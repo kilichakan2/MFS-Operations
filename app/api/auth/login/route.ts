@@ -1,14 +1,18 @@
 /**
  * app/api/auth/login/route.ts
- * Handles PIN and password authentication.
- * Verifies bcrypt hash against Supabase users table.
- * Sets session cookie on the NextResponse directly (Next.js 15 compatible).
+ *
+ * PIN and password authentication.
+ * Uses SUPABASE_SERVICE_ROLE_KEY — bypasses RLS.
+ * Sets session cookie directly on the NextResponse (Next.js 15 pattern).
+ * All credentials are explicitly cast to String() before bcrypt to prevent
+ * "Illegal arguments: number, string" TypeError if type coercion occurs.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
 import bcrypt                        from 'bcryptjs'
 
+// Service role key — bypasses RLS. Never expose to the client.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -23,30 +27,39 @@ const ROLE_ROUTES: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => null)
+    // ── Parse body ────────────────────────────────────────────────────────────
+    let body: { name?: unknown; credential?: unknown } | null = null
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    }
 
-    if (!body || !body.name?.trim() || !body.credential?.trim()) {
+    // Explicitly cast both to string — guards against JSON number types
+    // (bcrypt.compare throws "Illegal arguments: number, string" if not a string)
+    const name       = String(body?.name       ?? '').trim()
+    const credential = String(body?.credential ?? '').trim()
+
+    if (!name || !credential) {
       return NextResponse.json(
-        { error: 'Name and credential required' },
+        { error: 'Name and credential are required' },
         { status: 400 }
       )
     }
 
-    const { name, credential } = body as { name: string; credential: string }
-
-    // Fetch user — case-insensitive name match
+    // ── Fetch user by name (service role — RLS bypassed) ─────────────────────
     const { data: user, error: dbError } = await supabase
       .from('users')
       .select('id, name, role, pin_hash, password_hash, active')
-      .ilike('name', name.trim())
+      .ilike('name', name)
       .single()
 
     if (dbError) {
-      // PGRST116 = 0 rows returned from .single() — normal "not found" case
+      // PGRST116 = no rows returned by .single() — treat as wrong credentials
       if (dbError.code === 'PGRST116') {
         return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
       }
-      console.error('[login] Supabase error:', dbError.message)
+      console.error('[login] DB error:', dbError.code, dbError.message)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
 
@@ -58,18 +71,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Account is inactive' }, { status: 403 })
     }
 
-    const hashToCheck = user.role === 'admin' ? user.password_hash : user.pin_hash
+    // ── Select correct hash ───────────────────────────────────────────────────
+    const hashToCheck: string | null =
+      user.role === 'admin' ? user.password_hash : user.pin_hash
 
     if (!hashToCheck) {
-      console.error(`[login] User ${user.name} has no hash for role ${user.role}`)
-      return NextResponse.json({ error: 'Account not configured — contact admin' }, { status: 403 })
+      console.error(`[login] ${user.name} (${user.role}) has no hash set`)
+      return NextResponse.json(
+        { error: 'Account not configured — ask an admin to reset your credentials' },
+        { status: 403 }
+      )
     }
 
+    // ── bcrypt compare — both args explicitly string ──────────────────────────
     let valid = false
     try {
-      valid = await bcrypt.compare(credential, hashToCheck)
+      valid = await bcrypt.compare(String(credential), String(hashToCheck))
     } catch (bcryptErr) {
-      console.error('[login] bcrypt.compare failed:', bcryptErr)
+      console.error('[login] bcrypt.compare threw:', bcryptErr)
       return NextResponse.json({ error: 'Authentication error' }, { status: 500 })
     }
 
@@ -77,7 +96,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
-    // Fire-and-forget last_login_at update (non-blocking)
+    // ── Update last_login_at (non-blocking, fire and forget) ──────────────────
     supabase
       .from('users')
       .update({ last_login_at: new Date().toISOString() })
@@ -86,10 +105,9 @@ export async function POST(req: NextRequest) {
         if (e) console.error('[login] last_login_at update failed:', e.message)
       })
 
-    // ── Set cookie directly on the response object ─────────────────────────
-    // Using response.cookies.set() is the correct pattern for Next.js 15
-    // Route Handlers. The next/headers cookies() mutation approach can fail
-    // to attach to the response when the response is created as a separate object.
+    // ── Build response and set cookie ─────────────────────────────────────────
+    // response.cookies.set() is the correct Next.js 15 Route Handler pattern.
+    // The deprecated cookies() from next/headers does NOT attach to the response object.
     const redirect = ROLE_ROUTES[user.role] ?? '/screen4'
 
     const response = NextResponse.json({
@@ -114,7 +132,9 @@ export async function POST(req: NextRequest) {
     return response
 
   } catch (err) {
-    console.error('[login] Unexpected error:', err)
+    // Top-level catch — nothing should reach here, but if it does we
+    // still return a JSON response rather than dropping the connection.
+    console.error('[login] Unhandled error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
