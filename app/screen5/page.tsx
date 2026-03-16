@@ -208,7 +208,7 @@ function PrimaryButton({
 
 function UsersSection() {
   const [users, setUsers]         = useState<MockUser[]>(MOCK_USERS)
-  const [showAddForm, setShowAdd] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName]     = useState('')
   const [newRole, setNewRole]     = useState<UserRole>('sales')
   const [newPin, setNewPin]       = useState('')
@@ -232,7 +232,7 @@ function UsersSection() {
     ])
     setNewName('')
     setNewPin('')
-    setShowAdd(false)
+    setShowAddForm(false)
   }
 
   return (
@@ -240,7 +240,7 @@ function UsersSection() {
       <SectionHeader
         title="Users"
         action={
-          <PrimaryButton onClick={() => setShowAdd(!showAdd)}>
+          <PrimaryButton onClick={() => setShowAddForm(!showAddForm)}>
             {showAddForm ? 'Cancel' : '+ Add user'}
           </PrimaryButton>
         }
@@ -293,7 +293,7 @@ function UsersSection() {
             <PrimaryButton onClick={handleAdd} disabled={!newName.trim() || !newPin.trim()}>
               Create user
             </PrimaryButton>
-            <PrimaryButton variant="ghost" onClick={() => setShowAdd(false)}>
+            <PrimaryButton variant="ghost" onClick={() => setShowAddForm(false)}>
               Cancel
             </PrimaryButton>
           </div>
