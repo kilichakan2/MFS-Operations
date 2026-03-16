@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import BottomNav, { Icons } from '@/components/BottomNav'
+import AppHeader             from '@/components/AppHeader'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -344,18 +345,10 @@ export default function Screen4Page() {
     <div className="min-h-screen bg-gray-50">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
-      <header className="bg-[#16205B] px-5 pt-14 pb-5 sticky top-0 z-40">
-        <div className="flex items-center justify-between max-w-2xl mx-auto">
-          <div>
-            <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase">
-              MFS Global
-            </p>
-            <h1 className="text-white text-lg font-bold leading-tight mt-0.5">
-              Operations
-            </h1>
-          </div>
-
-          {/* Dev toggle — remove before production */}
+      <AppHeader
+        title="Operations"
+        maxWidth="2xl"
+        actions={
           <div className="flex items-center gap-1 bg-white/10 rounded-xl p-1">
             {(['busy', 'clear'] as const).map((m) => (
               <button
@@ -364,17 +357,15 @@ export default function Screen4Page() {
                 onClick={() => setMode(m)}
                 className={[
                   'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
-                  mode === m
-                    ? 'bg-[#EB6619] text-white'
-                    : 'text-white/60 hover:text-white',
+                  mode === m ? 'bg-[#EB6619] text-white' : 'text-white/60 hover:text-white',
                 ].join(' ')}
               >
                 {m === 'busy' ? 'Busy' : 'Clear'}
               </button>
             ))}
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-24 space-y-8">
 

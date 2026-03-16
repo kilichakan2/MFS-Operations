@@ -1,6 +1,7 @@
 /**
  * app/api/admin/users/[id]/route.ts
- * PATCH — update a user (toggle active, reset PIN/password)
+ * PATCH  — toggle active / reset credential
+ * DELETE — permanently remove a user
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -33,6 +34,9 @@ export async function PATCH(
     if (body.credential && body.role) {
       const hash  = await bcrypt.hash(body.credential, 12)
       const field = body.role === 'admin' ? 'password_hash' : 'pin_hash'
+      // Clear the other field so no stale credential remains
+      if (field === 'pin_hash') updates.password_hash = null
+      else updates.pin_hash = null
       updates[field] = hash
     }
 
@@ -49,6 +53,29 @@ export async function PATCH(
     }
 
     return NextResponse.json(data)
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('[DELETE /api/admin/users/:id]', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }

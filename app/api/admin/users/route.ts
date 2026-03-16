@@ -42,6 +42,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'name, role, and credential required' }, { status: 400 })
     }
 
+    // Server-side PIN validation — enforced even if client-side is bypassed
+    if (role !== 'admin' && !/^\d{4}$/.test(credential)) {
+      return NextResponse.json(
+        { error: 'PIN must be exactly 4 numeric digits (e.g. 1234)' },
+        { status: 400 }
+      )
+    }
+
+    if (role === 'admin' && credential.trim().length < 6) {
+      return NextResponse.json(
+        { error: 'Admin password must be at least 6 characters' },
+        { status: 400 }
+      )
+    }
+
     const hash  = await bcrypt.hash(credential, 12)
     const field = role === 'admin' ? 'password_hash' : 'pin_hash'
 

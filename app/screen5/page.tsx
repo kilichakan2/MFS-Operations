@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import BottomNav, { Icons } from '@/components/BottomNav'
+import AppHeader             from '@/components/AppHeader'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -129,6 +130,10 @@ function PrimaryButton({ children, onClick, disabled, variant = 'orange' }: {
 
 // ─── Section 1: Users (live Supabase) ─────────────────────────────────────────
 
+const PIN_RE = /^\d{4}$/
+
+interface ResetTarget { id: string; name: string; role: UserRole }
+
 function UsersSection() {
   const [users,       setUsers]       = useState<AppUser[]>([])
   const [loading,     setLoading]     = useState(true)
@@ -136,8 +141,18 @@ function UsersSection() {
   const [newName,     setNewName]     = useState('')
   const [newRole,     setNewRole]     = useState<UserRole>('sales')
   const [newPin,      setNewPin]      = useState('')
+  const [pinError,    setPinError]    = useState('')
   const [saving,      setSaving]      = useState(false)
   const [saveError,   setSaveError]   = useState('')
+
+  // Reset auth modal
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null)
+  const [resetCred,   setResetCred]   = useState('')
+  const [resetError,  setResetError]  = useState('')
+  const [resetting,   setResetting]   = useState(false)
+
+  // Delete in-progress tracking
+  const [deletingId,  setDeletingId]  = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/admin/users')
@@ -147,8 +162,29 @@ function UsersSection() {
       .finally(() => setLoading(false))
   }, [])
 
+  // ── Validate PIN on every keystroke ────────────────────────────────────────
+  function handlePinChange(val: string) {
+    setNewPin(val)
+    if (newRole !== 'admin') {
+      if (val.length > 0 && !/^\d+$/.test(val)) {
+        setPinError('PIN must be numbers only')
+      } else if (val.length === 4 && !PIN_RE.test(val)) {
+        setPinError('PIN must be exactly 4 digits')
+      } else {
+        setPinError('')
+      }
+    } else {
+      setPinError('')
+    }
+  }
+
+  function pinIsValid() {
+    if (newRole === 'admin') return newPin.trim().length >= 6
+    return PIN_RE.test(newPin)
+  }
+
+  // ── Toggle active ──────────────────────────────────────────────────────────
   async function toggleActive(id: string, current: boolean) {
-    // Optimistic update
     setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: !current } : u))
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
@@ -157,7 +193,6 @@ function UsersSection() {
         body: JSON.stringify({ active: !current }),
       })
       if (!res.ok) {
-        // Roll back and surface the error
         setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: current } : u))
         setSaveError(`Failed to update user (${res.status})`)
       }
@@ -167,8 +202,9 @@ function UsersSection() {
     }
   }
 
+  // ── Add user ───────────────────────────────────────────────────────────────
   async function handleAdd() {
-    if (!newName.trim() || !newPin.trim() || saving) return
+    if (!newName.trim() || !pinIsValid() || saving) return
     setSaving(true)
     setSaveError('')
     try {
@@ -177,17 +213,13 @@ function UsersSection() {
         body: JSON.stringify({ name: newName.trim(), role: newRole, credential: newPin }),
       })
       let data: AppUser & { error?: string }
-      try {
-        data = await res.json()
-      } catch {
-        setSaveError(`Server error (${res.status}) — check API route`)
-        return
-      }
+      try { data = await res.json() }
+      catch { setSaveError(`Server error (${res.status})`); return }
       if (res.ok) {
         setUsers((prev) => [...prev, data as AppUser])
-        setNewName(''); setNewPin(''); setShowAdd(false)
+        setNewName(''); setNewPin(''); setPinError(''); setShowAdd(false)
       } else {
-        setSaveError(data.error ?? `Request failed with status ${res.status}`)
+        setSaveError(data.error ?? `Failed (${res.status})`)
       }
     } catch (err) {
       setSaveError(`Network error — ${String(err)}`)
@@ -196,25 +228,93 @@ function UsersSection() {
     }
   }
 
+  // ── Delete user ────────────────────────────────────────────────────────────
+  async function handleDelete(u: AppUser) {
+    if (!window.confirm(`Delete "${u.name}" permanently? This cannot be undone.`)) return
+    setDeletingId(u.id)
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setUsers((prev) => prev.filter((x) => x.id !== u.id))
+      } else {
+        const d = await res.json().catch(() => ({}))
+        setSaveError(d.error ?? `Delete failed (${res.status})`)
+      }
+    } catch {
+      setSaveError('Network error — delete failed')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  // ── Reset auth ─────────────────────────────────────────────────────────────
+  async function handleReset() {
+    if (!resetTarget || !resetCred.trim() || resetting) return
+    const isPin = resetTarget.role !== 'admin'
+    if (isPin && !PIN_RE.test(resetCred)) {
+      setResetError('PIN must be exactly 4 digits')
+      return
+    }
+    if (!isPin && resetCred.length < 6) {
+      setResetError('Password must be at least 6 characters')
+      return
+    }
+    setResetting(true)
+    setResetError('')
+    try {
+      const res  = await fetch(`/api/admin/users/${resetTarget.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: resetCred, role: resetTarget.role }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setResetTarget(null)
+        setResetCred('')
+      } else {
+        setResetError(data.error ?? `Failed (${res.status})`)
+      }
+    } catch {
+      setResetError('Network error')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const isPin = (role: UserRole) => role !== 'admin'
+
   return (
     <div>
+      {/* ── Global error banner ─────────────────────────────────── */}
+      {saveError && (
+        <div className="mb-4 flex items-center justify-between gap-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+          <p className="text-sm text-red-700">{saveError}</p>
+          <button type="button" onClick={() => setSaveError('')} className="text-red-400 hover:text-red-600 text-lg leading-none">×</button>
+        </div>
+      )}
+
       <SectionHeader
         title="Users"
-        action={<PrimaryButton onClick={() => { setShowAdd(!showAdd); setSaveError('') }}>{showAdd ? 'Cancel' : '+ Add user'}</PrimaryButton>}
+        action={
+          <PrimaryButton onClick={() => { setShowAdd(!showAdd); setSaveError(''); setPinError('') }}>
+            {showAdd ? 'Cancel' : '+ Add user'}
+          </PrimaryButton>
+        }
       />
 
+      {/* ── Add user form ────────────────────────────────────────── */}
       {showAdd && (
         <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
           <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">New user</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Name</label>
-              <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Full name"
+              <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
+                placeholder="e.g. Daz"
                 className="w-full h-9 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#EB6619]" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Role</label>
-              <select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)}
+              <select value={newRole} onChange={(e) => { setNewRole(e.target.value as UserRole); setNewPin(''); setPinError('') }}
                 className="w-full h-9 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#EB6619] bg-white">
                 <option value="warehouse">Warehouse</option>
                 <option value="office">Office</option>
@@ -222,30 +322,43 @@ function UsersSection() {
                 <option value="admin">Admin</option>
               </select>
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">{newRole === 'admin' ? 'Password' : '4-digit PIN'}</label>
-              <input type={newRole === 'admin' ? 'password' : 'text'} inputMode={newRole === 'admin' ? 'text' : 'numeric'}
-                maxLength={newRole === 'admin' ? 100 : 4} value={newPin} onChange={(e) => setNewPin(e.target.value)}
-                placeholder={newRole === 'admin' ? '••••••••' : '0000'}
-                className="w-full h-9 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#EB6619]" />
+            <div className="col-span-2">
+              <label className="block text-xs text-gray-500 mb-1">
+                {newRole === 'admin' ? 'Password (min 6 chars)' : '4-digit PIN (numbers only)'}
+              </label>
+              <input
+                type={newRole === 'admin' ? 'password' : 'text'}
+                inputMode={newRole === 'admin' ? 'text' : 'numeric'}
+                maxLength={newRole === 'admin' ? 100 : 4}
+                value={newPin}
+                onChange={(e) => handlePinChange(e.target.value)}
+                placeholder={newRole === 'admin' ? 'min 6 characters' : '4 digits, e.g. 1234'}
+                className={[
+                  'w-full h-9 px-3 rounded-lg border text-sm focus:outline-none',
+                  pinError ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-[#EB6619]',
+                ].join(' ')}
+              />
+              {pinError && <p className="text-red-600 text-xs mt-1">{pinError}</p>}
             </div>
           </div>
-          {saveError && <p className="text-red-600 text-xs">{saveError}</p>}
           <div className="flex gap-2 pt-1">
-            <PrimaryButton onClick={handleAdd} disabled={!newName.trim() || !newPin.trim() || saving}>
+            <PrimaryButton onClick={handleAdd} disabled={!newName.trim() || !pinIsValid() || !!pinError || saving}>
               {saving ? 'Creating…' : 'Create user'}
             </PrimaryButton>
-            <PrimaryButton variant="ghost" onClick={() => setShowAdd(false)}>Cancel</PrimaryButton>
+            <PrimaryButton variant="ghost" onClick={() => { setShowAdd(false); setPinError(''); setNewPin('') }}>Cancel</PrimaryButton>
           </div>
         </div>
       )}
 
+      {/* ── Users table ─────────────────────────────────────────── */}
       {loading ? <Spinner /> : (
         <div className="overflow-x-auto rounded-xl border border-gray-200">
-          <table className="w-full min-w-[560px]">
-            <TableHeader cols={['Name', 'Role', 'Last login', 'Created', 'Active']} />
+          <table className="w-full min-w-[640px]">
+            <TableHeader cols={['Name', 'Role', 'Last login', 'Created', 'Active', '']} />
             <tbody className="divide-y divide-gray-100">
-              {users.length === 0 && <tr><td colSpan={5}><EmptyState message="No users found" /></td></tr>}
+              {users.length === 0 && (
+                <tr><td colSpan={6}><EmptyState message="No users yet" /></td></tr>
+              )}
               {users.map((u) => (
                 <tr key={u.id} className={u.active ? 'bg-white' : 'bg-gray-50'}>
                   <td className="py-3 px-3">
@@ -261,10 +374,94 @@ function UsersSection() {
                   <td className="py-3 px-3">
                     <Toggle checked={u.active} onChange={() => toggleActive(u.id, u.active)} label={`Toggle ${u.name}`} />
                   </td>
+                  {/* Action buttons */}
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-1.5">
+                      {/* Reset auth */}
+                      <button
+                        type="button"
+                        onClick={() => { setResetTarget({ id: u.id, name: u.name, role: u.role }); setResetCred(''); setResetError('') }}
+                        title={`Reset ${isPin(u.role) ? 'PIN' : 'password'} for ${u.name}`}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-[#16205B] hover:bg-gray-100 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                          <path fillRule="evenodd" d="M8 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 1ZM10.5 3.22a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 0 1-1.06 1.06L10.5 4.28a.75.75 0 0 1 0-1.06ZM13 7.25a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM10.5 10.5a.75.75 0 0 1 1.06-1.06l1.06 1.06a.75.75 0 0 1-1.06 1.06l-1.06-1.06ZM8 12.25a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 8 12.25ZM3.22 10.5a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 0 1-1.06-1.06L2.16 10.5a.75.75 0 0 1 1.06 0ZM2.75 7.25a.75.75 0 0 1-.75.75H.5a.75.75 0 0 1 0-1.5H2a.75.75 0 0 1 .75.75ZM3.22 5.5a.75.75 0 0 1-1.06 0L1.1 4.44A.75.75 0 0 1 2.16 3.38L3.22 4.44a.75.75 0 0 1 0 1.06ZM8 5a3 3 0 1 0 0 6A3 3 0 0 0 8 5Z" clipRule="evenodd"/>
+                        </svg>
+                      </button>
+                      {/* Delete */}
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(u)}
+                        disabled={deletingId === u.id}
+                        title={`Delete ${u.name}`}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30"
+                      >
+                        {deletingId === u.id ? (
+                          <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
+                            <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5A.75.75 0 0 1 9.95 6Z" clipRule="evenodd"/>
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── Reset auth modal ─────────────────────────────────────── */}
+      {resetTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4"
+          onClick={(e) => e.target === e.currentTarget && setResetTarget(null)}
+        >
+          <div className="w-full max-w-sm bg-white rounded-2xl p-6 shadow-2xl mb-4 sm:mb-0">
+            <h3 className="text-base font-bold text-gray-900 mb-1">
+              Reset {isPin(resetTarget.role) ? 'PIN' : 'password'}
+            </h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Setting new {isPin(resetTarget.role) ? 'PIN' : 'password'} for{' '}
+              <span className="font-semibold text-gray-700">{resetTarget.name}</span>
+            </p>
+
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
+              {isPin(resetTarget.role) ? 'New PIN (4 digits)' : 'New password (min 6 chars)'}
+            </label>
+            <input
+              type={isPin(resetTarget.role) ? 'text' : 'password'}
+              inputMode={isPin(resetTarget.role) ? 'numeric' : 'text'}
+              maxLength={isPin(resetTarget.role) ? 4 : 100}
+              value={resetCred}
+              onChange={(e) => { setResetCred(e.target.value); setResetError('') }}
+              onKeyDown={(e) => e.key === 'Enter' && handleReset()}
+              placeholder={isPin(resetTarget.role) ? '1234' : 'new password'}
+              autoFocus
+              className={[
+                'w-full h-11 px-3 rounded-lg border text-sm mb-2 focus:outline-none',
+                resetError ? 'border-red-400' : 'border-gray-200 focus:border-[#EB6619]',
+              ].join(' ')}
+            />
+            {resetError && <p className="text-red-600 text-xs mb-3">{resetError}</p>}
+
+            <div className="flex gap-2 mt-4">
+              <PrimaryButton
+                onClick={handleReset}
+                disabled={!resetCred.trim() || resetting}
+              >
+                {resetting ? 'Saving…' : `Save ${isPin(resetTarget.role) ? 'PIN' : 'password'}`}
+              </PrimaryButton>
+              <PrimaryButton variant="ghost" onClick={() => setResetTarget(null)}>
+                Cancel
+              </PrimaryButton>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -626,12 +823,7 @@ export default function Screen5Page() {
   return (
     <div className="min-h-screen bg-gray-50">
 
-      <header className="bg-[#16205B] px-5 pt-14 pb-5 sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto">
-          <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase">MFS Global</p>
-          <h1 className="text-white text-lg font-bold leading-tight mt-0.5">Admin</h1>
-        </div>
-      </header>
+      <AppHeader title="Admin" maxWidth="4xl" />
 
       <div className="bg-white border-b border-gray-200 sticky top-[88px] z-30">
         <div className="max-w-4xl mx-auto px-4">

@@ -3,6 +3,7 @@
 import { useState, useCallback, useId } from 'react'
 import BottomSheetSelector              from '@/components/BottomSheetSelector'
 import BottomNav, { Icons }             from '@/components/BottomNav'
+import AppHeader                            from '@/components/AppHeader'
 import { useCustomers }                 from '@/hooks/useReferenceData'
 import { localDb }                      from '@/lib/localDb'
 import type { SelectableItem }          from '@/components/BottomSheetSelector'
@@ -296,25 +297,7 @@ export default function Screen2Page() {
       <div className="min-h-screen bg-gray-50">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <header className="bg-[#16205B] px-5 pt-14 pb-5 sticky top-0 z-40">
-          <div className="flex items-center justify-between max-w-lg mx-auto">
-            <div>
-              <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase">
-                MFS Global
-              </p>
-              <h1 className="text-white text-lg font-bold leading-tight mt-0.5">
-                Complaint Log
-              </h1>
-            </div>
-            <div
-              className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1.5"
-              title="All records synced"
-            >
-              <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
-              <span className="text-white/70 text-xs font-medium">Synced</span>
-            </div>
-          </div>
-        </header>
+        <AppHeader title="Complaint Log" maxWidth="lg" />
 
         {/* ── Form ───────────────────────────────────────────────────────── */}
         <main className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-6" id={formId}>
