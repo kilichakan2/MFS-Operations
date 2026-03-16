@@ -4,6 +4,7 @@ import { useState, useCallback, useId } from 'react'
 import BottomSheetSelector, {
   type SelectableItem,
 } from '@/components/BottomSheetSelector'
+import BottomNav, { Icons } from '@/components/BottomNav'
 import { localDb } from '@/lib/localDb'
 
 // ─── Mock seed data (replace with Supabase fetch) ─────────────────────────────
@@ -356,7 +357,7 @@ export default function Screen1Page() {
         </header>
 
         {/* ── Form ───────────────────────────────────────────────────────── */}
-        <main className="max-w-lg mx-auto px-4 py-6 space-y-6" id={formId}>
+        <main className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-6" id={formId}>
 
           {/* ── Customer ─────────────────────────────────────────────────── */}
           <section>
@@ -591,6 +592,11 @@ export default function Screen1Page() {
 
         </main>
       </div>
+      <BottomNav items={[
+        { href: '/screen1', label: 'Dispatch', icon: Icons.dispatch },
+        { href: '/screen2', label: 'Complaints', icon: Icons.complaint },
+        { href: '/screen3', label: 'Visits', icon: Icons.visit },
+      ]} />
     </>
   )
 }

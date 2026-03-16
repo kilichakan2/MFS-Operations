@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import BottomNav, { Icons } from '@/components/BottomNav'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -375,7 +376,7 @@ export default function Screen4Page() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-6 space-y-8">
+      <main className="max-w-2xl mx-auto px-4 py-6 pb-24 space-y-8">
 
         {/* ════════════════════════════════════════════════════════════════
             ZONE 1 — ALERTS
@@ -745,6 +746,10 @@ export default function Screen4Page() {
         <div className="h-8" aria-hidden="true" />
 
       </main>
+      <BottomNav items={[
+        { href: '/screen4', label: 'Dashboard', icon: Icons.dashboard },
+        { href: '/screen5', label: 'Admin',     icon: Icons.admin     },
+      ]} />
     </div>
   )
 }

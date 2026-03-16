@@ -1,0 +1,96 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
+interface NavItem {
+  href:  string
+  label: string
+  icon:  React.ReactNode
+}
+
+interface BottomNavProps {
+  items: NavItem[]
+}
+
+export default function BottomNav({ items }: BottomNavProps) {
+  const pathname = usePathname()
+
+  if (items.length <= 1) return null   // no nav needed for single-screen roles
+
+  return (
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      aria-label="Main navigation"
+    >
+      <div className="flex">
+        {items.map((item) => {
+          const active = pathname === item.href
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={[
+                'flex-1 flex flex-col items-center justify-center py-3 gap-1',
+                'text-[10px] font-bold tracking-wide uppercase',
+                'transition-colors duration-100',
+                active
+                  ? 'text-[#EB6619]'
+                  : 'text-gray-400 hover:text-gray-600',
+              ].join(' ')}
+              aria-current={active ? 'page' : undefined}
+            >
+              <span className={['w-6 h-6', active ? 'text-[#EB6619]' : 'text-gray-400'].join(' ')}>
+                {item.icon}
+              </span>
+              {item.label}
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
+
+// ─── Icon set — inline SVG, no icon library needed ────────────────────────────
+
+export const Icons = {
+  dispatch: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 8h14M5 8a2 2 0 1 0 0-4h14a2 2 0 1 0 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/>
+      <path d="M10 12h4"/>
+    </svg>
+  ),
+  complaint: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+  ),
+  visit: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  ),
+  dashboard: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+    </svg>
+  ),
+  admin: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
+    </svg>
+  ),
+}

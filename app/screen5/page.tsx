@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import BottomNav, { Icons } from '@/components/BottomNav'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -865,7 +866,7 @@ export default function Screen5Page() {
       </div>
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
-      <main className="max-w-4xl mx-auto px-4 py-6 pb-16">
+      <main className="max-w-4xl mx-auto px-4 py-6 pb-24">
         {activeTab === 'users'       && <UsersSection />}
         {activeTab === 'customers'   && (
           <ImporterSection
@@ -887,6 +888,10 @@ export default function Screen5Page() {
         {activeTab === 'permissions' && <PermissionsSection />}
         {activeTab === 'audit'       && <AuditSection />}
       </main>
+      <BottomNav items={[
+        { href: '/screen4', label: 'Dashboard', icon: Icons.dashboard },
+        { href: '/screen5', label: 'Admin',     icon: Icons.admin     },
+      ]} />
     </div>
   )
 }
