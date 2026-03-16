@@ -1,10 +1,25 @@
 'use client'
 
-import { Suspense, useState, useCallback } from 'react'
-import { useRouter, useSearchParams }      from 'next/navigation'
-import AuthKeypad                          from '@/components/AuthKeypad'
+import { Suspense, useState, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams }                  from 'next/navigation'
+import AuthKeypad                                      from '@/components/AuthKeypad'
 
 type Mode = 'select' | 'team' | 'admin'
+
+interface TeamMember { id: string; name: string; role: string }
+
+// ─── Role colour accents for the name grid ────────────────────────────────────
+
+const ROLE_ACCENT: Record<string, string> = {
+  warehouse: 'border-amber-500/40  text-amber-300',
+  office:    'border-purple-500/40 text-purple-300',
+  sales:     'border-emerald-500/40 text-emerald-300',
+}
+const ROLE_LABEL: Record<string, string> = {
+  warehouse: 'Warehouse',
+  office:    'Office',
+  sales:     'Sales',
+}
 
 // ─── Shared submit helper ─────────────────────────────────────────────────────
 
@@ -12,7 +27,7 @@ async function submitLogin(
   name:       string,
   credential: string,
   onSuccess:  (redirect: string) => void,
-  onError:    (msg: string) => void,
+  onError:    (msg: string)      => void,
   from:       string | null,
 ) {
   try {
@@ -38,7 +53,6 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
   return (
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs">
-        {/* Logo */}
         <div className="text-center mb-12">
           <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase mb-1">
             MFS Global
@@ -54,7 +68,6 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
         >
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
-              {/* People icon */}
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                 stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
                 className="w-6 h-6">
@@ -82,7 +95,6 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
         >
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-              {/* Shield icon */}
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                 stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
                 className="w-6 h-6">
@@ -104,35 +116,63 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
   )
 }
 
-// ─── Screen B: Team login (Name → PIN) ────────────────────────────────────────
+// ─── Screen B: POS-style team login ──────────────────────────────────────────
 
-function TeamLogin({
-  onBack,
-  from,
-}: {
-  onBack: () => void
-  from:   string | null
-}) {
+function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }) {
   const router = useRouter()
-  const [step, setStep]         = useState<'name' | 'pin'>('name')
-  const [name, setName]         = useState('')
-  const [error, setError]       = useState('')
-  const [resetSignal, setReset] = useState(0)
 
+  const [step,        setStep]        = useState<'grid' | 'pin'>('grid')
+  const [selected,    setSelected]    = useState<TeamMember | null>(null)
+  const [members,     setMembers]     = useState<TeamMember[]>([])
+  const [fetchError,  setFetchError]  = useState('')
+  const [loadingList, setLoadingList] = useState(true)
+
+  // Error + reset state for the PIN pad
+  const [error,       setError]       = useState('')
+  const [resetSignal, setReset]       = useState(0)
+
+  // Fetch team members on mount
+  useEffect(() => {
+    fetch('/api/auth/team')
+      .then((r) => r.json())
+      .then((data: TeamMember[]) => setMembers(Array.isArray(data) ? data : []))
+      .catch(() => setFetchError('Could not load team — check connection'))
+      .finally(() => setLoadingList(false))
+  }, [])
+
+  // Handle PIN pad submission — always reset the pad in finally
   const handlePin = useCallback(async (pin: string) => {
+    if (!selected) return
     setError('')
-    await submitLogin(
-      name, pin,
-      (redirect) => router.replace(redirect),
-      (msg)      => { setError(msg); setReset((n) => n + 1) },
-      from,
-    )
-  }, [name, router, from])
+    try {
+      await submitLogin(
+        selected.name,
+        pin,
+        (redirect) => router.replace(redirect),
+        (msg) => { setError(msg) },
+        from,
+      )
+    } finally {
+      // Always increment reset signal so the keypad unfreezes.
+      // If navigation succeeds the component will unmount anyway.
+      setReset((n) => n + 1)
+    }
+  }, [selected, router, from])
 
-  if (step === 'name') {
+  function selectMember(m: TeamMember) {
+    setSelected(m)
+    setError('')
+    setReset(0)
+    setStep('pin')
+  }
+
+  // ── Name grid ───────────────────────────────────────────────────────────────
+  if (step === 'grid') {
     return (
-      <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
-        <div className="w-full max-w-xs">
+      <div className="min-h-screen bg-[#16205B] flex flex-col px-6 pt-16 pb-10">
+        <div className="max-w-sm mx-auto w-full flex flex-col flex-1">
+
+          {/* Header */}
           <button
             type="button"
             onClick={onBack}
@@ -147,36 +187,80 @@ function TeamLogin({
           <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase text-center mb-1">
             Team Login
           </p>
-          <h1 className="text-white text-xl font-bold text-center mb-10">What's your name?</h1>
+          <h1 className="text-white text-xl font-bold text-center mb-8">
+            Who are you?
+          </h1>
 
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => { setName(e.target.value); setError('') }}
-            onKeyDown={(e) => e.key === 'Enter' && name.trim() && (setError(''), setStep('pin'))}
-            placeholder="e.g. Daz"
-            autoFocus
-            autoComplete="off"
-            className="w-full h-14 rounded-xl px-4 text-base font-semibold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#EB6619] mb-3"
-          />
-          {error && <p className="text-red-400 text-sm text-center mb-3">{error}</p>}
-          <button
-            type="button"
-            onClick={() => { if (name.trim()) { setError(''); setStep('pin') } }}
-            disabled={!name.trim()}
-            className="w-full h-14 rounded-xl bg-[#EB6619] text-white text-base font-bold disabled:opacity-40 active:scale-[0.98] transition-all"
-          >
-            Continue
-          </button>
+          {loadingList && (
+            <div className="flex flex-col items-center gap-3 py-10">
+              <svg className="animate-spin w-6 h-6 text-white/30" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+              <p className="text-white/40 text-sm">Loading team…</p>
+            </div>
+          )}
+
+          {fetchError && (
+            <div className="bg-red-900/40 border border-red-500/30 rounded-xl p-4 text-center">
+              <p className="text-red-300 text-sm">{fetchError}</p>
+              <button
+                type="button"
+                onClick={() => { setFetchError(''); setLoadingList(true); fetch('/api/auth/team').then(r=>r.json()).then(d=>setMembers(Array.isArray(d)?d:[])).catch(()=>setFetchError('Could not load team')).finally(()=>setLoadingList(false)) }}
+                className="mt-3 text-white/50 text-xs hover:text-white/80"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!loadingList && !fetchError && members.length === 0 && (
+            <div className="text-center py-10">
+              <p className="text-white/40 text-sm">No team members yet.</p>
+              <p className="text-white/30 text-xs mt-1">Add users in the Admin panel first.</p>
+            </div>
+          )}
+
+          {/* Name button grid */}
+          {!loadingList && members.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              {members.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => selectMember(m)}
+                  className={[
+                    'relative flex flex-col items-center justify-center',
+                    'bg-white/8 border rounded-2xl p-5',
+                    'active:scale-95 transition-all duration-100',
+                    'hover:bg-white/12',
+                    ROLE_ACCENT[m.role] ?? 'border-white/20 text-white/50',
+                  ].join(' ')}
+                >
+                  {/* Avatar circle */}
+                  <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center mb-3">
+                    <span className="text-white text-xl font-bold">
+                      {m.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <span className="text-white font-bold text-base leading-tight">{m.name}</span>
+                  <span className={`text-[10px] font-semibold mt-1 ${ROLE_ACCENT[m.role]?.split(' ')[1] ?? 'text-white/40'}`}>
+                    {ROLE_LABEL[m.role] ?? m.role}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     )
   }
 
+  // ── PIN pad ─────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col">
       <AuthKeypad
-        title={`Hi ${name}, enter your PIN`}
+        title={`Hi ${selected?.name ?? ''}, enter your PIN`}
         onComplete={handlePin}
         error={error}
         resetSignal={resetSignal}
@@ -184,7 +268,7 @@ function TeamLogin({
       <div className="fixed bottom-8 left-0 right-0 flex justify-center">
         <button
           type="button"
-          onClick={() => { setStep('name'); setError('') }}
+          onClick={() => { setStep('grid'); setError(''); setSelected(null) }}
           className="text-white/30 text-xs hover:text-white/60 transition-colors px-4 py-2"
         >
           ← Back
@@ -194,31 +278,29 @@ function TeamLogin({
   )
 }
 
-// ─── Screen C: Admin login (Username + Password) ──────────────────────────────
+// ─── Screen C: Admin login ────────────────────────────────────────────────────
 
-function AdminLogin({
-  onBack,
-  from,
-}: {
-  onBack: () => void
-  from:   string | null
-}) {
+function AdminLogin({ onBack, from }: { onBack: () => void; from: string | null }) {
   const router = useRouter()
-  const [username,    setUsername]    = useState('')
-  const [password,    setPassword]    = useState('')
-  const [error,       setError]       = useState('')
-  const [isSubmitting, setSubmitting] = useState(false)
+  const [username,     setUsername]    = useState('')
+  const [password,     setPassword]    = useState('')
+  const [error,        setError]       = useState('')
+  const [isSubmitting, setSubmitting]  = useState(false)
 
   async function handleSubmit() {
     if (!username.trim() || !password.trim() || isSubmitting) return
     setSubmitting(true)
     setError('')
-    await submitLogin(
-      username, password,
-      (redirect) => router.replace(redirect),
-      (msg)      => { setError(msg); setSubmitting(false) },
-      from,
-    )
+    try {
+      await submitLogin(
+        username, password,
+        (redirect) => router.replace(redirect),
+        (msg)      => setError(msg),
+        from,
+      )
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -240,7 +322,6 @@ function AdminLogin({
         </p>
         <h1 className="text-white text-xl font-bold text-center mb-10">Welcome back</h1>
 
-        {/* Username */}
         <label className="block text-white/60 text-xs font-bold tracking-widest uppercase mb-2">
           Username
         </label>
@@ -255,7 +336,6 @@ function AdminLogin({
           className="w-full h-14 rounded-xl px-4 text-base font-semibold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#EB6619] mb-4"
         />
 
-        {/* Password */}
         <label className="block text-white/60 text-xs font-bold tracking-widest uppercase mb-2">
           Password
         </label>
@@ -269,9 +349,7 @@ function AdminLogin({
           className="w-full h-14 rounded-xl px-4 text-base font-semibold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#EB6619] mb-3"
         />
 
-        {error && (
-          <p className="text-red-400 text-sm text-center mb-3">{error}</p>
-        )}
+        {error && <p className="text-red-400 text-sm text-center mb-3">{error}</p>}
 
         <button
           type="button"
@@ -286,19 +364,17 @@ function AdminLogin({
   )
 }
 
-// ─── Root form (reads searchParams) ──────────────────────────────────────────
+// ─── Root form ────────────────────────────────────────────────────────────────
 
 function LoginForm() {
-  const searchParams          = useSearchParams()
-  const from                  = searchParams.get('from')
-  const [mode, setMode]       = useState<Mode>('select')
+  const searchParams = useSearchParams()
+  const from         = searchParams.get('from')
+  const [mode, setMode] = useState<Mode>('select')
 
   if (mode === 'select') return <ModeSelect onSelect={setMode} />
   if (mode === 'team')   return <TeamLogin  onBack={() => setMode('select')} from={from} />
   return                        <AdminLogin  onBack={() => setMode('select')} from={from} />
 }
-
-// ─── Skeleton + page export ───────────────────────────────────────────────────
 
 function LoginSkeleton() {
   return (
