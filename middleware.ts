@@ -16,14 +16,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Paths that are public (no auth required)
-const PUBLIC_PATHS = ['/login', '/api/auth/login']
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type']
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   warehouse: ['/screen1'],
   office:    ['/screen1', '/screen2'],
   sales:     ['/screen2', '/screen3'],
-  admin:     ['/screen4', '/screen5', '/api/reference'],
+  admin:     ['/screen4', '/screen5', '/api/reference', '/api/admin'],
 }
 
 // Default landing page per role

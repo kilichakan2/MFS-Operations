@@ -150,16 +150,25 @@ function UsersSection() {
   async function toggleActive(id: string, current: boolean) {
     // Optimistic update
     setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: !current } : u))
-    const res = await fetch(`/api/admin/users/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ active: !current }),
-    })
-    if (!res.ok) setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: current } : u))
+    try {
+      const res = await fetch(`/api/admin/users/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !current }),
+      })
+      if (!res.ok) {
+        // Roll back and surface the error
+        setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: current } : u))
+        setSaveError(`Failed to update user (${res.status})`)
+      }
+    } catch {
+      setUsers((prev) => prev.map((u) => u.id === id ? { ...u, active: current } : u))
+      setSaveError('Network error — toggle failed')
+    }
   }
 
   async function handleAdd() {
-    if (!newName.trim() || !newPin.trim()) return
+    if (!newName.trim() || !newPin.trim() || saving) return
     setSaving(true)
     setSaveError('')
     try {
@@ -167,13 +176,21 @@ function UsersSection() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName.trim(), role: newRole, credential: newPin }),
       })
-      const data = await res.json()
+      let data: AppUser & { error?: string }
+      try {
+        data = await res.json()
+      } catch {
+        setSaveError(`Server error (${res.status}) — check API route`)
+        return
+      }
       if (res.ok) {
         setUsers((prev) => [...prev, data as AppUser])
         setNewName(''); setNewPin(''); setShowAdd(false)
       } else {
-        setSaveError(data.error ?? 'Failed to create user')
+        setSaveError(data.error ?? `Request failed with status ${res.status}`)
       }
+    } catch (err) {
+      setSaveError(`Network error — ${String(err)}`)
     } finally {
       setSaving(false)
     }
