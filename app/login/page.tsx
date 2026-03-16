@@ -1,17 +1,22 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { Suspense, useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AuthKeypad from '@/components/AuthKeypad'
 
-export default function LoginPage() {
+// ─── Inner component — contains useSearchParams, must be inside Suspense ──────
+// Next.js 15 requires any component calling useSearchParams() to be wrapped
+// in a <Suspense> boundary during static generation. Isolating it here means
+// the outer page can remain a normal server-renderable shell.
+
+function LoginForm() {
   const router       = useRouter()
   const searchParams = useSearchParams()
-  const [step, setStep]           = useState<'name' | 'pin'>('name')
-  const [name, setName]           = useState('')
-  const [error, setError]         = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [resetSignal, setReset]   = useState(0)
+
+  const [step, setStep]         = useState<'name' | 'pin'>('name')
+  const [name, setName]         = useState('')
+  const [error, setError]       = useState('')
+  const [resetSignal, setReset] = useState(0)
 
   function handleNameSubmit() {
     if (!name.trim()) { setError('Enter your name'); return }
@@ -20,9 +25,7 @@ export default function LoginPage() {
   }
 
   const handlePinComplete = useCallback(async (pin: string) => {
-    setIsLoading(true)
     setError('')
-
     try {
       const res = await fetch('/api/auth/login', {
         method:  'POST',
@@ -35,7 +38,6 @@ export default function LoginPage() {
       if (!res.ok) {
         setError(data.error ?? 'Invalid PIN')
         setReset((n) => n + 1)
-        setIsLoading(false)
         return
       }
 
@@ -44,11 +46,9 @@ export default function LoginPage() {
     } catch {
       setError('Connection error — try again')
       setReset((n) => n + 1)
-      setIsLoading(false)
     }
   }, [name, router, searchParams])
 
-  // Name entry step
   if (step === 'name') {
     return (
       <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
@@ -91,7 +91,6 @@ export default function LoginPage() {
     )
   }
 
-  // PIN entry step
   return (
     <AuthKeypad
       title={`Welcome, ${name}`}
@@ -99,5 +98,30 @@ export default function LoginPage() {
       error={error}
       resetSignal={resetSignal}
     />
+  )
+}
+
+// ─── Loading shell — shown by Suspense while LoginForm hydrates ───────────────
+
+function LoginSkeleton() {
+  return (
+    <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
+      <div className="w-full max-w-xs text-center">
+        <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase mb-1">
+          MFS Global
+        </p>
+        <h1 className="text-white text-xl font-bold">Operations</h1>
+      </div>
+    </div>
+  )
+}
+
+// ─── Page export — Suspense boundary wraps the useSearchParams consumer ───────
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginForm />
+    </Suspense>
   )
 }
