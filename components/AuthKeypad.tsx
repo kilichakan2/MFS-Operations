@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface AuthKeypadProps {
   onComplete:    (pin: string) => void
@@ -58,24 +58,28 @@ export default function AuthKeypad({ onComplete, error, title = 'Enter your PIN'
   const [pin,          setPin]          = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // useRef to guard double-submission WITHOUT triggering a re-render.
+  // Critical: if we used setIsSubmitting(true) inside the auto-submit effect AND
+  // isSubmitting was in the dependency array, the state update would cause the effect
+  // to re-run, which runs the cleanup, which calls clearTimeout — cancelling the timer
+  // before onComplete ever fires. The ref has the same value but no re-render side-effect.
+  const submittingRef = useRef(false)
+
   // ── Reset when parent increments resetSignal ─────────────────────────────────
-  // Fires on every change to resetSignal, including back to 0.
-  // Also fires on mount (initial undefined → defined transition) to clear any stale state.
   useEffect(() => {
     console.log('[KEYPAD] resetSignal changed →', resetSignal, '— clearing pin and isSubmitting')
     setPin('')
     setIsSubmitting(false)
+    submittingRef.current = false
   }, [resetSignal])
 
-  // ── ALSO reset whenever parent passes a non-empty error ──────────────────────
-  // Belt-and-braces: if the parent surfaces an error, the keypad MUST be unfrozen
-  // regardless of whether resetSignal fired. Handles the case where the React
-  // update batching prevents the resetSignal effect from running in time.
+  // ── Belt-and-braces: also reset when parent passes an error ──────────────────
   useEffect(() => {
     if (error) {
       console.log('[KEYPAD] error prop set →', error, '— force clearing isSubmitting')
       setIsSubmitting(false)
       setPin('')
+      submittingRef.current = false
     }
   }, [error])
 
@@ -101,23 +105,27 @@ export default function AuthKeypad({ onComplete, error, title = 'Enter your PIN'
   }, [])
 
   // ── Auto-submit when 4 digits entered ────────────────────────────────────────
+  // Dependency array contains only [pin, onComplete] — NOT isSubmitting.
+  // The ref check prevents double-submission without causing a re-render that
+  // would trigger the cleanup and clearTimeout the timer before it fires.
   useEffect(() => {
-    if (pin.length === PIN_LENGTH && !isSubmitting) {
-      console.log('[KEYPAD] 4 digits entered — setting isSubmitting=true and scheduling onComplete')
-      setIsSubmitting(true)
+    if (pin.length === PIN_LENGTH && !submittingRef.current) {
+      console.log('[KEYPAD] 4 digits entered — setting ref=true and scheduling onComplete')
+      submittingRef.current = true
+      setIsSubmitting(true)   // UI only — safe because not in dep array below
       const timer = setTimeout(() => {
         console.log('[KEYPAD] Calling onComplete with PIN of length', pin.length)
         onComplete(pin)
       }, 120)
       return () => clearTimeout(timer)
     }
-  }, [pin, isSubmitting, onComplete])
+  }, [pin, onComplete])   // isSubmitting intentionally excluded — see comment above
 
   const handleKey = useCallback((value: KeyValue) => {
-    if (isSubmitting) return
+    if (submittingRef.current) return
     if (value === 'back') handleBackspace()
     else if (value !== '') handleDigit(value)
-  }, [isSubmitting, handleDigit, handleBackspace])
+  }, [handleDigit, handleBackspace])
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#16205B] px-8 py-12 select-none">
