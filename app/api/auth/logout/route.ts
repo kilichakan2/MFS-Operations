@@ -1,18 +1,17 @@
-/**
- * app/api/auth/logout/route.ts
- * Clears the mfs_session cookie and redirects to /login.
- */
-
 import { NextResponse } from 'next/server'
 
 export async function POST() {
   const response = NextResponse.json({ success: true })
-  response.cookies.set('mfs_session', '', {
-    httpOnly: true,
+
+  // Clear both session cookies
+  const shared = {
     secure:   process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    sameSite: 'lax' as const,
     maxAge:   0,
     path:     '/',
-  })
+  }
+  response.cookies.set('mfs_session', '', { ...shared, httpOnly: true  })
+  response.cookies.set('mfs_role',    '', { ...shared, httpOnly: false })
+
   return response
 }

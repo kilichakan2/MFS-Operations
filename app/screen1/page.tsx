@@ -1,26 +1,13 @@
 'use client'
 
-import { useState, useCallback, useId } from 'react'
+import { useState, useCallback, useId, useEffect } from 'react'
 import BottomSheetSelector, {
   type SelectableItem,
 } from '@/components/BottomSheetSelector'
-import BottomNav, { Icons } from '@/components/BottomNav'
+import RoleNav from '@/components/RoleNav'
 import AppHeader             from '@/components/AppHeader'
-import { localDb } from '@/lib/localDb'
-
-// ─── Mock seed data (replace with Supabase fetch) ─────────────────────────────
-
-const MOCK_CUSTOMERS: SelectableItem[] = [
-  { id: 'c1', label: 'Al Turka Restaurant' },
-  { id: 'c2', label: 'The Manor Hotel' },
-  { id: 'c3', label: 'Milano Steakhouse' },
-]
-
-const MOCK_PRODUCTS: SelectableItem[] = [
-  { id: 'p1', label: 'Lamb Shoulder',   sublabel: 'Meat' },
-  { id: 'p2', label: 'Chicken Breast',  sublabel: 'Poultry' },
-  { id: 'p3', label: 'Lamb Shank',      sublabel: 'Meat' },
-]
+import { localDb, syncReferenceData } from '@/lib/localDb'
+import { useCustomers, useProducts } from '@/hooks/useReferenceData'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -219,6 +206,15 @@ export default function Screen1Page() {
   const [showSuccess, setShowSuccess] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // ── Live reference data (Supabase via Dexie offline cache) ─────────────────
+  const customers = useCustomers()
+  const products  = useProducts()
+
+  // Sync on mount — respects 30-min cooldown, safe to call every render
+  useEffect(() => {
+    syncReferenceData().catch(console.error)
+  }, [])
+
   // ── Field updaters ──────────────────────────────────────────────────────────
 
   const set = useCallback(
@@ -314,7 +310,7 @@ export default function Screen1Page() {
       {sheet === 'customer' && (
         <BottomSheetSelector
           title="Select customer"
-          items={MOCK_CUSTOMERS}
+          items={customers}
           selectedId={form.customer?.id}
           searchPlaceholder="Search customers…"
           onSelect={handleSelect}
@@ -324,7 +320,7 @@ export default function Screen1Page() {
       {sheet === 'product' && (
         <BottomSheetSelector
           title="Select product"
-          items={MOCK_PRODUCTS}
+          items={products}
           selectedId={form.product?.id}
           searchPlaceholder="Search products…"
           onSelect={handleSelect}
@@ -574,11 +570,7 @@ export default function Screen1Page() {
 
         </main>
       </div>
-      <BottomNav items={[
-        { href: '/screen1', label: 'Dispatch', icon: Icons.dispatch },
-        { href: '/screen2', label: 'Complaints', icon: Icons.complaint },
-        { href: '/screen3', label: 'Visits', icon: Icons.visit },
-      ]} />
+      <RoleNav />
     </>
   )
 }

@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useCallback, useId } from 'react'
+import { useState, useCallback, useId, useEffect } from 'react'
 import BottomSheetSelector              from '@/components/BottomSheetSelector'
-import BottomNav, { Icons }             from '@/components/BottomNav'
+import RoleNav from '@/components/RoleNav'
 import AppHeader                            from '@/components/AppHeader'
 import { useCustomers }                 from '@/hooks/useReferenceData'
-import { localDb }                      from '@/lib/localDb'
+import { localDb, syncReferenceData }   from '@/lib/localDb'
 import type { SelectableItem }          from '@/components/BottomSheetSelector'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -209,6 +209,11 @@ function SuccessBanner({ visible }: { visible: boolean }) {
 
 export default function Screen2Page() {
   const formId              = useId()
+  // Sync reference data on mount so customer dropdown is populated
+  useEffect(() => {
+    syncReferenceData().catch(console.error)
+  }, [])
+
   const customers           = useCustomers()
   const [form, setForm]     = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors] = useState<ValidationErrors>({})
@@ -509,11 +514,7 @@ export default function Screen2Page() {
 
         </main>
       </div>
-      <BottomNav items={[
-        { href: '/screen1', label: 'Dispatch', icon: Icons.dispatch },
-        { href: '/screen2', label: 'Complaints', icon: Icons.complaint },
-        { href: '/screen3', label: 'Visits', icon: Icons.visit },
-      ]} />
+      <RoleNav />
     </>
   )
 }

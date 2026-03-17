@@ -129,6 +129,16 @@ export async function POST(req: NextRequest) {
       path:     '/',
     })
 
+    // mfs_role is NOT httpOnly — readable by client-side JS for nav rendering only.
+    // Role string is not sensitive; middleware enforces actual access server-side.
+    response.cookies.set('mfs_role', user.role, {
+      httpOnly: false,
+      secure:   process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge:   60 * 60 * 24 * 30,
+      path:     '/',
+    })
+
     return response
 
   } catch (err) {
