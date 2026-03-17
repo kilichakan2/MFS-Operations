@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useState, useEffect, useCallback } from 'react'
-import { useRouter, useSearchParams }                  from 'next/navigation'
+import { useSearchParams }                             from 'next/navigation'
 import AuthKeypad                                      from '@/components/AuthKeypad'
 
 type Mode = 'select' | 'team' | 'admin'
@@ -20,17 +20,25 @@ const ROLE_LABEL: Record<string, string> = {
 }
 
 // ─── Shared submit helper ─────────────────────────────────────────────────────
-// AbortController gives a 15-second ceiling so the keypad can never hang forever.
+// Uses window.location.href for the success redirect (hard navigation).
+// This guarantees the new mfs_session cookie is included in the very next
+// request to the server — bypasses any SPA router caching or React batching
+// that could cause middleware to see a stale request without the cookie.
 
 async function submitLogin(
-  name:      string,
+  name:       string,
   credential: string,
-  onSuccess: (redirect: string) => void,
-  onError:   (msg: string)      => void,
-  from:      string | null,
+  onSuccess:  (redirect: string) => void,
+  onError:    (msg: string)      => void,
+  from:       string | null,
 ) {
+  console.log('[LOGIN] Sending PIN/password to server for:', name)
+
   const controller = new AbortController()
-  const timeoutId  = setTimeout(() => controller.abort(), 15_000)
+  const timeoutId  = setTimeout(() => {
+    console.log('[LOGIN] Aborting — 15s timeout reached')
+    controller.abort()
+  }, 15_000)
 
   try {
     const res = await fetch('/api/auth/login', {
@@ -40,20 +48,29 @@ async function submitLogin(
       signal:  controller.signal,
     })
 
+    console.log('[LOGIN] Server response status:', res.status)
+
     let data: { redirect?: string; error?: string }
     try {
       data = await res.json()
-    } catch {
+      console.log('[LOGIN] Response body:', JSON.stringify(data))
+    } catch (parseErr) {
+      console.log('[LOGIN] Failed to parse response as JSON:', parseErr)
       onError(`Server returned unexpected response (${res.status})`)
       return
     }
 
     if (res.ok) {
-      onSuccess(from ?? data.redirect ?? '/screen1')
+      const dest = from ?? data.redirect ?? '/screen1'
+      console.log('[LOGIN] Success — forcing hard redirect to', dest)
+      // Hard navigation: full browser reload, new cookie sent natively with next request
+      onSuccess(dest)
     } else {
+      console.log('[LOGIN] Auth failed:', data.error)
       onError(data.error ?? `Login failed (${res.status})`)
     }
   } catch (err: unknown) {
+    console.log('[LOGIN] Error caught:', err)
     if (err instanceof Error && err.name === 'AbortError') {
       onError('Connection timed out — please try again')
     } else {
@@ -61,6 +78,7 @@ async function submitLogin(
     }
   } finally {
     clearTimeout(timeoutId)
+    console.log('[LOGIN] submitLogin finally block — timeout cleared')
   }
 }
 
@@ -116,11 +134,9 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
   )
 }
 
-// ─── Screen B: POS-style team login ──────────────────────────────────────────
+// ─── Screen B: Team login (POS grid → PIN pad) ────────────────────────────────
 
 function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }) {
-  const router = useRouter()
-
   const [step,        setStep]        = useState<'grid' | 'pin'>('grid')
   const [selected,    setSelected]    = useState<TeamMember | null>(null)
   const [members,     setMembers]     = useState<TeamMember[]>([])
@@ -143,22 +159,35 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
 
   const handlePin = useCallback(async (pin: string) => {
     if (!selected) return
+    console.log('[LOGIN] handlePin called for', selected.name, '— PIN length', pin.length)
     setError('')
     try {
       await submitLogin(
         selected.name,
         pin,
-        (redirect) => router.replace(redirect),
-        (msg)      => setError(msg),
+        (redirect) => {
+          // Hard redirect — full browser reload, no SPA router
+          console.log('[LOGIN] Forcing hard redirect to', redirect)
+          window.location.href = redirect
+        },
+        (msg) => {
+          console.log('[LOGIN] onError called with:', msg)
+          setError(msg)
+        },
         from,
       )
+    } catch (unexpectedErr) {
+      // Should never reach here — submitLogin has its own try/catch
+      console.log('[LOGIN] Unexpected throw from submitLogin:', unexpectedErr)
+      setError('Unexpected error — please try again')
     } finally {
-      // Always unfreeze the keypad — if login succeeded the component unmounts anyway
+      console.log('[LOGIN] handlePin finally — incrementing resetSignal')
       setReset((n) => n + 1)
     }
-  }, [selected, router, from])
+  }, [selected, from])
 
   function selectMember(m: TeamMember) {
+    console.log('[LOGIN] Selected team member:', m.name, m.role)
     setSelected(m)
     setError('')
     setStep('pin')
@@ -245,7 +274,6 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
 // ─── Screen C: Admin login ────────────────────────────────────────────────────
 
 function AdminLogin({ onBack, from }: { onBack: () => void; from: string | null }) {
-  const router = useRouter()
   const [username,     setUsername]   = useState('')
   const [password,     setPassword]   = useState('')
   const [error,        setError]      = useState('')
@@ -255,11 +283,18 @@ function AdminLogin({ onBack, from }: { onBack: () => void; from: string | null 
     if (!username.trim() || !password.trim() || isSubmitting) return
     setSubmitting(true)
     setError('')
+    console.log('[LOGIN] Admin submit for username:', username)
     try {
       await submitLogin(
         username, password,
-        (redirect) => router.replace(redirect),
-        (msg)      => setError(msg),
+        (redirect) => {
+          console.log('[LOGIN] Admin success — hard redirect to', redirect)
+          window.location.href = redirect
+        },
+        (msg) => {
+          console.log('[LOGIN] Admin error:', msg)
+          setError(msg)
+        },
         from,
       )
     } finally {
@@ -312,9 +347,9 @@ function LoginForm() {
   const from            = searchParams.get('from')
   const [mode, setMode] = useState<Mode>('select')
 
-  if (mode === 'select') return <ModeSelect onSelect={setMode} />
-  if (mode === 'team')   return <TeamLogin  onBack={() => setMode('select')} from={from} />
-  return                        <AdminLogin  onBack={() => setMode('select')} from={from} />
+  return mode === 'select' ? <ModeSelect onSelect={setMode} />
+       : mode === 'team'   ? <TeamLogin  onBack={() => setMode('select')} from={from} />
+       :                     <AdminLogin  onBack={() => setMode('select')} from={from} />
 }
 
 function LoginSkeleton() {
