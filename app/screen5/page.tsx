@@ -20,8 +20,8 @@ interface AppUser {
 }
 
 interface AppCustomer { id: string; name: string; active: boolean; created_at: string }
-interface AppProduct  { id: string; name: string; category: string | null; active: boolean; created_at: string }
-interface CleanRow    { name: string; category?: string | null }
+interface AppProduct  { id: string; name: string; category: string | null; code: string | null; box_size: string | null; active: boolean; created_at: string }
+interface CleanRow    { name: string; category?: string | null; code?: string | null; box_size?: string | null }
 interface FlaggedRow  { row: number; raw: string; reason: string }
 interface AuditEntry  { id: string; timestamp: string; user: string; screen: string; action: string; summary: string }
 
@@ -573,7 +573,7 @@ function ImporterSection({
     setResult(null)
   }
 
-  const cols = showCategory ? ['Name', 'Category', 'Added', 'Active'] : ['Name', 'Added', 'Active']
+  const cols = showCategory ? ['Code', 'Name', 'Category', 'Box Size', 'Added', 'Active'] : ['Name', 'Added', 'Active']
 
   return (
     <div>
@@ -640,8 +640,10 @@ function ImporterSection({
                 <table className="w-full">
                   <thead className="sticky top-0">
                     <tr className="bg-green-50 border-b border-green-200">
+                      {showCategory && <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Code</th>}
                       <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Name</th>
                       {showCategory && <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Category</th>}
+                      {showCategory && <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Box Size</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-green-100 bg-white">
@@ -649,8 +651,10 @@ function ImporterSection({
                       ? <tr><td colSpan={showCategory ? 2 : 1} className="py-4 text-center text-sm text-gray-400">No clean rows</td></tr>
                       : result.clean_rows.map((r, i) => (
                           <tr key={i}>
+                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500 font-mono">{(r as CleanRow).code ?? <span className="text-gray-300">—</span>}</td>}
                             <td className="py-2.5 px-3 text-sm text-gray-800">{r.name}</td>
-                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{(r as { name: string; category?: string | null }).category ?? <span className="text-gray-300 italic">none</span>}</td>}
+                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{(r as CleanRow).category ?? <span className="text-gray-300 italic">none</span>}</td>}
+                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{(r as CleanRow).box_size ?? <span className="text-gray-300">—</span>}</td>}
                           </tr>
                         ))
                     }
@@ -726,11 +730,17 @@ function ImporterSection({
                   const isActive = item.active
                   return (
                     <tr key={item.id} className={isActive ? 'bg-white' : 'bg-gray-50'}>
+                      {showCategory && (
+                        <td className="py-3 px-3 text-sm text-gray-400 font-mono">{(item as AppProduct).code ?? '—'}</td>
+                      )}
                       <td className="py-3 px-3">
                         <span className={`text-sm font-medium ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>{item.name}</span>
                       </td>
                       {showCategory && (
                         <td className="py-3 px-3 text-sm text-gray-400">{(item as AppProduct).category ?? '—'}</td>
+                      )}
+                      {showCategory && (
+                        <td className="py-3 px-3 text-sm text-gray-400">{(item as AppProduct).box_size ?? '—'}</td>
                       )}
                       <td className="py-3 px-3 text-sm text-gray-400">
                         {new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}

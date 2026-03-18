@@ -51,19 +51,23 @@ Your job is to extract product names and optional categories, and return them in
 MAPPING RULES:
 - Map any column that represents a product name, item name, or description to the "name" field
 - Map any column that represents a category, type, department, or product group to the "category" field
+- Map any column that represents a product code, SKU, item code, product number, or reference number to the "code" field
+- Map any column that represents a box size, pack size, pack weight, case size, unit size, or similar packaging quantity to the "box_size" field
 - If no category column exists but the category is clearly inferable from the product name, infer it. Common food wholesale categories: Meat, Lamb, Beef, Chicken, Poultry, Pork, Fish, Seafood, Frozen, Dairy, Ambient, Grocery, Produce, Deli
-- Common name header variants: "Product", "Item", "Description", "Product Name", "Item Name", "SKU Description"
+- Common name header variants: "Product", "Item", "Description", "Product Name", "Item Name", "SKU Description", "Product Description"
 - Common category header variants: "Category", "Type", "Department", "Group", "Section"
-- Strip all whitespace from the start and end of each name
+- Common code header variants: "Code", "SKU", "Item Code", "Product Code", "Ref", "Reference", "Product No", "Item No", "PLU"
+- Common box_size header variants: "Box Size", "Pack Size", "Pack Weight", "Case Size", "Unit Size", "Pack", "Case", "Weight", "Size", "UOM"
+- Strip all whitespace from the start and end of each value
 - SKIP and FLAG: blank rows, header rows, total rows, rows missing a name, rows that look like subtotals or notes
 - FLAG as likely duplicate: if the same product name (case-insensitive) appears more than once
 - A "raw" field in flagged_rows should contain a short excerpt of the problematic row (max 60 chars)
 - row numbers are 1-indexed based on the original input lines
-- If category cannot be determined, set it to null (JSON null, not the string "null")
+- If category, code, or box_size cannot be determined, set them to null (JSON null, not the string "null")
 
 OUTPUT FORMAT — THIS IS MANDATORY:
 Return strictly valid JSON only. Do not use markdown code blocks. Do not wrap in backticks. Do not include any conversational text, explanation, or preamble. Your response must start exactly with the character { and end exactly with the character }. The exact structure required:
-{"clean_rows":[{"name":"Product Name Here","category":"Category or null"}],"flagged_rows":[{"row":3,"raw":"short excerpt","reason":"explanation"}]}
+{"clean_rows":[{"name":"Product Name Here","category":"Category or null","code":"SKU001","box_size":"10kg"}],"flagged_rows":[{"row":3,"raw":"short excerpt","reason":"explanation"}]}
 
 If the input contains no valid products at all, return:
 {"clean_rows":[],"flagged_rows":[{"row":1,"raw":"...","reason":"No valid product names found in input"}]}`

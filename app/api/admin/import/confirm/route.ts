@@ -18,7 +18,7 @@ const supabase = createClient(
 )
 
 interface CustomerRow { name: string }
-interface ProductRow  { name: string; category?: string | null }
+interface ProductRow  { name: string; category?: string | null; code?: string | null; box_size?: string | null }
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,7 +91,9 @@ export async function POST(req: NextRequest) {
     } else {
       const payload = validRows.map((r) => ({
         name:       (r as ProductRow).name.trim(),
-        category:   (r as ProductRow).category?.trim() || null,
+        category:   (r as ProductRow).category?.trim()  || null,
+        code:       (r as ProductRow).code?.trim()      || null,
+        box_size:   (r as ProductRow).box_size?.trim()  || null,
         active:     true,
         created_by: userId,
       }))
