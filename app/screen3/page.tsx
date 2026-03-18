@@ -6,6 +6,7 @@ import RoleNav from '@/components/RoleNav'
 import AppHeader                            from '@/components/AppHeader'
 import { useCustomers }                 from '@/hooks/useReferenceData'
 import { localDb, syncReferenceData }   from '@/lib/localDb'
+import { triggerSync }                   from '@/lib/syncEngine'
 import type { SelectableItem }          from '@/components/BottomSheetSelector'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -280,6 +281,9 @@ export default function Screen3Page() {
       setErrors({})
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 2000)
+
+      // Fire-and-forget sync — does not block the UI
+      triggerSync()
     } catch (err) {
       console.error('Failed to write to local queue:', err)
     } finally {

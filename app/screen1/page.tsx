@@ -7,6 +7,7 @@ import BottomSheetSelector, {
 import RoleNav from '@/components/RoleNav'
 import AppHeader             from '@/components/AppHeader'
 import { localDb, syncReferenceData } from '@/lib/localDb'
+import { triggerSync }                from '@/lib/syncEngine'
 import { useCustomers, useProducts } from '@/hooks/useReferenceData'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -287,11 +288,8 @@ export default function Screen1Page() {
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 2000)
 
-      // Attempt background sync — fire and forget
-      // (sync engine imported from lib/syncEngine when wired up)
-      if (typeof window !== 'undefined' && navigator.onLine) {
-        // triggerSync()  ← uncomment once syncEngine is wired
-      }
+      // Fire-and-forget sync — does not block the UI
+      triggerSync()
     } catch (err) {
       console.error('Failed to write to local queue:', err)
     } finally {
