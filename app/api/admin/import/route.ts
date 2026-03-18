@@ -192,24 +192,25 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // toolBlock.input is already a parsed JS object — no JSON.parse() needed
-    const result = toolBlock.input as {
-      clean_rows:   unknown[]
-      flagged_rows: unknown[]
+    // toolBlock.input is already a parsed JS object — no JSON.parse() needed.
+    // Use explicit fallbacks: the model occasionally omits an empty array even
+    // when it is in the tool's required[] (e.g. flagged_rows when all rows are
+    // clean, or clean_rows when every row is flagged). Defaulting to [] is
+    // always correct — we never error on a missing empty array.
+    const raw = toolBlock.input as Record<string, unknown>
+    console.log('[import] Tool input keys:', Object.keys(raw))
+
+    const clean_rows   = Array.isArray(raw.clean_rows)   ? raw.clean_rows   : []
+    const flagged_rows = Array.isArray(raw.flagged_rows) ? raw.flagged_rows : []
+
+    if (!Array.isArray(raw.clean_rows)) {
+      console.warn('[import] clean_rows missing — defaulted to []:', JSON.stringify(raw).slice(0, 200))
+    }
+    if (!Array.isArray(raw.flagged_rows)) {
+      console.warn('[import] flagged_rows missing — defaulted to []:', JSON.stringify(raw).slice(0, 200))
     }
 
-    if (!Array.isArray(result.clean_rows) || !Array.isArray(result.flagged_rows)) {
-      console.error('[import] Tool input missing arrays:', JSON.stringify(result).slice(0, 300))
-      return NextResponse.json(
-        { error: 'AI response missing clean_rows or flagged_rows arrays' },
-        { status: 502 }
-      )
-    }
-
-    return NextResponse.json({
-      clean_rows:   result.clean_rows,
-      flagged_rows: result.flagged_rows,
-    })
+    return NextResponse.json({ clean_rows, flagged_rows })
 
   } catch (err) {
     console.error('[import] Unhandled error:', err)
