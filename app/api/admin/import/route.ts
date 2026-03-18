@@ -1,103 +1,141 @@
 /**
  * POST /api/admin/import
  *
- * Accepts raw pasted text (CSV, tab-separated, free-form) and a target type
- * ('customers' or 'products'). Sends it to claude-sonnet-4-6 and returns:
- *   { clean_rows: [...], flagged_rows: [...] }
+ * Accepts raw pasted text and a target type ('customers' or 'products').
+ * Uses Anthropic tool_use (structured output) to force the model to return
+ * a typed schema — the SDK serialises it as JSON, so the model never writes
+ * raw JSON text and character-escaping issues (inch marks, quotes in product
+ * names/sizes, etc.) are impossible.
  *
  * Called once per import at the mapping/preview stage only.
- * No database writes happen here — those happen at /api/admin/import/confirm.
+ * No database writes here — those happen at /api/admin/import/confirm.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic                     from '@anthropic-ai/sdk'
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// ── Tool definitions ───────────────────────────────────────────────────────────
+// Using tool_use forces the model to populate a typed schema instead of writing
+// raw JSON text.  The SDK serialises the input object — the model never produces
+// raw JSON characters, so unescaped quotes / inch-marks / special chars in
+// product names or box sizes cannot break parsing.
+
+const CUSTOMER_TOOL: Anthropic.Tool = {
+  name:        'return_mapped_customers',
+  description: 'Return the mapped customer data extracted from the raw input.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      clean_rows: {
+        type:        'array',
+        description: 'Rows that were successfully mapped to a customer name.',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'The business / restaurant name, trimmed.' },
+          },
+          required: ['name'],
+        },
+      },
+      flagged_rows: {
+        type:        'array',
+        description: 'Rows that could not be mapped or should be reviewed.',
+        items: {
+          type: 'object',
+          properties: {
+            row:    { type: 'number', description: '1-indexed line number in the original input.' },
+            raw:    { type: 'string', description: 'Short excerpt of the problematic row (max 60 chars).' },
+            reason: { type: 'string', description: 'Why this row was flagged.' },
+          },
+          required: ['row', 'raw', 'reason'],
+        },
+      },
+    },
+    required: ['clean_rows', 'flagged_rows'],
+  },
+}
+
+const PRODUCT_TOOL: Anthropic.Tool = {
+  name:        'return_mapped_products',
+  description: 'Return the mapped product data extracted from the raw input.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      clean_rows: {
+        type:        'array',
+        description: 'Rows that were successfully mapped to a product.',
+        items: {
+          type: 'object',
+          properties: {
+            name:     { type: 'string',  description: 'The product name, trimmed.'                                      },
+            category: { type: ['string', 'null'], description: 'Product category, or null if unknown.'                  },
+            code:     { type: ['string', 'null'], description: 'Product / SKU code, or null if not present.'            },
+            box_size: { type: ['string', 'null'], description: 'Box/pack size (e.g. "10kg", "12 x 500g"), or null.'    },
+          },
+          required: ['name', 'category', 'code', 'box_size'],
+        },
+      },
+      flagged_rows: {
+        type:        'array',
+        description: 'Rows that could not be mapped or should be reviewed.',
+        items: {
+          type: 'object',
+          properties: {
+            row:    { type: 'number', description: '1-indexed line number in the original input.' },
+            raw:    { type: 'string', description: 'Short excerpt of the problematic row (max 60 chars).' },
+            reason: { type: 'string', description: 'Why this row was flagged.' },
+          },
+          required: ['row', 'raw', 'reason'],
+        },
+      },
+    },
+    required: ['clean_rows', 'flagged_rows'],
+  },
+}
 
 // ── System prompts ─────────────────────────────────────────────────────────────
-// Critically: the final paragraph of each prompt is an unambiguous instruction
-// to return raw JSON only — no markdown, no prose, starting with { ending with }.
 
-const CUSTOMER_SYSTEM_PROMPT = `You are a data mapping assistant for a wholesale food distributor's internal app.
+const CUSTOMER_SYSTEM = `You are a data mapping assistant for a wholesale food distributor.
 
-You will receive raw text that may be a CSV export, tab-separated data, a spreadsheet paste, or free-form text containing customer names.
+You will receive raw text — a CSV export, tab-separated data, a spreadsheet paste, or a free-form list — containing customer / business names.
 
-Your job is to extract business/restaurant names and return them in a strict JSON format.
-
-MAPPING RULES:
-- Map any column that represents a business name, client name, customer name, or account name to the "name" field
-- Common header variants to recognise: "Customer", "Client", "Business", "Account", "Name", "Company", "Restaurant", "Venue", "Account Name", "Customer Name", "Business Name"
-- Strip all whitespace from the start and end of each name
-- SKIP and FLAG: blank rows, rows that are clearly headers (e.g. the row contains "Customer" or "Name" as the only value), rows missing a name, rows that look like totals (e.g. "TOTAL: 47"), rows that are clearly not business names
-- FLAG as likely duplicate: if the same name (case-insensitive) appears more than once in the input
-- A "raw" field in flagged_rows should contain a short excerpt of the problematic row (max 60 chars)
-- row numbers are 1-indexed based on the original input lines
-
-OUTPUT FORMAT — THIS IS MANDATORY:
-Return strictly valid JSON only. Do not use markdown code blocks. Do not wrap in backticks. Do not include any conversational text, explanation, or preamble. Your response must start exactly with the character { and end exactly with the character }. The exact structure required:
-{"clean_rows":[{"name":"Business Name Here"}],"flagged_rows":[{"row":3,"raw":"short excerpt","reason":"explanation"}]}
-
-If the input contains no valid names at all, return:
-{"clean_rows":[],"flagged_rows":[{"row":1,"raw":"...","reason":"No valid customer names found in input"}]}`
-
-const PRODUCT_SYSTEM_PROMPT = `You are a data mapping assistant for a wholesale food distributor's internal app.
-
-You will receive raw text that may be a CSV export, tab-separated data, a spreadsheet paste, or free-form text containing product names.
-
-Your job is to extract product names and optional categories, and return them in a strict JSON format.
+Call the return_mapped_customers tool with:
+  clean_rows   — one entry per valid business name found
+  flagged_rows — rows that are blank, look like headers, look like totals, are missing a name, or appear to be duplicates (same name already in clean_rows)
 
 MAPPING RULES:
-- Map any column that represents a product name, item name, or description to the "name" field
-- Map any column that represents a category, type, department, or product group to the "category" field
-- Map any column that represents a product code, SKU, item code, product number, or reference number to the "code" field
-- Map any column that represents a box size, pack size, pack weight, case size, unit size, or similar packaging quantity to the "box_size" field
-- If no category column exists but the category is clearly inferable from the product name, infer it. Common food wholesale categories: Meat, Lamb, Beef, Chicken, Poultry, Pork, Fish, Seafood, Frozen, Dairy, Ambient, Grocery, Produce, Deli
-- Common name header variants: "Product", "Item", "Description", "Product Name", "Item Name", "SKU Description", "Product Description"
-- Common category header variants: "Category", "Type", "Department", "Group", "Section"
-- Common code header variants: "Code", "SKU", "Item Code", "Product Code", "Ref", "Reference", "Product No", "Item No", "PLU"
-- Common box_size header variants: "Box Size", "Pack Size", "Pack Weight", "Case Size", "Unit Size", "Pack", "Case", "Weight", "Size", "UOM"
-- Strip all whitespace from the start and end of each value
-- SKIP and FLAG: blank rows, header rows, total rows, rows missing a name, rows that look like subtotals or notes
-- FLAG as likely duplicate: if the same product name (case-insensitive) appears more than once
-- A "raw" field in flagged_rows should contain a short excerpt of the problematic row (max 60 chars)
-- row numbers are 1-indexed based on the original input lines
-- If category, code, or box_size cannot be determined, set them to null (JSON null, not the string "null")
+- Accepted header variants: Customer, Client, Business, Account, Name, Company, Restaurant, Venue
+- Strip leading/trailing whitespace from every name
+- Skip and flag: blank rows, header rows, total rows (e.g. "TOTAL: 47"), rows clearly not business names
+- Flag likely duplicates: same name case-insensitively appears more than once in the input
+- row numbers are 1-indexed from the original input`
 
-OUTPUT FORMAT — THIS IS MANDATORY:
-Return strictly valid JSON only. Do not use markdown code blocks. Do not wrap in backticks. Do not include any conversational text, explanation, or preamble. Your response must start exactly with the character { and end exactly with the character }. The exact structure required:
-{"clean_rows":[{"name":"Product Name Here","category":"Category or null","code":"SKU001","box_size":"10kg"}],"flagged_rows":[{"row":3,"raw":"short excerpt","reason":"explanation"}]}
+const PRODUCT_SYSTEM = `You are a data mapping assistant for a wholesale food distributor.
 
-If the input contains no valid products at all, return:
-{"clean_rows":[],"flagged_rows":[{"row":1,"raw":"...","reason":"No valid product names found in input"}]}`
+You will receive raw text — a CSV export, tab-separated data, a spreadsheet paste, or a free-form list — containing product data.
 
-// ── JSON extraction helper ─────────────────────────────────────────────────────
-// Handles all known cases where the model wraps or decorates JSON:
-//   - ```json ... ``` fences
-//   - ``` ... ``` fences  
-//   - Prose before the first {
-//   - Prose after the last }
-//   - Mixed whitespace / newlines
+Call the return_mapped_products tool with:
+  clean_rows   — one entry per valid product found
+  flagged_rows — rows that are blank, look like headers/totals, or are missing a name
 
-function extractJSON(raw: string): string {
-  // Step 1: strip markdown fences anywhere in the string
-  let s = raw
-    .replace(/```json\s*/gi, '')
-    .replace(/```\s*/g, '')
+MAPPING RULES FOR EACH FIELD:
+  name     — product/item description. Headers: Product, Item, Description, Product Name, SKU Description
+  category — product category or type. Headers: Category, Type, Department, Group.
+             If absent but inferable from the product name, infer it.
+             Common categories: Meat, Lamb, Beef, Chicken, Poultry, Pork, Fish, Seafood, Frozen, Dairy, Ambient, Grocery, Produce, Deli
+             Set to null if genuinely unknown.
+  code     — product/SKU reference code. Headers: Code, SKU, Item Code, Product Code, Ref, PLU, Product No.
+             Set to null if not present.
+  box_size — box, pack, or case size (e.g. "10kg", "12 x 500g", "6 x 1kg").
+             Headers: Box Size, Pack Size, Pack Weight, Case Size, Unit Size, Pack, Case, Weight, Size, UOM.
+             Preserve the exact value from the data including any units or measurements.
+             Set to null if not present.
 
-  // Step 2: find the outermost { ... } pair
-  const first = s.indexOf('{')
-  const last  = s.lastIndexOf('}')
-
-  if (first === -1 || last === -1 || last < first) {
-    // No JSON object found — return the trimmed string and let JSON.parse fail
-    // with a clear error rather than a confusing "unexpected end of JSON" message
-    return s.trim()
-  }
-
-  return s.slice(first, last + 1)
-}
+Strip leading/trailing whitespace from all values.
+Flag likely duplicates: same product name case-insensitively appears more than once.
+row numbers are 1-indexed from the original input.`
 
 // ── Route handler ──────────────────────────────────────────────────────────────
 
@@ -118,58 +156,50 @@ export async function POST(req: NextRequest) {
     if (!raw_text?.trim()) {
       return NextResponse.json({ error: 'raw_text is required' }, { status: 400 })
     }
-
     if (type !== 'customers' && type !== 'products') {
-      return NextResponse.json(
-        { error: 'type must be "customers" or "products"' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'type must be "customers" or "products"' }, { status: 400 })
     }
 
-    const systemPrompt = type === 'customers' ? CUSTOMER_SYSTEM_PROMPT : PRODUCT_SYSTEM_PROMPT
+    const tool         = type === 'customers' ? CUSTOMER_TOOL   : PRODUCT_TOOL
+    const systemPrompt = type === 'customers' ? CUSTOMER_SYSTEM : PRODUCT_SYSTEM
+    const entityLabel  = type === 'customers' ? 'customer'      : 'product'
 
-    // ── Call Claude ──────────────────────────────────────────────────────────
+    // ── Tool-use call — model must call the tool, no free-text response ────────
     const message = await client.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system:     systemPrompt,
-      messages: [
-        {
-          role:    'user',
-          content: `Map the following ${type === 'customers' ? 'customer' : 'product'} data and return JSON only:\n\n${raw_text.trim()}`,
-        },
-      ],
+      model:       'claude-sonnet-4-6',
+      max_tokens:  4096,
+      system:      systemPrompt,
+      tools:       [tool],
+      tool_choice: { type: 'tool', name: tool.name },  // force tool call
+      messages: [{
+        role:    'user',
+        content: `Map the following ${entityLabel} data:\n\n${raw_text.trim()}`,
+      }],
     })
 
-    // Extract raw text from response blocks
-    const rawResponse = message.content
-      .filter((block) => block.type === 'text')
-      .map((block) => (block as { type: 'text'; text: string }).text)
-      .join('')
+    // ── Extract tool_use block ─────────────────────────────────────────────────
+    const toolBlock = message.content.find((b) => b.type === 'tool_use') as
+      | Anthropic.ToolUseBlock
+      | undefined
 
-    // ── Parse and validate JSON ──────────────────────────────────────────────
-    const extracted = extractJSON(rawResponse)
-
-    let parsed: { clean_rows: unknown[]; flagged_rows: unknown[] }
-    try {
-      parsed = JSON.parse(extracted)
-    } catch (parseErr) {
-      // Log the full raw response so it appears in Vercel runtime logs
-      console.error('[import] JSON.parse failed.')
-      console.error('[import] Parse error:', String(parseErr))
-      console.error('[import] Raw response from Claude (full):')
-      console.error(rawResponse)
-      console.error('[import] Extracted string attempted:')
-      console.error(extracted)
-
+    if (!toolBlock) {
+      // Shouldn't happen with tool_choice: forced, but log if it does
+      console.error('[import] No tool_use block in response. stop_reason:', message.stop_reason)
+      console.error('[import] Content blocks:', JSON.stringify(message.content))
       return NextResponse.json(
-        { error: 'AI returned invalid JSON — please try again' },
+        { error: 'AI did not return structured data — please try again' },
         { status: 502 }
       )
     }
 
-    if (!Array.isArray(parsed.clean_rows) || !Array.isArray(parsed.flagged_rows)) {
-      console.error('[import] Parsed JSON missing required arrays:', JSON.stringify(parsed).slice(0, 300))
+    // toolBlock.input is already a parsed JS object — no JSON.parse() needed
+    const result = toolBlock.input as {
+      clean_rows:   unknown[]
+      flagged_rows: unknown[]
+    }
+
+    if (!Array.isArray(result.clean_rows) || !Array.isArray(result.flagged_rows)) {
+      console.error('[import] Tool input missing arrays:', JSON.stringify(result).slice(0, 300))
       return NextResponse.json(
         { error: 'AI response missing clean_rows or flagged_rows arrays' },
         { status: 502 }
@@ -177,8 +207,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      clean_rows:   parsed.clean_rows,
-      flagged_rows: parsed.flagged_rows,
+      clean_rows:   result.clean_rows,
+      flagged_rows: result.flagged_rows,
     })
 
   } catch (err) {
