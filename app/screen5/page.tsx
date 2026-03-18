@@ -21,21 +21,16 @@ interface AppUser {
 
 interface AppCustomer { id: string; name: string; active: boolean; created_at: string }
 interface AppProduct  { id: string; name: string; category: string | null; active: boolean; created_at: string }
-interface CleanRow    { name: string }
+interface CleanRow    { name: string; category?: string | null }
 interface FlaggedRow  { row: number; raw: string; reason: string }
 interface AuditEntry  { id: string; timestamp: string; user: string; screen: string; action: string; summary: string }
 
-// ─── AI importer preview — stays mock (UI state for the importer flow) ─────────
+// ─── AI importer — types for live API response ────────────────────────────────
 
-const MOCK_CLEAN_ROWS: CleanRow[] = [
-  { name: 'Al Turka Restaurant' }, { name: 'The Manor Hotel' },
-  { name: 'Milano Steakhouse'   }, { name: 'Naz Restaurant'  }, { name: 'Taj Brasserie' },
-]
-const MOCK_FLAGGED_ROWS: FlaggedRow[] = [
-  { row: 4,  raw: ', Sheffield, 0114 XXX', reason: 'Missing name — first column is empty'         },
-  { row: 7,  raw: 'Al Turka Restaurant',   reason: 'Likely duplicate — name already in database' },
-  { row: 11, raw: 'TOTAL: 47',             reason: 'Appears to be a spreadsheet total row'        },
-]
+interface ImportResult {
+  clean_rows:   CleanRow[]
+  flagged_rows: FlaggedRow[]
+}
 
 // ─── Audit log — stays mock until audit_log API route is wired ────────────────
 
@@ -468,30 +463,38 @@ function UsersSection() {
   )
 }
 
-// ─── Section 2 & 3: Importer (live Supabase for list view) ────────────────────
+// ─── Section 2 & 3: Importer (live AI + Supabase) ─────────────────────────────
 
 function ImporterSection({
-  entityLabel, showCategory,
+  entityLabel, showCategory, type,
   fetchUrl, patchUrl,
 }: {
   entityLabel:  string
   showCategory: boolean
+  type:         'customers' | 'products'
   fetchUrl:     string
   patchUrl:     (id: string) => string
 }) {
   const [importState, setImportState] = useState<ImportState>('list')
   const [rawInput,    setRawInput]    = useState('')
   const [isLoading,   setIsLoading]   = useState(false)
+  const [isConfirming, setIsConfirming] = useState(false)
+  const [apiError,    setApiError]    = useState('')
+  const [result,      setResult]      = useState<ImportResult | null>(null)
   const [items,       setItems]       = useState<(AppCustomer | AppProduct)[]>([])
   const [fetching,    setFetching]    = useState(true)
+  const [importDone,  setImportDone]  = useState<{ inserted: number; skipped: number } | null>(null)
 
-  useEffect(() => {
+  function loadList() {
+    setFetching(true)
     fetch(fetchUrl)
       .then((r) => r.json())
       .then((data) => setItems(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setFetching(false))
-  }, [fetchUrl])
+  }
+
+  useEffect(() => { loadList() }, [fetchUrl])
 
   async function toggleItem(id: string, current: boolean) {
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, active: !current } : i))
@@ -502,99 +505,212 @@ function ImporterSection({
     if (!res.ok) setItems((prev) => prev.map((i) => i.id === id ? { ...i, active: current } : i))
   }
 
-  function handleMapData() {
+  // ── Step 1: Send raw text to AI for mapping ─────────────────────────────────
+  async function handleMapData() {
     if (!rawInput.trim()) return
     setIsLoading(true)
-    setTimeout(() => { setIsLoading(false); setImportState('preview') }, 1400)
+    setApiError('')
+    setResult(null)
+
+    try {
+      const res = await fetch('/api/admin/import', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ raw_text: rawInput, type }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setApiError(data.error ?? `AI mapping failed (${res.status})`)
+        return
+      }
+
+      setResult(data as ImportResult)
+      setImportState('preview')
+    } catch {
+      setApiError('Network error — check your connection and try again')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
+  // ── Step 2: Confirm and bulk insert clean rows ──────────────────────────────
   async function handleConfirm() {
-    setImportState('list')
-    setRawInput('')
-    // Re-fetch after import
-    setFetching(true)
-    fetch(fetchUrl)
-      .then((r) => r.json())
-      .then((data) => setItems(Array.isArray(data) ? data : []))
-      .finally(() => setFetching(false))
+    if (!result || result.clean_rows.length === 0) return
+    setIsConfirming(true)
+    setApiError('')
+
+    try {
+      const res = await fetch('/api/admin/import/confirm', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ type, rows: result.clean_rows }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setApiError(data.error ?? `Import failed (${res.status})`)
+        return
+      }
+
+      setImportDone({ inserted: data.inserted, skipped: data.skipped })
+      setImportState('list')
+      setRawInput('')
+      setResult(null)
+      loadList()
+    } catch {
+      setApiError('Network error during import — please try again')
+    } finally {
+      setIsConfirming(false)
+    }
+  }
+
+  function resetToInput() {
+    setImportState('input')
+    setApiError('')
+    setResult(null)
   }
 
   const cols = showCategory ? ['Name', 'Category', 'Added', 'Active'] : ['Name', 'Added', 'Active']
 
   return (
     <div>
+      {/* Success banner after import */}
+      {importDone && (
+        <div className="mb-4 flex items-center justify-between gap-3 p-3 bg-green-50 border border-green-200 rounded-xl">
+          <p className="text-sm text-green-800 font-medium">
+            ✓ {importDone.inserted} {entityLabel.toLowerCase()}{importDone.inserted === 1 ? '' : 's'} imported successfully
+            {importDone.skipped > 0 && <span className="text-green-600 font-normal"> ({importDone.skipped} skipped — already exist)</span>}
+          </p>
+          <button type="button" onClick={() => setImportDone(null)} className="text-green-500 hover:text-green-700 text-lg leading-none">×</button>
+        </div>
+      )}
+
       <SectionHeader
         title={`${entityLabel}s`}
         action={
           importState === 'list'
-            ? <PrimaryButton onClick={() => setImportState('input')}>+ Import {entityLabel.toLowerCase()}s</PrimaryButton>
-            : <PrimaryButton variant="ghost" onClick={() => { setImportState('list'); setRawInput('') }}>← Back to list</PrimaryButton>
+            ? <PrimaryButton onClick={() => { setImportState('input'); setApiError(''); setImportDone(null) }}>+ Import {entityLabel.toLowerCase()}s</PrimaryButton>
+            : <PrimaryButton variant="ghost" onClick={() => { setImportState('list'); setRawInput(''); setResult(null); setApiError('') }}>← Back to list</PrimaryButton>
         }
       />
 
+      {/* ── Step 1: Paste raw data ─────────────────────────────────────────── */}
       {importState === 'input' && (
         <div className="space-y-4">
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
             <p className="text-sm font-semibold text-blue-800 mb-1">Paste any format — AI will map it</p>
-            <p className="text-xs text-blue-600">Works with BarcodeX exports, Fresho CSVs, Xero contacts, or any spreadsheet copy-paste.</p>
+            <p className="text-xs text-blue-600">Works with BarcodeX exports, Fresho CSVs, Xero contacts, or any spreadsheet copy-paste. Column headers don't matter.</p>
           </div>
-          <textarea rows={10} value={rawInput} onChange={(e) => setRawInput(e.target.value)}
+          <textarea rows={12} value={rawInput} onChange={(e) => { setRawInput(e.target.value); setApiError('') }}
             placeholder={`Paste your ${entityLabel.toLowerCase()} data here…`}
             className="w-full rounded-xl border border-gray-200 p-4 text-sm text-gray-800 font-mono leading-relaxed focus:outline-none focus:border-[#EB6619] resize-none placeholder:text-gray-300" />
+          {apiError && <p className="text-red-600 text-sm">{apiError}</p>}
           <div className="flex items-center gap-3">
             <PrimaryButton onClick={handleMapData} disabled={!rawInput.trim() || isLoading}>
-              {isLoading ? <span className="flex items-center gap-2"><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Mapping with AI…</span> : 'Map data with AI'}
+              {isLoading
+                ? <span className="flex items-center gap-2"><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Mapping with AI…</span>
+                : 'Map data with AI'}
             </PrimaryButton>
-            <p className="text-xs text-gray-400">{rawInput.length > 0 ? `${rawInput.split('\n').length} lines pasted` : 'No data pasted yet'}</p>
+            <p className="text-xs text-gray-400">{rawInput.length > 0 ? `${rawInput.split('\n').filter(l => l.trim()).length} non-empty lines` : 'No data pasted yet'}</p>
           </div>
         </div>
       )}
 
-      {importState === 'preview' && (
+      {/* ── Step 2: Preview results ────────────────────────────────────────── */}
+      {importState === 'preview' && result && (
         <div className="space-y-5">
+          {result.clean_rows.length === 0 && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-sm font-semibold text-amber-800">No importable rows found</p>
+              <p className="text-xs text-amber-700 mt-1">The AI could not identify any valid {entityLabel.toLowerCase()} names. Check the flagged rows below, edit your data, and try again.</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* Clean rows */}
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                <p className="text-sm font-bold text-gray-900">Ready to import <span className="ml-1.5 text-xs font-normal text-gray-400">({MOCK_CLEAN_ROWS.length} rows)</span></p>
+                <p className="text-sm font-bold text-gray-900">Ready to import <span className="ml-1.5 text-xs font-normal text-gray-400">({result.clean_rows.length} rows)</span></p>
               </div>
-              <div className="rounded-xl border border-green-200 overflow-hidden">
+              <div className="rounded-xl border border-green-200 overflow-hidden max-h-96 overflow-y-auto">
                 <table className="w-full">
-                  <thead><tr className="bg-green-50 border-b border-green-200"><th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Name</th></tr></thead>
+                  <thead className="sticky top-0">
+                    <tr className="bg-green-50 border-b border-green-200">
+                      <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Name</th>
+                      {showCategory && <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Category</th>}
+                    </tr>
+                  </thead>
                   <tbody className="divide-y divide-green-100 bg-white">
-                    {MOCK_CLEAN_ROWS.map((r, i) => <tr key={i}><td className="py-2.5 px-3 text-sm text-gray-800">{r.name}</td></tr>)}
+                    {result.clean_rows.length === 0
+                      ? <tr><td colSpan={showCategory ? 2 : 1} className="py-4 text-center text-sm text-gray-400">No clean rows</td></tr>
+                      : result.clean_rows.map((r, i) => (
+                          <tr key={i}>
+                            <td className="py-2.5 px-3 text-sm text-gray-800">{r.name}</td>
+                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{(r as { name: string; category?: string | null }).category ?? <span className="text-gray-300 italic">none</span>}</td>}
+                          </tr>
+                        ))
+                    }
                   </tbody>
                 </table>
               </div>
             </div>
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
-                <p className="text-sm font-bold text-gray-900">Flagged — review required <span className="ml-1.5 text-xs font-normal text-gray-400">({MOCK_FLAGGED_ROWS.length} rows)</span></p>
-              </div>
-              <div className="rounded-xl border border-amber-200 overflow-hidden">
-                <table className="w-full">
-                  <thead><tr className="bg-amber-50 border-b border-amber-200"><th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-amber-700">Row</th><th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-amber-700">Reason</th></tr></thead>
-                  <tbody className="divide-y divide-amber-100 bg-white">
-                    {MOCK_FLAGGED_ROWS.map((r, i) => (
-                      <tr key={i}>
-                        <td className="py-2.5 px-3 text-sm font-mono text-gray-500 w-12">{r.row}</td>
-                        <td className="py-2.5 px-3 text-xs text-amber-800 leading-snug">{r.reason}<span className="block text-gray-400 font-mono mt-0.5 truncate">{r.raw}</span></td>
+
+            {/* Flagged rows */}
+            {result.flagged_rows.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                  <p className="text-sm font-bold text-gray-900">Flagged — will be skipped <span className="ml-1.5 text-xs font-normal text-gray-400">({result.flagged_rows.length} rows)</span></p>
+                </div>
+                <div className="rounded-xl border border-amber-200 overflow-hidden max-h-96 overflow-y-auto">
+                  <table className="w-full">
+                    <thead className="sticky top-0">
+                      <tr className="bg-amber-50 border-b border-amber-200">
+                        <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-amber-700 w-10">Row</th>
+                        <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-amber-700">Reason</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-amber-100 bg-white">
+                      {result.flagged_rows.map((r, i) => (
+                        <tr key={i}>
+                          <td className="py-2.5 px-3 text-sm font-mono text-gray-400">{r.row}</td>
+                          <td className="py-2.5 px-3 text-xs text-amber-800 leading-snug">
+                            {r.reason}
+                            <span className="block text-gray-400 font-mono mt-0.5 truncate max-w-[200px]">{r.raw}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
           </div>
-          <div className="flex items-center gap-3 pt-1">
-            <PrimaryButton onClick={handleConfirm}>Confirm &amp; import {MOCK_CLEAN_ROWS.length} records</PrimaryButton>
-            <PrimaryButton variant="ghost" onClick={() => setImportState('input')}>← Edit data</PrimaryButton>
-            <p className="text-xs text-gray-400 ml-auto">{MOCK_FLAGGED_ROWS.length} flagged rows will be skipped</p>
+
+          {apiError && <p className="text-red-600 text-sm">{apiError}</p>}
+
+          <div className="flex items-center gap-3 pt-1 flex-wrap">
+            <PrimaryButton
+              onClick={handleConfirm}
+              disabled={result.clean_rows.length === 0 || isConfirming}
+            >
+              {isConfirming
+                ? <span className="flex items-center gap-2"><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Importing…</span>
+                : `Confirm & import ${result.clean_rows.length} record${result.clean_rows.length === 1 ? '' : 's'}`}
+            </PrimaryButton>
+            <PrimaryButton variant="ghost" onClick={resetToInput}>← Edit data</PrimaryButton>
+            {result.flagged_rows.length > 0 && (
+              <p className="text-xs text-gray-400 ml-auto">{result.flagged_rows.length} flagged row{result.flagged_rows.length === 1 ? '' : 's'} will be skipped</p>
+            )}
           </div>
         </div>
       )}
 
+      {/* ── Existing list ──────────────────────────────────────────────────── */}
       {importState === 'list' && (
         fetching ? <Spinner /> : (
           <div className="overflow-x-auto rounded-xl border border-gray-200">
@@ -845,6 +961,7 @@ export default function Screen5Page() {
           <ImporterSection
             entityLabel="Customer"
             showCategory={false}
+            type="customers"
             fetchUrl="/api/admin/customers"
             patchUrl={(id) => `/api/admin/customers/${id}`}
           />
@@ -853,6 +970,7 @@ export default function Screen5Page() {
           <ImporterSection
             entityLabel="Product"
             showCategory={true}
+            type="products"
             fetchUrl="/api/admin/products"
             patchUrl={(id) => `/api/admin/products/${id}`}
           />
