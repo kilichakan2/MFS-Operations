@@ -70,9 +70,9 @@ const PRODUCT_TOOL: Anthropic.Tool = {
           type: 'object',
           properties: {
             name:     { type: 'string',  description: 'The product name, trimmed.'                                      },
-            category: { type: ['string', 'null'], description: 'Product category, or null if unknown.'                  },
-            code:     { type: ['string', 'null'], description: 'Product / SKU code, or null if not present.'            },
-            box_size: { type: ['string', 'null'], description: 'Box/pack size (e.g. "10kg", "12 x 500g"), or null.'    },
+            category: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Product category, or null if unknown.'     },
+            code:     { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Product / SKU code, or null if not present.' },
+            box_size: { anyOf: [{ type: 'string' }, { type: 'null' }], description: 'Box/pack size (e.g. "10kg", "12 x 500g"), or null.' },
           },
           required: ['name'],  // category, code, box_size are optional
         },
@@ -212,7 +212,6 @@ export async function POST(req: NextRequest) {
     // clean, or clean_rows when every row is flagged). Defaulting to [] is
     // always correct — we never error on a missing empty array.
     const raw = toolBlock.input as Record<string, unknown>
-    console.log('[import] Tool input keys:', Object.keys(raw))
 
     const clean_rows   = Array.isArray(raw.clean_rows)   ? raw.clean_rows   : []
     const flagged_rows = Array.isArray(raw.flagged_rows) ? raw.flagged_rows : []
