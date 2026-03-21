@@ -74,7 +74,7 @@ const PRODUCT_TOOL: Anthropic.Tool = {
             code:     { type: ['string', 'null'], description: 'Product / SKU code, or null if not present.'            },
             box_size: { type: ['string', 'null'], description: 'Box/pack size (e.g. "10kg", "12 x 500g"), or null.'    },
           },
-          required: ['name', 'category', 'code', 'box_size'],
+          required: ['name'],  // category, code, box_size are optional
         },
       },
       flagged_rows: {
@@ -135,7 +135,12 @@ MAPPING RULES FOR EACH FIELD:
 
 Strip leading/trailing whitespace from all values.
 Flag likely duplicates: same product name case-insensitively appears more than once.
-row numbers are 1-indexed from the original input.`
+row numbers are 1-indexed from the original input.
+
+CRITICAL — OPTIONAL FIELDS: category, code, and box_size are ALL optional.
+Do NOT flag a row just because it is missing a category, code, or box size.
+Only flag a row if the actual product NAME is missing or unreadable.
+If category is missing and cannot be inferred, set it to null. Same for code and box_size.`
 
 // ── Route handler ──────────────────────────────────────────────────────────────
 
