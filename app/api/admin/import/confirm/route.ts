@@ -89,11 +89,18 @@ export async function POST(req: NextRequest) {
       skipped  = validRows.length - inserted
 
     } else {
+      // Convert the sentinel value "none" (returned by AI for missing optional
+      // fields) back to null before inserting into Supabase.
+      const sentinel = (v: string | null | undefined): string | null => {
+        if (!v || v.trim() === '' || v.trim().toLowerCase() === 'none') return null
+        return v.trim()
+      }
+
       const payload = validRows.map((r) => ({
         name:       (r as ProductRow).name.trim(),
-        category:   (r as ProductRow).category?.trim()  || null,
-        code:       (r as ProductRow).code?.trim()      || null,
-        box_size:   (r as ProductRow).box_size?.trim()  || null,
+        category:   sentinel((r as ProductRow).category),
+        code:       sentinel((r as ProductRow).code),
+        box_size:   sentinel((r as ProductRow).box_size),
         active:     true,
         created_by: userId,
       }))

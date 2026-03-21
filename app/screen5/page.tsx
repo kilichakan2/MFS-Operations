@@ -651,10 +651,10 @@ function ImporterSection({
                       ? <tr><td colSpan={showCategory ? 2 : 1} className="py-4 text-center text-sm text-gray-400">No clean rows</td></tr>
                       : result.clean_rows.map((r, i) => (
                           <tr key={i}>
-                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500 font-mono">{(r as CleanRow).code ?? <span className="text-gray-300">—</span>}</td>}
+                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500 font-mono">{((r as CleanRow).code && (r as CleanRow).code !== 'none') ? (r as CleanRow).code : <span className="text-gray-300">—</span>}</td>}
                             <td className="py-2.5 px-3 text-sm text-gray-800">{r.name}</td>
-                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{(r as CleanRow).category ?? <span className="text-gray-300 italic">none</span>}</td>}
-                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{(r as CleanRow).box_size ?? <span className="text-gray-300">—</span>}</td>}
+                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{((r as CleanRow).category && (r as CleanRow).category !== 'none') ? (r as CleanRow).category : <span className="text-gray-300 italic">—</span>}</td>}
+                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{((r as CleanRow).box_size && (r as CleanRow).box_size !== 'none') ? (r as CleanRow).box_size : <span className="text-gray-300">—</span>}</td>}
                           </tr>
                         ))
                     }
