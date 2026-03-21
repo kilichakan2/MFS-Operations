@@ -118,29 +118,38 @@ You will receive raw text — a CSV export, tab-separated data, a spreadsheet pa
 
 Call the return_mapped_products tool with:
   clean_rows   — one entry per valid product found
-  flagged_rows — rows that are blank, look like headers/totals, or are missing a name
+  flagged_rows — rows that are blank, look like spreadsheet headers/totals, or have NO product name at all
+
+CRITICAL — DATA-DRIVEN MAPPING, NOT HEADER-DRIVEN:
+Do not rely solely on column headers to identify which column is the product name.
+Analyze the actual values in every row. If a cell contains a recognisable food, beverage, or wholesale item name (e.g. "Beypazari Mineral Water", "Coca Cola", "Lamb Shoulder", "Chicken Breast", "Basmati Rice 10kg"), you MUST map it to the name field regardless of what the column header says — even if the header is "Product Name/Description", "Description", "Item", "Article", or anything else. The header is a hint, not a rule.
 
 MAPPING RULES FOR EACH FIELD:
-  name     — product/item description. Headers: Product, Item, Description, Product Name, SKU Description
+  name     — the product / item description. Look at the row values, not just the header.
+             Accepted header variants include (but are not limited to): Product, Item, Description,
+             Product Name, Product Name/Description, SKU Description, Article, Article Name.
+             If a string value looks like a food or beverage product name, treat it as name.
   category — product category or type. Headers: Category, Type, Department, Group.
              If absent but inferable from the product name, infer it.
-             Common categories: Meat, Lamb, Beef, Chicken, Poultry, Pork, Fish, Seafood, Frozen, Dairy, Ambient, Grocery, Produce, Deli
-             Set to null if genuinely unknown.
+             Common categories: Meat, Lamb, Beef, Chicken, Poultry, Pork, Fish, Seafood,
+             Frozen, Dairy, Ambient, Grocery, Produce, Deli, Beverages, Dry Goods.
+             Set to null if genuinely unknown — this is fine.
   code     — product/SKU reference code. Headers: Code, SKU, Item Code, Product Code, Ref, PLU, Product No.
-             Set to null if not present.
+             Set to null if not present — this is fine.
   box_size — box, pack, or case size (e.g. "10kg", "12 x 500g", "6 x 1kg").
              Headers: Box Size, Pack Size, Pack Weight, Case Size, Unit Size, Pack, Case, Weight, Size, UOM.
-             Preserve the exact value from the data including any units or measurements.
-             Set to null if not present.
+             Preserve the exact value from the source data including units.
+             Set to null if not present — this is fine.
+
+CRITICAL — OPTIONAL FIELDS:
+category, code, and box_size are ALL entirely optional.
+NEVER flag a row because category, code, or box_size is missing.
+ONLY flag a row if the product NAME itself is missing, blank, or completely unrecognisable.
+A row with only a name and nothing else is a perfectly valid clean row.
 
 Strip leading/trailing whitespace from all values.
-Flag likely duplicates: same product name case-insensitively appears more than once.
-row numbers are 1-indexed from the original input.
-
-CRITICAL — OPTIONAL FIELDS: category, code, and box_size are ALL optional.
-Do NOT flag a row just because it is missing a category, code, or box size.
-Only flag a row if the actual product NAME is missing or unreadable.
-If category is missing and cannot be inferred, set it to null. Same for code and box_size.`
+Flag likely duplicates: same name case-insensitively appears more than once in the input.
+row numbers are 1-indexed from the original input.`
 
 // ── Route handler ──────────────────────────────────────────────────────────────
 
