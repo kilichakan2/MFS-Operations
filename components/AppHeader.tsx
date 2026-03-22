@@ -31,20 +31,21 @@ export default function AppHeader({
     <header className="bg-[#16205B] px-5 pt-14 pb-5 sticky top-0 z-40">
       <div className={`flex items-center justify-between max-w-${maxWidth} mx-auto`}>
 
-        {/* Brand — logo + screen title */}
+        {/* Logo + screen title */}
         <div className="flex items-center gap-3">
+          {/* White logo on navy — approved brand variant */}
           <Image
-            src="/mfs-logo.svg"
+            src="/mfs-logo-white.svg"
             alt="MFS Wholesale"
-            width={110}
-            height={26}
+            width={107}
+            height={28}
             priority
-            className="h-[26px] w-auto"
+            className="h-7 w-auto"
           />
           {title && (
             <>
-              <span className="text-white/30 text-lg font-light select-none">|</span>
-              <span className="text-white text-sm font-semibold leading-tight">{title}</span>
+              <span className="text-white/25 font-light select-none">|</span>
+              <span className="text-white/80 text-sm font-semibold">{title}</span>
             </>
           )}
         </div>
