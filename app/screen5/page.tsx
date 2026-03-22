@@ -7,7 +7,7 @@ import AppHeader             from '@/components/AppHeader'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab        = 'users' | 'customers' | 'products' | 'export' | 'permissions' | 'audit'
-type ImportState = 'input' | 'preview' | 'list'
+type ImportState = 'input' | 'mapping' | 'preview' | 'list'
 type UserRole   = 'warehouse' | 'office' | 'sales' | 'admin'
 
 interface AppUser {
@@ -463,7 +463,12 @@ function UsersSection() {
   )
 }
 
-// ─── Section 2 & 3: Importer (live AI + Supabase) ─────────────────────────────
+// ─── Section 2 & 3: Importer ──────────────────────────────────────────────────
+// Customers: AI-powered flow (paste → AI maps → confirm → Supabase)
+// Products:  Manual column mapper (paste TSV → pick columns → preview → Supabase)
+// The manual mapper bypasses the Anthropic API entirely — direct data-to-DB.
+
+interface ColMapping { name: number; code: number | null; category: number | null; box_size: number | null }
 
 function ImporterSection({
   entityLabel, showCategory, type,
@@ -475,15 +480,20 @@ function ImporterSection({
   fetchUrl:     string
   patchUrl:     (id: string) => string
 }) {
-  const [importState, setImportState] = useState<ImportState>('list')
-  const [rawInput,    setRawInput]    = useState('')
-  const [isLoading,   setIsLoading]   = useState(false)
+  const [importState,  setImportState]  = useState<ImportState>('list')
+  const [rawInput,     setRawInput]     = useState('')
+  const [isLoading,    setIsLoading]    = useState(false)
   const [isConfirming, setIsConfirming] = useState(false)
-  const [apiError,    setApiError]    = useState('')
-  const [result,      setResult]      = useState<ImportResult | null>(null)
-  const [items,       setItems]       = useState<(AppCustomer | AppProduct)[]>([])
-  const [fetching,    setFetching]    = useState(true)
-  const [importDone,  setImportDone]  = useState<{ inserted: number; skipped: number } | null>(null)
+  const [apiError,     setApiError]     = useState('')
+  const [result,       setResult]       = useState<ImportResult | null>(null)
+  const [items,        setItems]        = useState<(AppCustomer | AppProduct)[]>([])
+  const [fetching,     setFetching]     = useState(true)
+  const [importDone,   setImportDone]   = useState<{ inserted: number; skipped: number } | null>(null)
+
+  // ── Manual mapper state (products only) ─────────────────────────────────────
+  const [parsedRows,   setParsedRows]   = useState<string[][]>([])
+  const [headers,      setHeaders]      = useState<string[]>([])
+  const [mapping,      setMapping]      = useState<ColMapping>({ name: 1, code: 0, category: null, box_size: 2 })
 
   function loadList() {
     setFetching(true)
@@ -493,7 +503,6 @@ function ImporterSection({
       .catch(console.error)
       .finally(() => setFetching(false))
   }
-
   useEffect(() => { loadList() }, [fetchUrl])
 
   async function toggleItem(id: string, current: boolean) {
@@ -505,83 +514,108 @@ function ImporterSection({
     if (!res.ok) setItems((prev) => prev.map((i) => i.id === id ? { ...i, active: current } : i))
   }
 
-  // ── Step 1: Send raw text to AI for mapping ─────────────────────────────────
-  async function handleMapData() {
+  // ── Products: parse TSV and go to mapping step ───────────────────────────────
+  function handleParseForMapping() {
     if (!rawInput.trim()) return
-    setIsLoading(true)
+    const lines = rawInput.trim().split('\n').filter(l => l.trim())
+    const allRows = lines.map(l => l.split('\t'))
+    const maxCols = Math.max(...allRows.map(r => r.length))
+    const colLabels = Array.from({ length: maxCols }, (_, i) => `Column ${i + 1}`)
+
+    // If first row looks like a header (no numeric-only cells), use it as labels
+    const firstRow = allRows[0]
+    const looksLikeHeader = firstRow.every(cell => isNaN(Number(cell.trim())) || cell.trim() === '')
+    if (looksLikeHeader) {
+      setHeaders(firstRow.map((h, i) => h.trim() || `Column ${i + 1}`))
+      setParsedRows(allRows.slice(1))
+    } else {
+      setHeaders(colLabels)
+      setParsedRows(allRows)
+    }
+
+    // Auto-detect mapping from headers
+    const detect = (keywords: string[]) => {
+      const idx = (looksLikeHeader ? firstRow : []).findIndex(h =>
+        keywords.some(k => h.toLowerCase().includes(k))
+      )
+      return idx >= 0 ? idx : null
+    }
+    const nameIdx     = detect(['name', 'description', 'product', 'item', 'article']) ?? 0
+    const codeIdx     = detect(['code', 'sku', 'ref', 'plu', 'no.', 'number'])
+    const catIdx      = detect(['category', 'type', 'dept', 'group'])
+    const boxIdx      = detect(['box', 'pack', 'size', 'weight', 'uom', 'unit'])
+
+    setMapping({ name: nameIdx, code: codeIdx, category: catIdx, box_size: boxIdx })
+    setImportState('mapping')
     setApiError('')
-    setResult(null)
+  }
 
+  // ── Customers: AI mapping flow ───────────────────────────────────────────────
+  async function handleAIMap() {
+    if (!rawInput.trim()) return
+    setIsLoading(true); setApiError(''); setResult(null)
     try {
-      const res = await fetch('/api/admin/import', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ raw_text: rawInput, type }),
+      const res  = await fetch('/api/admin/import', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw_text: rawInput, type }),
       })
-
       const data = await res.json()
-
-      if (!res.ok) {
-        setApiError(data.error ?? `AI mapping failed (${res.status})`)
-        return
-      }
-
+      if (!res.ok) { setApiError(data.error ?? `AI mapping failed (${res.status})`); return }
       setResult(data as ImportResult)
       setImportState('preview')
-    } catch {
-      setApiError('Network error — check your connection and try again')
-    } finally {
-      setIsLoading(false)
-    }
+    } catch { setApiError('Network error — check your connection and try again') }
+    finally   { setIsLoading(false) }
   }
 
-  // ── Step 2: Confirm and bulk insert clean rows ──────────────────────────────
-  async function handleConfirm() {
-    if (!result || result.clean_rows.length === 0) return
-    setIsConfirming(true)
-    setApiError('')
-
+  // ── Manual confirm (products) ────────────────────────────────────────────────
+  async function handleManualConfirm() {
+    if (parsedRows.length === 0 || isConfirming) return
+    setIsConfirming(true); setApiError('')
     try {
-      const res = await fetch('/api/admin/import/confirm', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ type, rows: result.clean_rows }),
+      const res  = await fetch('/api/admin/import/manual', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, rows: parsedRows, mapping }),
       })
-
       const data = await res.json()
-
-      if (!res.ok) {
-        setApiError(data.error ?? `Import failed (${res.status})`)
-        return
-      }
-
+      if (!res.ok) { setApiError(data.error ?? `Import failed (${res.status})`); return }
       setImportDone({ inserted: data.inserted, skipped: data.skipped })
-      setImportState('list')
-      setRawInput('')
-      setResult(null)
-      loadList()
-    } catch {
-      setApiError('Network error during import — please try again')
-    } finally {
-      setIsConfirming(false)
-    }
+      setImportState('list'); setRawInput(''); setParsedRows([]); loadList()
+    } catch { setApiError('Network error — please try again') }
+    finally   { setIsConfirming(false) }
   }
 
-  function resetToInput() {
-    setImportState('input')
-    setApiError('')
-    setResult(null)
+  // ── AI confirm (customers) ───────────────────────────────────────────────────
+  async function handleAIConfirm() {
+    if (!result || result.clean_rows.length === 0 || isConfirming) return
+    setIsConfirming(true); setApiError('')
+    try {
+      const res  = await fetch('/api/admin/import/confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, rows: result.clean_rows }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setApiError(data.error ?? `Import failed (${res.status})`); return }
+      setImportDone({ inserted: data.inserted, skipped: data.skipped })
+      setImportState('list'); setRawInput(''); setResult(null); loadList()
+    } catch { setApiError('Network error — please try again') }
+    finally   { setIsConfirming(false) }
   }
 
-  const cols = showCategory ? ['Code', 'Name', 'Category', 'Box Size', 'Added', 'Active'] : ['Name', 'Added', 'Active']
+  function reset() { setImportState('list'); setRawInput(''); setResult(null); setParsedRows([]); setApiError('') }
+
+  const listCols = showCategory ? ['Code', 'Name', 'Category', 'Box Size', 'Added', 'Active'] : ['Name', 'Added', 'Active']
+
+  // ── Column option list for dropdowns ─────────────────────────────────────────
+  const colOptions = headers.map((h, i) => ({ value: i, label: `Col ${i + 1}: ${h}` }))
+  const colOptionsWithNone = [{ value: -1, label: '— not mapped —' }, ...colOptions]
 
   return (
     <div>
-      {/* Success banner after import */}
+      {/* Success banner */}
       {importDone && (
         <div className="mb-4 flex items-center justify-between gap-3 p-3 bg-green-50 border border-green-200 rounded-xl">
           <p className="text-sm text-green-800 font-medium">
-            ✓ {importDone.inserted} {entityLabel.toLowerCase()}{importDone.inserted === 1 ? '' : 's'} imported successfully
+            ✓ {importDone.inserted} {entityLabel.toLowerCase()}{importDone.inserted === 1 ? '' : 's'} imported
             {importDone.skipped > 0 && <span className="text-green-600 font-normal"> ({importDone.skipped} skipped — already exist)</span>}
           </p>
           <button type="button" onClick={() => setImportDone(null)} className="text-green-500 hover:text-green-700 text-lg leading-none">×</button>
@@ -593,44 +627,133 @@ function ImporterSection({
         action={
           importState === 'list'
             ? <PrimaryButton onClick={() => { setImportState('input'); setApiError(''); setImportDone(null) }}>+ Import {entityLabel.toLowerCase()}s</PrimaryButton>
-            : <PrimaryButton variant="ghost" onClick={() => { setImportState('list'); setRawInput(''); setResult(null); setApiError('') }}>← Back to list</PrimaryButton>
+            : <PrimaryButton variant="ghost" onClick={reset}>← Back to list</PrimaryButton>
         }
       />
 
-      {/* ── Step 1: Paste raw data ─────────────────────────────────────────── */}
+      {/* ── Step 1: Paste ─────────────────────────────────────────────────── */}
       {importState === 'input' && (
         <div className="space-y-4">
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <p className="text-sm font-semibold text-blue-800 mb-1">Paste any format — AI will map it</p>
-            <p className="text-xs text-blue-600">Works with BarcodeX exports, Fresho CSVs, Xero contacts, or any spreadsheet copy-paste. Column headers don't matter.</p>
+            {showCategory ? (
+              <>
+                <p className="text-sm font-semibold text-blue-800 mb-1">Paste from Excel — you choose the columns</p>
+                <p className="text-xs text-blue-600">Copy your spreadsheet data and paste it here. Works with any column order — you will map them in the next step.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-blue-800 mb-1">Paste any format — AI will map it</p>
+                <p className="text-xs text-blue-600">Works with BarcodeX exports, Fresho CSVs, Xero contacts, or any spreadsheet copy-paste.</p>
+              </>
+            )}
           </div>
           <textarea rows={12} value={rawInput} onChange={(e) => { setRawInput(e.target.value); setApiError('') }}
-            placeholder={`Paste your ${entityLabel.toLowerCase()} data here…`}
+            placeholder={showCategory ? 'Paste your Excel data here (Ctrl+C from spreadsheet, then Ctrl+V)…' : `Paste your ${entityLabel.toLowerCase()} data here…`}
             className="w-full rounded-xl border border-gray-200 p-4 text-sm text-gray-800 font-mono leading-relaxed focus:outline-none focus:border-[#EB6619] resize-none placeholder:text-gray-300" />
           {apiError && <p className="text-red-600 text-sm">{apiError}</p>}
           <div className="flex items-center gap-3">
-            <PrimaryButton onClick={handleMapData} disabled={!rawInput.trim() || isLoading}>
-              {isLoading
-                ? <span className="flex items-center gap-2"><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Mapping with AI…</span>
-                : 'Map data with AI'}
-            </PrimaryButton>
-            <p className="text-xs text-gray-400">{rawInput.length > 0 ? `${rawInput.split('\n').filter(l => l.trim()).length} non-empty lines` : 'No data pasted yet'}</p>
+            {showCategory ? (
+              <PrimaryButton onClick={handleParseForMapping} disabled={!rawInput.trim()}>
+                Next: Map columns →
+              </PrimaryButton>
+            ) : (
+              <PrimaryButton onClick={handleAIMap} disabled={!rawInput.trim() || isLoading}>
+                {isLoading
+                  ? <span className="flex items-center gap-2"><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Mapping with AI…</span>
+                  : 'Map with AI'}
+              </PrimaryButton>
+            )}
+            <p className="text-xs text-gray-400">
+              {rawInput.length > 0 ? `${rawInput.trim().split('\n').filter(l => l.trim()).length} lines pasted` : 'No data pasted yet'}
+            </p>
           </div>
         </div>
       )}
 
-      {/* ── Step 2: Preview results ────────────────────────────────────────── */}
+      {/* ── Step 2 (products): Column mapping ─────────────────────────────── */}
+      {importState === 'mapping' && parsedRows.length > 0 && (
+        <div className="space-y-5">
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+            <p className="text-sm font-semibold text-gray-800 mb-3">Map your columns</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: 'Product Name',  field: 'name'     as const, required: true  },
+                { label: 'Product Code',  field: 'code'     as const, required: false },
+                { label: 'Category',      field: 'category' as const, required: false },
+                { label: 'Pack / Box Size', field: 'box_size' as const, required: false },
+              ].map(({ label, field, required }) => (
+                <div key={field}>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">
+                    {label}{required && <span className="text-red-400 ml-0.5">*</span>}
+                  </label>
+                  <select
+                    value={mapping[field] ?? -1}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      setMapping(prev => ({ ...prev, [field]: v < 0 ? null : v }))
+                    }}
+                    className="w-full h-9 px-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#EB6619] bg-white"
+                  >
+                    {(required ? colOptions : colOptionsWithNone).map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview first 3 rows */}
+          <div>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Preview (first 3 rows)</p>
+            <div className="overflow-x-auto rounded-xl border border-gray-200">
+              <table className="w-full min-w-[500px]">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-gray-500">Code</th>
+                    <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-gray-500">Name</th>
+                    <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-gray-500">Category</th>
+                    <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-gray-500">Pack Size</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {parsedRows.slice(0, 3).map((row, i) => (
+                    <tr key={i}>
+                      <td className="py-2 px-3 text-xs font-mono text-gray-500">{mapping.code     !== null ? (row[mapping.code]     ?? '—') : '—'}</td>
+                      <td className="py-2 px-3 text-sm text-gray-900 font-medium">{row[mapping.name] ?? '—'}</td>
+                      <td className="py-2 px-3 text-xs text-gray-500">{mapping.category !== null ? (row[mapping.category] ?? '—') : '—'}</td>
+                      <td className="py-2 px-3 text-xs text-gray-500">{mapping.box_size  !== null ? (row[mapping.box_size]  ?? '—') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">{parsedRows.length} total rows to import</p>
+          </div>
+
+          {apiError && <p className="text-red-600 text-sm">{apiError}</p>}
+
+          <div className="flex items-center gap-3">
+            <PrimaryButton onClick={handleManualConfirm} disabled={isConfirming}>
+              {isConfirming
+                ? <span className="flex items-center gap-2"><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Importing…</span>
+                : `Import ${parsedRows.length} product${parsedRows.length === 1 ? '' : 's'}`}
+            </PrimaryButton>
+            <PrimaryButton variant="ghost" onClick={() => { setImportState('input'); setApiError('') }}>← Edit data</PrimaryButton>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step 2 (customers): AI preview ────────────────────────────────── */}
       {importState === 'preview' && result && (
         <div className="space-y-5">
           {result.clean_rows.length === 0 && (
             <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
               <p className="text-sm font-semibold text-amber-800">No importable rows found</p>
-              <p className="text-xs text-amber-700 mt-1">The AI could not identify any valid {entityLabel.toLowerCase()} names. Check the flagged rows below, edit your data, and try again.</p>
+              <p className="text-xs text-amber-700 mt-1">The AI could not identify any valid {entityLabel.toLowerCase()} names. Edit your data and try again.</p>
             </div>
           )}
-
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {/* Clean rows */}
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
@@ -640,30 +763,17 @@ function ImporterSection({
                 <table className="w-full">
                   <thead className="sticky top-0">
                     <tr className="bg-green-50 border-b border-green-200">
-                      {showCategory && <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Code</th>}
                       <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Name</th>
-                      {showCategory && <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Category</th>}
-                      {showCategory && <th className="py-2 px-3 text-left text-[10px] font-bold tracking-widest uppercase text-green-700">Box Size</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-green-100 bg-white">
-                    {result.clean_rows.length === 0
-                      ? <tr><td colSpan={showCategory ? 2 : 1} className="py-4 text-center text-sm text-gray-400">No clean rows</td></tr>
-                      : result.clean_rows.map((r, i) => (
-                          <tr key={i}>
-                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500 font-mono">{((r as CleanRow).code && (r as CleanRow).code !== 'none') ? (r as CleanRow).code : <span className="text-gray-300">—</span>}</td>}
-                            <td className="py-2.5 px-3 text-sm text-gray-800">{r.name}</td>
-                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{((r as CleanRow).category && (r as CleanRow).category !== 'none') ? (r as CleanRow).category : <span className="text-gray-300 italic">—</span>}</td>}
-                            {showCategory && <td className="py-2.5 px-3 text-xs text-gray-500">{((r as CleanRow).box_size && (r as CleanRow).box_size !== 'none') ? (r as CleanRow).box_size : <span className="text-gray-300">—</span>}</td>}
-                          </tr>
-                        ))
-                    }
+                    {result.clean_rows.map((r, i) => (
+                      <tr key={i}><td className="py-2.5 px-3 text-sm text-gray-800">{r.name}</td></tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
-
-            {/* Flagged rows */}
             {result.flagged_rows.length > 0 && (
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -694,19 +804,14 @@ function ImporterSection({
               </div>
             )}
           </div>
-
           {apiError && <p className="text-red-600 text-sm">{apiError}</p>}
-
           <div className="flex items-center gap-3 pt-1 flex-wrap">
-            <PrimaryButton
-              onClick={handleConfirm}
-              disabled={result.clean_rows.length === 0 || isConfirming}
-            >
+            <PrimaryButton onClick={handleAIConfirm} disabled={result.clean_rows.length === 0 || isConfirming}>
               {isConfirming
                 ? <span className="flex items-center gap-2"><svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Importing…</span>
                 : `Confirm & import ${result.clean_rows.length} record${result.clean_rows.length === 1 ? '' : 's'}`}
             </PrimaryButton>
-            <PrimaryButton variant="ghost" onClick={resetToInput}>← Edit data</PrimaryButton>
+            <PrimaryButton variant="ghost" onClick={() => setImportState('input')}>← Edit data</PrimaryButton>
             {result.flagged_rows.length > 0 && (
               <p className="text-xs text-gray-400 ml-auto">{result.flagged_rows.length} flagged row{result.flagged_rows.length === 1 ? '' : 's'} will be skipped</p>
             )}
@@ -719,10 +824,10 @@ function ImporterSection({
         fetching ? <Spinner /> : (
           <div className="overflow-x-auto rounded-xl border border-gray-200">
             <table className="w-full min-w-[420px]">
-              <TableHeader cols={cols} />
+              <TableHeader cols={listCols} />
               <tbody className="divide-y divide-gray-100">
                 {items.length === 0 && (
-                  <tr><td colSpan={cols.length}>
+                  <tr><td colSpan={listCols.length}>
                     <EmptyState message={`No ${entityLabel.toLowerCase()}s yet — use Import to add some`} />
                   </td></tr>
                 )}
