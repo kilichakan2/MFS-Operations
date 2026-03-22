@@ -48,12 +48,17 @@ export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Always allow public paths and Next.js internals
+  // Pass through static assets — SVG/PNG/ICO/JSON files in /public
+  // These must be excluded BEFORE the session check or the middleware
+  // intercepts them and redirects unauthenticated requests to /login.
+  const ext = pathname.split('.').pop()?.toLowerCase() ?? ''
   if (
     PUBLIC_PATHS.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/manifest') ||
-    pathname.startsWith('/icons')
+    pathname.startsWith('/icons') ||
+    ['svg', 'png', 'jpg', 'jpeg', 'webp', 'ico', 'json', 'txt', 'xml'].includes(ext)
   ) {
     return NextResponse.next()
   }
