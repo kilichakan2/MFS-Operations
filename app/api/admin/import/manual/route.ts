@@ -2,14 +2,17 @@
  * POST /api/admin/import/manual
  *
  * Receives pre-parsed rows and column-index mappings from the manual column
- * mapper UI. Performs a direct upsert into the products or customers table.
- * NO Anthropic API call — this is a pure data-to-DB path.
+ * mapper UI. Inserts directly into products or customers — no Anthropic call.
+ *
+ * Strategy: insert rows one at a time so a single duplicate/bad row never
+ * aborts the entire batch. Duplicates (unique constraint violations on name)
+ * are silently skipped and counted as "skipped".
  *
  * Body:
- *   type        — 'customers' | 'products'
- *   rows        — string[][] (all data rows, header row already excluded)
- *   mapping     — { name: number, code?: number, category?: number, box_size?: number }
- *                 numbers are 0-based column indices
+ *   type    — 'customers' | 'products'
+ *   rows    — string[][] (data rows, header already excluded by the client)
+ *   mapping — { name: number, code?: number, category?: number, box_size?: number }
+ *             numbers are 0-based column indices; null/undefined = not mapped
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -20,9 +23,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-function clean(v: string | undefined): string | null {
-  if (!v || v.trim() === '') return null
-  return v.trim()
+/** Trim a cell value; return null if blank */
+function cell(v: string | undefined): string | null {
+  if (v === undefined || v === null) return null
+  const t = v.trim()
+  return t === '' ? null : t
 }
 
 export async function POST(req: NextRequest) {
@@ -41,7 +46,7 @@ export async function POST(req: NextRequest) {
     const { type, rows, mapping } = body as {
       type:    'customers' | 'products'
       rows:    string[][]
-      mapping: { name: number; code?: number; category?: number; box_size?: number }
+      mapping: { name: number; code?: number | null; category?: number | null; box_size?: number | null }
     }
 
     if (type !== 'customers' && type !== 'products') {
@@ -54,64 +59,50 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'mapping.name column index is required' }, { status: 400 })
     }
 
-    // ── Build insert payload ───────────────────────────────────────────────────
     let inserted = 0
     let skipped  = 0
 
-    if (type === 'customers') {
-      const payload = rows
-        .map((row) => ({ name: clean(row[mapping.name]) }))
-        .filter((r): r is { name: string } => r.name !== null && r.name.length > 0)
+    // ── Insert rows individually so one failure never aborts the batch ─────────
+    for (const row of rows) {
+      const name = cell(row[mapping.name])
+      if (!name) { skipped++; continue }   // blank name — skip silently
 
-      if (payload.length === 0) {
-        return NextResponse.json({ error: 'No valid customer names found in data' }, { status: 400 })
+      if (type === 'customers') {
+        const { error } = await supabase
+          .from('customers')
+          .insert({ name, active: true, created_by: userId })
+
+        if (error) {
+          // 23505 = unique_violation — duplicate name, skip it
+          if (error.code === '23505') { skipped++; continue }
+          console.error('[import/manual] customer insert error:', error.message, '| row:', name)
+          skipped++
+        } else {
+          inserted++
+        }
+
+      } else {
+        const record = {
+          name,
+          code:       mapping.code     != null ? cell(row[mapping.code])     : null,
+          category:   mapping.category != null ? cell(row[mapping.category]) : null,
+          box_size:   mapping.box_size  != null ? cell(row[mapping.box_size])  : null,
+          active:     true,
+          created_by: userId,
+        }
+
+        const { error } = await supabase
+          .from('products')
+          .insert(record)
+
+        if (error) {
+          if (error.code === '23505') { skipped++; continue }
+          console.error('[import/manual] product insert error:', error.message, '| row:', name)
+          skipped++
+        } else {
+          inserted++
+        }
       }
-
-      const { data, error } = await supabase
-        .from('customers')
-        .upsert(payload.map(r => ({ ...r, active: true, created_by: userId })), {
-          onConflict:        'name',
-          ignoreDuplicates:  true,
-        })
-        .select('id')
-
-      if (error) {
-        console.error('[import/manual] Customer upsert error:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-
-      inserted = data?.length ?? 0
-      skipped  = payload.length - inserted
-
-    } else {
-      const payload = rows
-        .map((row) => ({
-          name:       clean(row[mapping.name]),
-          code:       mapping.code     !== undefined ? clean(row[mapping.code])     : null,
-          category:   mapping.category !== undefined ? clean(row[mapping.category]) : null,
-          box_size:   mapping.box_size  !== undefined ? clean(row[mapping.box_size])  : null,
-        }))
-        .filter((r): r is typeof r & { name: string } => r.name !== null && r.name.length > 0)
-
-      if (payload.length === 0) {
-        return NextResponse.json({ error: 'No valid product names found in data' }, { status: 400 })
-      }
-
-      const { data, error } = await supabase
-        .from('products')
-        .upsert(payload.map(r => ({ ...r, active: true, created_by: userId })), {
-          onConflict:       'name',
-          ignoreDuplicates: true,
-        })
-        .select('id')
-
-      if (error) {
-        console.error('[import/manual] Product upsert error:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-
-      inserted = data?.length ?? 0
-      skipped  = payload.length - inserted
     }
 
     // ── Audit log ─────────────────────────────────────────────────────────────
@@ -121,7 +112,7 @@ export async function POST(req: NextRequest) {
       screen:    'screen5',
       action:    'imported',
       record_id: null,
-      summary:   `${inserted} ${label}${inserted === 1 ? '' : 's'} imported via manual column mapper by ${userName}${skipped > 0 ? ` (${skipped} skipped — already exist)` : ''}`,
+      summary:   `${inserted} ${label}${inserted === 1 ? '' : 's'} imported via manual column mapper by ${userName}${skipped > 0 ? ` (${skipped} skipped — blank or duplicate)` : ''}`,
     })
 
     return NextResponse.json({ inserted, skipped }, { status: 201 })
