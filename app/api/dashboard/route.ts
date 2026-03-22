@@ -76,14 +76,14 @@ export async function GET(req: NextRequest) {
       // ── Zone 2: Discrepancies today ────────────────────────────────────────
       supabase
         .from('discrepancies')
-        .select('id, status, reason, customers(name), products(name)')
+        .select('id, created_at, status, reason, customers(name), products(name), users!discrepancies_user_id_fkey(name)')
         .gte('created_at', todayStartISO)
         .order('created_at', { ascending: false }),
 
       // ── Zone 2: Complaints today ───────────────────────────────────────────
       supabase
         .from('complaints')
-        .select('id, category, status, customers(name), users!complaints_user_id_fkey(name)')
+        .select('id, created_at, category, status, customers(name), users!complaints_user_id_fkey(name)')
         .gte('created_at', todayStartISO)
         .order('created_at', { ascending: false }),
 
@@ -163,12 +163,15 @@ export async function GET(req: NextRequest) {
     const discrepanciesToday = (discTodayRes.data ?? []).map((d: Record<string, unknown>) => {
       const cust = d.customers as { name: string } | null
       const prod = d.products  as { name: string } | null
+      const usr  = d['users']  as { name: string } | null
       return {
-        id:       d.id,
-        customer: cust?.name ?? 'Unknown',
-        product:  prod?.name ?? 'Unknown',
-        status:   d.status as 'short' | 'not_sent',
-        reason:   String(d.reason ?? '').replace(/_/g, ' '),
+        id:        d.id,
+        customer:  cust?.name ?? 'Unknown',
+        product:   prod?.name ?? 'Unknown',
+        status:    d.status as 'short' | 'not_sent',
+        reason:    String(d.reason ?? '').replace(/_/g, ' '),
+        loggedBy:  usr?.name ?? 'Unknown',
+        createdAt: d.created_at as string,
       }
     })
 
@@ -176,11 +179,12 @@ export async function GET(req: NextRequest) {
       const cust = c.customers as { name: string } | null
       const usr  = (c['users'] as { name: string } | null)
       return {
-        id:       c.id,
-        customer: cust?.name ?? 'Unknown',
-        category: String(c.category ?? '').replace(/_/g, ' '),
-        status:   c.status as 'open' | 'resolved',
-        loggedBy: usr?.name ?? 'Unknown',
+        id:        c.id,
+        customer:  cust?.name ?? 'Unknown',
+        category:  String(c.category ?? '').replace(/_/g, ' '),
+        status:    c.status as 'open' | 'resolved',
+        loggedBy:  usr?.name ?? 'Unknown',
+        createdAt: c.created_at as string,
       }
     })
 

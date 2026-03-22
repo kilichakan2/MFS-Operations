@@ -2,11 +2,11 @@
 
 import { useRouter } from 'next/navigation'
 import { useState }  from 'react'
+import Image         from 'next/image'
 
 interface AppHeaderProps {
   title?:    string
   maxWidth?: 'lg' | '2xl' | '4xl'
-  /** Optional slot rendered left of the logout button (e.g. dev toggles) */
   actions?:  React.ReactNode
 }
 
@@ -31,21 +31,28 @@ export default function AppHeader({
     <header className="bg-[#16205B] px-5 pt-14 pb-5 sticky top-0 z-40">
       <div className={`flex items-center justify-between max-w-${maxWidth} mx-auto`}>
 
-        {/* Brand */}
-        <div>
-          <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase">
-            MFS Global
-          </p>
-          <h1 className="text-white text-lg font-bold leading-tight mt-0.5">
-            {title}
-          </h1>
+        {/* Brand — logo + screen title */}
+        <div className="flex items-center gap-3">
+          <Image
+            src="/mfs-logo.svg"
+            alt="MFS Wholesale"
+            width={110}
+            height={26}
+            priority
+            className="h-[26px] w-auto"
+          />
+          {title && (
+            <>
+              <span className="text-white/30 text-lg font-light select-none">|</span>
+              <span className="text-white text-sm font-semibold leading-tight">{title}</span>
+            </>
+          )}
         </div>
 
         {/* Right slot */}
         <div className="flex items-center gap-2">
           {actions}
 
-          {/* Logout */}
           <button
             type="button"
             onClick={handleLogout}

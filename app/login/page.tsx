@@ -1,5 +1,7 @@
 'use client'
 
+import Image from 'next/image'
+
 import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useSearchParams }                             from 'next/navigation'
 import AuthKeypad                                      from '@/components/AuthKeypad'
@@ -89,7 +91,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs">
         <div className="text-center mb-12">
-          <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase mb-1">MFS Global</p>
+          <Image src="/mfs-logo.svg" alt="MFS Wholesale" width={160} height={38} priority className="h-9 w-auto mx-auto mb-2" />
           <h1 className="text-white text-2xl font-bold">Operations</h1>
         </div>
 
@@ -356,7 +358,7 @@ function LoginSkeleton() {
   return (
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs text-center">
-        <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase mb-1">MFS Global</p>
+        <Image src="/mfs-logo.svg" alt="MFS Wholesale" width={160} height={38} className="h-9 w-auto mx-auto mb-2" />
         <h1 className="text-white text-2xl font-bold">Operations</h1>
       </div>
     </div>

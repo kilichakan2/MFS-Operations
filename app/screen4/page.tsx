@@ -9,8 +9,8 @@ import AppHeader             from '@/components/AppHeader'
 interface OpenComplaint       { id: string; customer: string; category: string; loggedBy: string; hoursAgo: number }
 interface AtRiskAccount       { id: string; customer: string; outcome: 'at_risk'|'lost'; rep: string; hoursAgo: number }
 interface UnreviewedCommitment{ id: string; customer: string; detail: string; rep: string; hoursAgo: number }
-interface Discrepancy         { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string }
-interface TodayComplaint      { id: string; customer: string; category: string; status: 'open'|'resolved'; loggedBy: string }
+interface Discrepancy         { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string; loggedBy: string; createdAt: string }
+interface TodayComplaint      { id: string; customer: string; category: string; status: 'open'|'resolved'; loggedBy: string; createdAt: string }
 interface TodayVisit          { rep: string; count: number; outcomes: { positive: number; neutral: number; at_risk: number; lost: number } }
 interface WeekDiscrepancyByReason   { reason: string; count: number }
 interface WeekDiscrepancyByProduct  { product: string; count: number }
@@ -33,6 +33,13 @@ interface DashboardData {
   avgResolutionHours:      number | null
   totalComplaintsWeek:     number
   openComplaintsWeek:      number
+}
+
+/** Format ISO timestamp → "14:32" (24h UK time) */
+function fmtTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })
+  } catch { return '' }
 }
 
 const EMPTY: DashboardData = {
@@ -266,6 +273,7 @@ export default function Screen4Page() {
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{d.customer}</p>
                       <p className="text-xs text-gray-400 truncate">{d.product} · {d.reason}</p>
+                      <p className="text-xs text-gray-300 mt-0.5">{d.loggedBy} · {fmtTime(d.createdAt)}</p>
                     </div>
                     <Badge label={d.status === 'not_sent' ? 'NOT SENT' : 'SHORT'} tone={d.status === 'not_sent' ? 'red' : 'amber'} />
                   </div>
@@ -293,7 +301,7 @@ export default function Screen4Page() {
                   <div key={c.id} className="bg-white border border-gray-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{c.customer}</p>
-                      <p className="text-xs text-gray-400 truncate">{c.category} · logged by {c.loggedBy}</p>
+                      <p className="text-xs text-gray-400 truncate">{c.category} · {c.loggedBy} · {fmtTime(c.createdAt)}</p>
                     </div>
                     <Badge label={c.status === 'open' ? 'OPEN' : 'RESOLVED'} tone={c.status === 'open' ? 'amber' : 'green'} />
                   </div>
