@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation'
 import { useState }  from 'react'
-import Image         from 'next/image'
 
 interface AppHeaderProps {
   title?:    string
@@ -34,14 +33,8 @@ export default function AppHeader({
         {/* Logo + screen title */}
         <div className="flex items-center gap-3">
           {/* White logo on navy — approved brand variant */}
-          <Image
-            src="/mfs-logo-white.svg"
-            alt="MFS Wholesale"
-            width={107}
-            height={28}
-            priority
-            className="h-7 w-auto"
-          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/mfs-logo-white.svg" alt="MFS Wholesale" className="h-7 w-auto" />
           {title && (
             <>
               <span className="text-white/25 font-light select-none">|</span>
