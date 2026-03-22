@@ -181,15 +181,29 @@ export default function BottomSheetSelector({
     [onSelect]
   )
 
-  // Filtered list — normalised fuzzy match on label and sublabel
+  // Filtered list — two-pass matching:
+  //   Pass 1: case-insensitive substring ("Al Turka" matches query "al turka")
+  //   Pass 2 (fallback if pass 1 returns nothing): every space-separated word
+  //           must appear somewhere in the label — "naz rest" finds "Naz Restaurant",
+  //           "cafe corner" finds "The Corner Cafe"
   const filtered = useMemo(() => {
     const q = normalise(query.trim())
     if (!q) return items
-    return items.filter(
+
+    // Pass 1: contiguous substring match
+    const pass1 = items.filter(
       (item) =>
         normalise(item.label).includes(q) ||
         (item.sublabel && normalise(item.sublabel).includes(q))
     )
+    if (pass1.length > 0) return pass1
+
+    // Pass 2: every word in the query appears somewhere in the label
+    const words = q.split(/\s+/).filter(Boolean)
+    return items.filter((item) => {
+      const haystack = normalise(item.label) + ' ' + normalise(item.sublabel ?? '')
+      return words.every((w) => haystack.includes(w))
+    })
   }, [items, query])
 
   // Backdrop click

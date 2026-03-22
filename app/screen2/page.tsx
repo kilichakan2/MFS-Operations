@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useId, useEffect } from 'react'
+import { useState, useCallback, useId, useEffect, useRef } from 'react'
 import BottomSheetSelector              from '@/components/BottomSheetSelector'
 import RoleNav from '@/components/RoleNav'
 import AppHeader                            from '@/components/AppHeader'
@@ -208,6 +208,182 @@ function SuccessBanner({ visible }: { visible: boolean }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface OpenComplaint {
+  id:          string
+  createdAt:   string
+  category:    string
+  description: string
+  customer:    string
+}
+
+// ─── Open Complaints Tab ──────────────────────────────────────────────────────
+
+function OpenComplaintsTab() {
+  const [complaints,   setComplaints]   = useState<OpenComplaint[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState('')
+  const [expandedId,   setExpandedId]   = useState<string | null>(null)
+  const [noteValue,    setNoteValue]    = useState<Record<string, string>>({})
+  const [submitting,   setSubmitting]   = useState<string | null>(null)   // complaint id currently being resolved
+  const [resolvedIds,  setResolvedIds]  = useState<Set<string>>(new Set())
+
+  async function load() {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/screen2/open')
+      if (!res.ok) { setError('Failed to load open complaints'); return }
+      setComplaints(await res.json())
+    } catch { setError('Network error') }
+    finally   { setLoading(false) }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function handleResolve(id: string) {
+    const note = (noteValue[id] ?? '').trim()
+    if (!note) return
+    setSubmitting(id)
+    try {
+      // Queue for offline-capable sync
+      const { localDb } = await import('@/lib/localDb')
+      const { triggerSync } = await import('@/lib/syncEngine')
+      await localDb.queue.add({
+        localId:   crypto.randomUUID(),
+        screen:    'screen2_resolve',
+        payload:   { complaint_id: id, resolution_note: note },
+        createdAt: Date.now(),
+        synced:    false,
+        retries:   0,
+      })
+      // Optimistic UI — hide this card immediately
+      setResolvedIds(prev => new Set([...prev, id]))
+      setExpandedId(null)
+      triggerSync()
+    } catch (err) {
+      console.error('resolve queue error:', err)
+    } finally {
+      setSubmitting(null)
+    }
+  }
+
+  function fmtDate(iso: string) {
+    try {
+      return new Date(iso).toLocaleString('en-GB', {
+        day: '2-digit', month: 'short',
+        hour: '2-digit', minute: '2-digit',
+        timeZone: 'Europe/London',
+      })
+    } catch { return '' }
+  }
+
+  const visible = complaints.filter(c => !resolvedIds.has(c.id))
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <svg className="animate-spin w-6 h-6 text-gray-300" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+    </div>
+  )
+
+  if (error) return (
+    <div className="mx-4 mt-6 p-4 bg-red-50 border border-red-200 rounded-2xl">
+      <p className="text-sm text-red-700">{error}</p>
+      <button type="button" onClick={load} className="mt-2 text-sm font-semibold text-red-600">Retry</button>
+    </div>
+  )
+
+  if (visible.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-20 px-8 text-center">
+      <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-7 h-7 text-green-600">
+          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd"/>
+        </svg>
+      </div>
+      <p className="text-base font-semibold text-gray-700">All clear</p>
+      <p className="text-sm text-gray-400 mt-1">No open complaints</p>
+    </div>
+  )
+
+  return (
+    <div className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-3">
+      <p className="text-xs text-gray-400 font-semibold uppercase tracking-widest px-1">
+        {visible.length} open complaint{visible.length === 1 ? '' : 's'}
+      </p>
+      {visible.map(c => {
+        const isExpanded = expandedId === c.id
+        const note = noteValue[c.id] ?? ''
+        const isSaving = submitting === c.id
+        return (
+          <div key={c.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            {/* Card header — tap to expand */}
+            <button
+              type="button"
+              onClick={() => setExpandedId(isExpanded ? null : c.id)}
+              className="w-full px-4 py-4 text-left flex items-start gap-3 active:bg-gray-50"
+            >
+              <span className="mt-0.5 w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{c.customer}</p>
+                <p className="text-xs text-gray-500 truncate mt-0.5">
+                  {c.category} · {fmtDate(c.createdAt)}
+                </p>
+                <p className="text-xs text-gray-400 truncate mt-1">{c.description}</p>
+              </div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+                className={["w-4 h-4 flex-shrink-0 text-gray-400 transition-transform mt-1", isExpanded ? "rotate-180" : ""].join(" ")}
+              >
+                <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd"/>
+              </svg>
+            </button>
+
+            {/* Resolution form — shown when expanded */}
+            {isExpanded && (
+              <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-3">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Resolution note</p>
+                <textarea
+                  rows={3}
+                  placeholder="What was done to resolve this? Be specific."
+                  value={note}
+                  onChange={e => setNoteValue(prev => ({ ...prev, [c.id]: e.target.value }))}
+                  maxLength={500}
+                  className={[
+                    "w-full rounded-xl px-4 py-3 resize-none text-sm",
+                    "text-gray-900 placeholder:text-gray-400 leading-relaxed",
+                    "border-2 bg-gray-50 focus:bg-white",
+                    "focus:outline-none focus:border-[#EB6619] transition-colors",
+                    "border-gray-200",
+                  ].join(" ")}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleResolve(c.id)}
+                  disabled={!note.trim() || isSaving}
+                  className={[
+                    "w-full h-12 rounded-xl text-sm font-bold transition-all",
+                    "focus:outline-none",
+                    (!note.trim() || isSaving)
+                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      : "bg-[#16205B] text-white active:scale-[0.98]",
+                  ].join(" ")}
+                >
+                  {isSaving ? "Saving…" : "Mark Resolved"}
+                </button>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function Screen2Page() {
   const formId              = useId()
   // Sync reference data on mount so customer dropdown is populated
@@ -215,6 +391,7 @@ export default function Screen2Page() {
     syncReferenceData().catch(console.error)
   }, [])
 
+  const [activeTab, setActiveTab] = useState<'log' | 'open'>('log')
   const customers           = useCustomers()
   const [form, setForm]     = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors] = useState<ValidationErrors>({})
@@ -308,7 +485,32 @@ export default function Screen2Page() {
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <AppHeader title="Complaint Log" maxWidth="lg" />
 
-        {/* ── Form ───────────────────────────────────────────────────────── */}
+        {/* ── Tab switcher ────────────────────────────────────────────────── */}
+        <div className="bg-white border-b border-gray-200 sticky top-[calc(var(--header-h,96px))] z-30">
+          <div className="max-w-lg mx-auto flex">
+            {(['log', 'open'] as const).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={[
+                  'flex-1 py-3.5 text-sm font-semibold border-b-2 transition-colors',
+                  activeTab === tab
+                    ? 'border-[#EB6619] text-[#EB6619]'
+                    : 'border-transparent text-gray-400 hover:text-gray-600',
+                ].join(' ')}
+              >
+                {tab === 'log' ? 'Log New' : 'Open Complaints'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Open Complaints Tab ─────────────────────────────────────────── */}
+        {activeTab === 'open' && <OpenComplaintsTab />}
+
+        {/* ── Log New Form ─────────────────────────────────────────────────── */}
+        {activeTab === 'log' && (
         <main className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-6" id={formId}>
 
           {/* ── Customer ─────────────────────────────────────────────────── */}
@@ -517,6 +719,7 @@ export default function Screen2Page() {
           </section>
 
         </main>
+        )}
       </div>
       <RoleNav />
     </>

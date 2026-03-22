@@ -21,7 +21,8 @@ import { localDb } from '@/lib/localDb'
 const ENDPOINT: Record<string, string> = {
   screen1: '/api/screen1/sync',
   screen2: '/api/screen2/sync',
-  screen3: '/api/screen3/sync',
+  screen3:         '/api/screen3/sync',
+  screen2_resolve: '/api/screen2/resolve',
 }
 
 const MAX_RETRIES = 3
