@@ -6,11 +6,11 @@ import AppHeader             from '@/components/AppHeader'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface OpenComplaint       { id: string; customer: string; category: string; loggedBy: string; hoursAgo: number }
+interface OpenComplaint       { id: string; customer: string; category: string; description: string; loggedBy: string; hoursAgo: number }
 interface AtRiskAccount       { id: string; customer: string; outcome: 'at_risk'|'lost'; rep: string; hoursAgo: number }
 interface UnreviewedCommitment{ id: string; customer: string; detail: string; rep: string; hoursAgo: number }
-interface Discrepancy         { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string; loggedBy: string; createdAt: string }
-interface TodayComplaint      { id: string; customer: string; category: string; status: 'open'|'resolved'; loggedBy: string; createdAt: string }
+interface Discrepancy         { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string; orderedQty: number|null; sentQty: number|null; loggedBy: string; createdAt: string }
+interface TodayComplaint      { id: string; customer: string; category: string; status: 'open'|'resolved'; description: string; resolutionNote: string|null; loggedBy: string; createdAt: string }
 interface TodayVisit          { rep: string; count: number; outcomes: { positive: number; neutral: number; at_risk: number; lost: number } }
 interface WeekDiscrepancyByReason   { reason: string; count: number }
 interface WeekDiscrepancyByProduct  { product: string; count: number }
@@ -227,6 +227,9 @@ export default function Screen4Page() {
                     {c.customer}
                     <span className="font-normal"> — {c.category} complaint open {c.hoursAgo}h</span>
                   </span>
+                  {c.description && (
+                    <span className="text-xs leading-relaxed opacity-90">"{c.description}"</span>
+                  )}
                   <span className="text-xs">Logged by {c.loggedBy} · needs resolution</span>
                 </AlertCard>
               ))}
@@ -277,6 +280,11 @@ export default function Screen4Page() {
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{d.customer}</p>
                       <p className="text-xs text-gray-400 truncate">{d.product} · {d.reason}</p>
+                      {d.status === 'short' && d.orderedQty != null && d.sentQty != null && (
+                        <p className="text-xs text-amber-700 font-medium mt-0.5">
+                          Ordered {d.orderedQty} {d.sentQty != null ? `· Sent ${d.sentQty}` : ''}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-300 mt-0.5">{d.loggedBy} · {fmtTime(d.createdAt)}</p>
                     </div>
                     <Badge label={d.status === 'not_sent' ? 'NOT SENT' : 'SHORT'} tone={d.status === 'not_sent' ? 'red' : 'amber'} />
@@ -302,10 +310,18 @@ export default function Screen4Page() {
             ) : (
               <div className="space-y-2">
                 {data.complaintsTodayList.map((c) => (
-                  <div key={c.id} className="bg-white border border-gray-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
+                  <div key={c.id} className="bg-white border border-gray-200 rounded-2xl px-4 py-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-gray-900 truncate">{c.customer}</p>
                       <p className="text-xs text-gray-400 truncate">{c.category} · {c.loggedBy} · {fmtTime(c.createdAt)}</p>
+                      {c.description && (
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">"{c.description}"</p>
+                      )}
+                      {c.status === 'resolved' && c.resolutionNote && (
+                        <p className="text-xs text-green-700 mt-1 line-clamp-2 leading-relaxed">
+                          <span className="font-semibold">Resolved:</span> {c.resolutionNote}
+                        </p>
+                      )}
                     </div>
                     <Badge label={c.status === 'open' ? 'OPEN' : 'RESOLVED'} tone={c.status === 'open' ? 'amber' : 'green'} />
                   </div>
