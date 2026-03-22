@@ -23,7 +23,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   warehouse: ['/screen1'],
   office:    ['/screen1', '/screen2'],
   sales:     ['/screen2', '/screen3'],
-  admin:     ['/screen4', '/screen5', '/api/reference', '/api/admin'],
+  admin:     ['/screen4', '/screen5', '/api/reference', '/api/admin', '/api/dashboard'],
 }
 
 // Default landing page per role
