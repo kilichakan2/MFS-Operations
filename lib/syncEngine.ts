@@ -47,6 +47,19 @@ export async function triggerSync(): Promise<void> {
   syncInProgress = true
 
   try {
+    // Reset any records exhausted from a previous bug/deployment cycle.
+    // If retries >= MAX_RETRIES but still unsynced, reset to 0 so a hard
+    // refresh gives stuck records a fresh batch of attempts.
+    const exhausted = await localDb.queue
+      .filter(r => !r.synced && (r.retries ?? 0) >= MAX_RETRIES)
+      .toArray()
+    if (exhausted.length > 0) {
+      console.log(`[syncEngine] Resetting ${exhausted.length} exhausted record(s)`)
+      await Promise.all(
+        exhausted.map(r => localDb.queue.update(r.localId, { retries: 0, syncError: undefined }))
+      )
+    }
+
     // Fetch all records that haven't been synced and haven't exceeded retry limit
     const pending = (await localDb.queue.toArray())
       .filter(r => !r.synced && (r.retries ?? 0) < MAX_RETRIES)

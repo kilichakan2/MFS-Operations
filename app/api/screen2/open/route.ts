@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/screen2/open
  * Returns all OPEN complaints logged by the calling user, newest first.
