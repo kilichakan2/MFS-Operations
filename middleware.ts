@@ -83,9 +83,17 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/login', req.url))
   }
 
-  // Shared API paths — allow any authenticated user
+  // Build enriched headers once — used by every authenticated pass-through.
+  // Sync routes read x-mfs-user-id to identify the caller without re-parsing
+  // the cookie. This must happen BEFORE the shared-path early return.
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-mfs-user-id',   session.userId)
+  requestHeaders.set('x-mfs-user-name', session.name)
+  requestHeaders.set('x-mfs-user-role', session.role)
+
+  // Shared API paths — allow any authenticated user (all roles can sync)
   if (SHARED_API_PATHS.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next()
+    return NextResponse.next({ request: { headers: requestHeaders } })
   }
 
   // Check role permissions for screen paths
@@ -93,16 +101,8 @@ export function middleware(req: NextRequest) {
   const isPermitted = permitted.some((p) => pathname.startsWith(p))
 
   if (!isPermitted) {
-    // Redirect to role's home rather than showing a 403
     return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/login', req.url))
   }
-
-  // Pass the session identity to API routes via headers
-  // (avoids re-parsing the cookie in every route handler)
-  const requestHeaders = new Headers(req.headers)
-  requestHeaders.set('x-mfs-user-id',   session.userId)
-  requestHeaders.set('x-mfs-user-name', session.name)
-  requestHeaders.set('x-mfs-user-role', session.role)
 
   return NextResponse.next({ request: { headers: requestHeaders } })
 }
