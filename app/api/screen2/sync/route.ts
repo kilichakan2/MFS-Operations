@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[screen2/sync] keys:', Object.keys(body).join(', '))
 
+    const id              = body.id              as string | undefined
     const customer_id     = body.customer_id     as string | undefined
     const category        = body.category        as string | undefined
     const description     = body.description     as string | undefined
@@ -69,6 +70,7 @@ export async function POST(req: NextRequest) {
     }
 
     const payload: Record<string, unknown> = {
+      ...(id ? { id } : {}),
       user_id:     userId,
       customer_id,
       category,
@@ -84,6 +86,11 @@ export async function POST(req: NextRequest) {
     const { ok, status: httpStatus, text } = await supaPost('complaints', payload)
 
     if (!ok) {
+      // 23505 = unique_violation — already inserted on a previous retry
+      if (httpStatus === 409 || text.includes('23505')) {
+        console.log('[screen2/sync] Duplicate insert — already exists, returning 200')
+        return NextResponse.json({ id, duplicate: true }, { status: 200 })
+      }
       console.error('[screen2/sync] insert failed:', httpStatus, text.slice(0, 200))
       return NextResponse.json({ error: `Insert failed: ${text.slice(0, 100)}` }, { status: 500 })
     }

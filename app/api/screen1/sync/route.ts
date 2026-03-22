@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[screen1/sync] Received payload keys:', Object.keys(body).join(', '))
 
+    const id          = body.id          as string | undefined   // client-generated UUID for idempotency
     const customer_id = body.customer_id as string | undefined
     const product_id  = body.product_id  as string | undefined
     const status      = body.status      as string | undefined
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
     const { data: record, error: insertError } = await supabase
       .from('discrepancies')
       .insert({
+        ...(id ? { id } : {}),   // use client UUID if provided — idempotent retries
         user_id:     userId,
         customer_id,
         product_id,
@@ -82,6 +84,12 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (insertError) {
+      // 23505 = unique_violation — this exact record was already inserted
+      // (retry after network drop). Treat as success so the client clears it.
+      if (insertError.code === '23505') {
+        console.log('[screen1/sync] Duplicate insert — already exists, returning 200')
+        return NextResponse.json({ id, duplicate: true }, { status: 200 })
+      }
       console.error('[screen1/sync] Insert error:', insertError.code, insertError.message)
       return NextResponse.json({ error: insertError.message }, { status: 500 })
     }

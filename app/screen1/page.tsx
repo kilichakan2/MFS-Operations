@@ -263,10 +263,12 @@ export default function Screen1Page() {
     setIsSubmitting(true)
 
     try {
+      const localId1 = crypto.randomUUID()
       await localDb.queue.add({
-        localId:   crypto.randomUUID(),
+        localId:   localId1,
         screen:    'screen1',
         payload: {
+          id:           localId1,  // used as DB PK — makes retries idempotent
           customer_id:  form.customer!.id,
           product_id:   form.product!.id,
           status:       form.status!,

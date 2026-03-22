@@ -82,10 +82,10 @@ export async function triggerSync(): Promise<void> {
           body:    JSON.stringify(record.payload),
         })
 
-        if (res.status === 201) {
-          // Success — mark as synced
+        if (res.ok) {
+          // Success — 201 = created, 200 = already exists (idempotent duplicate)
           await localDb.queue.update(record.localId, { synced: true })
-          console.log(`[syncEngine] ✓ Synced ${record.localId} (${record.screen})`)
+          console.log(`[syncEngine] ✓ Synced ${record.localId} (${record.screen}) HTTP ${res.status}`)
         } else {
           // Server rejected — increment retries and store reason
           let errorMsg = `HTTP ${res.status}`

@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[screen3/sync] keys:', Object.keys(body).join(', '))
 
+    const id                =  body.id                as string  | undefined
     const customer_id       = (body.customer_id       as string  | undefined) ?? null
     const prospect_name     = (body.prospect_name     as string  | undefined) ?? null
     const prospect_postcode = (body.prospect_postcode as string  | undefined) ?? null
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
     }
 
     const payload: Record<string, unknown> = {
+      ...(id ? { id } : {}),
       user_id:           userId,
       customer_id,
       prospect_name,
@@ -85,6 +87,10 @@ export async function POST(req: NextRequest) {
     const { ok, status: httpStatus, text } = await supaPost('visits', payload)
 
     if (!ok) {
+      if (httpStatus === 409 || text.includes('23505')) {
+        console.log('[screen3/sync] Duplicate insert — already exists, returning 200')
+        return NextResponse.json({ id, duplicate: true }, { status: 200 })
+      }
       console.error('[screen3/sync] insert failed:', httpStatus, text.slice(0, 200))
       return NextResponse.json({ error: `Insert failed: ${text.slice(0, 100)}` }, { status: 500 })
     }

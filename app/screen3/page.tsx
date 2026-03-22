@@ -259,10 +259,12 @@ export default function Screen3Page() {
     setIsSubmitting(true)
 
     try {
+      const localId3 = crypto.randomUUID()
       await localDb.queue.add({
-        localId:   crypto.randomUUID(),
+        localId:   localId3,
         screen:    'screen3',
         payload: {
+          id:                localId3,  // used as DB PK — makes retries idempotent
           // Exactly one of customer_id or prospect_name will be non-null
           customer_id:       form.customerMode === 'existing' ? form.customer!.id : null,
           prospect_name:     form.customerMode === 'prospect' ? form.prospectName.trim()  : null,

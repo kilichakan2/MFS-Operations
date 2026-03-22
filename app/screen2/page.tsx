@@ -433,10 +433,12 @@ export default function Screen2Page() {
     setIsSubmitting(true)
 
     try {
+      const localId2 = crypto.randomUUID()
       await localDb.queue.add({
-        localId:   crypto.randomUUID(),
+        localId:   localId2,
         screen:    'screen2',
         payload: {
+          id:              localId2,  // used as DB PK — makes retries idempotent
           customer_id:     form.customer!.id,
           category:        form.category!,
           description:     form.description.trim(),
