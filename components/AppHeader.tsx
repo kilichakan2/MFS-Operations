@@ -1,14 +1,57 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useState }  from 'react'
-import MfsLogo       from '@/components/MfsLogo'
+import { useRouter }      from 'next/navigation'
+import { useState }       from 'react'
+import { useLiveQuery }   from 'dexie-react-hooks'
+import { localDb }        from '@/lib/localDb'
+import MfsLogo            from '@/components/MfsLogo'
 
 interface AppHeaderProps {
   title?:    string
   maxWidth?: 'lg' | '2xl' | '4xl'
   actions?:  React.ReactNode
 }
+
+// ── Inline SyncStatus pill ────────────────────────────────────────────────────
+// Reads the Dexie queue reactively. Hidden when everything is synced.
+// Amber = pending (being retried). Red = stuck (retries exhausted).
+
+function SyncStatus() {
+  const unsynced = useLiveQuery(
+    () => localDb.queue.filter(r => !r.synced).toArray(),
+    [],
+    []
+  )
+
+  const total  = unsynced.length
+  const stuck  = unsynced.filter(r => (r.retries ?? 0) >= 3).length
+  const pending = total - stuck
+
+  if (total === 0) return null
+
+  if (stuck > 0) {
+    return (
+      <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/20 text-red-200 text-[10px] font-bold">
+        <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+          <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/>
+        </svg>
+        {stuck} stuck
+      </span>
+    )
+  }
+
+  return (
+    <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 text-amber-200 text-[10px] font-bold">
+      <svg className="w-3 h-3 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
+      {pending} syncing
+    </span>
+  )
+}
+
+// ── Main header ───────────────────────────────────────────────────────────────
 
 export default function AppHeader({
   title    = 'Operations',
@@ -33,7 +76,6 @@ export default function AppHeader({
 
         {/* Logo + screen title */}
         <div className="flex items-center gap-3">
-          {/* White logo on navy — approved brand variant */}
           <MfsLogo className="h-7 w-auto" />
           {title && (
             <>
@@ -43,8 +85,10 @@ export default function AppHeader({
           )}
         </div>
 
-        {/* Right slot */}
+        {/* Right slot: sync pill + any custom actions + logout */}
         <div className="flex items-center gap-2">
+          <SyncStatus />
+
           {actions}
 
           <button

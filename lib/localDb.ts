@@ -21,7 +21,7 @@ import Dexie, { type Table } from 'dexie'
  */
 export interface QueuedRecord {
   localId:    string                              // client-generated UUID
-  screen:     'screen1' | 'screen2' | 'screen3'
+  screen:     'screen1' | 'screen2' | 'screen3' | 'screen2_resolve'
   payload:    Record<string, unknown>             // the full form submission
   createdAt:  number                              // unix ms timestamp
   synced:     boolean

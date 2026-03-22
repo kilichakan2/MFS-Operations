@@ -4,6 +4,7 @@ import { useState, useCallback, useId, useEffect, useRef } from 'react'
 import BottomSheetSelector              from '@/components/BottomSheetSelector'
 import RoleNav from '@/components/RoleNav'
 import AppHeader                            from '@/components/AppHeader'
+import RecentActivity from '@/components/RecentActivity'
 import { useCustomers }                 from '@/hooks/useReferenceData'
 import { localDb, syncReferenceData }   from '@/lib/localDb'
 import { triggerSync }                   from '@/lib/syncEngine'
@@ -717,6 +718,9 @@ export default function Screen2Page() {
               {isSubmitting ? 'Saving…' : 'Log Complaint'}
             </button>
           </section>
+
+
+          <RecentActivity screen="screen2" />
 
         </main>
         )}

@@ -6,6 +6,7 @@ import BottomSheetSelector, {
 } from '@/components/BottomSheetSelector'
 import RoleNav from '@/components/RoleNav'
 import AppHeader             from '@/components/AppHeader'
+import RecentActivity from '@/components/RecentActivity'
 import { localDb, syncReferenceData } from '@/lib/localDb'
 import { triggerSync }                from '@/lib/syncEngine'
 import { useCustomers, useProducts } from '@/hooks/useReferenceData'
@@ -565,6 +566,9 @@ export default function Screen1Page() {
               {isSubmitting ? 'Saving…' : 'Log Discrepancy'}
             </button>
           </section>
+
+
+          <RecentActivity screen="screen1" />
 
         </main>
       </div>

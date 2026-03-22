@@ -4,6 +4,7 @@ import { useState, useCallback, useId, useEffect } from 'react'
 import BottomSheetSelector              from '@/components/BottomSheetSelector'
 import RoleNav from '@/components/RoleNav'
 import AppHeader                            from '@/components/AppHeader'
+import RecentActivity from '@/components/RecentActivity'
 import { useCustomers }                 from '@/hooks/useReferenceData'
 import { localDb, syncReferenceData }   from '@/lib/localDb'
 import { triggerSync }                   from '@/lib/syncEngine'
@@ -594,6 +595,9 @@ export default function Screen3Page() {
               {isSubmitting ? 'Saving…' : 'Log Visit'}
             </button>
           </section>
+
+
+          <RecentActivity screen="screen3" />
 
         </main>
       </div>
