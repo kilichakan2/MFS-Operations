@@ -80,20 +80,24 @@ export async function GET(req: NextRequest) {
         .from('discrepancies')
         .select('id, created_at, status, reason, ordered_qty, sent_qty, customers(name), products(name), users!discrepancies_user_id_fkey(name)')
         .gte('created_at', todayStartISO)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(50),
 
       // ── Zone 2: Complaints today ───────────────────────────────────────────
       supabase
         .from('complaints')
         .select('id, created_at, category, status, description, resolution_note, customers(name), users!complaints_user_id_fkey(name)')
         .gte('created_at', todayStartISO)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(50),
 
       // ── Zone 2: Visits today ───────────────────────────────────────────────
       supabase
         .from('visits')
-        .select('outcome, user_id, users!visits_user_id_fkey(name)')
-        .gte('created_at', todayStartISO),
+        .select('id, created_at, outcome, visit_type, customer_id, prospect_name, customers(name), users!visits_user_id_fkey(name)')
+        .gte('created_at', todayStartISO)
+        .order('created_at', { ascending: false })
+        .limit(50),
 
       // ── Zone 3: Discrepancies this week ────────────────────────────────────
       supabase
@@ -110,13 +114,13 @@ export async function GET(req: NextRequest) {
       // ── Zone 3: Visits this week ────────────────────────────────────────────
       supabase
         .from('visits')
-        .select('visit_type, outcome, user_id, users!visits_user_id_fkey(name)')
+        .select('visit_type, outcome, user_id, customer_id, prospect_name, users!visits_user_id_fkey(name)')
         .gte('created_at', weekStartISO),
 
       // ── Zone 3: Prospects this week ────────────────────────────────────────
       supabase
         .from('visits')
-        .select('prospect_name, prospect_postcode, outcome, users!visits_user_id_fkey(name)')
+        .select('prospect_name, prospect_postcode, outcome, visit_type, users!visits_user_id_fkey(name)')
         .not('prospect_name', 'is', null)
         .gte('created_at', weekStartISO)
         .order('created_at', { ascending: false }),
@@ -195,21 +199,38 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // Group visits today by rep
-    const visitsByRepMap = new Map<string, { rep: string; count: number; outcomes: Record<string, number> }>()
+    // Group visits today by rep — also keep individual visit list for drill-down
+    const visitsByRepMap = new Map<string, {
+      rep: string; count: number; outcomes: Record<string, number>
+      visits: { id: string; customer: string; visitType: string; outcome: string }[]
+    }>()
     for (const v of (visitsTodayRes.data ?? [])) {
-      const vr = v as Record<string, unknown>
-      const usr = (vr['users'] as { name: string } | null)
-      const rep = usr?.name ?? 'Unknown'
+      const vr  = v as Record<string, unknown>
+      const usr  = (vr['users']     as { name: string } | null)
+      const cust = (vr['customers'] as { name: string } | null)
+      const rep  = usr?.name ?? 'Unknown'
       if (!visitsByRepMap.has(rep)) {
-        visitsByRepMap.set(rep, { rep, count: 0, outcomes: { positive: 0, neutral: 0, at_risk: 0, lost: 0 } })
+        visitsByRepMap.set(rep, { rep, count: 0, outcomes: { positive: 0, neutral: 0, at_risk: 0, lost: 0 }, visits: [] })
       }
-      const entry = visitsByRepMap.get(rep)!
-      entry.count++
+      const entry   = visitsByRepMap.get(rep)!
       const outcome = String(vr.outcome ?? 'neutral')
+      entry.count++
       entry.outcomes[outcome] = (entry.outcomes[outcome] ?? 0) + 1
+      entry.visits.push({
+        id:        String(vr.id ?? ''),
+        customer:  cust?.name ?? String(vr.prospect_name ?? 'Prospect'),
+        visitType: String(vr.visit_type ?? '').replace(/_/g, ' '),
+        outcome,
+      })
     }
     const visitsToday = Array.from(visitsByRepMap.values())
+
+    // Hunter/Farmer: count existing customers vs prospects across full week
+    const allWeekVisits = weekVisitsRes.data ?? []
+    const hunterFarmer = {
+      existing:  (allWeekVisits as Record<string, unknown>[]).filter(v => v.customer_id != null || (v as Record<string,unknown>).prospect_name == null).length,
+      prospects: (allWeekVisits as Record<string, unknown>[]).filter(v => (v as Record<string,unknown>).prospect_name != null).length,
+    }
 
     // ── Shape Zone 3 ──────────────────────────────────────────────────────────
 
@@ -273,10 +294,11 @@ export async function GET(req: NextRequest) {
     const prospectsThisWeek = (prospectsRes.data ?? []).map((v: Record<string, unknown>) => {
       const usr = (v['users'] as { name: string } | null)
       return {
-        name:     String(v.prospect_name ?? ''),
-        postcode: String(v.prospect_postcode ?? ''),
-        outcome:  String(v.outcome ?? '').replace(/_/g, ' '),
-        rep:      usr?.name ?? 'Unknown',
+        name:      String(v.prospect_name ?? ''),
+        postcode:  String(v.prospect_postcode ?? ''),
+        outcome:   String(v.outcome ?? '').replace(/_/g, ' '),
+        visitType: String(v.visit_type ?? '').replace(/_/g, ' '),
+        rep:       usr?.name ?? 'Unknown',
       }
     })
 
@@ -295,6 +317,7 @@ export async function GET(req: NextRequest) {
       weekComplaintCategories,
       weekVisitsByRep,
       prospectsThisWeek,
+      hunterFarmer,
       // Extras
       avgResolutionHours,
       totalComplaintsWeek: Array.from(catMap.values()).reduce((s, n) => s + n, 0),

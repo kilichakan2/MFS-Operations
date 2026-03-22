@@ -11,12 +11,13 @@ interface AtRiskAccount       { id: string; customer: string; outcome: 'at_risk'
 interface UnreviewedCommitment{ id: string; customer: string; detail: string; rep: string; hoursAgo: number }
 interface Discrepancy         { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string; orderedQty: number|null; sentQty: number|null; loggedBy: string; createdAt: string }
 interface TodayComplaint      { id: string; customer: string; category: string; status: 'open'|'resolved'; description: string; resolutionNote: string|null; loggedBy: string; createdAt: string }
-interface TodayVisit          { rep: string; count: number; outcomes: { positive: number; neutral: number; at_risk: number; lost: number } }
+interface TodayVisitItem      { id: string; customer: string; visitType: string; outcome: string }
+interface TodayVisit          { rep: string; count: number; outcomes: { positive: number; neutral: number; at_risk: number; lost: number }; visits: TodayVisitItem[] }
 interface WeekDiscrepancyByReason   { reason: string; count: number }
 interface WeekDiscrepancyByProduct  { product: string; count: number }
 interface WeekComplaintByCategory   { category: string; count: number }
 interface WeekVisitByRep      { rep: string; total: number; types: { routine: number; new_pitch: number; complaint_followup: number; delivery_issue: number } }
-interface Prospect            { name: string; postcode: string; outcome: string; rep: string }
+interface Prospect            { name: string; postcode: string; outcome: string; visitType: string; rep: string }
 
 interface DashboardData {
   openComplaints48h:       OpenComplaint[]
@@ -30,6 +31,7 @@ interface DashboardData {
   weekComplaintCategories: WeekComplaintByCategory[]
   weekVisitsByRep:         WeekVisitByRep[]
   prospectsThisWeek:       Prospect[]
+  hunterFarmer:            { existing: number; prospects: number }
   avgResolutionHours:      number | null
   totalComplaintsWeek:     number
   openComplaintsWeek:      number
@@ -50,7 +52,7 @@ const EMPTY: DashboardData = {
   openComplaints48h: [], atRiskAccounts: [], unreviewedCommitments: [],
   discrepanciesToday: [], complaintsTodayList: [], visitsToday: [],
   weekDiscrepancyReasons: [], weekDiscrepancyProducts: [], weekComplaintCategories: [],
-  weekVisitsByRep: [], prospectsThisWeek: [],
+  weekVisitsByRep: [], prospectsThisWeek: [], hunterFarmer: { existing: 0, prospects: 0 },
   avgResolutionHours: null, totalComplaintsWeek: 0, openComplaintsWeek: 0,
 }
 
@@ -338,22 +340,50 @@ export default function Screen4Page() {
                 <p className="text-sm text-gray-400 font-medium">No visits logged today</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 {data.visitsToday.map((v) => {
                   const warn = v.outcomes.at_risk > 0 || v.outcomes.lost > 0
                   return (
-                    <div key={v.rep} className="bg-white border border-gray-200 rounded-2xl p-4 flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{v.rep}</span>
-                        {warn && <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />}
+                    <div key={v.rep} className="bg-white border border-gray-200 rounded-2xl p-4">
+                      {/* Rep summary row */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{v.rep}</span>
+                          {warn && <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xl font-bold text-[#16205B]">{v.count}</span>
+                          <span className="text-xs text-gray-400">visits</span>
+                        </div>
                       </div>
-                      <span className="text-3xl font-bold text-[#16205B] leading-none">{v.count}</span>
-                      <span className="text-xs text-gray-400">visits today</span>
-                      <div className="flex flex-wrap gap-1 mt-1">
+                      {/* Outcome badges */}
+                      <div className="flex flex-wrap gap-1 mb-3">
                         {v.outcomes.positive > 0 && <Badge label={`${v.outcomes.positive} positive`} tone="green" />}
+                        {v.outcomes.neutral  > 0 && <Badge label={`${v.outcomes.neutral} neutral`}   tone="gray"  />}
                         {v.outcomes.at_risk  > 0 && <Badge label={`${v.outcomes.at_risk} at risk`}   tone="amber" />}
                         {v.outcomes.lost     > 0 && <Badge label={`${v.outcomes.lost} lost`}          tone="red"   />}
                       </div>
+                      {/* Individual visit list */}
+                      {v.visits.length > 0 && (
+                        <div className="space-y-1 border-t border-gray-100 pt-2">
+                          {v.visits.map((vi) => {
+                            const outcomeColour =
+                              vi.outcome === 'positive' ? 'text-green-600'
+                              : vi.outcome === 'at_risk' ? 'text-amber-600'
+                              : vi.outcome === 'lost'    ? 'text-red-600'
+                              : 'text-gray-400'
+                            return (
+                              <div key={vi.id} className="flex items-center justify-between gap-2 py-0.5">
+                                <span className="text-xs text-gray-700 truncate flex-1 capitalize">{vi.customer}</span>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <span className="text-[10px] text-gray-400 capitalize">{vi.visitType}</span>
+                                  <span className={`text-[10px] font-semibold capitalize ${outcomeColour}`}>{vi.outcome.replace(/_/g,' ')}</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -476,6 +506,7 @@ export default function Screen4Page() {
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
                       <p className="text-xs text-gray-400">{p.postcode} · {p.rep}</p>
+                      {p.visitType && <p className="text-xs text-gray-300 capitalize mt-0.5">{p.visitType}</p>}
                     </div>
                     <Badge label={p.outcome} tone={p.outcome==='positive'||p.outcome==='Positive' ? 'green' : p.outcome==='neutral'||p.outcome==='Neutral' ? 'gray' : 'red'} />
                   </div>
@@ -483,6 +514,47 @@ export default function Screen4Page() {
               </div>
             )}
           </div>
+
+
+          {/* ── Hunter / Farmer ratio ──────────────────────────────────── */}
+          {(() => {
+            const { existing, prospects } = data.hunterFarmer
+            const total = existing + prospects
+            if (total === 0) return null
+            const existPct = Math.round((existing / total) * 100)
+            const prospPct = 100 - existPct
+            return (
+              <div className="bg-white border border-gray-200 rounded-2xl p-5 mt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-gray-900">This week's focus</h3>
+                  <span className="text-xs text-gray-400">{total} total visits</span>
+                </div>
+                {/* Split bar */}
+                <div className="w-full h-3 rounded-full overflow-hidden flex mb-3">
+                  <div
+                    className="h-full bg-[#16205B] transition-all duration-500 rounded-l-full"
+                    style={{ width: `${existPct}%` }}
+                  />
+                  <div
+                    className="h-full bg-[#EB6619] transition-all duration-500 rounded-r-full"
+                    style={{ width: `${prospPct}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#16205B] flex-shrink-0" />
+                    <span className="text-gray-600 font-medium">{existPct}% Existing customers</span>
+                    <span className="text-gray-400">({existing})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#EB6619] flex-shrink-0" />
+                    <span className="text-gray-600 font-medium">{prospPct}% New prospects</span>
+                    <span className="text-gray-400">({prospects})</span>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
         </section>
 
