@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState }  from 'react'
+import MfsLogo       from '@/components/MfsLogo'
 
 interface AppHeaderProps {
   title?:    string
@@ -33,8 +34,7 @@ export default function AppHeader({
         {/* Logo + screen title */}
         <div className="flex items-center gap-3">
           {/* White logo on navy — approved brand variant */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/mfs-logo-white.svg" alt="MFS Wholesale" className="h-7 w-auto" />
+          <MfsLogo className="h-7 w-auto" />
           {title && (
             <>
               <span className="text-white/25 font-light select-none">|</span>

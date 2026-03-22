@@ -1,5 +1,7 @@
 'use client'
 
+import MfsLogo from '@/components/MfsLogo'
+
 
 import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useSearchParams }                             from 'next/navigation'
@@ -90,8 +92,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs">
         <div className="text-center mb-12">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/mfs-logo-white.svg" alt="MFS Wholesale" className="h-10 w-auto mx-auto mb-3" />
+          <MfsLogo className="h-10 w-auto mx-auto mb-3" />
           <h1 className="text-white text-2xl font-bold">Operations</h1>
         </div>
 
@@ -358,8 +359,7 @@ function LoginSkeleton() {
   return (
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/mfs-logo-white.svg" alt="MFS Wholesale" className="h-10 w-auto mx-auto mb-3" />
+        <MfsLogo className="h-10 w-auto mx-auto mb-3" />
         <h1 className="text-white text-2xl font-bold">Operations</h1>
       </div>
     </div>
