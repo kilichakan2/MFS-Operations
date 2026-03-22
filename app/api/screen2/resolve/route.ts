@@ -1,5 +1,5 @@
 /**
- * PATCH /api/screen2/resolve
+ * POST /api/screen2/resolve
  * Marks an open complaint as resolved.
  * Uses raw fetch() to Supabase REST — avoids cold-start client issues.
  *
@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
 const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
-export async function PATCH(req: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     const userId   = req.headers.get('x-mfs-user-id')
     const userName = req.headers.get('x-mfs-user-name') ?? 'Unknown'

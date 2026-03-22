@@ -35,10 +35,14 @@ interface DashboardData {
   openComplaintsWeek:      number
 }
 
-/** Format ISO timestamp → "14:32" (24h UK time) */
+/** Format ISO timestamp → "22 Mar, 14:32" (UK time) */
 function fmtTime(iso: string): string {
   try {
-    return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })
+    return new Date(iso).toLocaleString('en-GB', {
+      day: '2-digit', month: 'short',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Europe/London',
+    }).replace(',', '')
   } catch { return '' }
 }
 
