@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
 
     const openComplaints48h = (openComplaintsRes.data ?? []).map((c: Record<string, unknown>) => {
       const cust = c.customers as { name: string } | null
-      const usr  = (c['users!complaints_user_id_fkey'] as { name: string } | null)
+      const usr  = (c['users'] as { name: string } | null)
       return {
         id:       c.id,
         customer: cust?.name ?? 'Unknown',
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
 
     const atRiskAccounts = (atRiskRes.data ?? []).map((v: Record<string, unknown>) => {
       const cust = v.customers as { name: string } | null
-      const usr  = (v['users!visits_user_id_fkey'] as { name: string } | null)
+      const usr  = (v['users'] as { name: string } | null)
       return {
         id:       v.id,
         customer: cust?.name ?? (v.prospect_name as string) ?? 'Unknown',
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
 
     const unreviewedCommitments = (commitmentsRes.data ?? []).map((v: Record<string, unknown>) => {
       const cust = v.customers as { name: string } | null
-      const usr  = (v['users!visits_user_id_fkey'] as { name: string } | null)
+      const usr  = (v['users'] as { name: string } | null)
       return {
         id:       v.id,
         customer: cust?.name ?? (v.prospect_name as string) ?? 'Unknown',
@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
 
     const complaintsTodayList = (complaintsTodayRes.data ?? []).map((c: Record<string, unknown>) => {
       const cust = c.customers as { name: string } | null
-      const usr  = (c['users!complaints_user_id_fkey'] as { name: string } | null)
+      const usr  = (c['users'] as { name: string } | null)
       return {
         id:       c.id,
         customer: cust?.name ?? 'Unknown',
@@ -188,7 +188,7 @@ export async function GET(req: NextRequest) {
     const visitsByRepMap = new Map<string, { rep: string; count: number; outcomes: Record<string, number> }>()
     for (const v of (visitsTodayRes.data ?? [])) {
       const vr = v as Record<string, unknown>
-      const usr = (vr['users!visits_user_id_fkey'] as { name: string } | null)
+      const usr = (vr['users'] as { name: string } | null)
       const rep = usr?.name ?? 'Unknown'
       if (!visitsByRepMap.has(rep)) {
         visitsByRepMap.set(rep, { rep, count: 0, outcomes: { positive: 0, neutral: 0, at_risk: 0, lost: 0 } })
@@ -246,7 +246,7 @@ export async function GET(req: NextRequest) {
     const repMap = new Map<string, { rep: string; total: number; types: Record<string, number> }>()
     for (const v of (weekVisitsRes.data ?? [])) {
       const vr  = v as Record<string, unknown>
-      const usr = (vr['users!visits_user_id_fkey'] as { name: string } | null)
+      const usr = (vr['users'] as { name: string } | null)
       const rep = usr?.name ?? 'Unknown'
       if (!repMap.has(rep)) {
         repMap.set(rep, { rep, total: 0, types: { routine: 0, new_pitch: 0, complaint_followup: 0, delivery_issue: 0 } })
@@ -260,7 +260,7 @@ export async function GET(req: NextRequest) {
 
     // Prospects
     const prospectsThisWeek = (prospectsRes.data ?? []).map((v: Record<string, unknown>) => {
-      const usr = (v['users!visits_user_id_fkey'] as { name: string } | null)
+      const usr = (v['users'] as { name: string } | null)
       return {
         name:     String(v.prospect_name ?? ''),
         postcode: String(v.prospect_postcode ?? ''),
