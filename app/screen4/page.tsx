@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import BottomNav, { Icons } from '@/components/BottomNav'
 import AppHeader             from '@/components/AppHeader'
+import DetailModal, { type ModalType } from '@/components/DetailModal'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -194,7 +195,7 @@ function TodayTabs({ data }: { data: DashboardData }) {
                                  : vi.outcome==='lost'     ? 'text-red-700 bg-red-50'
                                  : 'text-gray-500 bg-gray-50'
                         return (
-                          <div key={vi.id} className="flex items-center justify-between gap-3 py-1.5 border-t border-gray-50 first:border-0">
+                          <div key={vi.id} onClick={() => setModal({ type: 'visit', id: vi.id })} className="flex items-center justify-between gap-3 py-1.5 border-t border-gray-50 first:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors">
                             <span className="text-xs text-gray-800 truncate flex-1 capitalize">{vi.customer}</span>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className="text-[10px] text-gray-400 capitalize">{vi.visitType}</span>
@@ -217,7 +218,7 @@ function TodayTabs({ data }: { data: DashboardData }) {
           {data.complaintsTodayList.length === 0
             ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No complaints today</p>
             : data.complaintsTodayList.map(c => (
-                <div key={c.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                <div key={c.id} onClick={() => setModal({ type: 'complaint', id: c.id })} className="px-4 py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-gray-50 transition-colors">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 truncate">{c.customer}</p>
                     <p className="text-xs text-gray-400">{cap(c.category)} · {c.loggedBy} · {fmtTime(c.createdAt)}</p>
@@ -239,7 +240,7 @@ function TodayTabs({ data }: { data: DashboardData }) {
           {data.discrepanciesToday.length === 0
             ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No discrepancies today</p>
             : data.discrepanciesToday.map(d => (
-                <div key={d.id} className="px-4 py-3 flex items-start justify-between gap-3">
+                <div key={d.id} onClick={() => setModal({ type: 'discrepancy', id: d.id })} className="px-4 py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-gray-50 transition-colors">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 truncate">{d.customer}</p>
                     <p className="text-xs text-gray-400 truncate">{d.product} · {cap(d.reason)}</p>
@@ -375,6 +376,7 @@ export default function Screen4Page() {
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState('')
   const [lastFetch,  setLastFetch]  = useState<Date | null>(null)
+  const [modal,      setModal]      = useState<{ type: ModalType; id: string } | null>(null)
   const [preset,     setPreset]     = useState<Preset>('today')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo,   setCustomTo]   = useState('')
@@ -657,6 +659,15 @@ export default function Screen4Page() {
 
         <div className="h-4" aria-hidden="true" />
       </main>
+      )}
+
+      {/* Drill-down modal */}
+      {modal && (
+        <DetailModal
+          type={modal.type}
+          id={modal.id}
+          onClose={() => setModal(null)}
+        />
       )}
 
       <BottomNav items={[
