@@ -14,9 +14,9 @@ type Mode = 'select' | 'team' | 'admin'
 interface TeamMember { id: string; name: string; role: string }
 
 const ROLE_ACCENT: Record<string, string> = {
-  warehouse: 'border-amber-500/40  text-amber-300',
-  office:    'border-purple-500/40 text-purple-300',
-  sales:     'border-emerald-500/40 text-emerald-300',
+  warehouse: 'border-amber-500/60  text-amber-700',
+  office:    'border-purple-500/60 text-purple-700',
+  sales:     'border-emerald-600/60 text-emerald-700',
 }
 const ROLE_LABEL: Record<string, string> = {
   warehouse: 'Warehouse',
@@ -95,41 +95,41 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs">
         <div className="text-center mb-12">
-          <MfsLogo className="h-14 w-auto mx-auto text-[#EB6619]" />
+          <MfsLogo className="h-14 w-auto mx-auto" />
         </div>
 
         <button type="button" onClick={() => onSelect('team')}
-          className="w-full mb-4 rounded-2xl bg-[#EDEAE1] active:bg-[#dedad0] active:scale-[0.98] transition-all p-5 text-left">
+          className="w-full mb-4 rounded-2xl bg-[#EB6619] active:bg-[#c95510] active:scale-[0.98] transition-all p-5 text-left">
           <div className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-xl bg-[#16205B]/10 flex items-center justify-center flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#16205B" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+            <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
             </div>
             <div>
-              <p className="text-[#16205B] font-bold text-base leading-tight">{t('teamLogin')}</p>
-              <p className="text-[#16205B]/60 text-xs mt-0.5">{t('teamLoginSub')}</p>
+              <p className="text-white font-bold text-base leading-tight">{t('teamLogin')}</p>
+              <p className="text-white/70 text-xs mt-0.5">{t('teamLoginSub')}</p>
             </div>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="#16205B" className="w-5 h-5 ml-auto opacity-40">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="white" className="w-5 h-5 ml-auto opacity-60">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd"/>
             </svg>
           </div>
         </button>
 
         <button type="button" onClick={() => onSelect('admin')}
-          className="w-full rounded-2xl bg-[#EDEAE1] hover:bg-[#dedad0] active:scale-[0.98] transition-all p-5 text-left border border-[#EDEAE1]">
+          className="w-full rounded-2xl bg-white/10 hover:bg-white/15 active:bg-white/20 active:scale-[0.98] transition-all p-5 text-left border border-white/10">
           <div className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-xl bg-[#16205B]/10 flex items-center justify-center flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#16205B" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+            <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
             </div>
             <div>
-              <p className="text-[#16205B] font-bold text-base leading-tight">{t('adminLogin')}</p>
-              <p className="text-[#16205B]/60 text-xs mt-0.5">{t('adminLoginSub')}</p>
+              <p className="text-white font-bold text-base leading-tight">{t('adminLogin')}</p>
+              <p className="text-white/50 text-xs mt-0.5">{t('adminLoginSub')}</p>
             </div>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="#16205B" className="w-5 h-5 ml-auto opacity-30">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="white" className="w-5 h-5 ml-auto opacity-30">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd"/>
             </svg>
           </div>
@@ -275,11 +275,11 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
             <div className="grid grid-cols-2 gap-3">
               {members.map((m) => (
                 <button key={m.id} type="button" onClick={() => selectMember(m)}
-                  className={['relative flex flex-col items-center justify-center bg-white/8 border rounded-2xl p-5 active:scale-95 transition-all duration-100 hover:bg-white/12', ROLE_ACCENT[m.role] ?? 'border-white/20 text-white/50'].join(' ')}>
-                  <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center mb-3">
-                    <span className="text-white text-xl font-bold">{m.name.charAt(0).toUpperCase()}</span>
+                  className={['relative flex flex-col items-center justify-center bg-[#EDEAE1] border rounded-2xl p-5 active:scale-95 transition-all duration-100 hover:bg-[#dedad0]', ROLE_ACCENT[m.role] ?? 'border-white/20 text-white/50'].join(' ')}>
+                  <div className="w-14 h-14 rounded-full bg-[#16205B]/10 flex items-center justify-center mb-3">
+                    <span className="text-[#16205B] text-xl font-bold">{m.name.charAt(0).toUpperCase()}</span>
                   </div>
-                  <span className="text-white font-bold text-base leading-tight">{m.name}</span>
+                  <span className="text-[#16205B] font-bold text-base leading-tight">{m.name}</span>
                   <span className={`text-[10px] font-semibold mt-1 ${ROLE_ACCENT[m.role]?.split(' ')[1] ?? 'text-white/40'}`}>
                     {ROLE_LABEL[m.role] ?? m.role}
                   </span>
@@ -398,7 +398,7 @@ function LoginSkeleton() {
   return (
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs text-center">
-        <MfsLogo className="h-14 w-auto mx-auto text-[#EB6619]" />
+        <MfsLogo className="h-14 w-auto mx-auto" />
       </div>
     </div>
   )
