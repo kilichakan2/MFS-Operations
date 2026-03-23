@@ -26,17 +26,23 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     }
 
-    const now       = new Date()
-    const ago48h    = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
-    const ago24h    = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
-    const weekStart = new Date(now)
-    weekStart.setHours(0, 0, 0, 0)
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + (weekStart.getDay() === 0 ? -6 : 1))
-    const weekStartISO = weekStart.toISOString()
-    // Today = midnight local time in UTC ISO
-    const todayStart = new Date(now)
-    todayStart.setHours(0, 0, 0, 0)
-    const todayStartISO = todayStart.toISOString()
+    const now    = new Date()
+    const ago48h = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
+    const ago24h = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
+
+    // Zone 1 alerts use rolling server-side windows (timezone-independent).
+    // Zone 1 at-risk: rolling 7-day window
+    const ago7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+    // Zone 2 + 3: use client-supplied ISO strings so timezone is correct.
+    // The browser computes midnight in local time and sends the ISO string.
+    // If absent (e.g. direct API call), fall back to UTC today.
+    const todayUTC = new Date(now); todayUTC.setUTCHours(0, 0, 0, 0)
+    const searchParams = req.nextUrl.searchParams
+    const zoneFrom  = searchParams.get('from') ?? todayUTC.toISOString()
+    const zoneTo    = searchParams.get('to')   ?? now.toISOString()
+    // Keep for Zone 1 at-risk query
+    const weekStartISO = ago7d
 
     const [
       openComplaintsRes,
@@ -79,7 +85,8 @@ export async function GET(req: NextRequest) {
       supabase
         .from('discrepancies')
         .select('id, created_at, status, reason, ordered_qty, sent_qty, customers(name), products(name), users!discrepancies_user_id_fkey(name)')
-        .gte('created_at', todayStartISO)
+        .gte('created_at', zoneFrom)
+        .lte('created_at', zoneTo)
         .order('created_at', { ascending: false })
         .limit(50),
 
@@ -87,7 +94,8 @@ export async function GET(req: NextRequest) {
       supabase
         .from('complaints')
         .select('id, created_at, category, status, description, resolution_note, customers(name), users!complaints_user_id_fkey(name)')
-        .gte('created_at', todayStartISO)
+        .gte('created_at', zoneFrom)
+        .lte('created_at', zoneTo)
         .order('created_at', { ascending: false })
         .limit(50),
 
@@ -95,7 +103,8 @@ export async function GET(req: NextRequest) {
       supabase
         .from('visits')
         .select('id, created_at, outcome, visit_type, customer_id, prospect_name, customers(name), users!visits_user_id_fkey(name)')
-        .gte('created_at', todayStartISO)
+        .gte('created_at', zoneFrom)
+        .lte('created_at', zoneTo)
         .order('created_at', { ascending: false })
         .limit(50),
 
@@ -103,26 +112,30 @@ export async function GET(req: NextRequest) {
       supabase
         .from('discrepancies')
         .select('reason, products(name)')
-        .gte('created_at', weekStartISO),
+        .gte('created_at', zoneFrom)
+        .lte('created_at', zoneTo),
 
       // ── Zone 3: Complaints this week ───────────────────────────────────────
       supabase
         .from('complaints')
         .select('category, status, created_at, resolved_at')
-        .gte('created_at', weekStartISO),
+        .gte('created_at', zoneFrom)
+        .lte('created_at', zoneTo),
 
       // ── Zone 3: Visits this week ────────────────────────────────────────────
       supabase
         .from('visits')
         .select('visit_type, outcome, user_id, customer_id, prospect_name, users!visits_user_id_fkey(name)')
-        .gte('created_at', weekStartISO),
+        .gte('created_at', zoneFrom)
+        .lte('created_at', zoneTo),
 
       // ── Zone 3: Prospects this week ────────────────────────────────────────
       supabase
         .from('visits')
         .select('prospect_name, prospect_postcode, outcome, visit_type, users!visits_user_id_fkey(name)')
         .not('prospect_name', 'is', null)
-        .gte('created_at', weekStartISO)
+        .gte('created_at', zoneFrom)
+        .lte('created_at', zoneTo)
         .order('created_at', { ascending: false }),
     ])
 

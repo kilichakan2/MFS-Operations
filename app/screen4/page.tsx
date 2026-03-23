@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import BottomNav, { Icons } from '@/components/BottomNav'
 import AppHeader             from '@/components/AppHeader'
@@ -258,25 +258,148 @@ function TodayTabs({ data }: { data: DashboardData }) {
   )
 }
 
+
+// ─── Date range helpers ───────────────────────────────────────────────────────
+
+type Preset = 'today' | 'week' | 'month' | 'last_month' | 'custom'
+
+interface DateRange { from: string; to: string; label: string }
+
+/** Compute ISO boundaries in the browser's local timezone */
+function buildRange(preset: Preset, customFrom: string, customTo: string): DateRange {
+  const now   = new Date()
+  const start = new Date(now)
+
+  if (preset === 'today') {
+    start.setHours(0, 0, 0, 0)
+    return { from: start.toISOString(), to: now.toISOString(), label: 'Today' }
+  }
+  if (preset === 'week') {
+    start.setHours(0, 0, 0, 0)
+    // Monday of current week
+    start.setDate(start.getDate() - start.getDay() + (start.getDay() === 0 ? -6 : 1))
+    return { from: start.toISOString(), to: now.toISOString(), label: 'This Week' }
+  }
+  if (preset === 'month') {
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+    return { from: start.toISOString(), to: now.toISOString(), label: 'This Month' }
+  }
+  if (preset === 'last_month') {
+    const firstThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const firstLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const lastLastMonth  = new Date(firstThisMonth.getTime() - 1)
+    return {
+      from:  firstLastMonth.toISOString(),
+      to:    lastLastMonth.toISOString(),
+      label: firstLastMonth.toLocaleString('en-GB', { month: 'long', year: 'numeric' }),
+    }
+  }
+  // Custom — customFrom/customTo are YYYY-MM-DD strings
+  if (customFrom && customTo) {
+    const f = new Date(customFrom + 'T00:00:00')
+    const t = new Date(customTo   + 'T23:59:59')
+    const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+    return { from: f.toISOString(), to: t.toISOString(), label: `${fmt(f)} – ${fmt(t)}` }
+  }
+  // Custom but incomplete — fall back to today
+  start.setHours(0, 0, 0, 0)
+  return { from: start.toISOString(), to: now.toISOString(), label: 'Today' }
+}
+
+// ─── Date Filter Bar ──────────────────────────────────────────────────────────
+
+const PRESETS: { id: Preset; label: string }[] = [
+  { id: 'today',      label: 'Today'      },
+  { id: 'week',       label: 'This Week'  },
+  { id: 'month',      label: 'This Month' },
+  { id: 'last_month', label: 'Last Month' },
+  { id: 'custom',     label: 'Custom'     },
+]
+
+function DateFilterBar({ preset, customFrom, customTo, onChange }: {
+  preset:     Preset
+  customFrom: string
+  customTo:   string
+  onChange:   (p: Preset, f: string, t: string) => void
+}) {
+  return (
+    <div className="bg-white border-b border-gray-100 px-4 py-3">
+      <div className="max-w-2xl mx-auto flex flex-wrap items-center gap-2">
+        {/* Preset buttons */}
+        {PRESETS.map(p => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => onChange(p.id, customFrom, customTo)}
+            className={[
+              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+              preset === p.id
+                ? 'bg-[#16205B] text-white'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
+            ].join(' ')}
+          >
+            {p.label}
+          </button>
+        ))}
+
+        {/* Custom date inputs — only shown when Custom is active */}
+        {preset === 'custom' && (
+          <div className="flex items-center gap-2 ml-1">
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={e => onChange('custom', e.target.value, customTo)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:border-[#EB6619]"
+            />
+            <span className="text-xs text-gray-400">–</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={e => onChange('custom', customFrom, e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:border-[#EB6619]"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Screen4Page() {
-  const [data,      setData]      = useState<DashboardData>(EMPTY)
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState('')
-  const [lastFetch, setLastFetch] = useState<Date | null>(null)
+  const [data,       setData]       = useState<DashboardData>(EMPTY)
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState('')
+  const [lastFetch,  setLastFetch]  = useState<Date | null>(null)
+  const [preset,     setPreset]     = useState<Preset>('today')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo,   setCustomTo]   = useState('')
+
+  const range = useMemo(
+    () => buildRange(preset, customFrom, customTo),
+    [preset, customFrom, customTo]
+  )
+
+  function handleRangeChange(p: Preset, f: string, t: string) {
+    setPreset(p); setCustomFrom(f); setCustomTo(t)
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError('')
     try {
-      const res = await fetch('/api/dashboard')
+      const res = await fetch(`/api/dashboard?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`)
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error ?? `HTTP ${res.status}`); return }
       setData(await res.json()); setLastFetch(new Date())
     } catch { setError('Network error — check your connection') }
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  // Re-fetch whenever the date range changes
+  useEffect(() => { fetchData() }, [fetchData, range.from, range.to])
 
   const totalVisitsToday = data.visitsToday.reduce((s, v) => s + v.count, 0)
   const openAlertsCount  = data.openComplaints48h.length
@@ -367,13 +490,13 @@ export default function Screen4Page() {
 
         {/* Today — tabbed */}
         <div>
-          <SectionLabel>Today</SectionLabel>
+          <SectionLabel>{range.label}</SectionLabel>
           <TodayTabs data={data} />
         </div>
 
         {/* This Week */}
         <div>
-          <SectionLabel>This week</SectionLabel>
+          <SectionLabel>{range.label} — Breakdown</SectionLabel>
 
           {/* Week KPI mini-row */}
           <div className="grid grid-cols-3 gap-3 mb-4">
