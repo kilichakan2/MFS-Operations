@@ -89,8 +89,8 @@ async function submitLogin(
 
 // ─── Screen A: Mode selector ──────────────────────────────────────────────────
 
-function ModeSelect({   const { t } = useLanguage()
-onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
+function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
+  const { t } = useLanguage()
   return (
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs">
