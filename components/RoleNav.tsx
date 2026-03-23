@@ -1,5 +1,7 @@
 'use client'
 
+import { useLanguage } from '@/lib/LanguageContext'
+
 /**
  * components/RoleNav.tsx
  *
@@ -33,24 +35,25 @@ function getClientRole(): Role {
 const NAV_ITEMS: Record<Role, { href: string; label: string; icon: ReactNode }[]> = {
   warehouse: [
     // Single screen — BottomNav hides itself when items.length <= 1
-    { href: '/screen1', label: 'Dispatch',   icon: Icons.dispatch },
+    { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch },
   ],
   office: [
-    { href: '/screen1', label: 'Dispatch',   icon: Icons.dispatch  },
-    { href: '/screen2', label: 'Complaints', icon: Icons.complaint },
+    { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch  },
+    { href: '/screen2', label: t('navComplaints'), icon: Icons.complaint },
   ],
   sales: [
-    { href: '/screen2', label: 'Complaints', icon: Icons.complaint },
-    { href: '/screen3', label: 'Visits',     icon: Icons.visit     },
+    { href: '/screen2', label: t('navComplaints'), icon: Icons.complaint },
+    { href: '/screen3', label: t('navVisits'),     icon: Icons.visit     },
   ],
   admin: [
-    { href: '/screen4', label: 'Dashboard',  icon: Icons.dashboard },
-    { href: '/screen5', label: 'Admin',      icon: Icons.admin     },
+    { href: '/screen4', label: t('navDashboard'),  icon: Icons.dashboard },
+    { href: '/screen5', label: t('navAdmin'),      icon: Icons.admin     },
   ],
   '': [],
 }
 
 export default function RoleNav() {
+  const { t } = useLanguage()
   const items = useMemo(() => {
     const role = getClientRole()
     return NAV_ITEMS[role] ?? []

@@ -3,6 +3,7 @@
 import { useState, useCallback, useId, useEffect, useRef } from 'react'
 import BottomSheetSelector              from '@/components/BottomSheetSelector'
 import RoleNav from '@/components/RoleNav'
+import { useLanguage } from '@/lib/LanguageContext'
 import AppHeader                            from '@/components/AppHeader'
 import RecentActivity from '@/components/RecentActivity'
 import { useCustomers }                 from '@/hooks/useReferenceData'
@@ -37,21 +38,21 @@ const EMPTY_FORM: FormState = {
 // ─── Button config ────────────────────────────────────────────────────────────
 
 const CATEGORIES: { value: Category; label: string }[] = [
-  { value: 'weight',       label: 'Weight'       },
-  { value: 'quality',      label: 'Quality'      },
-  { value: 'delivery',     label: 'Delivery'     },
-  { value: 'missing_item', label: 'Missing item' },
-  { value: 'pricing',      label: 'Pricing'      },
-  { value: 'service',      label: 'Service'      },
-  { value: 'other',        label: 'Other'        },
+  { value: 'weight',       label: t('weight')       },
+  { value: 'quality',      label: t('quality')      },
+  { value: 'delivery',     label: t('delivery')     },
+  { value: 'missing_item', label: t('missingItem') },
+  { value: 'pricing',      label: t('pricing')      },
+  { value: 'service',      label: t('service')      },
+  { value: 'other',        label: t('other')        },
 ]
 
 const RECEIVED_VIA: { value: ReceivedVia; label: string }[] = [
-  { value: 'phone',     label: 'Phone call' },
-  { value: 'in_person', label: 'In person'  },
-  { value: 'whatsapp',  label: 'WhatsApp'   },
-  { value: 'email',     label: 'Email'      },
-  { value: 'other',     label: 'Other'      },
+  { value: 'phone',     label: t('phone') },
+  { value: 'in_person', label: t('inPerson')  },
+  { value: 'whatsapp',  label: t('whatsapp')   },
+  { value: 'email',     label: t('email')      },
+  { value: 'other',     label: t('other')      },
 ]
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -237,7 +238,7 @@ function OpenComplaintsTab() {
     setError('')
     try {
       const res = await fetch('/api/screen2/open')
-      if (!res.ok) { setError('Failed to load open complaints'); return }
+      if (!res.ok) { setError(t('noOpenComp')); return }
       setComplaints(await res.json())
     } catch { setError('Network error') }
     finally   { setLoading(false) }
@@ -336,7 +337,7 @@ function OpenComplaintsTab() {
                   {c.category} · {fmtDate(c.createdAt)}
                 </p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Logged by <span className="font-medium text-gray-600">{c.loggedBy}</span>
+                  {t('loggedBy')} <span className="font-medium text-gray-600">{c.loggedBy}</span>
                 </p>
                 <p className="text-xs text-gray-400 truncate mt-1">{c.description}</p>
               </div>
@@ -354,7 +355,7 @@ function OpenComplaintsTab() {
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Resolution note</p>
                 <textarea
                   rows={3}
-                  placeholder="What was done to resolve this? Be specific."
+                  placeholder={t('resolvePrompt2')}
                   value={note}
                   onChange={e => setNoteValue(prev => ({ ...prev, [c.id]: e.target.value }))}
                   maxLength={500}
@@ -378,7 +379,7 @@ function OpenComplaintsTab() {
                       : "bg-[#16205B] text-white active:scale-[0.98]",
                   ].join(" ")}
                 >
-                  {isSaving ? "Saving…" : "Mark Resolved"}
+                  {isSaving ? "Saving…" : t('markResolved')}
                 </button>
               </div>
             )}
@@ -390,6 +391,7 @@ function OpenComplaintsTab() {
 }
 
 export default function Screen2Page() {
+  const { t } = useLanguage()
   const formId              = useId()
   // Sync reference data on mount so customer dropdown is populated
   useEffect(() => {
@@ -478,10 +480,10 @@ export default function Screen2Page() {
 
       {sheetOpen && (
         <BottomSheetSelector
-          title="Select customer"
+          title={t('selectCustomer')}
           items={customers}
           selectedId={form.customer?.id}
-          searchPlaceholder="Search customers…"
+          searchPlaceholder={t('searchCustomers')}
           onSelect={(item) => { set('customer', item); setSheetOpen(false) }}
           onDismiss={() => setSheetOpen(false)}
         />
@@ -490,7 +492,7 @@ export default function Screen2Page() {
       <div className="min-h-screen bg-gray-50">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <AppHeader title="Complaint Log" maxWidth="lg" />
+        <AppHeader title={t('complaintLog')} maxWidth="lg" />
 
         {/* ── Tab switcher ────────────────────────────────────────────────── */}
         <div className="bg-white border-b border-gray-200 sticky top-[calc(var(--header-h,96px))] z-30">
@@ -507,7 +509,7 @@ export default function Screen2Page() {
                     : 'border-transparent text-gray-400 hover:text-gray-600',
                 ].join(' ')}
               >
-                {tab === 'log' ? 'Log New' : 'Open Complaints'}
+                {tab === 'log' ? t('logNew') : t('openComplaints')}
               </button>
             ))}
           </div>
@@ -525,7 +527,7 @@ export default function Screen2Page() {
             <Label>Customer</Label>
             <SelectorButton
               label={form.customer?.label}
-              placeholder="Select customer"
+              placeholder={t('selectCustomer')}
               onClick={() => setSheetOpen(true)}
               error={errors.customer}
             />
@@ -557,7 +559,7 @@ export default function Screen2Page() {
               <div className="col-span-3">
                 <OptionButton
                   value="other"
-                  label="Other"
+                  label={t('other')}
                   selected={form.category === 'other'}
                   onPress={(v) => set('category', v)}
                   activeColour="maroon"
@@ -569,10 +571,10 @@ export default function Screen2Page() {
 
           {/* ── Description ──────────────────────────────────────────────── */}
           <section>
-            <Label>Description</Label>
+            <Label>{t('description')}</Label>
             <textarea
               rows={3}
-              placeholder="What did the customer say? What was the specific issue?"
+              placeholder={t('complaintDesc')}
               value={form.description}
               onChange={(e) => set('description', e.target.value)}
               maxLength={500}
@@ -629,7 +631,7 @@ export default function Screen2Page() {
 
           {/* ── Status ───────────────────────────────────────────────────── */}
           <section>
-            <Label>Status</Label>
+            <Label>{t('status')}</Label>
             <div
               className="grid grid-cols-2 gap-3"
               role="group"
@@ -687,7 +689,7 @@ export default function Screen2Page() {
             <Label>Resolution note</Label>
             <textarea
               rows={3}
-              placeholder="What was done to resolve this complaint?"
+              placeholder={t('resolvePrompt')}
               value={form.resolutionNote}
               onChange={(e) => set('resolutionNote', e.target.value)}
               maxLength={500}
@@ -721,7 +723,7 @@ export default function Screen2Page() {
                   : 'bg-[#EB6619] active:scale-[0.98] active:bg-[#c95510] shadow-lg shadow-orange-200',
               ].join(' ')}
             >
-              {isSubmitting ? 'Saving…' : 'Log Complaint'}
+              {isSubmitting ? t('saving') : t('logComplaint')}
             </button>
           </section>
 

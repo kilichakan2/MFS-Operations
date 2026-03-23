@@ -3,6 +3,7 @@
 import { useState, useCallback, useId, useEffect } from 'react'
 import BottomSheetSelector              from '@/components/BottomSheetSelector'
 import RoleNav from '@/components/RoleNav'
+import { useLanguage } from '@/lib/LanguageContext'
 import AppHeader                            from '@/components/AppHeader'
 import RecentActivity from '@/components/RecentActivity'
 import { useCustomers }                 from '@/hooks/useReferenceData'
@@ -43,10 +44,10 @@ const EMPTY_FORM: FormState = {
 // ─── Button config ────────────────────────────────────────────────────────────
 
 const VISIT_TYPES: { value: VisitType; label: string }[] = [
-  { value: 'routine',           label: 'Routine'           },
-  { value: 'new_pitch',         label: 'New pitch'         },
-  { value: 'complaint_followup', label: 'Complaint follow-up' },
-  { value: 'delivery_issue',    label: 'Delivery issue'    },
+  { value: 'routine',           label: t('routine')           },
+  { value: 'new_pitch',         label: t('newPitch')         },
+  { value: 'complaint_followup', label: t('complaintFollowup') },
+  { value: 'delivery_issue',    label: t('deliveryIssue')    },
 ]
 
 // Outcome carries semantic colour — encoded here, applied in render
@@ -57,22 +58,22 @@ const OUTCOMES: {
 }[] = [
   {
     value:  'positive',
-    label:  'Positive',
+    label:  t('positive'),
     active: 'bg-[#16205B] text-white shadow-md',        // navy — clean positive
   },
   {
     value:  'neutral',
-    label:  'Neutral',
+    label:  t('neutral'),
     active: 'bg-[#5F5E5A] text-white shadow-md',        // gray — neutral/inert
   },
   {
     value:  'at_risk',
-    label:  'At risk',
+    label:  t('atRisk'),
     active: 'bg-[#BA7517] text-white shadow-md',        // amber — warning
   },
   {
     value:  'lost',
-    label:  'Lost',
+    label:  t('lost'),
     active: 'bg-[#A32D2D] text-white shadow-md',        // red — danger
   },
 ]
@@ -201,6 +202,7 @@ function SuccessBanner({ visible }: { visible: boolean }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Screen3Page() {
+  const { t } = useLanguage()
   const formId              = useId()
   // Sync reference data on mount so customer dropdown is populated
   useEffect(() => {
@@ -304,17 +306,17 @@ export default function Screen3Page() {
 
       {sheetOpen && (
         <BottomSheetSelector
-          title="Select customer"
+          title={t('selectCustomer')}
           items={customers}
           selectedId={form.customer?.id}
-          searchPlaceholder="Search customers…"
+          searchPlaceholder={t('searchCustomers')}
           onSelect={(item) => {
             set('customer', item)
             setSheetOpen(false)
           }}
           onDismiss={() => setSheetOpen(false)}
           footerAction={{
-            label:   '+ New prospect',
+            label:   ('+ ' + t('newProspect')),
             onPress: () => switchMode('prospect'),
           }}
         />
@@ -323,7 +325,7 @@ export default function Screen3Page() {
       <div className="min-h-screen bg-gray-50">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <AppHeader title="Visit Log" maxWidth="lg" />
+        <AppHeader title={t('visitLog')} maxWidth="lg" />
 
         {/* ── Form ───────────────────────────────────────────────────────── */}
         <main className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-6" id={formId}>
@@ -332,7 +334,7 @@ export default function Screen3Page() {
           <section>
             <div className="flex items-center justify-between mb-2">
               <Label>
-                {isProspectMode ? 'New prospect' : 'Customer'}
+                {isProspectMode ? t('newProspect') : t('existingCustomer')}
               </Label>
               {/* Mode toggle pill */}
               <button
@@ -348,7 +350,7 @@ export default function Screen3Page() {
                 ].join(' ')}
                 aria-label={isProspectMode ? 'Switch to existing customer' : 'Switch to new prospect'}
               >
-                {isProspectMode ? '← Existing customer' : '+ New prospect'}
+                {isProspectMode ? ('← ' + t('existingCustomer')) : ('+ ' + t('newProspect'))}
               </button>
             </div>
 
@@ -356,7 +358,7 @@ export default function Screen3Page() {
             {!isProspectMode && (
               <SelectorButton
                 label={form.customer?.label}
-                placeholder="Select customer"
+                placeholder={t('selectCustomer')}
                 onClick={() => setSheetOpen(true)}
                 error={errors.customer}
               />
@@ -368,7 +370,7 @@ export default function Screen3Page() {
                 <div>
                   <input
                     type="text"
-                    placeholder="Business or contact name"
+                    placeholder={t('prospectNameField')}
                     value={form.prospectName}
                     onChange={(e) => {
                       set('prospectName', e.target.value)
@@ -389,7 +391,7 @@ export default function Screen3Page() {
                 </div>
                 <input
                   type="text"
-                  placeholder="Postcode (optional)"
+                  placeholder={t('postcodeOptional')}
                   value={form.prospectPostcode}
                   onChange={(e) => set('prospectPostcode', e.target.value)}
                   aria-label="Prospect postcode"
@@ -411,7 +413,7 @@ export default function Screen3Page() {
 
           {/* ── Visit type ───────────────────────────────────────────────── */}
           <section>
-            <Label>Visit type</Label>
+            <Label>{t('visitType')}</Label>
             <div
               className="grid grid-cols-2 gap-2.5"
               role="group"
@@ -449,7 +451,7 @@ export default function Screen3Page() {
             <div
               className="grid grid-cols-2 gap-2.5"
               role="group"
-              aria-label="Visit outcome"
+              aria-label={t('visitOutcome')}
             >
               {OUTCOMES.map(({ value, label, active }) => {
                 const isActive = form.outcome === value
@@ -497,11 +499,11 @@ export default function Screen3Page() {
             <div
               className="grid grid-cols-2 gap-3"
               role="group"
-              aria-label="Was a commitment made?"
+              aria-label={t('commitmentMade')}
             >
               {([
-                { value: true,  label: 'Yes' },
-                { value: false, label: 'No'  },
+                { value: true,  label: t('yes') },
+                { value: false, label: t('no')  },
               ] as const).map(({ value, label }) => {
                 const isActive = form.commitmentMade === value
                 return (
@@ -539,7 +541,7 @@ export default function Screen3Page() {
             >
               <textarea
                 rows={2}
-                placeholder="What was promised? (price, product, delivery arrangement…)"
+                placeholder={t('commitmentPrompt')}
                 value={form.commitmentDetail}
                 onChange={(e) => set('commitmentDetail', e.target.value)}
                 maxLength={300}
@@ -560,10 +562,10 @@ export default function Screen3Page() {
 
           {/* ── Notes (optional) ─────────────────────────────────────────── */}
           <section>
-            <Label>Notes (optional)</Label>
+            <Label>{t('notesOptional')}</Label>
             <textarea
               rows={2}
-              placeholder="Market intelligence, competitor mentions, product feedback…"
+              placeholder={t('notesPrompt')}
               value={form.notes}
               onChange={(e) => set('notes', e.target.value)}
               maxLength={400}
@@ -594,7 +596,7 @@ export default function Screen3Page() {
                   : 'bg-[#EB6619] active:scale-[0.98] active:bg-[#c95510] shadow-lg shadow-orange-200',
               ].join(' ')}
             >
-              {isSubmitting ? 'Saving…' : 'Log Visit'}
+              {isSubmitting ? t('saving') : t('logVisit')}
             </button>
           </section>
 

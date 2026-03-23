@@ -4,6 +4,7 @@ import { useRouter }      from 'next/navigation'
 import { useState }       from 'react'
 import { useLiveQuery }   from 'dexie-react-hooks'
 import { localDb }        from '@/lib/localDb'
+import { useLanguage }    from '@/lib/LanguageContext'
 import MfsLogo            from '@/components/MfsLogo'
 
 interface AppHeaderProps {
@@ -35,7 +36,7 @@ function SyncStatus() {
         <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
           <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/>
         </svg>
-        {stuck} stuck
+        {stuck} {t('stuck')}
       </span>
     )
   }
@@ -46,7 +47,7 @@ function SyncStatus() {
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
       </svg>
-      {pending} syncing
+      {pending} {t('syncing')}
     </span>
   )
 }
@@ -60,6 +61,7 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const router                      = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
+  const { lang, setLang, t, mounted } = useLanguage()
 
   async function handleLogout() {
     setLoggingOut(true)
@@ -89,6 +91,18 @@ export default function AppHeader({
         <div className="flex items-center gap-2">
           <SyncStatus />
 
+          {/* Language toggle — only rendered client-side after mount to avoid hydration mismatch */}
+          {mounted && (
+            <button
+              type="button"
+              onClick={() => setLang(lang === 'en' ? 'tr' : 'en')}
+              aria-label={lang === 'en' ? 'Switch to Turkish' : 'İngilizceye geç'}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold tracking-wider bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors"
+            >
+              {lang === 'en' ? '🇹🇷 TR' : '🇬🇧 EN'}
+            </button>
+          )}
+
           {actions}
 
           <button
@@ -115,7 +129,7 @@ export default function AppHeader({
                 <path fillRule="evenodd" d="M19 10a.75.75 0 0 0-.75-.75H8.704l1.048-1.04a.75.75 0 1 0-1.06-1.06l-2.5 2.5a.75.75 0 0 0 0 1.06l2.5 2.5a.75.75 0 1 0 1.06-1.06l-1.048-1.04h9.546A.75.75 0 0 0 19 10Z" clipRule="evenodd"/>
               </svg>
             )}
-            {loggingOut ? 'Logging out…' : 'Logout'}
+            {loggingOut ? t('loggingOut') : t('logout')}
           </button>
         </div>
       </div>

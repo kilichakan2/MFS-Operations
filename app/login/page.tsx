@@ -1,5 +1,7 @@
 'use client'
 
+import { useLanguage } from '@/lib/LanguageContext'
+
 import MfsLogo from '@/components/MfsLogo'
 
 
@@ -87,7 +89,8 @@ async function submitLogin(
 
 // ─── Screen A: Mode selector ──────────────────────────────────────────────────
 
-function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
+function ModeSelect({   const { t } = useLanguage()
+onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
   return (
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs">
@@ -105,8 +108,8 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
               </svg>
             </div>
             <div>
-              <p className="text-white font-bold text-base leading-tight">Team Login</p>
-              <p className="text-white/70 text-xs mt-0.5">Drivers, warehouse &amp; sales</p>
+              <p className="text-white font-bold text-base leading-tight">{t('teamLogin')}</p>
+              <p className="text-white/70 text-xs mt-0.5">{t('teamLoginSub')}</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="white" className="w-5 h-5 ml-auto opacity-60">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd"/>
@@ -123,8 +126,8 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
               </svg>
             </div>
             <div>
-              <p className="text-white font-bold text-base leading-tight">Admin Login</p>
-              <p className="text-white/50 text-xs mt-0.5">Hakan &amp; Ege only</p>
+              <p className="text-white font-bold text-base leading-tight">{t('adminLogin')}</p>
+              <p className="text-white/50 text-xs mt-0.5">{t('adminLoginSub')}</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="white" className="w-5 h-5 ml-auto opacity-30">
               <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd"/>
@@ -135,7 +138,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
         {/* Divider */}
         <div className="flex items-center gap-3 my-5">
           <div className="flex-1 h-px bg-white/10" />
-          <span className="text-white/30 text-[10px] font-bold tracking-widest uppercase">Other apps</span>
+          <span className="text-white/30 text-[10px] font-bold tracking-widest uppercase">{t('otherApps')}</span>
           <div className="flex-1 h-px bg-white/10" />
         </div>
 
@@ -155,8 +158,8 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
               </svg>
             </div>
             <div>
-              <p className="text-[#EB6619] font-bold text-base leading-tight">Inventory</p>
-              <p className="text-white/40 text-xs mt-0.5">Stock tracking &amp; scanning</p>
+              <p className="text-[#EB6619] font-bold text-base leading-tight">{t('inventory')}</p>
+              <p className="text-white/40 text-xs mt-0.5">{t('inventorySub')}</p>
             </div>
             {/* External link arrow */}
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="#EB6619" strokeWidth={1.5} className="w-4 h-4 ml-auto opacity-50">
@@ -240,8 +243,8 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
             Back
           </button>
 
-          <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase text-center mb-1">Team Login</p>
-          <h1 className="text-white text-xl font-bold text-center mb-8">Who are you?</h1>
+          <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase text-center mb-1">{t('teamLogin')}</p>
+          <h1 className="text-white text-xl font-bold text-center mb-8">{t('whoAreYou')}</h1>
 
           {loadingList && (
             <div className="flex flex-col items-center gap-3 py-10">
@@ -249,7 +252,7 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
               </svg>
-              <p className="text-white/40 text-sm">Loading team…</p>
+              <p className="text-white/40 text-sm">{t('loadingTeam')}</p>
             </div>
           )}
 
@@ -262,8 +265,8 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
 
           {!loadingList && !fetchError && members.length === 0 && (
             <div className="text-center py-10">
-              <p className="text-white/40 text-sm">No team members yet.</p>
-              <p className="text-white/30 text-xs mt-1">Add users in the Admin panel first.</p>
+              <p className="text-white/40 text-sm">{t('noTeamYet')}</p>
+              <p className="text-white/30 text-xs mt-1">{t('addUsersFirst')}</p>
             </div>
           )}
 
@@ -348,16 +351,16 @@ function AdminLogin({ onBack, from }: { onBack: () => void; from: string | null 
           Back
         </button>
 
-        <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase text-center mb-1">Admin Login</p>
-        <h1 className="text-white text-xl font-bold text-center mb-10">Welcome back</h1>
+        <p className="text-[#EB6619] text-[10px] font-bold tracking-[0.3em] uppercase text-center mb-1">{t('adminLogin')}</p>
+        <h1 className="text-white text-xl font-bold text-center mb-10">{t('welcomeBack')}</h1>
 
-        <label className="block text-white/60 text-xs font-bold tracking-widest uppercase mb-2">Username</label>
+        <label className="block text-white/60 text-xs font-bold tracking-widest uppercase mb-2">{t('username')}</label>
         <input type="text" value={username} onChange={(e) => { setUsername(e.target.value); setError('') }}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} placeholder="Hakan or Ege"
+          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} placeholder={t('hakanOrEge')}
           autoFocus autoComplete="username"
           className="w-full h-14 rounded-xl px-4 text-base font-semibold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#EB6619] mb-4" />
 
-        <label className="block text-white/60 text-xs font-bold tracking-widest uppercase mb-2">Password</label>
+        <label className="block text-white/60 text-xs font-bold tracking-widest uppercase mb-2">{t('password')}</label>
         <input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setError('') }}
           onKeyDown={(e) => e.key === 'Enter' && handleSubmit()} placeholder="••••••••"
           autoComplete="current-password"
@@ -388,6 +391,7 @@ function LoginForm() {
 }
 
 function LoginSkeleton() {
+  const { t } = useLanguage()
   return (
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs text-center">

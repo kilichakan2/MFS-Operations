@@ -5,6 +5,7 @@ import BottomSheetSelector, {
   type SelectableItem,
 } from '@/components/BottomSheetSelector'
 import RoleNav from '@/components/RoleNav'
+import { useLanguage }    from '@/lib/LanguageContext'
 import AppHeader             from '@/components/AppHeader'
 import RecentActivity from '@/components/RecentActivity'
 import { localDb, syncReferenceData } from '@/lib/localDb'
@@ -42,10 +43,10 @@ const EMPTY_FORM: FormState = {
 // ─── Reason config ────────────────────────────────────────────────────────────
 
 const REASONS: { value: Reason; label: string }[] = [
-  { value: 'out_of_stock',   label: 'Out of stock'   },
-  { value: 'supplier_short', label: 'Supplier short' },
-  { value: 'butcher_error',  label: 'Butcher error'  },
-  { value: 'other',          label: 'Other'          },
+  { value: 'out_of_stock',   label: t('outOfStock')   },
+  { value: 'supplier_short', label: t('supplierShort') },
+  { value: 'butcher_error',  label: t('butcherError')  },
+  { value: 'other',          label: t('other')          },
 ]
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -201,6 +202,7 @@ function SuccessBanner({ visible }: { visible: boolean }) {
 type SheetTarget = 'customer' | 'product' | null
 
 export default function Screen1Page() {
+  const { t } = useLanguage()
   const formId               = useId()
   const [form, setForm]      = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors]  = useState<ValidationErrors>({})
@@ -310,20 +312,20 @@ export default function Screen1Page() {
       {/* Bottom sheets */}
       {sheet === 'customer' && (
         <BottomSheetSelector
-          title="Select customer"
+          title={t('selectCustomer')}
           items={customers}
           selectedId={form.customer?.id}
-          searchPlaceholder="Search customers…"
+          searchPlaceholder={t('searchCustomers')}
           onSelect={handleSelect}
           onDismiss={() => setSheet(null)}
         />
       )}
       {sheet === 'product' && (
         <BottomSheetSelector
-          title="Select product"
+          title={t('selectProduct')}
           items={products}
           selectedId={form.product?.id}
-          searchPlaceholder="Search products…"
+          searchPlaceholder={t('searchProducts')}
           onSelect={handleSelect}
           onDismiss={() => setSheet(null)}
         />
@@ -333,17 +335,17 @@ export default function Screen1Page() {
       <div className="min-h-screen bg-gray-50">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
-        <AppHeader title="Dispatch Log" maxWidth="lg" />
+        <AppHeader title={t('dispatchLog')} maxWidth="lg" />
 
         {/* ── Form ───────────────────────────────────────────────────────── */}
         <main className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-6" id={formId}>
 
           {/* ── Customer ─────────────────────────────────────────────────── */}
           <section>
-            <Label>Customer</Label>
+            <Label>{t('customer')}</Label>
             <SelectorButton
               label={form.customer?.label}
-              placeholder="Select customer"
+              placeholder={t('selectCustomer')}
               onClick={() => setSheet('customer')}
               error={errors.customer}
             />
@@ -351,10 +353,10 @@ export default function Screen1Page() {
 
           {/* ── Product ──────────────────────────────────────────────────── */}
           <section>
-            <Label>Product</Label>
+            <Label>{t('product')}</Label>
             <SelectorButton
               label={form.product?.label}
-              placeholder="Select product"
+              placeholder={t('selectProduct')}
               onClick={() => setSheet('product')}
               error={errors.product}
             />
@@ -370,8 +372,8 @@ export default function Screen1Page() {
             >
               {(
                 [
-                  { value: 'short' as Status,    label: 'Short'    },
-                  { value: 'not_sent' as Status, label: 'Not sent' },
+                  { value: 'short' as Status,    label: t('short')    },
+                  { value: 'not_sent' as Status, label: t('notSent') },
                 ] as const
               ).map(({ value, label }) => {
                 const isActive = form.status === value
@@ -400,7 +402,7 @@ export default function Screen1Page() {
 
           {/* ── Quantities ───────────────────────────────────────────────── */}
           <section>
-            <Label>Quantities</Label>
+            <Label>{t('quantities')}</Label>
 
             {/* Unit toggle — sits above the qty fields */}
             <div
@@ -495,7 +497,7 @@ export default function Screen1Page() {
 
           {/* ── Reason ───────────────────────────────────────────────────── */}
           <section>
-            <Label>Reason</Label>
+            <Label>{t('reason')}</Label>
             <div
               className="grid grid-cols-2 gap-3"
               role="group"
@@ -531,10 +533,10 @@ export default function Screen1Page() {
 
           {/* ── Note (optional) ──────────────────────────────────────────── */}
           <section>
-            <Label>Note (optional)</Label>
+            <Label>{t('noteOptional')}</Label>
             <textarea
               rows={2}
-              placeholder="Any additional context…"
+              placeholder={t('optionalNote')}
               value={form.note}
               onChange={(e) => set('note', e.target.value)}
               maxLength={280}
@@ -565,7 +567,7 @@ export default function Screen1Page() {
                   : 'bg-[#EB6619] active:scale-[0.98] active:bg-[#c95510] shadow-lg shadow-orange-200',
               ].join(' ')}
             >
-              {isSubmitting ? 'Saving…' : 'Log Discrepancy'}
+              {isSubmitting ? t('saving') : t('logDiscrepancy')}
             </button>
           </section>
 
