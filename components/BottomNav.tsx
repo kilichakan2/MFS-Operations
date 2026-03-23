@@ -20,7 +20,7 @@ export default function BottomNav({ items }: BottomNavProps) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#EDEAE1]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Main navigation"
     >
@@ -32,7 +32,7 @@ export default function BottomNav({ items }: BottomNavProps) {
               key={item.href}
               href={item.href}
               className={[
-                'flex-1 flex flex-col items-center justify-center py-3 gap-1',
+                'flex-1 flex flex-col items-center justify-center py-3.5 gap-1 min-h-[52px]',
                 'text-[10px] font-bold tracking-wide uppercase',
                 'transition-colors duration-100',
                 active
@@ -41,7 +41,7 @@ export default function BottomNav({ items }: BottomNavProps) {
               ].join(' ')}
               aria-current={active ? 'page' : undefined}
             >
-              <span className={['w-6 h-6', active ? 'text-[#EB6619]' : 'text-gray-400'].join(' ')}>
+              <span className={['w-6 h-6 flex-shrink-0', active ? 'text-[#EB6619]' : 'text-gray-400'].join(' ')}>
                 {item.icon}
               </span>
               {item.label}

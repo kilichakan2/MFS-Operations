@@ -1,5 +1,32 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── MFS Brand tokens ─────────────────────────────────────────── */
+:root {
+  --mfs-navy:    #16205B;
+  --mfs-orange:  #EB6619;
+  --mfs-maroon:  #590129;
+  --mfs-sand:    #C0946F;
+  --mfs-neutral: #EDEAE1;   /* brand-specified default background */
+  --mfs-black:   #1E1E1E;
+}
+
+/* ── Google Font — Plus Jakarta Sans (heading) ─────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── Base resets ──────────────────────────────────────────────── */
 * { -webkit-tap-highlight-color: transparent; }
-body { overscroll-behavior: none; }
+
+body {
+  overscroll-behavior: none;
+  background-color: var(--mfs-neutral);
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--mfs-black);
+}
+
+/* Headings use Plus Jakarta Sans */
+h1, h2, h3,
+.font-display {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}

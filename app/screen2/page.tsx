@@ -331,7 +331,7 @@ function OpenComplaintsTab() {
         const note = noteValue[c.id] ?? ''
         const isSaving = submitting === c.id
         return (
-          <div key={c.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+          <div key={c.id} className="bg-white border border-[#EDEAE1] rounded-2xl overflow-hidden">
             {/* Card header — tap to expand */}
             <button
               type="button"
@@ -499,7 +499,7 @@ export default function Screen2Page() {
         />
       )}
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#EDEAE1]">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <AppHeader title={t('complaintLog')} maxWidth="lg" />

@@ -198,7 +198,7 @@ function TodayTabs({ data, onRowClick }: {
                                  : vi.outcome==='lost'     ? 'text-red-700 bg-red-50'
                                  : 'text-gray-500 bg-gray-50'
                         return (
-                          <div key={vi.id} onClick={() => onRowClick('visit', vi.id)} className="flex items-center justify-between gap-3 py-1.5 border-t border-gray-50 first:border-0 cursor-pointer hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors">
+                          <div key={vi.id} onClick={() => onRowClick('visit', vi.id)} className="flex items-center justify-between gap-3 py-2.5 border-t border-[#EDEAE1] first:border-0 cursor-pointer hover:bg-[#EDEAE1] rounded-lg px-1 -mx-1 transition-colors min-h-[44px]">
                             <span className="text-xs text-gray-800 truncate flex-1 capitalize">{vi.customer}</span>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className="text-[10px] text-gray-400 capitalize">{vi.visitType}</span>
@@ -221,7 +221,7 @@ function TodayTabs({ data, onRowClick }: {
           {data.complaintsTodayList.length === 0
             ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No complaints today</p>
             : data.complaintsTodayList.map(c => (
-                <div key={c.id} onClick={() => onRowClick('complaint', c.id)} className="px-4 py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-gray-50 transition-colors">
+                <div key={c.id} onClick={() => onRowClick('complaint', c.id)} className="px-4 py-3.5 flex items-start justify-between gap-3 cursor-pointer hover:bg-[#EDEAE1] transition-colors min-h-[52px]">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 truncate">{c.customer}</p>
                     <p className="text-xs text-gray-400">{cap(c.category)} · {c.loggedBy} · {fmtTime(c.createdAt)}</p>
@@ -243,7 +243,7 @@ function TodayTabs({ data, onRowClick }: {
           {data.discrepanciesToday.length === 0
             ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No discrepancies today</p>
             : data.discrepanciesToday.map(d => (
-                <div key={d.id} onClick={() => onRowClick('discrepancy', d.id)} className="px-4 py-3 flex items-start justify-between gap-3 cursor-pointer hover:bg-gray-50 transition-colors">
+                <div key={d.id} onClick={() => onRowClick('discrepancy', d.id)} className="px-4 py-3.5 flex items-start justify-between gap-3 cursor-pointer hover:bg-[#EDEAE1] transition-colors min-h-[52px]">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 truncate">{d.customer}</p>
                     <p className="text-xs text-gray-400 truncate">{d.product} · {cap(d.reason)}</p>
@@ -337,7 +337,7 @@ function DateFilterBar({ preset, customFrom, customTo, onChange }: {
             type="button"
             onClick={() => onChange(p.id, customFrom, customTo)}
             className={[
-              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+              'px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors min-h-[44px] flex items-center',
               preset === p.id
                 ? 'bg-[#16205B] text-white'
                 : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
@@ -420,7 +420,7 @@ export default function Screen4Page() {
     : []
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[#EDEAE1]">
       <AppHeader title="Dashboard" maxWidth="2xl"
         actions={
           <button type="button" onClick={fetchData} disabled={loading}

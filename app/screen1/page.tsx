@@ -337,7 +337,7 @@ export default function Screen1Page() {
       )}
 
       {/* Page */}
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#EDEAE1]">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <AppHeader title={t('dispatchLog')} maxWidth="lg" />

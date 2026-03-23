@@ -326,7 +326,7 @@ export default function Screen3Page() {
         />
       )}
 
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#EDEAE1]">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <AppHeader title={t('visitLog')} maxWidth="lg" />
