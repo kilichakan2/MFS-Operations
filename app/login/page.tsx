@@ -95,7 +95,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs">
         <div className="text-center mb-12">
-          <MfsLogo className="h-14 w-auto mx-auto" />
+          <MfsLogo className="h-14 w-auto mx-auto text-[#EB6619]" />
         </div>
 
         <button type="button" onClick={() => onSelect('team')}
@@ -398,7 +398,7 @@ function LoginSkeleton() {
   return (
     <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-xs text-center">
-        <MfsLogo className="h-14 w-auto mx-auto" />
+        <MfsLogo className="h-14 w-auto mx-auto text-[#EB6619]" />
       </div>
     </div>
   )
