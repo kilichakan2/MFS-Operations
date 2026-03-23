@@ -175,6 +175,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
 // ─── Screen B: Team login (POS grid → PIN pad) ────────────────────────────────
 
 function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }) {
+  const { t } = useLanguage()
   const [step,        setStep]        = useState<'grid' | 'pin'>('grid')
   const [selected,    setSelected]    = useState<TeamMember | null>(null)
   const [members,     setMembers]     = useState<TeamMember[]>([])
@@ -312,6 +313,7 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
 // ─── Screen C: Admin login ────────────────────────────────────────────────────
 
 function AdminLogin({ onBack, from }: { onBack: () => void; from: string | null }) {
+  const { t } = useLanguage()
   const [username,     setUsername]   = useState('')
   const [password,     setPassword]   = useState('')
   const [error,        setError]      = useState('')
@@ -381,6 +383,7 @@ function AdminLogin({ onBack, from }: { onBack: () => void; from: string | null 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 function LoginForm() {
+  const { t } = useLanguage()
   const searchParams    = useSearchParams()
   const from            = searchParams.get('from')
   const [mode, setMode] = useState<Mode>('select')
