@@ -141,7 +141,7 @@ export default function AppHeader({
 
         {/* Left: Logo + screen title */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <MfsLogo className="h-7 w-auto flex-shrink-0" />
+          <MfsLogo className="h-7 w-auto flex-shrink-0 text-[#EB6619]" />
           {title && (
             <>
               <span className="text-white/20 select-none font-light">|</span>

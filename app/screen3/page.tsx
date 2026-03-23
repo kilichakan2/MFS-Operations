@@ -115,7 +115,7 @@ function validate(form: FormState): ValidationErrors {
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-bold tracking-widest uppercase text-gray-400 mb-2 px-1">
+    <p className="text-xs font-bold tracking-widest uppercase text-[#16205B]/50 mb-2 px-1">
       {children}
     </p>
   )
@@ -159,7 +159,7 @@ function SelectorButton({
         ].join(' ')}
         aria-haspopup="dialog"
       >
-        <span className={label ? 'text-base font-semibold text-gray-900' : 'text-base text-gray-400'}>
+        <span className={label ? 'text-base font-semibold text-gray-900' : 'text-base text-gray-500'}>
           {label ?? placeholder}
         </span>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"

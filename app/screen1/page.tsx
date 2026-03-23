@@ -94,7 +94,7 @@ function validate(form: FormState): ValidationErrors {
 /** Section label */
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-bold tracking-widest uppercase text-gray-400 mb-2 px-1">
+    <p className="text-xs font-bold tracking-widest uppercase text-[#16205B]/50 mb-2 px-1">
       {children}
     </p>
   )
@@ -142,7 +142,7 @@ function SelectorButton({
       >
         <span
           className={
-            label ? 'text-base font-semibold text-gray-900' : 'text-base text-gray-400'
+            label ? 'text-base font-semibold text-gray-900' : 'text-base text-gray-500'
           }
         >
           {label ?? placeholder}
@@ -437,7 +437,7 @@ export default function Screen1Page() {
             <div className="grid grid-cols-2 gap-3">
               {/* Ordered qty — always visible */}
               <div>
-                <p className="text-xs text-gray-400 font-semibold mb-1.5 px-1">
+                <p className="text-xs text-gray-600 font-semibold mb-1.5 px-1">
                   Ordered
                 </p>
                 <input
@@ -472,7 +472,7 @@ export default function Screen1Page() {
                 ].join(' ')}
                 aria-hidden={form.status === 'not_sent'}
               >
-                <p className="text-xs text-gray-400 font-semibold mb-1.5 px-1">
+                <p className="text-xs text-gray-600 font-semibold mb-1.5 px-1">
                   Sent
                 </p>
                 <input
