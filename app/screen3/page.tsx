@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useCallback, useId, useEffect } from 'react'
 import BottomSheetSelector              from '@/components/BottomSheetSelector'
 import RoleNav from '@/components/RoleNav'
