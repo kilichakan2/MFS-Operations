@@ -131,6 +131,39 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
             </svg>
           </div>
         </button>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 my-5">
+          <div className="flex-1 h-px bg-white/10" />
+          <span className="text-white/30 text-[10px] font-bold tracking-widest uppercase">Other apps</span>
+          <div className="flex-1 h-px bg-white/10" />
+        </div>
+
+        {/* Inventory tracker — external link */}
+        <a
+          href="https://mfs-inventory-tracker.vercel.app/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex rounded-2xl border border-[#EB6619]/40 hover:border-[#EB6619]/70 active:scale-[0.98] transition-all p-5 text-left bg-[#EB6619]/5 hover:bg-[#EB6619]/10"
+        >
+          <div className="flex items-center gap-4 w-full">
+            <div className="w-11 h-11 rounded-xl bg-[#EB6619]/15 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#EB6619" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                <line x1="12" y1="22.08" x2="12" y2="12"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-[#EB6619] font-bold text-base leading-tight">Inventory</p>
+              <p className="text-white/40 text-xs mt-0.5">Stock tracking &amp; scanning</p>
+            </div>
+            {/* External link arrow */}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="#EB6619" strokeWidth={1.5} className="w-4 h-4 ml-auto opacity-50">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"/>
+            </svg>
+          </div>
+        </a>
       </div>
     </div>
   )
