@@ -429,6 +429,14 @@ export default function Screen4Page() {
         }
       />
 
+      {/* Date filter bar */}
+      <DateFilterBar
+        preset={preset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onChange={handleRangeChange}
+      />
+
       {error && (
         <div className="max-w-2xl mx-auto px-4 pt-4">
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center justify-between gap-3">
