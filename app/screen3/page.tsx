@@ -43,19 +43,18 @@ const EMPTY_FORM: FormState = {
 
 // ─── Button config ────────────────────────────────────────────────────────────
 
-const VISIT_TYPES: { value: VisitType; label: string }[] = [
+function VISIT_TYPES(t: (k: string) => string) {
+  return [
   { value: 'routine',           label: t('routine')           },
   { value: 'new_pitch',         label: t('newPitch')         },
   { value: 'complaint_followup', label: t('complaintFollowup') },
   { value: 'delivery_issue',    label: t('deliveryIssue')    },
 ]
+}
 
 // Outcome carries semantic colour — encoded here, applied in render
-const OUTCOMES: {
-  value:   Outcome
-  label:   string
-  active:  string   // Tailwind classes for selected state
-}[] = [
+function OUTCOMES(t: (k: string) => string) {
+  return [
   {
     value:  'positive',
     label:  t('positive'),
@@ -77,6 +76,7 @@ const OUTCOMES: {
     active: 'bg-[#A32D2D] text-white shadow-md',        // red — danger
   },
 ]
+}
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -203,6 +203,8 @@ function SuccessBanner({ visible }: { visible: boolean }) {
 
 export default function Screen3Page() {
   const { t } = useLanguage()
+  const visitTypes = VISIT_TYPES(t)
+  const outcomes   = OUTCOMES(t)
   const formId              = useId()
   // Sync reference data on mount so customer dropdown is populated
   useEffect(() => {
@@ -419,7 +421,7 @@ export default function Screen3Page() {
               role="group"
               aria-label="Visit type"
             >
-              {VISIT_TYPES.map(({ value, label }) => {
+              {visitTypes.map(({ value, label }) => {
                 const isActive = form.visitType === value
                 return (
                   <button
@@ -453,7 +455,7 @@ export default function Screen3Page() {
               role="group"
               aria-label={t('visitOutcome')}
             >
-              {OUTCOMES.map(({ value, label, active }) => {
+              {outcomes.map(({ value, label, active }) => {
                 const isActive = form.outcome === value
                 return (
                   <button

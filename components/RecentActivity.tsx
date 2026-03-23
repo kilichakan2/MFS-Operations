@@ -13,6 +13,7 @@
 
 import { useLiveQuery } from 'dexie-react-hooks'
 import { localDb }      from '@/lib/localDb'
+import { useLanguage } from '@/lib/LanguageContext'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,7 @@ interface RecentActivityProps {
 }
 
 export default function RecentActivity({ screen }: RecentActivityProps) {
+  const { t } = useLanguage()
   const today = todayMidnight()
 
   // Live query: today's records for this screen, newest first, max 5
@@ -91,7 +93,7 @@ export default function RecentActivity({ screen }: RecentActivityProps) {
       <div className="h-px bg-gray-100 mb-4" />
 
       <p className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-2.5">
-        My activity today
+        {t('myActivityToday')}
       </p>
 
       <div className="space-y-2">

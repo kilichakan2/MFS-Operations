@@ -37,7 +37,8 @@ const EMPTY_FORM: FormState = {
 
 // ─── Button config ────────────────────────────────────────────────────────────
 
-const CATEGORIES: { value: Category; label: string }[] = [
+function CATEGORIES(t: (k: string) => string) {
+  return [
   { value: 'weight',       label: t('weight')       },
   { value: 'quality',      label: t('quality')      },
   { value: 'delivery',     label: t('delivery')     },
@@ -46,14 +47,17 @@ const CATEGORIES: { value: Category; label: string }[] = [
   { value: 'service',      label: t('service')      },
   { value: 'other',        label: t('other')        },
 ]
+}
 
-const RECEIVED_VIA: { value: ReceivedVia; label: string }[] = [
+function RECEIVED_VIA(t: (k: string) => string) {
+  return [
   { value: 'phone',     label: t('phone') },
   { value: 'in_person', label: t('inPerson')  },
   { value: 'whatsapp',  label: t('whatsapp')   },
   { value: 'email',     label: t('email')      },
   { value: 'other',     label: t('other')      },
 ]
+}
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -182,6 +186,7 @@ function OptionButton<T extends string>({
 
 /** "Logged" success banner — identical to Screen 1 */
 function SuccessBanner({ visible }: { visible: boolean }) {
+  const { t } = useLanguage()
   return (
     <div
       aria-live="polite"
@@ -225,6 +230,7 @@ interface OpenComplaint {
 // ─── Open Complaints Tab ──────────────────────────────────────────────────────
 
 function OpenComplaintsTab() {
+  const { t } = useLanguage()
   const [complaints,   setComplaints]   = useState<OpenComplaint[]>([])
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState('')
@@ -392,6 +398,8 @@ function OpenComplaintsTab() {
 
 export default function Screen2Page() {
   const { t } = useLanguage()
+  const categories = CATEGORIES(t)
+  const receivedVia = RECEIVED_VIA(t)
   const formId              = useId()
   // Sync reference data on mount so customer dropdown is populated
   useEffect(() => {
@@ -545,7 +553,7 @@ export default function Screen2Page() {
               role="group"
               aria-label="Complaint category"
             >
-              {CATEGORIES.slice(0, 6).map(({ value, label }) => (
+              {categories.slice(0, 6).map(({ value, label }) => (
                 <OptionButton
                   key={value}
                   value={value}
@@ -604,7 +612,7 @@ export default function Screen2Page() {
               role="group"
               aria-label="How complaint was received"
             >
-              {RECEIVED_VIA.slice(0, 3).map(({ value, label }) => (
+              {receivedVia.slice(0, 3).map(({ value, label }) => (
                 <OptionButton
                   key={value}
                   value={value}
@@ -615,7 +623,7 @@ export default function Screen2Page() {
                 />
               ))}
               {/* Email + Other share last row — each 50% */}
-              {RECEIVED_VIA.slice(3).map(({ value, label }) => (
+              {receivedVia.slice(3).map(({ value, label }) => (
                 <OptionButton
                   key={value}
                   value={value}

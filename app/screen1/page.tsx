@@ -42,12 +42,14 @@ const EMPTY_FORM: FormState = {
 
 // ─── Reason config ────────────────────────────────────────────────────────────
 
-const REASONS: { value: Reason; label: string }[] = [
+function REASONS(t: (k: string) => string) {
+  return [
   { value: 'out_of_stock',   label: t('outOfStock')   },
   { value: 'supplier_short', label: t('supplierShort') },
   { value: 'butcher_error',  label: t('butcherError')  },
   { value: 'other',          label: t('other')          },
 ]
+}
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -203,6 +205,7 @@ type SheetTarget = 'customer' | 'product' | null
 
 export default function Screen1Page() {
   const { t } = useLanguage()
+  const reasons = REASONS(t)
   const formId               = useId()
   const [form, setForm]      = useState<FormState>(EMPTY_FORM)
   const [errors, setErrors]  = useState<ValidationErrors>({})
@@ -503,7 +506,7 @@ export default function Screen1Page() {
               role="group"
               aria-label="Reason for discrepancy"
             >
-              {REASONS.map(({ value, label }) => {
+              {reasons.map(({ value, label }) => {
                 const isActive = form.reason === value
                 return (
                   <button
