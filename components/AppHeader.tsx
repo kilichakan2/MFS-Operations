@@ -18,6 +18,7 @@ interface AppHeaderProps {
 // Amber = pending (being retried). Red = stuck (retries exhausted).
 
 function SyncStatus() {
+  const { t }    = useLanguage()
   const unsynced = useLiveQuery(
     () => localDb.queue.filter(r => !r.synced).toArray(),
     [],

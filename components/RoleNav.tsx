@@ -32,7 +32,11 @@ function getClientRole(): Role {
   return (match?.[1] ?? '') as Role
 }
 
-const NAV_ITEMS: Record<Role, { href: string; label: string; icon: ReactNode }[]> = {
+
+export default function RoleNav() {
+  const { t } = useLanguage()
+
+  const NAV_ITEMS: Record<Role, { href: string; label: string; icon: ReactNode }[]> = {
   warehouse: [
     // Single screen — BottomNav hides itself when items.length <= 1
     { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch },
@@ -52,8 +56,6 @@ const NAV_ITEMS: Record<Role, { href: string; label: string; icon: ReactNode }[]
   '': [],
 }
 
-export default function RoleNav() {
-  const { t } = useLanguage()
   const items = useMemo(() => {
     const role = getClientRole()
     return NAV_ITEMS[role] ?? []
