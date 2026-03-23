@@ -396,10 +396,10 @@ export default function Screen4Page() {
       setData(await res.json()); setLastFetch(new Date())
     } catch { setError('Network error — check your connection') }
     finally { setLoading(false) }
-  }, [])
+  }, [range.from, range.to])
 
-  // Re-fetch whenever the date range changes
-  useEffect(() => { fetchData() }, [fetchData, range.from, range.to])
+  // Re-fetch whenever fetchData reference changes (i.e. whenever range changes)
+  useEffect(() => { fetchData() }, [fetchData])
 
   const totalVisitsToday = data.visitsToday.reduce((s, v) => s + v.count, 0)
   const openAlertsCount  = data.openComplaints48h.length
