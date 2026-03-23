@@ -218,6 +218,7 @@ interface OpenComplaint {
   category:    string
   description: string
   customer:    string
+  loggedBy:    string
 }
 
 // ─── Open Complaints Tab ──────────────────────────────────────────────────────
@@ -333,6 +334,9 @@ function OpenComplaintsTab() {
                 <p className="text-sm font-semibold text-gray-900 truncate">{c.customer}</p>
                 <p className="text-xs text-gray-500 truncate mt-0.5">
                   {c.category} · {fmtDate(c.createdAt)}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Logged by <span className="font-medium text-gray-600">{c.loggedBy}</span>
                 </p>
                 <p className="text-xs text-gray-400 truncate mt-1">{c.description}</p>
               </div>

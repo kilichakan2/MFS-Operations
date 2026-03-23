@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/screen2/open
- * Returns all OPEN complaints logged by the calling user, newest first.
+ * Returns ALL OPEN complaints (any user), newest first, with logger name.
  * Uses raw fetch() to the Supabase REST API (avoids cold-start client issues).
  */
 
@@ -17,10 +17,9 @@ export async function GET(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
     const params = new URLSearchParams({
-      select:    'id,created_at,category,description,customers(name)',
-      status:    'eq.open',
-      user_id:   `eq.${userId}`,
-      order:     'created_at.desc',
+      select: 'id,created_at,category,description,customers(name),users!complaints_user_id_fkey(name)',
+      status: 'eq.open',
+      order:  'created_at.desc',
     })
 
     const res = await fetch(`${SUPA_URL}/rest/v1/complaints?${params}`, {
@@ -42,6 +41,7 @@ export async function GET(req: NextRequest) {
       category: string
       description: string
       customers: { name: string } | null
+      users:     { name: string } | null
     }[]
 
     const complaints = rows.map((r) => ({
@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
       category:    r.category.replace(/_/g, ' '),
       description: r.description,
       customer:    r.customers?.name ?? 'Unknown',
+      loggedBy:    r.users?.name     ?? 'Unknown',
     }))
 
     return NextResponse.json(complaints)
