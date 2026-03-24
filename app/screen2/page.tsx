@@ -505,7 +505,7 @@ export default function Screen2Page() {
         <AppHeader title={t('complaintLog')} maxWidth="lg" />
 
         {/* ── Tab switcher ────────────────────────────────────────────────── */}
-        <div className="bg-white border-b border-gray-200 sticky top-[calc(var(--header-h,96px))] z-30">
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="max-w-lg mx-auto flex">
             {(['log', 'open'] as const).map((tab) => (
               <button

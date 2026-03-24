@@ -23,7 +23,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   warehouse: ['/screen1'],
   office:    ['/screen1', '/screen2'],
   sales:     ['/screen2', '/screen3'],
-  admin:     ['/screen4', '/screen5', '/api/reference', '/api/admin', '/api/dashboard'],
+  admin:     ['/screen4', '/screen5', '/screen6', '/api/reference', '/api/admin', '/api/dashboard', '/api/map'],
 }
 
 // Default landing page per role
@@ -42,9 +42,12 @@ const SHARED_API_PATHS = [
   '/api/screen2/open',
   '/api/screen2/resolve',
   '/api/screen3/sync',
+  '/api/screen3/today',
+  '/api/screen3/visit',
   '/api/detail/visit',
   '/api/detail/complaint',
   '/api/detail/discrepancy',
+  '/api/admin/geocode-all',
 ]
 
 export function middleware(req: NextRequest) {

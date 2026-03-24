@@ -3,6 +3,9 @@
  * Inserts a queued visit. Uses raw fetch() to the Supabase REST API
  * rather than the supabase-js client, to avoid any cold-start initialisation
  * issues with the client library.
+ *
+ * Sprint 1 Map View: prospect visits now trigger a fire-and-forget geocoding
+ * call to postcodes.io, writing prospect_lat/prospect_lng back to the row.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,6 +21,22 @@ async function supaPost(table: string, body: Record<string, unknown>) {
       'apikey':         SUPA_KEY,
       'Authorization': `Bearer ${SUPA_KEY}`,
       'Prefer':         'return=representation',
+    },
+    body: JSON.stringify(body),
+  })
+  const text = await res.text()
+  return { ok: res.ok, status: res.status, text }
+}
+
+
+async function supaUpsert(table: string, body: Record<string, unknown>) {
+  const res = await fetch(`${SUPA_URL}/rest/v1/${table}?on_conflict=id`, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'apikey':         SUPA_KEY,
+      'Authorization': `Bearer ${SUPA_KEY}`,
+      'Prefer':         'resolution=merge-duplicates,return=representation',
     },
     body: JSON.stringify(body),
   })
@@ -49,6 +68,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[screen3/sync] keys:', Object.keys(body).join(', '))
 
+    const _upsert           =  body._upsert           === true
     const id                =  body.id                as string  | undefined
     const customer_id       = (body.customer_id       as string  | undefined) ?? null
     const prospect_name     = (body.prospect_name     as string  | undefined) ?? null
@@ -83,8 +103,16 @@ export async function POST(req: NextRequest) {
       notes,
     }
 
-    console.log('[screen3/sync] inserting visit, type:', visit_type, 'outcome:', outcome)
-    const { ok, status: httpStatus, text } = await supaPost('visits', payload)
+    const isUpsert = _upsert  // extracted from body before payload was built
+
+    console.log('[screen3/sync] payload:', JSON.stringify({
+      id, _upsert, isUpsert,
+      customer_id, prospect_name, visit_type, outcome,
+      commitment_made, notes: notes?.slice(0,50),
+    }))
+    const { ok, status: httpStatus, text } = isUpsert
+      ? await supaUpsert('visits', payload)
+      : await supaPost('visits', payload)
 
     if (!ok) {
       if (httpStatus === 409 || text.includes('23505')) {
@@ -99,7 +127,48 @@ export async function POST(req: NextRequest) {
     const recordId = rows[0]?.id
     console.log('[screen3/sync] inserted:', recordId)
 
-    // Audit log (fire-and-forget)
+    // ── Geocode prospect postcode — fire-and-forget ───────────────────────────
+    // Writes prospect_lat/lng back to the visits row for the map view.
+    // Fuzzy fallback: if full postcode fails, retries with just the outcode
+    // and sets is_approximate_location=true so the map can render a ghost pin.
+    if (prospect_postcode && recordId) {
+      ;(async () => {
+        const patchVisit = async (lat: number, lng: number, approximate: boolean) => {
+          await fetch(`${SUPA_URL}/rest/v1/visits?id=eq.${recordId}`, {
+            method: 'PATCH',
+            headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}`,
+                       'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ prospect_lat: lat, prospect_lng: lng,
+                                   is_approximate_location: approximate }),
+          })
+        }
+        try {
+          // Pass 1 — exact postcode
+          const clean = prospect_postcode.replace(/\s/g, '')
+          const r1 = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(clean)}`)
+          const d1 = await r1.json()
+          if (d1.status === 200 && d1.result) {
+            await patchVisit(d1.result.latitude, d1.result.longitude, false)
+            console.log('[screen3/sync] geocoded prospect (exact):', prospect_postcode)
+            return
+          }
+          // Pass 2 — outcode fallback
+          const oc = prospect_postcode.trim().toUpperCase().split(' ')[0]
+          const r2 = await fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(oc)}`)
+          const d2 = await r2.json()
+          if (d2.status === 200 && d2.result) {
+            await patchVisit(d2.result.latitude, d2.result.longitude, true)  // /outcodes/:oc returns result.latitude directly
+            console.log('[screen3/sync] geocoded prospect (outcode fallback):', oc)
+          } else {
+            console.warn('[screen3/sync] prospect postcode unresolvable:', prospect_postcode)
+          }
+        } catch (e) {
+          console.error('[screen3/sync] prospect geocoding failed (non-fatal):', e)
+        }
+      })()
+    }
+
+    // ── Audit log (fire-and-forget) ───────────────────────────────────────────
     let displayName = prospect_name ?? 'Unknown'
     if (customer_id) {
       const customer = await supaGet('customers', `select=name&id=eq.${customer_id}`)

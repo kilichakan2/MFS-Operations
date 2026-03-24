@@ -20,7 +20,7 @@ export default function BottomNav({ items }: BottomNavProps) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#EDEAE1]"
+      className="fixed bottom-0 left-0 right-0 z-[999] bg-white border-t border-[#EDEAE1]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Main navigation"
     >
@@ -32,7 +32,7 @@ export default function BottomNav({ items }: BottomNavProps) {
               key={item.href}
               href={item.href}
               className={[
-                'flex-1 flex flex-col items-center justify-center py-3.5 gap-1 min-h-[52px]',
+                'flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[44px]',
                 'text-[10px] font-bold tracking-wide uppercase',
                 'transition-colors duration-100',
                 active
@@ -41,7 +41,7 @@ export default function BottomNav({ items }: BottomNavProps) {
               ].join(' ')}
               aria-current={active ? 'page' : undefined}
             >
-              <span className={['w-6 h-6 flex-shrink-0', active ? 'text-[#EB6619]' : 'text-gray-500'].join(' ')}>
+              <span className={['w-5 h-5 flex-shrink-0', active ? 'text-[#EB6619]' : 'text-gray-500'].join(' ')}>
                 {item.icon}
               </span>
               {item.label}
@@ -91,6 +91,14 @@ export const Icons = {
       <circle cx="12" cy="12" r="3"/>
       <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
       <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
+    </svg>
+  ),
+  map: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+      <line x1="9" y1="3" x2="9" y2="18"/>
+      <line x1="15" y1="6" x2="15" y2="21"/>
     </svg>
   ),
 }

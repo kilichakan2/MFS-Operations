@@ -136,7 +136,7 @@ export default function AppHeader({
   actions,
 }: AppHeaderProps) {
   return (
-    <header className="bg-[#16205B] px-4 pb-4 sticky top-0 z-40" style={{ paddingTop: "max(3rem, env(safe-area-inset-top))" }}>
+    <header className="bg-[#16205B] px-4 pb-3 sticky top-0 z-[999]" style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}>
       <div className={`flex items-center justify-between gap-3 max-w-${maxWidth} mx-auto`}>
 
         {/* Left: Logo + screen title */}

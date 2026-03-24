@@ -52,6 +52,7 @@ export default function RoleNav() {
   admin: [
     { href: '/screen4', label: t('navDashboard'),  icon: Icons.dashboard },
     { href: '/screen5', label: t('navAdmin'),      icon: Icons.admin     },
+    { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
   ],
   '': [],
 }
