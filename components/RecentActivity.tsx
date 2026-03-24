@@ -90,9 +90,9 @@ export default function RecentActivity({ screen }: RecentActivityProps) {
   return (
     <section className="max-w-lg mx-auto px-4 pt-2 pb-4">
       {/* Divider */}
-      <div className="h-px bg-gray-100 mb-4" />
+      <div className="h-px bg-[#EDEAE1] mb-4" />
 
-      <p className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mb-2.5">
+      <p className="text-[10px] font-bold tracking-widest uppercase text-[#16205B]/50 mb-2.5">
         {t('myActivityToday')}
       </p>
 
@@ -114,10 +114,10 @@ export default function RecentActivity({ screen }: RecentActivityProps) {
             const reason   = titleCase(String(payload.reason ?? ''))
 
             return (
-              <div key={localId} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 flex items-start justify-between gap-3">
+              <div key={localId} className="bg-white rounded-xl border border-[#EDEAE1] px-3 py-2.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{customer}</p>
-                  <p className="text-xs text-gray-400 truncate">{product} · {reason}</p>
+                  <p className="text-xs text-gray-500 truncate">{product} · {reason}</p>
                   {status === 'short' && oQty != null && sQty != null && (
                     <p className="text-xs text-amber-600 font-medium mt-0.5">
                       Ordered {oQty} · Sent {sQty}
@@ -145,10 +145,10 @@ export default function RecentActivity({ screen }: RecentActivityProps) {
             const status   = payload.status as string
 
             return (
-              <div key={localId} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 flex items-start justify-between gap-3">
+              <div key={localId} className="bg-white rounded-xl border border-[#EDEAE1] px-3 py-2.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{customer}</p>
-                  <p className="text-xs text-gray-400 truncate">{category}</p>
+                  <p className="text-xs text-gray-500 truncate">{category}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
@@ -179,10 +179,10 @@ export default function RecentActivity({ screen }: RecentActivityProps) {
               : 'bg-gray-100 text-gray-600'
 
             return (
-              <div key={localId} className="bg-white rounded-xl border border-gray-100 px-3 py-2.5 flex items-start justify-between gap-3">
+              <div key={localId} className="bg-white rounded-xl border border-[#EDEAE1] px-3 py-2.5 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{customerName}</p>
-                  <p className="text-xs text-gray-400 truncate">{visitType}</p>
+                  <p className="text-xs text-gray-500 truncate">{visitType}</p>
                 </div>
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${outcomeStyle}`}>
@@ -206,7 +206,7 @@ function SyncDot({ synced, time }: { synced: boolean; time: string }) {
   return (
     <span className="flex items-center gap-1">
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${synced ? 'bg-green-400' : 'bg-amber-400'}`} />
-      <span className="text-[10px] text-gray-300">{time}</span>
+      <span className="text-[10px] text-gray-500">{time}</span>
     </span>
   )
 }

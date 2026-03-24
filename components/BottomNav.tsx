@@ -37,11 +37,11 @@ export default function BottomNav({ items }: BottomNavProps) {
                 'transition-colors duration-100',
                 active
                   ? 'text-[#EB6619]'
-                  : 'text-gray-400 hover:text-gray-600',
+                  : 'text-gray-500 hover:text-gray-700',
               ].join(' ')}
               aria-current={active ? 'page' : undefined}
             >
-              <span className={['w-6 h-6 flex-shrink-0', active ? 'text-[#EB6619]' : 'text-gray-400'].join(' ')}>
+              <span className={['w-6 h-6 flex-shrink-0', active ? 'text-[#EB6619]' : 'text-gray-500'].join(' ')}>
                 {item.icon}
               </span>
               {item.label}

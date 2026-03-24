@@ -44,8 +44,8 @@ function cap(s: string) {
 
 function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="flex flex-col gap-0.5 py-3 border-b border-gray-50 last:border-0">
-      <span className="text-[10px] font-bold tracking-widest uppercase text-gray-400">{label}</span>
+    <div className="flex flex-col gap-0.5 py-3 border-b border-[#EDEAE1] last:border-0">
+      <span className="text-[10px] font-bold tracking-widest uppercase text-[#16205B]/50">{label}</span>
       <span className={`text-sm text-gray-900 leading-relaxed ${mono ? 'font-mono text-xs' : ''}`}>{value}</span>
     </div>
   )
@@ -70,7 +70,7 @@ function OutcomePill({ value }: { value: string }) {
   const s = v === 'positive' ? 'bg-green-100 text-green-700'
           : v === 'at_risk'  ? 'bg-amber-100 text-amber-700'
           : v === 'lost'     ? 'bg-red-100 text-red-700'
-          : 'bg-gray-100 text-gray-600'
+          : 'bg-[#EDEAE1] text-gray-700'
   return <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full ${s}`}>{cap(value)}</span>
 }
 
@@ -236,14 +236,14 @@ export default function DetailModal({
       <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[90dvh] flex flex-col z-10">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-          <p className="text-xs font-bold tracking-widest uppercase text-gray-400">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#EDEAE1] flex-shrink-0">
+          <p className="text-xs font-bold tracking-widest uppercase text-[#16205B]/50">
             {TYPE_LABELS[type]}
           </p>
           <button
             type="button"
             onClick={onClose}
-            className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+            className="w-11 h-11 rounded-full bg-[#EDEAE1] hover:bg-[#dedad0] flex items-center justify-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EB6619]"
             aria-label="Close"
           >
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-gray-500">
@@ -256,7 +256,7 @@ export default function DetailModal({
         <div className="overflow-y-auto flex-1 px-5 py-4">
           {loading && (
             <div className="flex items-center justify-center py-16">
-              <svg className="animate-spin w-6 h-6 text-gray-300" viewBox="0 0 24 24" fill="none">
+              <svg className="animate-spin w-6 h-6 text-[#16205B]/40" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
               </svg>

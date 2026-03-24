@@ -131,7 +131,7 @@ function SelectorButton({
             ? 'border-red-400 bg-red-50'
             : label
             ? 'border-[#16205B] bg-white'
-            : 'border-gray-200 bg-gray-50',
+            : 'border-[#16205B]/20 bg-white',
         ].join(' ')}
         aria-haspopup="dialog"
       >
@@ -295,7 +295,7 @@ function OpenComplaintsTab() {
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
-      <svg className="animate-spin w-6 h-6 text-gray-300" viewBox="0 0 24 24" fill="none">
+      <svg className="animate-spin w-6 h-6 text-[#16205B]/40" viewBox="0 0 24 24" fill="none">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
       </svg>
@@ -600,7 +600,7 @@ export default function Screen2Page() {
             />
             <div className="flex items-start justify-between mt-1 px-1">
               <FieldError message={errors.description} />
-              <span className="text-xs text-gray-300 ml-auto flex-shrink-0">
+              <span className="text-xs text-gray-500 ml-auto flex-shrink-0">
                 {form.description.length}/500
               </span>
             </div>

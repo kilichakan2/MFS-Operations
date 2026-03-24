@@ -68,7 +68,7 @@ function ListItem({
       style={{ minHeight: ITEM_HEIGHT_PX }}
       className={[
         'w-full flex items-center justify-between px-5',
-        'text-left border-b border-gray-100',
+        'text-left border-b border-[#EDEAE1]',
         'transition-colors duration-75',
         'active:bg-orange-50',
         isSelected ? 'bg-orange-50' : 'bg-white',
@@ -263,7 +263,7 @@ export default function BottomSheetSelector({
             className={[
               'ml-auto flex items-center justify-center',
               'w-8 h-8 rounded-full',
-              'text-gray-400 hover:text-gray-600 hover:bg-gray-100',
+              'text-gray-400 hover:text-gray-600 hover:bg-white border border-[#EDEAE1]',
               'transition-colors',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EB6619]',
             ].join(' ')}
@@ -281,7 +281,7 @@ export default function BottomSheetSelector({
         </div>
 
         {/* ── Search bar — sticky ─────────────────────────────────── */}
-        <div className="px-4 pb-3 flex-shrink-0 bg-white border-b border-gray-100">
+        <div className="px-4 pb-3 flex-shrink-0 bg-white border-b border-[#EDEAE1]">
           <div className="relative">
             {/* Search icon */}
             <svg
@@ -309,7 +309,7 @@ export default function BottomSheetSelector({
               placeholder={searchPlaceholder}
               className={[
                 'w-full h-12 rounded-xl',
-                'bg-gray-100',
+                'bg-white border border-[#EDEAE1]',
                 'pl-10 pr-10 text-base',
                 'text-gray-900 placeholder:text-gray-400',
                 'border border-transparent',
@@ -374,7 +374,7 @@ export default function BottomSheetSelector({
               style={{ minHeight: ITEM_HEIGHT_PX }}
               className={[
                 'w-full flex items-center gap-3 px-5',
-                'border-t-4 border-gray-100',
+                'border-t-4 border-[#EDEAE1]',
                 'text-[#EB6619] font-semibold text-base',
                 'bg-white active:bg-orange-50',
                 'transition-colors',

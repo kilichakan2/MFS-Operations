@@ -99,7 +99,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
         </div>
 
         <button type="button" onClick={() => onSelect('team')}
-          className="w-full mb-4 rounded-2xl bg-[#EB6619] active:bg-[#c95510] active:scale-[0.98] transition-all p-5 text-left">
+          className="w-full mb-4 rounded-2xl bg-[#EB6619] active:bg-[#c95510] active:scale-[0.98] transition-all p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
@@ -118,7 +118,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
         </button>
 
         <button type="button" onClick={() => onSelect('admin')}
-          className="w-full rounded-2xl bg-white/10 hover:bg-white/15 active:bg-white/20 active:scale-[0.98] transition-all p-5 text-left border border-white/10">
+          className="w-full rounded-2xl bg-white/10 hover:bg-white/15 active:bg-white/20 active:scale-[0.98] transition-all p-5 text-left border border-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
@@ -275,7 +275,7 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
             <div className="grid grid-cols-2 gap-3">
               {members.map((m) => (
                 <button key={m.id} type="button" onClick={() => selectMember(m)}
-                  className={['relative flex flex-col items-center justify-center bg-[#EDEAE1] border rounded-2xl p-5 active:scale-95 transition-all duration-100 hover:bg-[#dedad0]', ROLE_ACCENT[m.role] ?? 'border-white/20 text-white/50'].join(' ')}>
+                  className={['relative flex flex-col items-center justify-center bg-[#EDEAE1] border rounded-2xl p-5 active:scale-95 transition-all duration-100 hover:bg-[#dedad0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EB6619]', ROLE_ACCENT[m.role] ?? 'border-white/20 text-white/50'].join(' ')}>
                   <div className="w-14 h-14 rounded-full bg-[#16205B]/10 flex items-center justify-center mb-3">
                     <span className="text-[#16205B] text-xl font-bold">{m.name.charAt(0).toUpperCase()}</span>
                   </div>

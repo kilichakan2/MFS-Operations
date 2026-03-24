@@ -136,7 +136,7 @@ function SelectorButton({
             ? 'border-red-400 bg-red-50'
             : label
             ? 'border-[#16205B] bg-white'
-            : 'border-gray-200 bg-gray-50',
+            : 'border-[#16205B]/20 bg-white',
         ].join(' ')}
         aria-haspopup="dialog"
       >

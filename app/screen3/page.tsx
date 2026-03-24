@@ -155,7 +155,7 @@ function SelectorButton({
             ? 'border-red-400 bg-red-50'
             : label
             ? 'border-[#16205B] bg-white'
-            : 'border-gray-200 bg-gray-50',
+            : 'border-[#16205B]/20 bg-white',
         ].join(' ')}
         aria-haspopup="dialog"
       >
@@ -345,7 +345,7 @@ export default function Screen3Page() {
                 type="button"
                 onClick={() => switchMode(isProspectMode ? 'existing' : 'prospect')}
                 className={[
-                  'text-xs font-bold px-3 py-1 rounded-full border-2',
+                  'text-xs font-bold px-4 py-2.5 rounded-full border-2 min-h-[44px] flex items-center',
                   'transition-colors duration-100',
                   'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EB6619]',
                   isProspectMode

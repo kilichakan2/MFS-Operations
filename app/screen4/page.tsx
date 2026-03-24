@@ -72,7 +72,7 @@ function Badge({ label, tone }: { label: string; tone: 'red'|'amber'|'green'|'gr
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-16">
-      <svg className="animate-spin w-6 h-6 text-gray-300" viewBox="0 0 24 24" fill="none">
+      <svg className="animate-spin w-6 h-6 text-[#16205B]/40" viewBox="0 0 24 24" fill="none">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
       </svg>
@@ -81,7 +81,7 @@ function Spinner() {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-gray-400 mb-3">{children}</p>
+  return <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-[#16205B]/50 mb-3">{children}</p>
 }
 
 function BreakdownRow({ label, count, max, colour='navy' }: {
@@ -93,7 +93,7 @@ function BreakdownRow({ label, count, max, colour='navy' }: {
   return (
     <div className="flex items-center gap-3">
       <span className="text-xs text-gray-600 w-36 flex-shrink-0 truncate capitalize">{label}</span>
-      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-1.5 bg-[#EDEAE1] rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{ width: `${pct}%` }} />
       </div>
       <span className="text-xs font-bold text-gray-900 w-5 text-right flex-shrink-0">{count}</span>
@@ -162,7 +162,7 @@ function TodayTabs({ data, onRowClick }: {
         {TABS.map(t => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)}
             className={['flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-semibold border-b-2 transition-colors',
-              tab === t.id ? 'border-[#EB6619] text-[#EB6619] bg-orange-50/40' : 'border-transparent text-gray-400 hover:text-gray-600'
+              tab === t.id ? 'border-[#EB6619] text-[#EB6619] bg-[#EB6619]/8' : 'border-transparent text-gray-400 hover:text-gray-600'
             ].join(' ')}
           >
             {t.label}
@@ -196,7 +196,7 @@ function TodayTabs({ data, onRowClick }: {
                         const oc = vi.outcome==='positive' ? 'text-green-600 bg-green-50'
                                  : vi.outcome==='at_risk'  ? 'text-amber-700 bg-amber-50'
                                  : vi.outcome==='lost'     ? 'text-red-700 bg-red-50'
-                                 : 'text-gray-500 bg-gray-50'
+                                 : 'text-gray-600 bg-white border border-[#EDEAE1]'
                         return (
                           <div key={vi.id} onClick={() => onRowClick('visit', vi.id)} className="flex items-center justify-between gap-3 py-2.5 border-t border-[#EDEAE1] first:border-0 cursor-pointer hover:bg-[#EDEAE1] rounded-lg px-1 -mx-1 transition-colors min-h-[44px]">
                             <span className="text-xs text-gray-800 truncate flex-1 capitalize">{vi.customer}</span>
@@ -250,7 +250,7 @@ function TodayTabs({ data, onRowClick }: {
                     {d.status === 'short' && d.orderedQty != null && d.sentQty != null && (
                       <p className="text-xs text-amber-700 font-medium mt-0.5">Ordered {d.orderedQty} · Sent {d.sentQty}</p>
                     )}
-                    <p className="text-[10px] text-gray-300 mt-0.5">{d.loggedBy} · {fmtTime(d.createdAt)}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{d.loggedBy} · {fmtTime(d.createdAt)}</p>
                   </div>
                   <Badge label={d.status === 'not_sent' ? 'NOT SENT' : 'SHORT'} tone={d.status === 'not_sent' ? 'red' : 'amber'} />
                 </div>
@@ -328,8 +328,8 @@ function DateFilterBar({ preset, customFrom, customTo, onChange }: {
   onChange:   (p: Preset, f: string, t: string) => void
 }) {
   return (
-    <div className="bg-white border-b border-gray-100 px-4 py-3">
-      <div className="max-w-2xl mx-auto flex flex-wrap items-center gap-2">
+    <div className="bg-white border-b border-[#EDEAE1] px-4 py-3">
+      <div className="max-w-5xl mx-auto flex flex-wrap items-center gap-2">
         {/* Preset buttons */}
         {PRESETS.map(p => (
           <button
@@ -337,10 +337,10 @@ function DateFilterBar({ preset, customFrom, customTo, onChange }: {
             type="button"
             onClick={() => onChange(p.id, customFrom, customTo)}
             className={[
-              'px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors min-h-[44px] flex items-center',
+              'px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors min-h-[44px] flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EB6619]',
               preset === p.id
                 ? 'bg-[#16205B] text-white'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200',
+                : 'bg-white border border-[#16205B]/20 text-gray-600 hover:bg-[#EDEAE1]',
             ].join(' ')}
           >
             {p.label}
@@ -355,7 +355,7 @@ function DateFilterBar({ preset, customFrom, customTo, onChange }: {
               value={customFrom}
               max={customTo || undefined}
               onChange={e => onChange('custom', e.target.value, customTo)}
-              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:border-[#EB6619]"
+              className="text-xs border border-[#16205B]/20 rounded-lg px-3 py-2.5 min-h-[44px] text-gray-700 focus:outline-none focus:border-[#EB6619] focus-visible:ring-2 focus-visible:ring-[#EB6619]/30 bg-white"
             />
             <span className="text-xs text-gray-400">–</span>
             <input
@@ -363,7 +363,7 @@ function DateFilterBar({ preset, customFrom, customTo, onChange }: {
               value={customTo}
               min={customFrom || undefined}
               onChange={e => onChange('custom', customFrom, e.target.value)}
-              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:border-[#EB6619]"
+              className="text-xs border border-[#16205B]/20 rounded-lg px-3 py-2.5 min-h-[44px] text-gray-700 focus:outline-none focus:border-[#EB6619] focus-visible:ring-2 focus-visible:ring-[#EB6619]/30 bg-white"
             />
           </div>
         )}
@@ -421,7 +421,7 @@ export default function Screen4Page() {
 
   return (
     <div className="min-h-screen bg-[#EDEAE1]">
-      <AppHeader title="Dashboard" maxWidth="2xl"
+      <AppHeader title="Dashboard" maxWidth="4xl"
         actions={
           <button type="button" onClick={fetchData} disabled={loading}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors disabled:opacity-40">
@@ -452,7 +452,7 @@ export default function Screen4Page() {
       )}
 
       {loading && !lastFetch ? <Spinner /> : (
-      <main className="max-w-2xl mx-auto px-4 py-5 pb-24 space-y-5">
+      <main className="max-w-5xl mx-auto px-4 py-5 pb-24">
 
         {/* KPI Row */}
         <div className="grid grid-cols-3 gap-3">
@@ -501,13 +501,16 @@ export default function Screen4Page() {
           )}
         </div>
 
-        {/* Today — tabbed */}
-        <div>
+        {/* Two-column layout on desktop: Today (left) | This Week (right) */}
+        <div className="md:grid md:grid-cols-2 md:gap-6 md:items-start space-y-5 md:space-y-0">
+
+        {/* Today — tabbed (left column) */}
+        <div className="md:sticky md:top-24">
           <SectionLabel>{range.label}</SectionLabel>
           <TodayTabs data={data} onRowClick={(type, id) => setModal({ type, id })} />
         </div>
 
-        {/* This Week */}
+        {/* This Week (right column) */}
         <div>
           <SectionLabel>{range.label} — Breakdown</SectionLabel>
 
@@ -545,7 +548,7 @@ export default function Screen4Page() {
                     {data.weekDiscrepancyProducts.map((p, i) => (
                       <div key={p.product} className="flex items-center justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] text-gray-300 font-bold w-4 flex-shrink-0">{i + 1}</span>
+                          <span className="text-[10px] text-gray-500 font-bold w-4 flex-shrink-0">{i + 1}</span>
                           <span className="text-xs text-gray-700 truncate">{p.product}</span>
                         </div>
                         <span className="text-xs font-bold text-gray-900 ml-2">{p.count}×</span>
@@ -659,6 +662,8 @@ export default function Screen4Page() {
             </div>
           )}
         </div>
+
+        </div>{/* end two-column grid */}
 
         <div className="h-4" aria-hidden="true" />
       </main>
