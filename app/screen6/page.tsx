@@ -169,7 +169,7 @@ export default function Screen6Page() {
       )}
 
       {/* ── Map — fills all remaining height ──────────────────────────────── */}
-      <div className="relative z-0 overflow-hidden" style={{ height: "calc(100dvh - 176px)" }}>
+      <div className="relative z-0 overflow-hidden" style={{ height: "calc(100dvh - 168px)" }}>
         {!loading && (
           <MapView
             customers={customers}

@@ -27,11 +27,19 @@ interface ProductRow  { name: string; category?: string | null; code?: string | 
 // Called after new customers are inserted. Looks up postcodes via postcodes.io
 // and writes lat/lng back. Errors are logged but never thrown — a failed
 // geocode is non-blocking; the map simply omits that pin until next run.
+/** Extract outcode from a UK postcode (e.g. "S70 1KW" → "S70") */
+function extractOutcode(postcode: string): string {
+  return postcode.trim().toUpperCase().split(' ')[0]
+}
+
 async function geocodeNewCustomers(customers: { id: string; postcode: string }[]) {
   const withPostcode = customers.filter(c => c.postcode?.trim())
   if (withPostcode.length === 0) return
 
   try {
+    const now = new Date().toISOString()
+
+    // Pass 1 — exact postcode bulk lookup
     const geoRes = await fetch('https://api.postcodes.io/postcodes', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -43,18 +51,43 @@ async function geocodeNewCustomers(customers: { id: string; postcode: string }[]
       return
     }
 
-    const now = new Date().toISOString()
+    const needFallback: { id: string; postcode: string }[] = []
     for (const r of geoData.result) {
-      if (!r.result) continue
       const customer = withPostcode.find(
         c => c.postcode.trim().toUpperCase() === r.query.toUpperCase()
       )
       if (!customer) continue
-      await supabase.from('customers').update({
-        lat:         r.result.latitude,
-        lng:         r.result.longitude,
-        geocoded_at: now,
-      }).eq('id', customer.id)
+      if (r.result) {
+        await supabase.from('customers').update({
+          lat: r.result.latitude, lng: r.result.longitude,
+          geocoded_at: now, is_approximate_location: false,
+        }).eq('id', customer.id)
+      } else {
+        needFallback.push(customer)
+      }
+    }
+
+    // Pass 2 — outcode fallback for failures
+    if (needFallback.length > 0) {
+      const outcodes = [...new Set(needFallback.map(c => extractOutcode(c.postcode)))]
+      const fbRes  = await fetch('https://api.postcodes.io/outcodes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body:   JSON.stringify({ outcodes }),
+      })
+      const fbData = await fbRes.json()
+      if (fbData.status === 200) {
+        const fbMap: Record<string, { latitude: number; longitude: number }> = {}
+        for (const r of fbData.result) { fbMap[r.outcode.toUpperCase()] = { latitude: r.latitude, longitude: r.longitude } }
+        for (const c of needFallback) {
+          const coords = fbMap[extractOutcode(c.postcode)]
+          if (coords) {
+            await supabase.from('customers').update({
+              lat: coords.latitude, lng: coords.longitude,
+              geocoded_at: now, is_approximate_location: true,
+            }).eq('id', c.id)
+          }
+        }
+      }
     }
     console.log(`[import/confirm] geocoded ${withPostcode.length} new customers`)
   } catch (err) {

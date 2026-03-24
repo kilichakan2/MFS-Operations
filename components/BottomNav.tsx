@@ -32,7 +32,7 @@ export default function BottomNav({ items }: BottomNavProps) {
               key={item.href}
               href={item.href}
               className={[
-                'flex-1 flex flex-col items-center justify-center py-3.5 gap-1 min-h-[52px]',
+                'flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[44px]',
                 'text-[10px] font-bold tracking-wide uppercase',
                 'transition-colors duration-100',
                 active
@@ -41,7 +41,7 @@ export default function BottomNav({ items }: BottomNavProps) {
               ].join(' ')}
               aria-current={active ? 'page' : undefined}
             >
-              <span className={['w-6 h-6 flex-shrink-0', active ? 'text-[#EB6619]' : 'text-gray-500'].join(' ')}>
+              <span className={['w-5 h-5 flex-shrink-0', active ? 'text-[#EB6619]' : 'text-gray-500'].join(' ')}>
                 {item.icon}
               </span>
               {item.label}

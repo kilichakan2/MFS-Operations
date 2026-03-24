@@ -35,11 +35,12 @@ L.Icon.Default.mergeOptions({
 // ── SVG DivIcon helpers ───────────────────────────────────────────────────────
 
 // Customer: navy teardrop
-function customerIcon(active: boolean): L.DivIcon {
-  const fill = active ? '#16205B' : '#6B7280'
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 22 30">
+function customerIcon(active: boolean, approximate: boolean): L.DivIcon {
+  const fill    = active ? '#16205B' : '#6B7280'
+  const opacity = approximate ? '0.55' : '1'
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 22 30" opacity="${opacity}">
     <path d="M11 0C4.9 0 0 4.9 0 11c0 8.3 11 19 11 19S22 19.3 22 11C22 4.9 17.1 0 11 0z"
-          fill="${fill}" stroke="white" stroke-width="1.5"/>
+          fill="${fill}" stroke="white" stroke-width="1.5" stroke-dasharray="${approximate ? '3,2' : 'none'}"/>
     <circle cx="11" cy="11" r="4.5" fill="white"/>
   </svg>`
   return L.divIcon({
@@ -67,14 +68,16 @@ function repShape(repName: string): 'circle' | 'square' {
 }
 
 function visitIcon(visit: MapVisit): L.DivIcon {
-  const colour = VISIT_COLOURS[visit.visit_type] ?? '#6B7280'
-  const shape  = repShape(visit.rep)
+  const colour  = VISIT_COLOURS[visit.visit_type] ?? '#6B7280'
+  const shape   = repShape(visit.rep)
+  const opacity = visit.is_approximate ? '0.55' : '1'
+  const dash    = visit.is_approximate ? 'stroke-dasharray="3,2"' : ''
 
   const inner = shape === 'circle'
-    ? `<circle cx="12" cy="12" r="8" fill="${colour}" stroke="white" stroke-width="2"/>`
-    : `<rect x="4" y="4" width="16" height="16" rx="2" fill="${colour}" stroke="white" stroke-width="2"/>`
+    ? `<circle cx="12" cy="12" r="8" fill="${colour}" stroke="white" stroke-width="2" ${dash}/>`
+    : `<rect x="4" y="4" width="16" height="16" rx="2" fill="${colour}" stroke="white" stroke-width="2" ${dash}/>`
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" opacity="${opacity}">
     ${inner}
   </svg>`
 
@@ -162,7 +165,7 @@ export default function MapView({ customers, visits, layer, onVisitClick }: Prop
           }}
         >
           {customers.map(c => (
-            <Marker key={c.id} position={[c.lat, c.lng]} icon={customerIcon(c.active)}>
+            <Marker key={c.id} position={[c.lat, c.lng]} icon={customerIcon(c.active, c.is_approximate ?? false)}>
               <Popup className="mfs-popup" maxWidth={200}>
                 <div style={{ fontFamily: 'Inter, sans-serif', padding: '2px 0' }}>
                   <p style={{ fontWeight: 700, fontSize: 13, color: '#16205B', margin: '0 0 4px' }}>
@@ -171,15 +174,27 @@ export default function MapView({ customers, visits, layer, onVisitClick }: Prop
                   <p style={{ fontSize: 11, color: '#6B7280', margin: '0 0 2px' }}>
                     {c.postcode}{c.code ? ` · ${c.code}` : ''}
                   </p>
-                  <span style={{
-                    display: 'inline-block',
-                    fontSize: 10, fontWeight: 600,
-                    padding: '1px 6px', borderRadius: 999,
-                    background: c.active ? '#DCFCE7' : '#F3F4F6',
-                    color:      c.active ? '#15803D' : '#6B7280',
-                  }}>
-                    {c.active ? 'Active' : 'Inactive'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      fontSize: 10, fontWeight: 600,
+                      padding: '1px 6px', borderRadius: 999,
+                      background: c.active ? '#DCFCE7' : '#F3F4F6',
+                      color:      c.active ? '#15803D' : '#6B7280',
+                    }}>
+                      {c.active ? 'Active' : 'Inactive'}
+                    </span>
+                    {c.is_approximate && (
+                      <span style={{
+                        display: 'inline-block',
+                        fontSize: 10, fontWeight: 600,
+                        padding: '1px 6px', borderRadius: 999,
+                        background: '#FEF9C3', color: '#854D0E',
+                      }}>
+                        ⚠ Approx. location
+                      </span>
+                    )}
+                  </div>
                 </div>
               </Popup>
             </Marker>
@@ -231,6 +246,14 @@ export default function MapView({ customers, visits, layer, onVisitClick }: Prop
                   <p style={{ fontSize: 11, color: '#6B7280', margin: '0 0 2px' }}>
                     {v.visit_type.replace(/_/g, ' ')} · {v.rep}
                   </p>
+                  {v.is_prospect && v.is_approximate && (
+                    <span style={{
+                      display: 'inline-block', marginBottom: 2,
+                      fontSize: 10, fontWeight: 600,
+                      padding: '1px 6px', borderRadius: 999,
+                      background: '#FEF9C3', color: '#854D0E',
+                    }}>⚠ Approx. location</span>
+                  )}
                   <p style={{ fontSize: 10, color: '#9CA3AF', margin: 0 }}>
                     Tap to see full details
                   </p>

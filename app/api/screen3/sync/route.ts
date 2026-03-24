@@ -103,32 +103,39 @@ export async function POST(req: NextRequest) {
     console.log('[screen3/sync] inserted:', recordId)
 
     // ── Geocode prospect postcode — fire-and-forget ───────────────────────────
-    // Writes prospect_lat/prospect_lng back to the visits row for the map view.
-    // Non-blocking: a failed geocode is logged but never surfaces to the user.
+    // Writes prospect_lat/lng back to the visits row for the map view.
+    // Fuzzy fallback: if full postcode fails, retries with just the outcode
+    // and sets is_approximate_location=true so the map can render a ghost pin.
     if (prospect_postcode && recordId) {
       ;(async () => {
+        const patchVisit = async (lat: number, lng: number, approximate: boolean) => {
+          await fetch(`${SUPA_URL}/rest/v1/visits?id=eq.${recordId}`, {
+            method: 'PATCH',
+            headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}`,
+                       'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ prospect_lat: lat, prospect_lng: lng,
+                                   is_approximate_location: approximate }),
+          })
+        }
         try {
-          const pcRes  = await fetch(
-            `https://api.postcodes.io/postcodes/${encodeURIComponent(prospect_postcode.replace(/\s/g,''))}`
-          )
-          const pcData = await pcRes.json()
-          if (pcData.status === 200 && pcData.result) {
-            await fetch(`${SUPA_URL}/rest/v1/visits?id=eq.${recordId}`, {
-              method:  'PATCH',
-              headers: {
-                'apikey':         SUPA_KEY,
-                'Authorization': `Bearer ${SUPA_KEY}`,
-                'Content-Type':  'application/json',
-                'Prefer':        'return=minimal',
-              },
-              body: JSON.stringify({
-                prospect_lat: pcData.result.latitude,
-                prospect_lng: pcData.result.longitude,
-              }),
-            })
-            console.log('[screen3/sync] geocoded prospect:', prospect_postcode)
+          // Pass 1 — exact postcode
+          const clean = prospect_postcode.replace(/\s/g, '')
+          const r1 = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(clean)}`)
+          const d1 = await r1.json()
+          if (d1.status === 200 && d1.result) {
+            await patchVisit(d1.result.latitude, d1.result.longitude, false)
+            console.log('[screen3/sync] geocoded prospect (exact):', prospect_postcode)
+            return
+          }
+          // Pass 2 — outcode fallback
+          const oc = prospect_postcode.trim().toUpperCase().split(' ')[0]
+          const r2 = await fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(oc)}`)
+          const d2 = await r2.json()
+          if (d2.status === 200 && d2.result) {
+            await patchVisit(d2.result.latitude, d2.result.longitude, true)  // /outcodes/:oc returns result.latitude directly
+            console.log('[screen3/sync] geocoded prospect (outcode fallback):', oc)
           } else {
-            console.warn('[screen3/sync] prospect postcode not found:', prospect_postcode)
+            console.warn('[screen3/sync] prospect postcode unresolvable:', prospect_postcode)
           }
         } catch (e) {
           console.error('[screen3/sync] prospect geocoding failed (non-fatal):', e)

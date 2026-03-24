@@ -16,13 +16,14 @@ const h = {
 }
 
 export interface MapCustomer {
-  id:       string
-  name:     string
-  postcode: string
-  code:     string | null
-  active:   boolean
-  lat:      number
-  lng:      number
+  id:           string
+  name:         string
+  postcode:     string
+  code:         string | null
+  active:       boolean
+  lat:          number
+  lng:          number
+  is_approximate: boolean
 }
 
 export interface MapVisit {
@@ -35,6 +36,7 @@ export interface MapVisit {
   customer_name: string
   created_at:    string
   is_prospect:   boolean
+  is_approximate: boolean
 }
 
 export async function GET(req: NextRequest) {
@@ -54,24 +56,25 @@ export async function GET(req: NextRequest) {
   // ── Customers ─────────────────────────────────────────────────────────────
   if (layer === 'all' || layer === 'customers') {
     const res = await fetch(
-      `${SUPA_URL}/rest/v1/customers?select=id,name,postcode,external_system_id,active,lat,lng&lat=not.is.null&lng=not.is.null&order=name.asc`,
+      `${SUPA_URL}/rest/v1/customers?select=id,name,postcode,external_system_id,active,lat,lng,is_approximate_location&lat=not.is.null&lng=not.is.null&order=name.asc`,
       { headers: h }
     )
     if (res.ok) {
       const rows = await res.json() as {
         id: string; name: string; postcode: string
         external_system_id: string | null; active: boolean
-        lat: number; lng: number
+        lat: number; lng: number; is_approximate_location: boolean
       }[]
       for (const r of rows) {
         customers.push({
-          id:       r.id,
-          name:     r.name,
-          postcode: r.postcode,
-          code:     r.external_system_id,
-          active:   r.active,
-          lat:      r.lat,
-          lng:      r.lng,
+          id:             r.id,
+          name:           r.name,
+          postcode:       r.postcode,
+          code:           r.external_system_id,
+          active:         r.active,
+          lat:            r.lat,
+          lng:            r.lng,
+          is_approximate: r.is_approximate_location,
         })
       }
     }
@@ -101,41 +104,44 @@ export async function GET(req: NextRequest) {
         const lng = r.customers?.lng
         if (lat == null || lng == null) continue
         visits.push({
-          id:            r.id,
+          id:             r.id,
           lat,
           lng,
-          visit_type:    r.visit_type,
-          outcome:       r.outcome,
-          rep:           r.users?.name ?? 'Unknown',
-          customer_name: r.customers?.name ?? 'Unknown',
-          created_at:    r.created_at,
-          is_prospect:   false,
+          visit_type:     r.visit_type,
+          outcome:        r.outcome,
+          rep:            r.users?.name ?? 'Unknown',
+          customer_name:  r.customers?.name ?? 'Unknown',
+          created_at:     r.created_at,
+          is_prospect:    false,
+          is_approximate: false,  // customer visits inherit customer coords — already verified
         })
       }
     }
 
     // Prospect visits — use prospect_lat/lng stored on the visit row
     const prospectVisitRes = await fetch(
-      `${SUPA_URL}/rest/v1/visits?select=id,visit_type,outcome,created_at,prospect_name,prospect_lat,prospect_lng,users!visits_user_id_fkey(name)&customer_id=is.null&prospect_lat=not.is.null${dateFilter}&order=created_at.desc&limit=500`,
+      `${SUPA_URL}/rest/v1/visits?select=id,visit_type,outcome,created_at,prospect_name,prospect_lat,prospect_lng,is_approximate_location,users!visits_user_id_fkey(name)&customer_id=is.null&prospect_lat=not.is.null${dateFilter}&order=created_at.desc&limit=500`,
       { headers: h }
     )
     if (prospectVisitRes.ok) {
       const rows = await prospectVisitRes.json() as {
         id: string; visit_type: string; outcome: string; created_at: string
         prospect_name: string | null; prospect_lat: number; prospect_lng: number
+        is_approximate_location: boolean
         users: { name: string } | null
       }[]
       for (const r of rows) {
         visits.push({
-          id:            r.id,
-          lat:           r.prospect_lat,
-          lng:           r.prospect_lng,
-          visit_type:    r.visit_type,
-          outcome:       r.outcome,
-          rep:           r.users?.name ?? 'Unknown',
-          customer_name: r.prospect_name ?? 'Prospect',
-          created_at:    r.created_at,
-          is_prospect:   true,
+          id:             r.id,
+          lat:            r.prospect_lat,
+          lng:            r.prospect_lng,
+          visit_type:     r.visit_type,
+          outcome:        r.outcome,
+          rep:            r.users?.name ?? 'Unknown',
+          customer_name:  r.prospect_name ?? 'Prospect',
+          created_at:     r.created_at,
+          is_prospect:    true,
+          is_approximate: r.is_approximate_location,
         })
       }
     }
