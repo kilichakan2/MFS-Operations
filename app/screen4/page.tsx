@@ -623,8 +623,6 @@ export default function Screen4Page() {
             </div>
           )}
 
-          </div>{/* end space-y-4 wrapper */}
-
           {/* Hunter / Farmer donut */}
           {hfTotal > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -665,6 +663,8 @@ export default function Screen4Page() {
               </div>
             </div>
           )}
+
+          </div>{/* end space-y-4 wrapper */}
         </div>
 
         </div>{/* end two-column grid */}
