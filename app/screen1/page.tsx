@@ -369,7 +369,7 @@ export default function Screen1Page() {
 
           {/* ── Status ───────────────────────────────────────────────────── */}
           <section>
-            <Label>Status</Label>
+            <Label>{t('status')}</Label>
             <div
               className="grid grid-cols-2 gap-3"
               role="group"

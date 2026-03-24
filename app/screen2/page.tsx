@@ -534,7 +534,7 @@ export default function Screen2Page() {
 
           {/* ── Customer ─────────────────────────────────────────────────── */}
           <section>
-            <Label>Customer</Label>
+            <Label>{t('customer')}</Label>
             <SelectorButton
               label={form.customer?.label}
               placeholder={t('selectCustomer')}
@@ -545,7 +545,7 @@ export default function Screen2Page() {
 
           {/* ── Category ─────────────────────────────────────────────────── */}
           <section>
-            <Label>Category</Label>
+            <Label>{t('complaintCat')}</Label>
             {/*
               7 buttons — 3 cols so the grid fills evenly.
               Last row has 1 button (Other) which span-cols itself to fill.
@@ -608,7 +608,7 @@ export default function Screen2Page() {
 
           {/* ── Received via ─────────────────────────────────────────────── */}
           <section>
-            <Label>Received via</Label>
+            <Label>{t('receivedVia')}</Label>
             <div
               className="grid grid-cols-3 gap-2.5"
               role="group"
@@ -696,7 +696,7 @@ export default function Screen2Page() {
             ].join(' ')}
             aria-hidden={form.status !== 'resolved'}
           >
-            <Label>Resolution note</Label>
+            <Label>{t('resolutionNote')}</Label>
             <textarea
               rows={3}
               placeholder={t('resolvePrompt')}

@@ -451,7 +451,7 @@ export default function Screen3Page() {
 
           {/* ── Outcome ──────────────────────────────────────────────────── */}
           <section>
-            <Label>Outcome</Label>
+            <Label>{t('outcome')}</Label>
             <div
               className="grid grid-cols-2 gap-2.5"
               role="group"
@@ -499,7 +499,7 @@ export default function Screen3Page() {
 
           {/* ── Commitment ───────────────────────────────────────────────── */}
           <section>
-            <Label>Commitment made?</Label>
+            <Label>{t('commitmentMade')}</Label>
             <div
               className="grid grid-cols-2 gap-3"
               role="group"

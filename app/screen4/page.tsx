@@ -452,7 +452,7 @@ export default function Screen4Page() {
       )}
 
       {loading && !lastFetch ? <Spinner /> : (
-      <main className="max-w-5xl mx-auto px-4 py-5 pb-24">
+      <main className="max-w-5xl mx-auto px-4 py-5 pb-24 space-y-5">
 
         {/* KPI Row */}
         <div className="grid grid-cols-3 gap-3">
