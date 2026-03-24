@@ -92,7 +92,7 @@ export default function Screen6Page() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col bg-[#EDEAE1]" style={{ height: '100dvh' }}>
+    <div className="bg-[#EDEAE1] min-h-screen">
 
       <AppHeader title="Map View" maxWidth="full" />
 
@@ -169,7 +169,7 @@ export default function Screen6Page() {
       )}
 
       {/* ── Map — fills all remaining height ──────────────────────────────── */}
-      <div className="flex-1 relative overflow-hidden" style={{ minHeight: 0 }}>
+      <div className="relative z-0 overflow-hidden" style={{ height: "calc(100dvh - 176px)" }}>
         {!loading && (
           <MapView
             customers={customers}

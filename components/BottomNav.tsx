@@ -20,7 +20,7 @@ export default function BottomNav({ items }: BottomNavProps) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#EDEAE1]"
+      className="fixed bottom-0 left-0 right-0 z-[999] bg-white border-t border-[#EDEAE1]"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       aria-label="Main navigation"
     >
