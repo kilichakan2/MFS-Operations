@@ -193,13 +193,13 @@ function ActivityList({ synced, pending, onEdit, onDelete }:{
   return (
     <div className="space-y-2">
       {pending.map(p=><ActivityItem key={p.localId} name={p.name} time={fmtTime(p.createdAt)} visitType={p.visitType} outcome={p.outcome} isPending onEdit={()=>onEdit(p)} onDelete={()=>onDelete(p)}/>)}
-      {synced.map(v=><ActivityItem key={v.id} name={v.customer_name??v.prospect_name??'Unknown'} time={fmtTime(v.created_at)} visitType={v.visit_type} outcome={v.outcome} onEdit={()=>onEdit(v)} onDelete={()=>onDelete(v)}/>)}
+      {synced.map(v=><ActivityItem key={v.id} name={v.customer_name??v.prospect_name??'Unknown'} time={fmtTime(v.created_at)} visitType={v.visit_type} outcome={v.outcome} notes={v.notes??undefined} onEdit={()=>onEdit(v)} onDelete={()=>onDelete(v)}/>)}
     </div>
   )
 }
 
-function ActivityItem({ name, time, visitType, outcome, isPending, onEdit, onDelete }:{
-  name:string; time:string; visitType:string; outcome:string; isPending?:boolean; onEdit:()=>void; onDelete:()=>void
+function ActivityItem({ name, time, visitType, outcome, notes, isPending, onEdit, onDelete }:{
+  name:string; time:string; visitType:string; outcome:string; notes?:string; isPending?:boolean; onEdit:()=>void; onDelete:()=>void
 }) {
   const c=TYPE_COLOUR[visitType]??'#6B7280'
   return (
@@ -221,6 +221,7 @@ function ActivityItem({ name, time, visitType, outcome, isPending, onEdit, onDel
           <span className="text-[#16205B]/20 text-xs">·</span>
           <span className="text-[11px] text-gray-400">{time}</span>
         </div>
+        {notes&&<p className="text-[11px] text-gray-400/80 mt-0.5 line-clamp-1 italic">{notes}</p>}
       </div>
       <div className="flex items-center gap-0.5 flex-shrink-0">
         <button type="button" onClick={onEdit} aria-label="Edit visit"
@@ -305,13 +306,20 @@ export default function Screen3Page() {
   const handleEdit=useCallback((visit:TodayVisit|PendingItem)=>{
     let f:FormState
     if('isPending' in visit){
-      f={customerMode:visit.customerId?'existing':'prospect',customer:null,
+      // Pending item — customer name not available, can only prefill prospect or blank existing
+      f={customerMode:visit.customerId?'existing':'prospect',
+        customer:null, // can't reconstruct SelectableItem without a name from queue
         prospectName:visit.prospectName??'',prospectPostcode:visit.prospectPostcode??'',
         visitType:visit.visitType as VisitType??null,outcome:visit.outcome as Outcome??null,
         commitmentMade:visit.commitmentMade,commitmentDetail:visit.commitmentDetail??'',notes:visit.notes??''}
       setEditingLocalId(visit.localId); setEditingId(null)
     } else {
-      f={customerMode:visit.customer_id?'existing':'prospect',customer:null,
+      // Synced item — reconstruct SelectableItem from customer_id + customer_name
+      const existingCustomer = visit.customer_id && visit.customer_name
+        ? { id: visit.customer_id, label: visit.customer_name }
+        : null
+      f={customerMode:visit.customer_id?'existing':'prospect',
+        customer:existingCustomer,
         prospectName:visit.prospect_name??'',prospectPostcode:visit.prospect_postcode??'',
         visitType:visit.visit_type as VisitType,outcome:visit.outcome as Outcome,
         commitmentMade:visit.commitment_made,commitmentDetail:visit.commitment_detail??'',notes:visit.notes??''}

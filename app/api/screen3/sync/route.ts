@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
 
     console.log('[screen3/sync] keys:', Object.keys(body).join(', '))
 
+    const _upsert           =  body._upsert           === true
     const id                =  body.id                as string  | undefined
     const customer_id       = (body.customer_id       as string  | undefined) ?? null
     const prospect_name     = (body.prospect_name     as string  | undefined) ?? null
@@ -102,8 +103,7 @@ export async function POST(req: NextRequest) {
       notes,
     }
 
-    const isUpsert = payload._upsert === true
-    delete payload._upsert  // strip internal flag before sending to Supabase
+    const isUpsert = _upsert  // extracted from body before payload was built
 
     console.log('[screen3/sync]', isUpsert ? 'upserting' : 'inserting', 'visit, type:', visit_type, 'outcome:', outcome)
     const { ok, status: httpStatus, text } = isUpsert
