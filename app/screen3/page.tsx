@@ -84,7 +84,7 @@ function OUTCOMES(t: (k: string) => string) {
 
 interface ValidationErrors {
   customer?:         string   // covers both existing and prospect name
-  prospectPostcode?: string   // unused currently — postcode has no validation
+  prospectPostcode?: string
   visitType?:        string
   outcome?:          string
   commitmentDetail?: string
@@ -99,6 +99,12 @@ function validate(form: FormState): ValidationErrors {
   }
   if (form.customerMode === 'prospect' && !form.prospectName.trim()) {
     errors.customer = 'Enter the prospect name'
+  }
+  if (form.customerMode === 'prospect' && form.prospectName.trim().length > 0 && form.prospectName.trim().length < 3) {
+    errors.customer = 'Name must be at least 3 characters'
+  }
+  if (form.customerMode === 'prospect' && !form.prospectPostcode.trim()) {
+    errors.prospectPostcode = 'Enter a postcode (e.g. S10 1TE)'
   }
 
   if (!form.visitType)  errors.visitType = 'Select a visit type'
@@ -393,24 +399,31 @@ export default function Screen3Page() {
                   />
                   <FieldError message={errors.customer} />
                 </div>
-                <input
-                  type="text"
-                  placeholder={t('postcodeOptional')}
-                  value={form.prospectPostcode}
-                  onChange={(e) => set('prospectPostcode', e.target.value)}
-                  aria-label="Prospect postcode"
-                  maxLength={10}
-                  className={[
-                    'w-full h-[56px] rounded-xl px-4',
-                    'text-base text-gray-900 placeholder:text-gray-400',
-                    'border-2 border-gray-200 bg-white',
-                    'focus:outline-none focus:border-[#EB6619]',
-                    'transition-colors',
-                  ].join(' ')}
-                />
-                <p className="text-xs text-gray-400 px-1">
-                  Postcode is used to map prospect activity over time — no format validation.
-                </p>
+                <div>
+                  <input
+                    type="text"
+                    placeholder={t('prospectPostcode')}
+                    value={form.prospectPostcode}
+                    onChange={(e) => {
+                      set('prospectPostcode', e.target.value)
+                      setErrors((prev) => ({ ...prev, prospectPostcode: undefined }))
+                    }}
+                    aria-label="Prospect postcode"
+                    maxLength={10}
+                    className={[
+                      'w-full h-[56px] rounded-xl px-4',
+                      'text-base text-gray-900 placeholder:text-gray-400',
+                      'border-2 bg-white',
+                      'focus:outline-none focus:border-[#EB6619]',
+                      'transition-colors',
+                      errors.prospectPostcode ? 'border-red-400 bg-red-50' : 'border-gray-200',
+                    ].join(' ')}
+                  />
+                  <FieldError message={errors.prospectPostcode} />
+                  <p className="text-xs text-gray-400 px-1 mt-1">
+                    {t('postcodeHint')}
+                  </p>
+                </div>
               </div>
             )}
           </section>

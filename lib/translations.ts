@@ -134,6 +134,7 @@ const t = {
   prospectNameField: { en: 'Business or contact name', tr: 'İşletme veya iletişim adı' },
   prospectPostcode: { en: 'Prospect postcode', tr: 'Posta kodu' },
   postcodeOptional: { en: 'Postcode (optional)', tr: 'Posta kodu (isteğe bağlı)' },
+  postcodeHint:     { en: 'Used to map prospect activity — e.g. S10 1TE', tr: 'Prospect takibi için kullanılır — ör. S10 1TE' },
   notesOptional:  { en: 'Notes (optional)', tr: 'Notlar (isteğe bağlı)' },
   notesPrompt:    { en: 'Market intelligence, competitor mentions, product feedback…',
                     tr: 'Piyasa bilgisi, rakip, ürün geri bildirimi…' },
