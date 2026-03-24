@@ -45,6 +45,7 @@ const SHARED_API_PATHS = [
   '/api/detail/visit',
   '/api/detail/complaint',
   '/api/detail/discrepancy',
+  '/api/admin/geocode-all',
 ]
 
 export function middleware(req: NextRequest) {
