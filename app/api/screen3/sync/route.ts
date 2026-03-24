@@ -3,6 +3,9 @@
  * Inserts a queued visit. Uses raw fetch() to the Supabase REST API
  * rather than the supabase-js client, to avoid any cold-start initialisation
  * issues with the client library.
+ *
+ * Sprint 1 Map View: prospect visits now trigger a fire-and-forget geocoding
+ * call to postcodes.io, writing prospect_lat/prospect_lng back to the row.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -99,7 +102,41 @@ export async function POST(req: NextRequest) {
     const recordId = rows[0]?.id
     console.log('[screen3/sync] inserted:', recordId)
 
-    // Audit log (fire-and-forget)
+    // ── Geocode prospect postcode — fire-and-forget ───────────────────────────
+    // Writes prospect_lat/prospect_lng back to the visits row for the map view.
+    // Non-blocking: a failed geocode is logged but never surfaces to the user.
+    if (prospect_postcode && recordId) {
+      ;(async () => {
+        try {
+          const pcRes  = await fetch(
+            `https://api.postcodes.io/postcodes/${encodeURIComponent(prospect_postcode.replace(/\s/g,''))}`
+          )
+          const pcData = await pcRes.json()
+          if (pcData.status === 200 && pcData.result) {
+            await fetch(`${SUPA_URL}/rest/v1/visits?id=eq.${recordId}`, {
+              method:  'PATCH',
+              headers: {
+                'apikey':         SUPA_KEY,
+                'Authorization': `Bearer ${SUPA_KEY}`,
+                'Content-Type':  'application/json',
+                'Prefer':        'return=minimal',
+              },
+              body: JSON.stringify({
+                prospect_lat: pcData.result.latitude,
+                prospect_lng: pcData.result.longitude,
+              }),
+            })
+            console.log('[screen3/sync] geocoded prospect:', prospect_postcode)
+          } else {
+            console.warn('[screen3/sync] prospect postcode not found:', prospect_postcode)
+          }
+        } catch (e) {
+          console.error('[screen3/sync] prospect geocoding failed (non-fatal):', e)
+        }
+      })()
+    }
+
+    // ── Audit log (fire-and-forget) ───────────────────────────────────────────
     let displayName = prospect_name ?? 'Unknown'
     if (customer_id) {
       const customer = await supaGet('customers', `select=name&id=eq.${customer_id}`)

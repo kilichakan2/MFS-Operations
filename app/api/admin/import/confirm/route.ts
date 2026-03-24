@@ -7,6 +7,9 @@
  * Also writes a single audit_log entry summarising the import.
  * Returns { inserted: number, skipped: number } — skipped count covers
  * rows that failed individually (e.g. duplicate name constraint).
+ *
+ * Sprint 1 Map View: new customer inserts now trigger a fire-and-forget
+ * geocoding call to postcodes.io so lat/lng are written automatically.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -17,8 +20,47 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-interface CustomerRow { name: string }
+interface CustomerRow { name: string; postcode?: string }
 interface ProductRow  { name: string; category?: string | null; code?: string | null; box_size?: string | null }
+
+// ── Geocoding helper — fire-and-forget ────────────────────────────────────────
+// Called after new customers are inserted. Looks up postcodes via postcodes.io
+// and writes lat/lng back. Errors are logged but never thrown — a failed
+// geocode is non-blocking; the map simply omits that pin until next run.
+async function geocodeNewCustomers(customers: { id: string; postcode: string }[]) {
+  const withPostcode = customers.filter(c => c.postcode?.trim())
+  if (withPostcode.length === 0) return
+
+  try {
+    const geoRes = await fetch('https://api.postcodes.io/postcodes', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ postcodes: withPostcode.map(c => c.postcode.trim()) }),
+    })
+    const geoData = await geoRes.json()
+    if (geoData.status !== 200) {
+      console.error('[import/confirm] postcodes.io returned status', geoData.status)
+      return
+    }
+
+    const now = new Date().toISOString()
+    for (const r of geoData.result) {
+      if (!r.result) continue
+      const customer = withPostcode.find(
+        c => c.postcode.trim().toUpperCase() === r.query.toUpperCase()
+      )
+      if (!customer) continue
+      await supabase.from('customers').update({
+        lat:         r.result.latitude,
+        lng:         r.result.longitude,
+        geocoded_at: now,
+      }).eq('id', customer.id)
+    }
+    console.log(`[import/confirm] geocoded ${withPostcode.length} new customers`)
+  } catch (err) {
+    console.error('[import/confirm] geocoding failed (non-fatal):', err)
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -54,7 +96,6 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Build insert payload ──────────────────────────────────────────────────
-    // Filter out any rows without a name (belt-and-braces against bad AI output)
     const validRows = rows.filter((r) => typeof r.name === 'string' && r.name.trim())
 
     if (validRows.length === 0) {
@@ -70,15 +111,15 @@ export async function POST(req: NextRequest) {
     if (type === 'customers') {
       const payload = validRows.map((r) => ({
         name:       (r as CustomerRow).name.trim(),
+        postcode:   (r as CustomerRow).postcode?.trim() || null,
         active:     true,
         created_by: userId,
       }))
 
-      // Insert in a single batch — ignore duplicates via onConflict
       const { data, error } = await supabase
         .from('customers')
         .insert(payload)
-        .select('id')
+        .select('id, postcode')
 
       if (error) {
         console.error('[import/confirm] Customer insert error:', error.message)
@@ -88,9 +129,15 @@ export async function POST(req: NextRequest) {
       inserted = data?.length ?? 0
       skipped  = validRows.length - inserted
 
+      // Fire-and-forget geocoding for newly inserted customers that have postcodes
+      if (data && data.length > 0) {
+        const toGeocode = data
+          .filter((d: { id: string; postcode: string | null }) => d.postcode)
+          .map((d: { id: string; postcode: string | null }) => ({ id: d.id, postcode: d.postcode! }))
+        geocodeNewCustomers(toGeocode).catch(() => {/* swallow — already logged inside */})
+      }
+
     } else {
-      // Convert the sentinel value "none" (returned by AI for missing optional
-      // fields) back to null before inserting into Supabase.
       const sentinel = (v: string | null | undefined): string | null => {
         if (!v || v.trim() === '' || v.trim().toLowerCase() === 'none') return null
         return v.trim()
