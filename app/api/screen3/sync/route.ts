@@ -105,7 +105,11 @@ export async function POST(req: NextRequest) {
 
     const isUpsert = _upsert  // extracted from body before payload was built
 
-    console.log('[screen3/sync]', isUpsert ? 'upserting' : 'inserting', 'visit, type:', visit_type, 'outcome:', outcome)
+    console.log('[screen3/sync] payload:', JSON.stringify({
+      id, _upsert, isUpsert,
+      customer_id, prospect_name, visit_type, outcome,
+      commitment_made, notes: notes?.slice(0,50),
+    }))
     const { ok, status: httpStatus, text } = isUpsert
       ? await supaUpsert('visits', payload)
       : await supaPost('visits', payload)

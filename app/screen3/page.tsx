@@ -341,7 +341,10 @@ export default function Screen3Page() {
     try{
       if(editingLocalId) await localDb.queue.where('localId').equals(editingLocalId).delete()
       const recordId=editingId??editingLocalId??crypto.randomUUID()
-      await localDb.queue.add({
+      console.log('[screen3] queueing visit:', { recordId, isUpsert: isDbRecord, customer_id: form.customerMode==='existing'?form.customer?.id:null, visitType: form.visitType, outcome: form.outcome })
+      // put() = insert-or-replace; critical for edits — add() throws ConstraintError
+      // if the original synced visit still has the same localId in the queue
+      await localDb.queue.put({
         localId:recordId, screen:'screen3',
         payload:{
           id:recordId, _upsert:isDbRecord,
