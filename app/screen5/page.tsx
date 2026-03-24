@@ -1098,6 +1098,7 @@ export default function Screen5Page() {
       <BottomNav items={[
         { href: '/screen4', label: 'Dashboard', icon: Icons.dashboard },
         { href: '/screen5', label: 'Admin',     icon: Icons.admin     },
+        { href: '/screen6', label: 'Map',       icon: Icons.map       },
       ]} />
     </div>
   )

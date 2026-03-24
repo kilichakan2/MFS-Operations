@@ -33,8 +33,9 @@ const t = {
   navDispatch:    { en: 'Dispatch',    tr: 'Sevkiyat' },
   navComplaints:  { en: 'Complaints',  tr: 'Şikayetler' },
   navVisits:      { en: 'Visits',      tr: 'Ziyaretler' },
-  navDashboard:   { en: 'Dashboard',   tr: 'Panel' },
+  navDashboard:   { en: 'Dashboard',   tr: 'Panel'   },
   navAdmin:       { en: 'Admin',       tr: 'Yönetim' },
+  navMap:         { en: 'Map',         tr: 'Harita'  },
 
   // ── Login screen ─────────────────────────────────────────────────────────
   teamLogin:      { en: 'Team Login',          tr: 'Ekip Girişi' },
