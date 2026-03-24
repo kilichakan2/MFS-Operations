@@ -144,7 +144,20 @@ const t = {
   logVisit:       { en: 'Log Visit',       tr: 'Ziyaret Kaydet' },
 
   // ── Recent activity feed ──────────────────────────────────────────────────
-  myActivityToday: { en: 'My activity today', tr: 'Bugünkü hareketlerim' },
+  myActivityToday:   { en: 'My activity today',     tr: 'Bugünkü hareketlerim' },
+  todayProgress:     { en: "Today's progress",       tr: 'Bugünkü ilerleme' },
+  visitsLabel:       { en: 'Visits',                 tr: 'Ziyaretler' },
+  prospectsLabel:    { en: 'Prospects',              tr: 'Prospects' },
+  complaintFu:       { en: 'Complaint f/u',          tr: 'Şikayet takibi' },
+  pendingSync:       { en: 'Pending sync',           tr: 'Senkronizasyon bekliyor' },
+  editVisit:         { en: 'Edit visit',             tr: 'Ziyareti düzenle' },
+  updateVisit:       { en: 'Update visit',           tr: 'Ziyareti güncelle' },
+  deleteVisit:       { en: 'Delete visit',           tr: 'Ziyareti sil' },
+  deleteConfirmMsg:  { en: 'Permanently delete this visit?', tr: 'Bu ziyareti kalıcı olarak sil?' },
+  deleteConfirmYes:  { en: 'Yes, delete',            tr: 'Evet, sil' },
+  cancel:            { en: 'Cancel',                 tr: 'İptal' },
+  noActivityYet:     { en: 'No visits logged today', tr: 'Bugün ziyaret girilmedi' },
+  loading:           { en: 'Loading…',               tr: 'Yükleniyor…' },
 
   // ── Language toggle ───────────────────────────────────────────────────────
   switchToTr:     { en: 'TR',              tr: 'TR' },

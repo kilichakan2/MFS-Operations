@@ -28,6 +28,22 @@ async function supaPost(table: string, body: Record<string, unknown>) {
   return { ok: res.ok, status: res.status, text }
 }
 
+
+async function supaUpsert(table: string, body: Record<string, unknown>) {
+  const res = await fetch(`${SUPA_URL}/rest/v1/${table}?on_conflict=id`, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'apikey':         SUPA_KEY,
+      'Authorization': `Bearer ${SUPA_KEY}`,
+      'Prefer':         'resolution=merge-duplicates,return=representation',
+    },
+    body: JSON.stringify(body),
+  })
+  const text = await res.text()
+  return { ok: res.ok, status: res.status, text }
+}
+
 async function supaGet(table: string, params: string) {
   const res = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {
     headers: {
@@ -86,8 +102,13 @@ export async function POST(req: NextRequest) {
       notes,
     }
 
-    console.log('[screen3/sync] inserting visit, type:', visit_type, 'outcome:', outcome)
-    const { ok, status: httpStatus, text } = await supaPost('visits', payload)
+    const isUpsert = payload._upsert === true
+    delete payload._upsert  // strip internal flag before sending to Supabase
+
+    console.log('[screen3/sync]', isUpsert ? 'upserting' : 'inserting', 'visit, type:', visit_type, 'outcome:', outcome)
+    const { ok, status: httpStatus, text } = isUpsert
+      ? await supaUpsert('visits', payload)
+      : await supaPost('visits', payload)
 
     if (!ok) {
       if (httpStatus === 409 || text.includes('23505')) {
