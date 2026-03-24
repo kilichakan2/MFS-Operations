@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import dynamic     from 'next/dynamic'
+import dynamicImport from 'next/dynamic'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import AppHeader    from '@/components/AppHeader'
@@ -11,7 +11,7 @@ import { useLanguage } from '@/lib/LanguageContext'
 import type { MapCustomer, MapVisit } from '@/app/api/map/data/route'
 
 // ── CRITICAL: SSR-safe import — Leaflet reads window at module level ──────────
-const MapView = dynamic(() => import('@/components/MapView'), {
+const MapView = dynamicImport(() => import('@/components/MapView'), {
   ssr:     false,
   loading: () => (
     <div className="flex-1 flex items-center justify-center bg-[#EDEAE1]">
