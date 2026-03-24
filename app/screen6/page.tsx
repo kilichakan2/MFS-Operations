@@ -17,6 +17,7 @@ import dynamicImport from 'next/dynamic'
 import { useState, useEffect, useCallback } from 'react'
 import AppHeader  from '@/components/AppHeader'
 import DetailModal from '@/components/DetailModal'
+import RoleNav     from '@/components/RoleNav'
 
 import type { MapCustomer, MapVisit } from '@/app/api/map/data/route'
 
@@ -220,6 +221,8 @@ export default function Screen6Page() {
           onClose={() => setModal(null)}
         />
       )}
+
+      <RoleNav />
     </div>
   )
 }
