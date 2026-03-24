@@ -452,7 +452,7 @@ export default function Screen4Page() {
       )}
 
       {loading && !lastFetch ? <Spinner /> : (
-      <main className="max-w-5xl mx-auto px-4 py-5 pb-24 space-y-5">
+      <main className="max-w-5xl mx-auto px-4 py-5 pb-24 space-y-8">
 
         {/* KPI Row */}
         <div className="grid grid-cols-3 gap-3">
@@ -514,8 +514,10 @@ export default function Screen4Page() {
         <div>
           <SectionLabel>{range.label} — Breakdown</SectionLabel>
 
+          <div className="space-y-4">
+
           {/* Week KPI mini-row */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <span className={`text-2xl font-bold leading-none block ${totalDiscWeek > 5 ? 'text-amber-700' : 'text-[#16205B]'}`}>{totalDiscWeek}</span>
               <p className="text-xs font-semibold text-gray-700 mt-1">Discrepancies</p>
@@ -533,7 +535,7 @@ export default function Screen4Page() {
 
           {/* Discrepancy breakdown */}
           {totalDiscWeek > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-800">Discrepancies by reason</p>
                 <span className="text-base font-bold text-[#16205B]">{totalDiscWeek}</span>
@@ -562,7 +564,7 @@ export default function Screen4Page() {
 
           {/* Complaints breakdown */}
           {data.totalComplaintsWeek > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-800 mb-3">Complaints by category</p>
               <div className="space-y-2">
                 {data.weekComplaintCategories.map(c => <BreakdownRow key={c.category} label={c.category} count={c.count} max={maxCompCount} colour="navy" />)}
@@ -572,7 +574,7 @@ export default function Screen4Page() {
 
           {/* Sales activity by rep */}
           {data.weekVisitsByRep.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-800 mb-3">Sales activity by rep</p>
               <div className="space-y-4">
                 {data.weekVisitsByRep.map(r => {
@@ -602,7 +604,7 @@ export default function Screen4Page() {
 
           {/* Prospects */}
           {data.prospectsThisWeek.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-800">Prospects visited</p>
                 <Badge label={`${data.prospectsThisWeek.length}`} tone="navy" />
@@ -620,6 +622,8 @@ export default function Screen4Page() {
               </div>
             </div>
           )}
+
+          </div>{/* end space-y-4 wrapper */}
 
           {/* Hunter / Farmer donut */}
           {hfTotal > 0 && (
