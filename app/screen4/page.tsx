@@ -198,10 +198,19 @@ function TodayTabs({ data, onRowClick }: {
                                  : vi.outcome==='lost'     ? 'text-red-700 bg-red-50'
                                  : 'text-gray-600 bg-white border border-[#EDEAE1]'
                         return (
-                          <div key={vi.id} onClick={() => onRowClick('visit', vi.id)} className="flex items-start justify-between gap-3 py-2.5 border-t border-[#EDEAE1] first:border-0 cursor-pointer hover:bg-[#EDEAE1] rounded-lg px-1 -mx-1 transition-colors min-h-[44px]">
+                          <div key={vi.id} onClick={() => { console.log('[screen4] visit data:', vi); onRowClick('visit', vi.id) }} className="flex items-start justify-between gap-3 py-2.5 border-t border-[#EDEAE1] first:border-0 cursor-pointer hover:bg-[#EDEAE1] rounded-lg px-1 -mx-1 transition-colors min-h-[44px]">
                             <div className="flex-1 min-w-0">
-                              <span className="text-xs text-gray-800 truncate block capitalize">{vi.customer}</span>
-                              {vi.notes && <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{vi.notes}</p>}
+                              <span className="text-xs font-semibold text-gray-800 truncate block capitalize">{vi.customer}</span>
+                              <div className="flex items-start gap-1 mt-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"
+                                  className="w-3 h-3 text-slate-400 flex-shrink-0 mt-0.5">
+                                  <path fillRule="evenodd" d="M1 8.74C1 6.01 3.26 3.75 5.99 3.75h4.02C12.74 3.75 15 6.01 15 8.74c0 2.73-2.26 4.99-4.99 4.99H9.5l-2.35 1.64a.5.5 0 0 1-.78-.44v-1.2H5.99C3.26 13.73 1 11.47 1 8.74Z" clipRule="evenodd"/>
+                                </svg>
+                                {vi.notes
+                                  ? <p className="text-xs text-slate-600 italic line-clamp-3 leading-relaxed">{vi.notes}</p>
+                                  : <p className="text-xs text-gray-300 italic">[No notes recorded]</p>
+                                }
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
                               <span className="text-[10px] text-gray-400 capitalize">{vi.visitType}</span>
