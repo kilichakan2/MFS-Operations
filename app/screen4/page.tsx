@@ -13,7 +13,7 @@ interface AtRiskAccount        { id: string; customer: string; outcome: 'at_risk
 interface UnreviewedCommitment { id: string; customer: string; detail: string; rep: string; hoursAgo: number }
 interface Discrepancy          { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string; orderedQty: number|null; sentQty: number|null; loggedBy: string; createdAt: string }
 interface TodayComplaint       { id: string; customer: string; category: string; status: 'open'|'resolved'; description: string; resolutionNote: string|null; loggedBy: string; createdAt: string }
-interface TodayVisitItem       { id: string; customer: string; visitType: string; outcome: string }
+interface TodayVisitItem       { id: string; customer: string; visitType: string; outcome: string; notes: string | null }
 interface TodayVisit           { rep: string; count: number; outcomes: { positive: number; neutral: number; at_risk: number; lost: number }; visits: TodayVisitItem[] }
 interface WeekDiscrepancyByReason   { reason: string; count: number }
 interface WeekDiscrepancyByProduct  { product: string; count: number }
@@ -198,9 +198,12 @@ function TodayTabs({ data, onRowClick }: {
                                  : vi.outcome==='lost'     ? 'text-red-700 bg-red-50'
                                  : 'text-gray-600 bg-white border border-[#EDEAE1]'
                         return (
-                          <div key={vi.id} onClick={() => onRowClick('visit', vi.id)} className="flex items-center justify-between gap-3 py-2.5 border-t border-[#EDEAE1] first:border-0 cursor-pointer hover:bg-[#EDEAE1] rounded-lg px-1 -mx-1 transition-colors min-h-[44px]">
-                            <span className="text-xs text-gray-800 truncate flex-1 capitalize">{vi.customer}</span>
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                          <div key={vi.id} onClick={() => onRowClick('visit', vi.id)} className="flex items-start justify-between gap-3 py-2.5 border-t border-[#EDEAE1] first:border-0 cursor-pointer hover:bg-[#EDEAE1] rounded-lg px-1 -mx-1 transition-colors min-h-[44px]">
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs text-gray-800 truncate block capitalize">{vi.customer}</span>
+                              {vi.notes && <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{vi.notes}</p>}
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
                               <span className="text-[10px] text-gray-400 capitalize">{vi.visitType}</span>
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize ${oc}`}>{vi.outcome.replace(/_/g,' ')}</span>
                             </div>

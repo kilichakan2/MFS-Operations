@@ -13,6 +13,15 @@ import { triggerSync }                   from '@/lib/syncEngine'
 import type { SelectableItem }          from '@/components/BottomSheetSelector'
 import type { TodayVisit }             from '@/app/api/screen3/today/route'
 
+
+// ── Haptics ───────────────────────────────────────────────────────────────────
+// Safe wrapper — window.navigator.vibrate is undefined on desktop/iOS Safari
+function vibrate(pattern: number | number[]) {
+  if (typeof window !== 'undefined' && window.navigator?.vibrate) {
+    window.navigator.vibrate(pattern)
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type VisitType  = 'routine' | 'new_pitch' | 'complaint_followup' | 'delivery_issue'
@@ -148,9 +157,9 @@ function ProgressBar({ visits, pendingCount }: { visits:TodayVisit[]; pendingCou
   const compFu    = visits.filter(v=>v.visit_type==='complaint_followup').length
   return (
     <div className="bg-white border-b border-[#EDEAE1] px-4 py-2 flex items-center divide-x divide-[#EDEAE1]">
-      <StatPill value={total}     label="Today"/>
-      <StatPill value={prospects} label="Prospects"/>
-      <StatPill value={compFu}    label="Complaint f/u"/>
+      <StatPill value={total}     label="Today"         color="#16205B"/>
+      <StatPill value={prospects} label="Prospects"     color="#EB6619"/>
+      <StatPill value={compFu}    label="Complaint f/u" color="#DC2626"/>
       {pendingCount>0 && (
         <div className="flex-1 flex items-center justify-end pl-3">
           <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
@@ -162,11 +171,11 @@ function ProgressBar({ visits, pendingCount }: { visits:TodayVisit[]; pendingCou
     </div>
   )
 }
-function StatPill({ value, label }: { value:number; label:string }) {
+function StatPill({ value, label, color }: { value:number; label:string; color:string }) {
   return (
     <div className="flex-1 flex flex-col items-center py-0.5 px-2">
-      <span className="text-base font-bold text-[#16205B] leading-tight">{value}</span>
-      <span className="text-[9px] font-semibold text-[#16205B]/40 leading-tight text-center uppercase tracking-wide">{label}</span>
+      <span className="text-base font-bold leading-tight" style={{ color }}>{value}</span>
+      <span className="text-[9px] font-semibold leading-tight text-center uppercase tracking-wide" style={{ color, opacity: 0.6 }}>{label}</span>
     </div>
   )
 }
@@ -360,6 +369,7 @@ export default function Screen3Page() {
       })
       setForm(EMPTY_FORM); setErrors({}); setEditingId(null); setEditingLocalId(null)
       setShowSuccess(true); setTimeout(()=>setShowSuccess(false),2000)
+      vibrate(50)  // light confirmation pulse
       triggerSync()
       setTimeout(()=>{ refreshFeed(); refreshPending() },1500)
     } catch(err){ console.error('Failed to write to local queue:',err) }
@@ -369,6 +379,7 @@ export default function Screen3Page() {
   const handleDeleteConfirm=useCallback(async()=>{
     if(!deleteTarget) return
     const target=deleteTarget; setDeleteTarget(null)
+    vibrate([50, 100, 50])  // double tap — destructive action
     try{
       if('isPending' in target){
         await localDb.queue.where('localId').equals(target.localId).delete()

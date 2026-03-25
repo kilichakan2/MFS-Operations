@@ -234,6 +234,7 @@ export async function GET(req: NextRequest) {
         customer:  cust?.name ?? String(vr.prospect_name ?? 'Prospect'),
         visitType: String(vr.visit_type ?? '').replace(/_/g, ' '),
         outcome,
+        notes:     (vr.notes as string | null) ?? null,
       })
     }
     const visitsToday = Array.from(visitsByRepMap.values())
