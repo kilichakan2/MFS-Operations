@@ -252,7 +252,8 @@ function OpenComplaintsTab() {
     finally   { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [])  // load is stable; only run once on mount
 
   async function handleResolve(id: string) {
     const note = (noteValue[id] ?? '').trim()

@@ -355,7 +355,7 @@ export default function BottomSheetSelector({
             // Empty state
             <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
               <p className="text-gray-400 text-base">
-                No results for <span className="font-medium text-gray-600">"{query}"</span>
+                No results for <span className="font-medium text-gray-600">&ldquo;{query}&rdquo;</span>
               </p>
               <p className="text-gray-400 text-sm mt-1">
                 Try a different search term

@@ -237,7 +237,7 @@ function TodayTabs({ data, onRowClick }: {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 truncate">{c.customer}</p>
                     <p className="text-xs text-gray-400">{cap(c.category)} · {c.loggedBy} · {fmtTime(c.createdAt)}</p>
-                    {c.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">"{c.description}"</p>}
+                    {c.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">&ldquo;{c.description}&rdquo;</p>}
                     {c.status === 'resolved' && c.resolutionNote && (
                       <p className="text-xs text-green-700 mt-0.5 line-clamp-1">↳ {c.resolutionNote}</p>
                     )}
@@ -492,7 +492,7 @@ export default function Screen4Page() {
               {data.openComplaints48h.map(c => (
                 <AlertRow key={c.id} tone="amber">
                   <span className="text-sm font-bold">{c.customer}<span className="font-normal"> — {c.category} open {c.hoursAgo}h</span></span>
-                  {c.description && <span className="text-xs opacity-80">"{c.description}"</span>}
+                  {c.description && <span className="text-xs opacity-80">&ldquo;{c.description}&rdquo;</span>}
                   <span className="text-xs opacity-60">By {c.loggedBy}</span>
                 </AlertRow>
               ))}
@@ -505,7 +505,7 @@ export default function Screen4Page() {
               {data.unreviewedCommitments.map(u => (
                 <AlertRow key={u.id} tone="amber">
                   <span className="text-sm font-bold">{u.customer}<span className="font-normal"> — unreviewed commitment</span></span>
-                  <span className="text-xs opacity-80">"{u.detail}"</span>
+                  <span className="text-xs opacity-80">&ldquo;{u.detail}&rdquo;</span>
                   <span className="text-xs opacity-60">{u.rep} · {u.hoursAgo}h ago</span>
                 </AlertRow>
               ))}
@@ -639,7 +639,7 @@ export default function Screen4Page() {
           {hfTotal > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold text-gray-800">This week's focus</p>
+                <p className="text-xs font-bold text-gray-800">This week&apos;s focus</p>
                 <span className="text-[10px] text-gray-400">{hfTotal} total visits</span>
               </div>
               <div className="flex items-center gap-6">

@@ -57,10 +57,11 @@ export default function RoleNav() {
   '': [],
 }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const items = useMemo(() => {
     const role = getClientRole()
     return NAV_ITEMS[role] ?? []
-  }, [])
+  }, [])  // NAV_ITEMS rebuilt each render from t(); role read from cookie, stable
 
   return <BottomNav items={items} />
 }

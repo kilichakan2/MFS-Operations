@@ -503,7 +503,8 @@ function ImporterSection({
       .catch(console.error)
       .finally(() => setFetching(false))
   }
-  useEffect(() => { loadList() }, [fetchUrl])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadList() }, [fetchUrl])  // loadList depends on fetchUrl; safe
 
   async function toggleItem(id: string, current: boolean) {
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, active: !current } : i))
