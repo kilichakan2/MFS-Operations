@@ -173,9 +173,9 @@ function ProgressBar({ visits, pendingCount }: { visits:TodayVisit[]; pendingCou
 }
 function StatPill({ value, label, color }: { value:number; label:string; color:string }) {
   return (
-    <div className="flex-1 flex flex-col items-center py-0.5 px-2">
-      <span className="text-base font-bold leading-tight" style={{ color }}>{value}</span>
-      <span className="text-[9px] font-semibold leading-tight text-center uppercase tracking-wide" style={{ color, opacity: 0.6 }}>{label}</span>
+    <div className="flex-1 flex flex-col items-center py-1 px-2 border-l first:border-l-0 border-[#EDEAE1]">
+      <span className="text-base font-bold leading-tight tabular-nums" style={{ color }}>{value}</span>
+      <span className="text-[9px] font-semibold leading-tight text-center uppercase tracking-wide mt-0.5" style={{ color, opacity: 0.55 }}>{label}</span>
     </div>
   )
 }
