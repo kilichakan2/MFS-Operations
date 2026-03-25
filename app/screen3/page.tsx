@@ -126,9 +126,9 @@ function SuccessBanner({ visible, isUpdate }: { visible:boolean; isUpdate:boolea
 
 function DeleteModal({ onConfirm, onCancel }: { onConfirm:()=>void; onCancel:()=>void }) {
   return (
-    <div className="fixed inset-0 z-[900] flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onCancel}/>
-      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm mx-0 sm:mx-4 p-6 space-y-4 shadow-2xl">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel}/>
+      <div className="relative bg-white rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-red-600">
@@ -345,6 +345,7 @@ export default function Screen3Page() {
   const handleSubmit=useCallback(async()=>{
     const errs=validate(form)
     if(Object.keys(errs).length>0){ setErrors(errs); window.scrollTo({top:0,behavior:'smooth'}); return }
+    vibrate(50)  // fire immediately in user gesture context — before any async work
     setIsSubmitting(true)
     const isDbRecord=editingId!==null
     try{
@@ -369,7 +370,6 @@ export default function Screen3Page() {
       })
       setForm(EMPTY_FORM); setErrors({}); setEditingId(null); setEditingLocalId(null)
       setShowSuccess(true); setTimeout(()=>setShowSuccess(false),2000)
-      vibrate(50)  // light confirmation pulse
       triggerSync()
       setTimeout(()=>{ refreshFeed(); refreshPending() },1500)
     } catch(err){ console.error('Failed to write to local queue:',err) }
@@ -378,8 +378,8 @@ export default function Screen3Page() {
 
   const handleDeleteConfirm=useCallback(async()=>{
     if(!deleteTarget) return
+    vibrate([50, 100, 50])  // fire immediately — synchronous, in user gesture context
     const target=deleteTarget; setDeleteTarget(null)
-    vibrate([50, 100, 50])  // double tap — destructive action
     try{
       if('isPending' in target){
         await localDb.queue.where('localId').equals(target.localId).delete()
