@@ -1,6 +1,6 @@
 /**
  * app/api/auth/team/route.ts
- * Returns active PIN users (warehouse, office, sales) for the POS login grid.
+ * Returns active PIN users (warehouse, office, sales, driver) for the POS login grid.
  * Returns only id, name, role — no hashes or sensitive data.
  */
 
@@ -16,7 +16,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('users')
     .select('id, name, role')
-    .in('role', ['warehouse', 'office', 'sales'])
+    .in('role', ['warehouse', 'office', 'sales', 'driver'])
     .eq('active', true)
     .order('name', { ascending: true })
 

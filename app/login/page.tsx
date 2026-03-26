@@ -15,11 +15,13 @@ interface TeamMember { id: string; name: string; role: string }
 
 const ROLE_ACCENT: Record<string, string> = {
   warehouse: 'border-amber-500/60  text-amber-700',
+  driver:    'border-sky-500/60     text-sky-700',
   office:    'border-purple-500/60 text-purple-700',
   sales:     'border-emerald-600/60 text-emerald-700',
 }
 const ROLE_LABEL: Record<string, string> = {
   warehouse: 'Warehouse',
+  driver:    'Driver',
   office:    'Office',
   sales:     'Sales',
 }

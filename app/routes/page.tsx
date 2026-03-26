@@ -94,100 +94,108 @@ function StopCardRow({
       'bg-white rounded-xl border-2 transition-colors',
       PRIORITY_RING[stop.priority],
     ].join(' ')}>
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        {/* Position + move arrows */}
-        <div className="flex flex-col items-center gap-0.5 flex-shrink-0">
-          <button
-            type="button" disabled={index === 0 || stop.lockedPosition}
+      {/* ── Main row — tightly packed ─────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5 px-2 py-1.5">
+
+        {/* Position badge + up/down arrows stacked vertically */}
+        <div className="flex flex-col items-center flex-shrink-0 w-5">
+          <button type="button" disabled={index === 0 || stop.lockedPosition}
             onClick={() => onMove(index, -1)}
-            className="w-6 h-5 flex items-center justify-center text-[#16205B]/30 hover:text-[#16205B] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            className="text-[#16205B]/25 hover:text-[#16205B] disabled:opacity-0 transition-colors leading-none"
+            style={{ touchAction: 'manipulation' }}
           >
-            <svg viewBox="0 0 12 8" fill="currentColor" className="w-2.5 h-2">
-              <path d="M6 0L12 8H0L6 0Z"/>
-            </svg>
+            <svg viewBox="0 0 10 6" fill="currentColor" className="w-2 h-1.5"><path d="M5 0L10 6H0L5 0Z"/></svg>
           </button>
-          <span className="text-[11px] font-bold text-[#16205B] w-5 text-center leading-none">
-            {index + 1}
-          </span>
-          <button
-            type="button" disabled={index === total - 1 || stop.lockedPosition}
+          <span className="text-[11px] font-bold text-[#16205B] leading-none my-0.5">{index + 1}</span>
+          <button type="button" disabled={index === total - 1 || stop.lockedPosition}
             onClick={() => onMove(index, 1)}
-            className="w-6 h-5 flex items-center justify-center text-[#16205B]/30 hover:text-[#16205B] disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            className="text-[#16205B]/25 hover:text-[#16205B] disabled:opacity-0 transition-colors leading-none"
+            style={{ touchAction: 'manipulation' }}
           >
-            <svg viewBox="0 0 12 8" fill="currentColor" className="w-2.5 h-2">
-              <path d="M6 8L0 0H12L6 8Z"/>
-            </svg>
+            <svg viewBox="0 0 10 6" fill="currentColor" className="w-2 h-1.5"><path d="M5 6L0 0H10L5 6Z"/></svg>
           </button>
         </div>
 
-        {/* Customer info */}
+        {/* Customer name + postcode — flexible width */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-[#16205B] truncate">{stop.name}</p>
-          <p className="text-[11px] text-gray-400">{stop.postcode ?? 'No postcode'}</p>
+          <p className="text-xs font-semibold text-[#16205B] truncate leading-tight">{stop.name}</p>
+          <p className="text-[10px] text-gray-400 leading-tight">{stop.postcode ?? 'No postcode'}</p>
         </div>
 
-        {/* Priority select */}
-        <select
-          value={stop.priority}
-          onChange={e => onChange(stop.id, { priority: e.target.value as StopCard['priority'] })}
-          className="text-[11px] font-semibold border border-[#EDEAE1] rounded-lg px-1.5 py-1 bg-white focus:outline-none focus:border-[#EB6619] text-[#16205B]"
-          style={{ touchAction: 'manipulation' }}
-        >
-          {Object.entries(PRIORITY_LABEL).map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </select>
+        {/* Controls row: priority · lock · note · remove — all 28px height */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Priority select */}
+          <select
+            value={stop.priority}
+            onChange={e => onChange(stop.id, { priority: e.target.value as StopCard['priority'] })}
+            className={[
+              'text-[10px] font-bold border rounded-md px-1 py-0.5 bg-white focus:outline-none focus:border-[#EB6619] h-7',
+              stop.priority === 'priority' ? 'border-red-400 text-red-600'
+                : stop.priority === 'urgent' ? 'border-amber-400 text-amber-600'
+                : 'border-[#EDEAE1] text-[#16205B]/60',
+            ].join(' ')}
+            style={{ touchAction: 'manipulation' }}
+          >
+            {Object.entries(PRIORITY_LABEL).map(([v, l]) => (
+              <option key={v} value={v}>{l}</option>
+            ))}
+          </select>
 
-        {/* Lock toggle */}
-        <button
-          type="button"
-          onClick={() => onChange(stop.id, { lockedPosition: !stop.lockedPosition })}
-          title={stop.lockedPosition ? 'Unlock position' : 'Lock position'}
-          className={[
-            'w-8 h-8 flex items-center justify-center rounded-lg border transition-colors flex-shrink-0',
-            stop.lockedPosition
-              ? 'bg-[#16205B] border-[#16205B] text-white'
-              : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
-          ].join(' ')}
-        >
-          {/* Padlock icon */}
-          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-            <path d="M11 6V4a3 3 0 0 0-6 0v2H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-1ZM7 4a1 1 0 0 1 2 0v2H7V4Zm1 5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0v-1a1 1 0 0 1 1-1Z"/>
-          </svg>
-        </button>
+          {/* Lock */}
+          <button type="button"
+            onClick={() => onChange(stop.id, { lockedPosition: !stop.lockedPosition })}
+            title={stop.lockedPosition ? 'Unlock' : 'Lock position'}
+            className={[
+              'w-7 h-7 flex items-center justify-center rounded-md border transition-colors',
+              stop.lockedPosition
+                ? 'bg-[#16205B] border-[#16205B] text-white'
+                : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
+            ].join(' ')}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <svg viewBox="0 0 14 14" fill="currentColor" className="w-3 h-3">
+              <path d="M9.5 5.5V4a2.5 2.5 0 0 0-5 0v1.5H3.5A.5.5 0 0 0 3 6v5a.5.5 0 0 0 .5.5h7A.5.5 0 0 0 11 11V6a.5.5 0 0 0-.5-.5H9.5ZM6 4a1 1 0 0 1 2 0v1.5H6V4Zm1 4.5a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-1.5 0v-.75A.75.75 0 0 1 7 8.5Z"/>
+            </svg>
+          </button>
 
-        {/* Note toggle */}
-        <button
-          type="button"
-          onClick={() => setShowNote(v => !v)}
-          className="w-8 h-8 flex items-center justify-center rounded-lg border border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B] transition-colors flex-shrink-0"
-          title="Add note"
-        >
-          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-            <path fillRule="evenodd" d="M1 8.74C1 6.01 3.26 3.75 5.99 3.75h4.02C12.74 3.75 15 6.01 15 8.74c0 2.73-2.26 4.99-4.99 4.99H9.5l-2.35 1.64a.5.5 0 0 1-.78-.44v-1.2H5.99C3.26 13.73 1 11.47 1 8.74Z" clipRule="evenodd"/>
-          </svg>
-        </button>
+          {/* Note toggle */}
+          <button type="button"
+            onClick={() => setShowNote(v => !v)}
+            title="Add note"
+            className={[
+              'w-7 h-7 flex items-center justify-center rounded-md border transition-colors',
+              showNote || stop.priorityNote
+                ? 'border-[#EB6619]/60 text-[#EB6619]'
+                : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
+            ].join(' ')}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <svg viewBox="0 0 14 14" fill="currentColor" className="w-3 h-3">
+              <path fillRule="evenodd" d="M1 7.5C1 5.3 2.8 3.5 5 3.5h4C11.2 3.5 13 5.3 13 7.5S11.2 11.5 9 11.5h-.6l-2 1.4a.4.4 0 0 1-.65-.37v-1.03H5C2.8 11.5 1 9.7 1 7.5Z" clipRule="evenodd"/>
+            </svg>
+          </button>
 
-        {/* Remove */}
-        <button
-          type="button" onClick={() => onRemove(stop.id)}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/20 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-        >
-          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-            <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
-          </svg>
-        </button>
+          {/* Remove */}
+          <button type="button" onClick={() => onRemove(stop.id)}
+            className="w-7 h-7 flex items-center justify-center rounded-md text-[#16205B]/20 hover:text-red-500 hover:bg-red-50 transition-colors"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-3 h-3">
+              <path d="M3 3l8 8M11 3l-8 8"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Note input */}
+      {/* Note input — slides in below */}
       {showNote && (
-        <div className="px-3 pb-2.5 pt-0">
+        <div className="px-2 pb-2 pt-0">
           <input
             type="text"
             value={stop.priorityNote}
             onChange={e => onChange(stop.id, { priorityNote: e.target.value })}
-            placeholder="e.g. Early delivery requested, call ahead"
-            className="w-full h-9 rounded-lg border border-[#EDEAE1] px-3 text-xs text-gray-700 focus:outline-none focus:border-[#EB6619]"
+            placeholder="e.g. Early delivery, call ahead"
+            className="w-full h-8 rounded-lg border border-[#EDEAE1] px-2.5 text-xs text-gray-700 focus:outline-none focus:border-[#EB6619]"
           />
         </div>
       )}
@@ -251,7 +259,8 @@ export default function RoutesPage() {
       .then(d => {
         const list = Array.isArray(d) ? d : []
         console.log(`[routes/page] Loaded ${list.length} users for assignee dropdown`)
-        setUsers(list.filter((u: User) => u.role !== 'admin'))  // exclude admin from assignee list since they plan routes, not drive them
+        // Only show drivers and sales reps — the people who actually do routes
+        setUsers(list.filter((u: User) => u.role === 'driver' || u.role === 'sales'))
       })
       .catch(err => console.error('[routes/page] Users fetch error:', err))
   }, [])
@@ -300,7 +309,7 @@ export default function RoutesPage() {
 
   // ── Optimise ────────────────────────────────────────────────────────────────
   const handleOptimise = useCallback(async () => {
-    if (stops.length === 0) return
+    if (stops.length < 2) return
     setOptimising(true)
     setOptimiseError('')
     setResult(null)
@@ -619,7 +628,7 @@ export default function RoutesPage() {
             <button
               type="button"
               onClick={handleOptimise}
-              disabled={optimising || stops.length === 0}
+              disabled={optimising || stops.length < 2}
               className="flex-1 h-12 rounded-xl bg-[#16205B] text-white font-bold text-sm disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               style={{ touchAction: 'manipulation' }}
             >
@@ -631,7 +640,7 @@ export default function RoutesPage() {
                   </svg>
                   Optimising…
                 </>
-              ) : '✨ Optimise Route'}
+              ) : stops.length < 2 ? 'Add 2+ stops to optimise' : '✨ Optimise Route'}
             </button>
 
             <button

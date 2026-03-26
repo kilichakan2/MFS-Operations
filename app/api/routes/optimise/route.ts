@@ -144,7 +144,24 @@ export async function POST(req: NextRequest) {
       const mapsData = await mapsRes.json() as GoogleDirectionsResponse
 
       if (mapsData.status !== 'OK') {
-        console.error('[routes/optimise] Google API error:', mapsData.status, mapsData.error_message)
+        // Structured error log — visible in Vercel runtime logs
+        const hint =
+          mapsData.status === 'REQUEST_DENIED'
+            ? 'Check: (1) Directions API enabled in Google Cloud Console, (2) API key has no HTTP referrer restriction blocking server-side calls, (3) Billing enabled on the GCP project'
+            : mapsData.status === 'OVER_DAILY_LIMIT' || mapsData.status === 'OVER_QUERY_LIMIT'
+            ? 'Quota exceeded — check GCP Console billing/quotas'
+            : mapsData.status === 'INVALID_REQUEST'
+            ? 'Invalid request — check postcodes are valid UK format'
+            : 'Unexpected Google API status'
+        console.error('[routes/optimise] Google Directions API failure:', {
+          status:        mapsData.status,
+          error_message: mapsData.error_message ?? '(none)',
+          hint,
+          origin:        ORIGIN_POSTCODE,
+          destination,
+          waypoint_count: unlockablePostcodes.length,
+          api_key_prefix: MAPS_KEY ? MAPS_KEY.slice(0, 8) + '...' : 'MISSING',
+        })
         return NextResponse.json(
           { error: `Google Maps error: ${mapsData.status}. ${mapsData.error_message ?? ''}`.trim() },
           { status: 502 }
