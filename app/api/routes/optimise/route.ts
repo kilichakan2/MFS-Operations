@@ -112,13 +112,17 @@ export async function POST(req: NextRequest) {
     // Google sometimes returns ZERO_RESULTS for "S7  0EQ" (double space) or
     // "s70 1gw" (lowercase) even when the postcode is valid.
 
+    // Strip ALL spaces — Google resolves spaceless UK postcodes perfectly (S38DG, S701GW)
+    // This eliminates any possibility of space-encoding bugs downstream.
     function cleanPostcode(pc: string): string {
-      return pc.replace(/\s+/g, ' ').trim().toUpperCase()
+      return pc.replace(/\s+/g, '').trim().toUpperCase()
     }
 
+    // Cleanse postcodes — no encodeURIComponent here because we build the
+    // URL string manually below. URLSearchParams would double-encode any
+    // pre-encoded string (% → %25), which is what caused S10%201TE → S10%25201TE.
     const unlockablePostcodes = unlockableStops
       .map(s => cleanPostcode(custMap.get(s.customerId)!.postcode!))
-      .map(pc => encodeURIComponent(pc))
 
     let googleOrder: number[]       = unlockableStops.map((_, i) => i) // default: as-is
     let googleLegs:  GoogleLeg[]    = []
@@ -126,43 +130,41 @@ export async function POST(req: NextRequest) {
     let totalDurationS              = 0
 
     if (unlockableStops.length > 0) {
-      const waypointsParam = unlockablePostcodes.length > 0
+      // Build the waypoints value — postcodes are already clean (no spaces, uppercase)
+      // The pipe | and colon : in "optimize:true|PC1|PC2" are safe unencoded for Google
+      const waypointsValue = unlockablePostcodes.length > 0
         ? `optimize:true|${unlockablePostcodes.join('|')}`
         : ''
 
       // Build departure time as Unix timestamp for traffic-aware routing
-      const departureDt  = new Date(`${plannedDate}T${departureTime}:00`)
+      const departureDt   = new Date(`${plannedDate}T${departureTime}:00`)
       const departureUnix = Math.floor(departureDt.getTime() / 1000)
 
-      const params = new URLSearchParams({
-        origin:           ORIGIN_POSTCODE,
-        destination,
-        waypoints:        waypointsParam,
-        travelmode:       'driving',
-        departure_time:   String(departureUnix),
-        traffic_model:    'best_guess',
-        key:              MAPS_KEY,
-        region:           'gb',
-        units:            'metric',
-      })
+      // Build URL manually — do NOT use URLSearchParams for the waypoints field.
+      // URLSearchParams encodes everything including pipe (|) and percent (%) which
+      // breaks pre-formatted waypoint strings and causes double-encoding.
+      const cleanOrigin      = cleanPostcode(ORIGIN_POSTCODE)
+      const cleanDestination = cleanPostcode(destination)
+      const baseUrl = 'https://maps.googleapis.com/maps/api/directions/json'
+      const manualUrl = `${baseUrl}?origin=${cleanOrigin}&destination=${cleanDestination}` +
+        (waypointsValue ? `&waypoints=${waypointsValue}` : '') +
+        `&travelmode=driving&departure_time=${departureUnix}&traffic_model=best_guess` +
+        `&key=${MAPS_KEY}&region=gb&units=metric`
 
-      // Full param log — visible in Vercel runtime logs for debugging
-      const fullUrl = `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
+      // Log with key redacted
       console.log('[routes/optimise] Calling Google Directions API:', {
-        origin:          ORIGIN_POSTCODE,
-        destination,
-        waypoints:       unlockablePostcodes.map(decodeURIComponent),
+        origin:          cleanOrigin,
+        destination:     cleanDestination,
+        waypoints:       unlockablePostcodes,
         locked_stops:    lockedIndices.length,
         unlocked_stops:  unlockableStops.length,
         departure_time:  new Date(departureUnix * 1000).toISOString(),
         api_key_present: !!MAPS_KEY,
         api_key_prefix:  MAPS_KEY ? MAPS_KEY.slice(0, 10) + '...' : 'MISSING',
-        full_url_no_key: fullUrl.replace(MAPS_KEY, '[REDACTED]'),
+        full_url_no_key: manualUrl.replace(MAPS_KEY, '[REDACTED]'),
       })
 
-      const mapsRes  = await fetch(
-        `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
-      )
+      const mapsRes  = await fetch(manualUrl)
       const mapsData = await mapsRes.json() as GoogleDirectionsResponse
 
       if (mapsData.status !== 'OK') {
@@ -194,19 +196,14 @@ export async function POST(req: NextRequest) {
           console.log(`[routes/optimise] ${mapsData.status} — sniffing ${allTestStops.length} stops individually`)
 
           for (const { customerId, customer } of allTestStops) {
-            const testPostcode = cleanPostcode(customer.postcode!)
-            const testParams   = new URLSearchParams({
-              origin:      ORIGIN_POSTCODE,
-              destination: testPostcode,
-              travelmode:  'driving',
-              key:         MAPS_KEY,
-              region:      'gb',
-            })
-            const testRes  = await fetch(
-              `https://maps.googleapis.com/maps/api/directions/json?${testParams.toString()}`
-            )
+            const testPostcode  = cleanPostcode(customer.postcode!)
+            const cleanOrig     = cleanPostcode(ORIGIN_POSTCODE)
+            // Manual URL — no URLSearchParams to avoid double-encoding
+            const testUrl = `https://maps.googleapis.com/maps/api/directions/json` +
+              `?origin=${cleanOrig}&destination=${testPostcode}&travelmode=driving&key=${MAPS_KEY}&region=gb`
+            const testRes  = await fetch(testUrl)
             const testData = await testRes.json() as { status: string }
-            console.log(`[routes/optimise] Leg test  ${ORIGIN_POSTCODE} → ${testPostcode} (${customer.name}): ${testData.status}`)
+            console.log(`[routes/optimise] Leg test  ${cleanOrig} → ${testPostcode} (${customer.name}): ${testData.status}`)
 
             if (testData.status !== 'OK') {
               brokenPostcodes.push({
@@ -326,16 +323,19 @@ export async function POST(req: NextRequest) {
     const totalDurationMin = Math.round(totalDurationS / 60)
 
     // ── 7. Build Google Maps deep link ──────────────────────────────────────
-    // Apply same cleansing to deep link postcodes so the mobile URL is clean too
+    // cleanPostcode strips all spaces so no encoding needed for postcodes.
+    // The Google Maps dir URL accepts bare postcodes without encoding.
+    const cleanOriginLink = cleanPostcode(ORIGIN_POSTCODE)
+    const cleanDestLink   = cleanPostcode(destination)
     const waypointPostcodes = orderedStops
-      .slice(0, -1) // exclude last stop — it's before the destination
-      .map(s => encodeURIComponent(s!.postcode ? cleanPostcode(s!.postcode) : s!.customerName))
+      .slice(0, -1)
+      .map(s => s!.postcode ? cleanPostcode(s!.postcode) : encodeURIComponent(s!.customerName))
       .join('|')
 
     const googleMapsUrl = [
       'https://www.google.com/maps/dir/?api=1',
-      `&origin=${encodeURIComponent(cleanPostcode(ORIGIN_POSTCODE))}`,
-      `&destination=${encodeURIComponent(cleanPostcode(destination))}`,
+      `&origin=${cleanOriginLink}`,
+      `&destination=${cleanDestLink}`,
       waypointPostcodes ? `&waypoints=${waypointPostcodes}` : '',
       '&travelmode=driving',
     ].join('')
