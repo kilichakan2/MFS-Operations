@@ -166,26 +166,84 @@ export async function POST(req: NextRequest) {
       const mapsData = await mapsRes.json() as GoogleDirectionsResponse
 
       if (mapsData.status !== 'OK') {
-        // Structured error log — visible in Vercel runtime logs
-        const hint =
-          mapsData.status === 'REQUEST_DENIED'
-            ? 'Check: (1) Directions API enabled in Google Cloud Console, (2) API key has no HTTP referrer restriction blocking server-side calls, (3) Billing enabled on the GCP project'
-            : mapsData.status === 'OVER_DAILY_LIMIT' || mapsData.status === 'OVER_QUERY_LIMIT'
-            ? 'Quota exceeded — check GCP Console billing/quotas'
-            : mapsData.status === 'INVALID_REQUEST'
-            ? 'Invalid request — check postcodes are valid UK format'
-            : 'Unexpected Google API status'
         console.error('[routes/optimise] Google Directions API failure:', {
-          status:        mapsData.status,
-          error_message: mapsData.error_message ?? '(none)',
-          hint,
-          origin:        ORIGIN_POSTCODE,
+          status:         mapsData.status,
+          error_message:  mapsData.error_message ?? '(none)',
+          origin:         ORIGIN_POSTCODE,
           destination,
           waypoint_count: unlockablePostcodes.length,
-          api_key_prefix: MAPS_KEY ? MAPS_KEY.slice(0, 8) + '...' : 'MISSING',
         })
+
+        // ── ZERO_RESULTS sniffer ───────────────────────────────────────────
+        // When the full route fails, test each stop individually so we can
+        // tell the user exactly which postcode(s) are breaking the route.
+        if (mapsData.status === 'ZERO_RESULTS') {
+          const brokenPostcodes: Array<{
+            customerId: string
+            name:       string
+            postcode:   string
+            status:     string
+          }> = []
+
+          const allTestStops = stops.map(s => ({
+            customerId: s.customerId,
+            customer:   custMap.get(s.customerId)!,
+          }))
+
+          console.log(`[routes/optimise] ZERO_RESULTS — sniffing ${allTestStops.length} stops individually`)
+
+          for (const { customerId, customer } of allTestStops) {
+            const testPostcode = cleanPostcode(customer.postcode!)
+            const testParams   = new URLSearchParams({
+              origin:      ORIGIN_POSTCODE,
+              destination: testPostcode,
+              travelmode:  'driving',
+              key:         MAPS_KEY,
+              region:      'gb',
+            })
+            const testRes  = await fetch(
+              `https://maps.googleapis.com/maps/api/directions/json?${testParams.toString()}`
+            )
+            const testData = await testRes.json() as { status: string }
+            console.log(`[routes/optimise] Leg test  ${ORIGIN_POSTCODE} → ${testPostcode} (${customer.name}): ${testData.status}`)
+
+            if (testData.status !== 'OK') {
+              brokenPostcodes.push({
+                customerId,
+                name:     customer.name,
+                postcode: customer.postcode!,
+                status:   testData.status,
+              })
+            }
+          }
+
+          console.log('[routes/optimise] Sniffer result:', brokenPostcodes.length === 0
+            ? 'All individual legs OK — may be routing between stops that fails'
+            : `Broken: ${brokenPostcodes.map(b => `${b.name} (${b.postcode})`).join(', ')}`)
+
+          return NextResponse.json(
+            {
+              error:           'ZERO_RESULTS',
+              brokenPostcodes,
+              message:         brokenPostcodes.length > 0
+                ? `Could not route to: ${brokenPostcodes.map(b => `${b.name} (${b.postcode})`).join(', ')}. Please correct the postcode(s).`
+                : 'Could not calculate a route between these stops. Please check all postcodes are reachable by road.',
+            },
+            { status: 422 }
+          )
+        }
+
+        // Non-ZERO_RESULTS errors
+        const hint =
+          mapsData.status === 'REQUEST_DENIED'
+            ? 'Directions API may not be enabled, or the API key has HTTP referrer restrictions blocking server-side calls.'
+            : mapsData.status === 'OVER_DAILY_LIMIT' || mapsData.status === 'OVER_QUERY_LIMIT'
+            ? 'Google Maps quota exceeded — try again tomorrow.'
+            : mapsData.status === 'INVALID_REQUEST'
+            ? 'Invalid request — one or more postcodes may be malformed.'
+            : 'Unexpected Google API error.'
         return NextResponse.json(
-          { error: `Google Maps error: ${mapsData.status}. ${mapsData.error_message ?? ''}`.trim() },
+          { error: `${mapsData.status}: ${hint}` },
           { status: 502 }
         )
       }

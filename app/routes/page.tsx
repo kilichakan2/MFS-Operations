@@ -78,23 +78,47 @@ function fmtDuration(min: number) {
 // ─── Stop card ────────────────────────────────────────────────────────────────
 
 function StopCardRow({
-  stop, index, total, onChange, onRemove, onMove,
+  stop, index, total, onChange, onRemove, onMove, broken, onPostcodeUpdate,
 }: {
-  stop:     StopCard
-  index:    number
-  total:    number
-  onChange: (id: string, patch: Partial<StopCard>) => void
-  onRemove: (id: string) => void
-  onMove:   (index: number, dir: -1 | 1) => void
+  stop:              StopCard
+  index:             number
+  total:             number
+  onChange:          (id: string, patch: Partial<StopCard>) => void
+  onRemove:          (id: string) => void
+  onMove:            (index: number, dir: -1 | 1) => void
+  broken?:           boolean
+  onPostcodeUpdate?: (id: string, newPostcode: string) => void
 }) {
-  const [showNote, setShowNote] = useState(false)
+  const [showNote,      setShowNote]      = useState(false)
+  const [editingPost,   setEditingPost]   = useState(false)
+  const [postcodeInput, setPostcodeInput] = useState(stop.postcode ?? '')
+  const [saving,        setSaving]        = useState(false)
+  const [saveErr,       setSaveErr]       = useState('')
+
+  async function savePostcode() {
+    const trimmed = postcodeInput.replace(/\s+/g, ' ').trim().toUpperCase()
+    if (!trimmed) return
+    setSaving(true); setSaveErr('')
+    try {
+      const res  = await fetch(`/api/routes/customers/${stop.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body:   JSON.stringify({ postcode: trimmed }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSaveErr(data.error ?? 'Save failed'); return }
+      onPostcodeUpdate?.(stop.id, trimmed)
+      setEditingPost(false); setSaveErr('')
+    } catch { setSaveErr('Network error') }
+    finally   { setSaving(false) }
+  }
+
+  const borderClass = broken
+    ? 'border-red-500 bg-red-50/30'
+    : PRIORITY_RING[stop.priority]
 
   return (
-    <div className={[
-      'bg-white rounded-xl border-2 transition-colors',
-      PRIORITY_RING[stop.priority],
-    ].join(' ')}>
-      {/* ── Main row — tightly packed ─────────────────────────────────────── */}
+    <div className={['bg-white rounded-xl border-2 transition-colors', borderClass].join(' ')}>
+      {/* ── Main row ─────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-1.5 px-2 py-1.5">
 
         {/* Position badge + up/down arrows stacked vertically */}
@@ -116,16 +140,29 @@ function StopCardRow({
           </button>
         </div>
 
-        {/* Customer name + postcode — flexible width */}
+        {/* Customer name + postcode */}
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-[#16205B] truncate leading-tight">{stop.name}</p>
-          {!stop.postcode || !stop.lat ? (
-            <p className="text-[10px] text-amber-600 font-semibold leading-tight flex items-center gap-0.5">
-              <span>⚠</span>
-              <span>{!stop.postcode ? 'No postcode — cannot optimise' : 'Not geocoded — may fail'}</span>
+          {broken ? (
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="text-[10px] text-red-600 font-bold">🔴 Bad postcode</span>
+              <button type="button" style={{ touchAction: 'manipulation' }}
+                onClick={() => { setEditingPost(v => !v); setPostcodeInput(stop.postcode ?? '') }}
+                className="text-[10px] text-red-500 underline hover:text-red-700 font-semibold"
+              >Edit</button>
+            </div>
+          ) : !stop.postcode || !stop.lat ? (
+            <p className="text-[10px] text-amber-600 font-semibold leading-tight">
+              ⚠ {!stop.postcode ? 'No postcode' : 'Not geocoded'}
             </p>
           ) : (
-            <p className="text-[10px] text-gray-400 leading-tight">{stop.postcode}</p>
+            <div className="flex items-center gap-1">
+              <p className="text-[10px] text-gray-400 leading-tight">{stop.postcode}</p>
+              <button type="button" style={{ touchAction: 'manipulation' }}
+                onClick={() => { setEditingPost(v => !v); setPostcodeInput(stop.postcode ?? '') }}
+                className="text-[10px] text-gray-300 hover:text-[#EB6619] transition-colors" title="Edit postcode"
+              >✏</button>
+            </div>
           )}
         </div>
 
@@ -194,11 +231,34 @@ function StopCardRow({
         </div>
       </div>
 
-      {/* Note input — slides in below */}
+      {/* ── Inline postcode editor ─────────────────────────────────────── */}
+      {editingPost && (
+        <div className="px-2 pb-2 pt-0">
+          <div className="flex items-center gap-1.5">
+            <input type="text" autoFocus maxLength={8}
+              value={postcodeInput}
+              onChange={e => { setPostcodeInput(e.target.value.toUpperCase()); setSaveErr('') }}
+              onKeyDown={e => e.key === 'Enter' && savePostcode()}
+              placeholder="e.g. S3 8DG"
+              className="flex-1 h-8 rounded-lg border-2 border-[#EB6619] px-2.5 text-xs font-mono text-gray-800 focus:outline-none uppercase"
+            />
+            <button type="button" onClick={savePostcode}
+              disabled={saving || !postcodeInput.trim()}
+              className="h-8 px-3 rounded-lg bg-[#EB6619] text-white text-xs font-bold disabled:opacity-40 flex-shrink-0"
+              style={{ touchAction: 'manipulation' }}
+            >{saving ? '…' : 'Save'}</button>
+            <button type="button" onClick={() => { setEditingPost(false); setSaveErr('') }}
+              className="h-8 px-2 rounded-lg border border-[#EDEAE1] text-xs text-gray-400 flex-shrink-0"
+              style={{ touchAction: 'manipulation' }}
+            >✕</button>
+          </div>
+          {saveErr && <p className="text-[10px] text-red-600 mt-1">{saveErr}</p>}
+        </div>
+      )}
+      {/* ── Note input ───────────────────────────────────────────────────── */}
       {showNote && (
         <div className="px-2 pb-2 pt-0">
-          <input
-            type="text"
+          <input type="text"
             value={stop.priorityNote}
             onChange={e => onChange(stop.id, { priorityNote: e.target.value })}
             placeholder="e.g. Early delivery, call ahead"
@@ -233,6 +293,7 @@ export default function RoutesPage() {
   const [optimising,     setOptimising]     = useState(false)
   const [optimiseError,  setOptimiseError]  = useState('')
   const [result,         setResult]         = useState<OptimiseResult | null>(null)
+  const [brokenIds,      setBrokenIds]      = useState<Set<string>>(new Set())
 
   // ── Save state ──────────────────────────────────────────────────────────────
   const [saving,         setSaving]         = useState(false)
@@ -333,6 +394,7 @@ export default function RoutesPage() {
     setOptimising(true)
     setOptimiseError('')
     setResult(null)
+    setBrokenIds(new Set())
 
     const payload = {
       stops: stops.map(s => ({
@@ -364,8 +426,18 @@ export default function RoutesPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        // Map Google error codes to friendly messages
-        const raw = (data.error ?? '') as string
+        // ZERO_RESULTS with sniffer data — highlight broken stops on cards
+        if (data.error === 'ZERO_RESULTS' && data.brokenPostcodes?.length > 0) {
+          const ids = new Set<string>(
+            (data.brokenPostcodes as { customerId: string }[]).map(b => b.customerId)
+          )
+          setBrokenIds(ids)
+          setOptimiseError(data.message ?? 'Some postcodes could not be routed. Fix the highlighted stops.')
+          return
+        }
+
+        // Generic error — map to friendly message
+        const raw = (data.error ?? data.message ?? '') as string
         const friendly =
           raw.includes('ZERO_RESULTS')
             ? 'Could not calculate a route. Please check all postcodes are correct and reachable by road.'
@@ -382,6 +454,7 @@ export default function RoutesPage() {
       }
 
       setResult(data)
+      setBrokenIds(new Set()) // clear any previous broken highlights on success
       // Reorder stop cards to match optimised order
       const orderMap = new Map(data.orderedStops.map((s: RouteStop) => [s.customerId, s.position]))
       setStops(prev => [...prev].sort((a, b) =>
@@ -594,6 +667,14 @@ export default function RoutesPage() {
                   onChange={updateStop}
                   onRemove={removeStop}
                   onMove={moveStop}
+                  broken={brokenIds.has(stop.id)}
+                  onPostcodeUpdate={(id, newPostcode) => {
+                    // Update local stop state with new postcode so card re-renders immediately
+                    setStops(prev => prev.map(s => s.id === id ? { ...s, postcode: newPostcode } : s))
+                    // Clear broken flag for this stop — user has fixed it
+                    setBrokenIds(prev => { const n = new Set(prev); n.delete(id); return n })
+                    setOptimiseError('')
+                  }}
                 />
               ))}
             </div>
