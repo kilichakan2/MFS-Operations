@@ -10,6 +10,7 @@
  *   office    → /screen1, /screen2
  *   sales     → /screen2, /screen3
  *   admin     → /screen4, /screen5
+ *   driver    → /driver (route view only)
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -24,6 +25,8 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   office:    ['/screen1', '/screen2'],
   sales:     ['/screen2', '/screen3'],
   admin:     ['/screen4', '/screen5', '/screen6', '/api/reference', '/api/admin', '/api/dashboard', '/api/map'],
+  driver:    ['/driver'],
+  routes:    ['/routes'],  // route planner — accessible to all roles
 }
 
 // Default landing page per role
@@ -32,6 +35,7 @@ const ROLE_HOME: Record<string, string> = {
   office:    '/screen1',
   sales:     '/screen2',
   admin:     '/screen4',
+  driver:    '/driver',
 }
 
 // Paths that any authenticated user can access (APIs used by multiple roles)
@@ -48,6 +52,9 @@ const SHARED_API_PATHS = [
   '/api/detail/complaint',
   '/api/detail/discrepancy',
   '/api/admin/geocode-all',
+  '/api/routes',
+  '/api/routes/optimise',
+  '/api/routes/today',
 ]
 
 export function middleware(req: NextRequest) {
