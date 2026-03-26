@@ -45,6 +45,8 @@ const t = {
   inventory:      { en: 'Inventory',           tr: 'Stok Takibi' },
   inventorySub:   { en: 'Stock tracking & scanning', tr: 'Stok kontrolü ve tarama' },
   otherApps:      { en: 'Other apps',          tr: 'Diğer uygulamalar' },
+  routePlanner:   { en: 'Route Planner',       tr: 'Rota Planlayıcı' },
+  routePlannerSub:{ en: 'Plan & assign routes', tr: 'Rota planla ve ata' },
   whoAreYou:      { en: 'Who are you?',        tr: 'Sen kimsin?' },
   welcomeBack:    { en: 'Welcome back',        tr: 'Hoş geldin' },
   username:       { en: 'Username',            tr: 'Kullanıcı adı' },

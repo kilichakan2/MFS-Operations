@@ -23,6 +23,7 @@ const ROLE_ROUTES: Record<string, string> = {
   office:    '/screen1',
   sales:     '/screen2',
   admin:     '/screen4',
+  driver:    '/driver',
 }
 
 export async function POST(req: NextRequest) {
