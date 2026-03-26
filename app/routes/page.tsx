@@ -548,8 +548,8 @@ export default function RoutesPage() {
               </label>
               <div className="flex gap-2">
                 {([
-                  { value: 'mfs',               label: 'MFS Sheffield' },
-                  { value: 'ozmen_john_street',  label: 'Ozmen John St' },
+                  { value: 'mfs',               label: 'MFS  S3 8DG' },
+                  { value: 'ozmen_john_street',  label: 'Ozmen  S2 4QT' },
                 ] as const).map(opt => (
                   <button
                     key={opt.value}

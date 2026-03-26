@@ -25,9 +25,9 @@ const SUPA_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPA_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const MAPS_KEY  = process.env.GOOGLE_MAPS_API_KEY!
 
-// Fixed location postcodes
-const ORIGIN_POSTCODE      = 'S1 4GE'   // MFS Sheffield warehouse
-const OZMEN_POSTCODE       = 'S6 1ND'   // Ozmen John Street
+// Fixed location postcodes — verified addresses, trimmed and uppercased
+const ORIGIN_POSTCODE      = 'S3 8DG'   // MFS Sheffield warehouse (Neepsend Lane)
+const OZMEN_POSTCODE       = 'S2 4QT'   // Ozmen John Street
 
 const supabase = createClient(SUPA_URL, SUPA_KEY)
 
@@ -107,9 +107,17 @@ export async function POST(req: NextRequest) {
     //
     // Google Directions waypoints format:
     //   "optimize:true|postcode1|postcode2|..."
+    //
+    // Cleanse every postcode before sending: strip all whitespace, uppercase.
+    // Google sometimes returns ZERO_RESULTS for "S7  0EQ" (double space) or
+    // "s70 1gw" (lowercase) even when the postcode is valid.
+
+    function cleanPostcode(pc: string): string {
+      return pc.replace(/\s+/g, ' ').trim().toUpperCase()
+    }
 
     const unlockablePostcodes = unlockableStops
-      .map(s => custMap.get(s.customerId)!.postcode!)
+      .map(s => cleanPostcode(custMap.get(s.customerId)!.postcode!))
       .map(pc => encodeURIComponent(pc))
 
     let googleOrder: number[]       = unlockableStops.map((_, i) => i) // default: as-is
@@ -139,6 +147,7 @@ export async function POST(req: NextRequest) {
       })
 
       // Full param log — visible in Vercel runtime logs for debugging
+      const fullUrl = `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
       console.log('[routes/optimise] Calling Google Directions API:', {
         origin:          ORIGIN_POSTCODE,
         destination,
@@ -148,6 +157,7 @@ export async function POST(req: NextRequest) {
         departure_time:  new Date(departureUnix * 1000).toISOString(),
         api_key_present: !!MAPS_KEY,
         api_key_prefix:  MAPS_KEY ? MAPS_KEY.slice(0, 10) + '...' : 'MISSING',
+        full_url_no_key: fullUrl.replace(MAPS_KEY, '[REDACTED]'),
       })
 
       const mapsRes  = await fetch(
@@ -259,18 +269,21 @@ export async function POST(req: NextRequest) {
     const totalDurationMin = Math.round(totalDurationS / 60)
 
     // ── 7. Build Google Maps deep link ──────────────────────────────────────
+    // Apply same cleansing to deep link postcodes so the mobile URL is clean too
     const waypointPostcodes = orderedStops
       .slice(0, -1) // exclude last stop — it's before the destination
-      .map(s => encodeURIComponent(s!.postcode ?? s!.customerName))
+      .map(s => encodeURIComponent(s!.postcode ? cleanPostcode(s!.postcode) : s!.customerName))
       .join('|')
 
     const googleMapsUrl = [
       'https://www.google.com/maps/dir/?api=1',
-      `&origin=${encodeURIComponent(ORIGIN_POSTCODE)}`,
-      `&destination=${encodeURIComponent(destination)}`,
+      `&origin=${encodeURIComponent(cleanPostcode(ORIGIN_POSTCODE))}`,
+      `&destination=${encodeURIComponent(cleanPostcode(destination))}`,
       waypointPostcodes ? `&waypoints=${waypointPostcodes}` : '',
       '&travelmode=driving',
     ].join('')
+
+    console.log('[routes/optimise] Generated deep link:', googleMapsUrl)
 
     // ── 8. Return preview result ─────────────────────────────────────────────
     return NextResponse.json({
