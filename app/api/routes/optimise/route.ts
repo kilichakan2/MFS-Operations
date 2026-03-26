@@ -174,10 +174,11 @@ export async function POST(req: NextRequest) {
           waypoint_count: unlockablePostcodes.length,
         })
 
-        // ── ZERO_RESULTS sniffer ───────────────────────────────────────────
-        // When the full route fails, test each stop individually so we can
-        // tell the user exactly which postcode(s) are breaking the route.
-        if (mapsData.status === 'ZERO_RESULTS') {
+        // ── Per-stop sniffer ───────────────────────────────────────────────
+        // Run for ZERO_RESULTS and INVALID_REQUEST — both indicate a bad
+        // postcode somewhere in the batch. Test each stop individually so
+        // we can tell the user (and highlight) exactly which one is broken.
+        if (mapsData.status === 'ZERO_RESULTS' || mapsData.status === 'INVALID_REQUEST') {
           const brokenPostcodes: Array<{
             customerId: string
             name:       string
@@ -190,7 +191,7 @@ export async function POST(req: NextRequest) {
             customer:   custMap.get(s.customerId)!,
           }))
 
-          console.log(`[routes/optimise] ZERO_RESULTS — sniffing ${allTestStops.length} stops individually`)
+          console.log(`[routes/optimise] ${mapsData.status} — sniffing ${allTestStops.length} stops individually`)
 
           for (const { customerId, customer } of allTestStops) {
             const testPostcode = cleanPostcode(customer.postcode!)
@@ -219,28 +220,26 @@ export async function POST(req: NextRequest) {
 
           console.log('[routes/optimise] Sniffer result:', brokenPostcodes.length === 0
             ? 'All individual legs OK — may be routing between stops that fails'
-            : `Broken: ${brokenPostcodes.map(b => `${b.name} (${b.postcode})`).join(', ')}`)
+            : `Broken: ${brokenPostcodes.map(b => `${b.name} (${b.postcode}) → ${b.status}`).join(', ')}`)
 
           return NextResponse.json(
             {
-              error:           'ZERO_RESULTS',
+              error:           'ZERO_RESULTS',  // use consistent key so UI handles both the same way
               brokenPostcodes,
               message:         brokenPostcodes.length > 0
-                ? `Could not route to: ${brokenPostcodes.map(b => `${b.name} (${b.postcode})`).join(', ')}. Please correct the postcode(s).`
-                : 'Could not calculate a route between these stops. Please check all postcodes are reachable by road.',
+                ? `Could not route to: ${brokenPostcodes.map(b => `${b.name} (${b.postcode})`).join(', ')}. Check the postcode${brokenPostcodes.length > 1 ? 's' : ''} and try again.`
+                : 'Could not calculate a route. Please check all postcodes are correct UK format and reachable by road.',
             },
             { status: 422 }
           )
         }
 
-        // Non-ZERO_RESULTS errors
+        // Non-routing errors (quota, auth) — no sniffer needed
         const hint =
           mapsData.status === 'REQUEST_DENIED'
             ? 'Directions API may not be enabled, or the API key has HTTP referrer restrictions blocking server-side calls.'
             : mapsData.status === 'OVER_DAILY_LIMIT' || mapsData.status === 'OVER_QUERY_LIMIT'
             ? 'Google Maps quota exceeded — try again tomorrow.'
-            : mapsData.status === 'INVALID_REQUEST'
-            ? 'Invalid request — one or more postcodes may be malformed.'
             : 'Unexpected Google API error.'
         return NextResponse.json(
           { error: `${mapsData.status}: ${hint}` },
