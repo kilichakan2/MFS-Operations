@@ -21,12 +21,11 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-  warehouse: ['/screen1'],
-  office:    ['/screen1', '/screen2'],
-  sales:     ['/screen2', '/screen3'],
-  admin:     ['/screen4', '/screen5', '/screen6', '/api/reference', '/api/admin', '/api/dashboard', '/api/map'],
-  driver:    ['/driver'],
-  routes:    ['/routes'],  // route planner — accessible to all roles
+  warehouse: ['/screen1', '/routes'],
+  office:    ['/screen1', '/screen2', '/routes'],
+  sales:     ['/screen2', '/screen3', '/routes'],
+  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/api/reference', '/api/admin', '/api/dashboard', '/api/map'],
+  driver:    ['/driver', '/routes'],  // drivers can also access /routes to view their assigned schedule
 }
 
 // Default landing page per role

@@ -98,8 +98,9 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
           <MfsLogo className="h-14 w-auto mx-auto text-[#EB6619]" />
         </div>
 
+        <div className="space-y-4">
         <button type="button" onClick={() => onSelect('team')}
-          className="w-full mb-4 rounded-2xl bg-[#EB6619] active:bg-[#c95510] active:scale-[0.98] transition-all p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+          className="w-full rounded-2xl bg-[#EB6619] active:bg-[#c95510] active:scale-[0.98] transition-all p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center flex-shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
@@ -137,7 +138,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
 
         {/* Route Planner card */}
         <button type="button" onClick={() => onSelect('routes')}
-          className="w-full mt-4 rounded-2xl bg-white/10 hover:bg-white/15 active:bg-white/20 active:scale-[0.98] transition-all p-5 text-left border border-[#EB6619]/40 hover:border-[#EB6619]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
+          className="w-full rounded-2xl bg-white/10 hover:bg-white/15 active:bg-white/20 active:scale-[0.98] transition-all p-5 text-left border border-[#EB6619]/40 hover:border-[#EB6619]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-xl bg-[#EB6619]/15 flex items-center justify-center flex-shrink-0">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#EB6619" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
@@ -155,6 +156,8 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
             </svg>
           </div>
         </button>
+
+        </div>{/* /space-y-4 */}
 
         {/* Divider */}
         <div className="flex items-center gap-3 my-5">
@@ -411,7 +414,7 @@ function LoginForm() {
 
   return mode === 'select' ? <ModeSelect onSelect={setMode} />
        : mode === 'team'   ? <TeamLogin  onBack={() => setMode('select')} from={from} />
-       : mode === 'routes' ? <TeamLogin  onBack={() => setMode('select')} from={from ?? '/routes'} routeMode />
+       : mode === 'routes' ? <TeamLogin  onBack={() => setMode('select')} from='/routes' routeMode />
        :                     <AdminLogin  onBack={() => setMode('select')} from={from} />
 }
 
