@@ -226,13 +226,34 @@ export default function RoutesPage() {
 
   // ── Fetch users and customers ───────────────────────────────────────────────
   useEffect(() => {
-    fetch('/api/reference')
+    // Fetch customers from dedicated route planner endpoint (includes postcode + coords)
+    fetch('/api/routes/customers')
       .then(r => r.json())
       .then(d => {
-        setUsers(d.users ?? [])
-        setCustomers((d.customers ?? []).filter((c: Customer) => c.postcode))
+        if (d.error) {
+          console.error('[routes/page] Customer fetch error:', d.error)
+          return
+        }
+        const all       = d.customers ?? []
+        const withPost  = all.filter((c: Customer) => c.postcode)
+        const noPost    = all.filter((c: Customer) => !c.postcode)
+        console.log(`[routes/page] Loaded ${all.length} customers — ${withPost.length} with postcode, ${noPost.length} without`)
+        if (noPost.length > 0) {
+          console.warn('[routes/page] Customers missing postcodes (excluded from picker):', noPost.map((c: Customer) => c.name))
+        }
+        setCustomers(withPost)
       })
-      .catch(console.error)
+      .catch(err => console.error('[routes/page] Customer fetch network error:', err))
+
+    // Fetch users for the assignee dropdown (admin users API)
+    fetch('/api/admin/users')
+      .then(r => r.json())
+      .then(d => {
+        const list = Array.isArray(d) ? d : []
+        console.log(`[routes/page] Loaded ${list.length} users for assignee dropdown`)
+        setUsers(list.filter((u: User) => u.role !== 'admin'))  // exclude admin from assignee list since they plan routes, not drive them
+      })
+      .catch(err => console.error('[routes/page] Users fetch error:', err))
   }, [])
 
   // ── Customer search filter ──────────────────────────────────────────────────

@@ -54,6 +54,7 @@ const SHARED_API_PATHS = [
   '/api/routes',
   '/api/routes/optimise',
   '/api/routes/today',
+  '/api/routes/customers',
 ]
 
 export function middleware(req: NextRequest) {
