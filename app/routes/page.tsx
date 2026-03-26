@@ -119,7 +119,14 @@ function StopCardRow({
         {/* Customer name + postcode — flexible width */}
         <div className="flex-1 min-w-0">
           <p className="text-xs font-semibold text-[#16205B] truncate leading-tight">{stop.name}</p>
-          <p className="text-[10px] text-gray-400 leading-tight">{stop.postcode ?? 'No postcode'}</p>
+          {!stop.postcode || !stop.lat ? (
+            <p className="text-[10px] text-amber-600 font-semibold leading-tight flex items-center gap-0.5">
+              <span>⚠</span>
+              <span>{!stop.postcode ? 'No postcode — cannot optimise' : 'Not geocoded — may fail'}</span>
+            </p>
+          ) : (
+            <p className="text-[10px] text-gray-400 leading-tight">{stop.postcode}</p>
+          )}
         </div>
 
         {/* Controls row: priority · lock · note · remove — all 28px height */}
@@ -253,16 +260,19 @@ export default function RoutesPage() {
       })
       .catch(err => console.error('[routes/page] Customer fetch network error:', err))
 
-    // Fetch users for the assignee dropdown (admin users API)
-    fetch('/api/admin/users')
-      .then(r => r.json())
-      .then(d => {
-        const list = Array.isArray(d) ? d : []
-        console.log(`[routes/page] Loaded ${list.length} users for assignee dropdown`)
-        // Only show drivers and sales reps — the people who actually do routes
-        setUsers(list.filter((u: User) => u.role === 'driver' || u.role === 'sales'))
+    // Dedicated endpoint — /api/admin/users is admin-only (307 for non-admins)
+    fetch('/api/routes/users')
+      .then(r => {
+        if (!r.ok) { console.error('[routes/page] Users fetch failed:', r.status, r.url); return null }
+        return r.json()
       })
-      .catch(err => console.error('[routes/page] Users fetch error:', err))
+      .then(d => {
+        if (!d) return
+        const list: User[] = d.users ?? []
+        console.log(`[routes/page] ${list.length} assignable users:`, list.map(u => `${u.name}(${u.role})`).join(', ') || 'NONE')
+        setUsers(list)
+      })
+      .catch(err => console.error('[routes/page] Users fetch network error:', err))
   }, [])
 
   // ── Customer search filter ──────────────────────────────────────────────────
@@ -310,27 +320,67 @@ export default function RoutesPage() {
   // ── Optimise ────────────────────────────────────────────────────────────────
   const handleOptimise = useCallback(async () => {
     if (stops.length < 2) return
+
+    // Block optimise if any stop has no postcode — Google will fail
+    const invalidStops = stops.filter(s => !s.postcode)
+    if (invalidStops.length > 0) {
+      setOptimiseError(
+        `${invalidStops.map(s => s.name).join(', ')} ${invalidStops.length === 1 ? 'has' : 'have'} no postcode — remove ${invalidStops.length === 1 ? 'it' : 'them'} or add a postcode in the customer record first.`
+      )
+      return
+    }
+
     setOptimising(true)
     setOptimiseError('')
     setResult(null)
+
+    const payload = {
+      stops: stops.map(s => ({
+        customerId:     s.id,
+        lockedPosition: s.lockedPosition,
+        priority:       s.priority,
+        priorityNote:   s.priorityNote || null,
+      })),
+      departureTime,
+      endPoint,
+      plannedDate,
+    }
+
+    // Client-side log so you can see exactly what's being sent
+    console.log('[routes/optimise] Sending payload:', {
+      stopCount:     payload.stops.length,
+      postcodes:     stops.map(s => `${s.name}: ${s.postcode}`),
+      departureTime: payload.departureTime,
+      endPoint:      payload.endPoint,
+      plannedDate:   payload.plannedDate,
+    })
+
     try {
-      const res = await fetch('/api/routes/optimise', {
+      const res  = await fetch('/api/routes/optimise', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          stops: stops.map(s => ({
-            customerId:     s.id,
-            lockedPosition: s.lockedPosition,
-            priority:       s.priority,
-            priorityNote:   s.priorityNote || null,
-          })),
-          departureTime,
-          endPoint,
-          plannedDate,
-        }),
+        body:    JSON.stringify(payload),
       })
       const data = await res.json()
-      if (!res.ok) { setOptimiseError(data.error ?? 'Optimisation failed'); return }
+
+      if (!res.ok) {
+        // Map Google error codes to friendly messages
+        const raw = (data.error ?? '') as string
+        const friendly =
+          raw.includes('ZERO_RESULTS')
+            ? 'Could not calculate a route. Please check all postcodes are correct and reachable by road.'
+            : raw.includes('REQUEST_DENIED')
+            ? 'Google Maps access denied. The API key may not have the Directions API enabled — contact your admin.'
+            : raw.includes('OVER_DAILY_LIMIT') || raw.includes('OVER_QUERY_LIMIT')
+            ? 'Google Maps quota exceeded for today. Try again tomorrow or contact your admin.'
+            : raw.includes('INVALID_REQUEST')
+            ? 'Invalid request — one or more postcodes may be in the wrong format.'
+            : raw || 'Optimisation failed — try again.'
+        console.error('[routes/optimise] Error from server:', raw)
+        setOptimiseError(friendly)
+        return
+      }
+
       setResult(data)
       // Reorder stop cards to match optimised order
       const orderMap = new Map(data.orderedStops.map((s: RouteStop) => [s.customerId, s.position]))
@@ -338,7 +388,7 @@ export default function RoutesPage() {
         (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99)
       ))
     } catch {
-      setOptimiseError('Network error — try again')
+      setOptimiseError('Network error — check your connection and try again.')
     } finally {
       setOptimising(false)
     }
@@ -628,7 +678,7 @@ export default function RoutesPage() {
             <button
               type="button"
               onClick={handleOptimise}
-              disabled={optimising || stops.length < 2}
+              disabled={optimising || stops.length < 2 || stops.some(s => !s.postcode)}
               className="flex-1 h-12 rounded-xl bg-[#16205B] text-white font-bold text-sm disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               style={{ touchAction: 'manipulation' }}
             >
@@ -640,7 +690,7 @@ export default function RoutesPage() {
                   </svg>
                   Optimising…
                 </>
-              ) : stops.length < 2 ? 'Add 2+ stops to optimise' : '✨ Optimise Route'}
+              ) : stops.length < 2 ? 'Add 2+ stops to optimise' : stops.some(s => !s.postcode) ? '⚠ Fix missing postcodes' : '✨ Optimise Route'}
             </button>
 
             <button

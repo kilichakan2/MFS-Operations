@@ -138,6 +138,18 @@ export async function POST(req: NextRequest) {
         units:            'metric',
       })
 
+      // Full param log — visible in Vercel runtime logs for debugging
+      console.log('[routes/optimise] Calling Google Directions API:', {
+        origin:          ORIGIN_POSTCODE,
+        destination,
+        waypoints:       unlockablePostcodes.map(decodeURIComponent),
+        locked_stops:    lockedIndices.length,
+        unlocked_stops:  unlockableStops.length,
+        departure_time:  new Date(departureUnix * 1000).toISOString(),
+        api_key_present: !!MAPS_KEY,
+        api_key_prefix:  MAPS_KEY ? MAPS_KEY.slice(0, 10) + '...' : 'MISSING',
+      })
+
       const mapsRes  = await fetch(
         `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`
       )
