@@ -140,6 +140,15 @@ export async function POST(req: NextRequest) {
       const departureDt   = new Date(`${plannedDate}T${departureTime}:00`)
       const departureUnix = Math.floor(departureDt.getTime() / 1000)
 
+      // Failsafe: Google rejects departure_time in the past with INVALID_REQUEST.
+      // If the requested time has already passed (e.g. planning at 9pm with 8am default),
+      // send "now" instead — Google treats this as current time with live traffic.
+      const nowUnix        = Math.floor(Date.now() / 1000)
+      const departureParam = departureUnix < nowUnix ? 'now' : String(departureUnix)
+      if (departureParam === 'now') {
+        console.log(`[routes/optimise] Requested departure ${departureDt.toISOString()} is in the past — using "now" for traffic`)
+      }
+
       // Build URL manually — do NOT use URLSearchParams for the waypoints field.
       // URLSearchParams encodes everything including pipe (|) and percent (%) which
       // breaks pre-formatted waypoint strings and causes double-encoding.
@@ -148,7 +157,7 @@ export async function POST(req: NextRequest) {
       const baseUrl = 'https://maps.googleapis.com/maps/api/directions/json'
       const manualUrl = `${baseUrl}?origin=${cleanOrigin}&destination=${cleanDestination}` +
         (waypointsValue ? `&waypoints=${waypointsValue}` : '') +
-        `&travelmode=driving&departure_time=${departureUnix}&traffic_model=best_guess` +
+        `&travelmode=driving&departure_time=${departureParam}&traffic_model=best_guess` +
         `&key=${MAPS_KEY}&region=gb&units=metric`
 
       // Log with key redacted
@@ -158,7 +167,7 @@ export async function POST(req: NextRequest) {
         waypoints:       unlockablePostcodes,
         locked_stops:    lockedIndices.length,
         unlocked_stops:  unlockableStops.length,
-        departure_time:  new Date(departureUnix * 1000).toISOString(),
+        departure_time:  departureParam,
         api_key_present: !!MAPS_KEY,
         api_key_prefix:  MAPS_KEY ? MAPS_KEY.slice(0, 10) + '...' : 'MISSING',
         full_url_no_key: manualUrl.replace(MAPS_KEY, '[REDACTED]'),
