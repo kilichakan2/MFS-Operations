@@ -165,17 +165,20 @@ function StopCardRow({
               >✏</button>
             </div>
           )}
-          {/* ETA + service time — shown after optimise */}
-          {stop.estimatedArrival && (
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              <p className="text-[10px] font-bold text-[#EB6619] leading-tight">
-                ETA {stop.estimatedArrival}
-              </p>
-              <span className="text-[9px] text-gray-400 bg-gray-100 rounded px-1 py-px leading-tight flex-shrink-0">
-                + 15m drop
-              </span>
-            </div>
-          )}
+          {/* Arrive / Depart — shown after optimise */}
+          {stop.estimatedArrival && (() => {
+            // Calculate depart time = arrival + 15min service time
+            const [h, m]   = stop.estimatedArrival.split(':').map(Number)
+            const depMins  = h * 60 + m + 15
+            const depStr   = `${String(Math.floor(depMins / 60) % 24).padStart(2, '0')}:${String(depMins % 60).padStart(2, '0')}`
+            return (
+              <div className="mt-0.5">
+                <span className="text-[10px] font-bold text-[#EB6619]">↓ {stop.estimatedArrival}</span>
+                <span className="text-[9px] text-gray-400 mx-1">·</span>
+                <span className="text-[10px] font-semibold text-gray-400">↑ {depStr}</span>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Controls row: priority · lock · note · remove — all 28px height */}
@@ -580,94 +583,90 @@ export default function RoutesPage() {
         {/* ── LEFT PANEL ──────────────────────────────────────────────────────── */}
         <div className="lg:w-[420px] lg:flex-shrink-0 flex flex-col overflow-y-auto">
 
-          {/* Route meta */}
-          <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-4 space-y-3">
+          {/* Route meta — compact two-row layout */}
+          <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-3 space-y-2">
 
-            {/* Route name (optional) */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#16205B]/50 uppercase tracking-widest mb-1">
-                Route name (optional)
-              </label>
-              <input
-                type="text"
-                value={routeName}
-                onChange={e => setRouteName(e.target.value)}
-                placeholder="e.g. Sheffield North run"
-                className="w-full h-10 rounded-xl border border-[#EDEAE1] px-3 text-sm text-gray-800 focus:outline-none focus:border-[#EB6619]"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Date */}
+            {/* Row 1: Route name + Date */}
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-bold text-[#16205B]/50 uppercase tracking-widest mb-1">
+                <label className="block text-[9px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-0.5">
+                  Route name
+                </label>
+                <input
+                  type="text"
+                  value={routeName}
+                  onChange={e => setRouteName(e.target.value)}
+                  placeholder="e.g. Sheffield North"
+                  className="w-full h-8 rounded-lg border border-[#EDEAE1] px-2.5 text-xs text-gray-800 focus:outline-none focus:border-[#EB6619]"
+                />
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-0.5">
                   Date
                 </label>
                 <input
                   type="date"
                   value={plannedDate}
                   onChange={e => { setPlannedDate(e.target.value); setResult(null) }}
-                  className="w-full h-10 rounded-xl border border-[#EDEAE1] px-3 text-sm text-gray-800 focus:outline-none focus:border-[#EB6619]"
+                  className="w-full h-8 rounded-lg border border-[#EDEAE1] px-2.5 text-xs text-gray-800 focus:outline-none focus:border-[#EB6619]"
                 />
               </div>
+            </div>
 
-              {/* Departure time */}
+            {/* Row 2: Depart + Assign to + End at in one tight row */}
+            <div className="grid grid-cols-[68px_1fr_auto] gap-2 items-end">
               <div>
-                <label className="block text-[10px] font-bold text-[#16205B]/50 uppercase tracking-widest mb-1">
+                <label className="block text-[9px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-0.5">
                   Depart
                 </label>
                 <input
                   type="time"
                   value={departureTime}
                   onChange={e => { setDepartureTime(e.target.value); setResult(null) }}
-                  className="w-full h-10 rounded-xl border border-[#EDEAE1] px-3 text-sm text-gray-800 focus:outline-none focus:border-[#EB6619]"
+                  className="w-full h-8 rounded-lg border border-[#EDEAE1] px-2 text-xs text-gray-800 focus:outline-none focus:border-[#EB6619]"
                 />
               </div>
-            </div>
-
-            {/* Assign to */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#16205B]/50 uppercase tracking-widest mb-1">
-                Assign to
-              </label>
-              <select
-                value={assignedTo}
-                onChange={e => setAssignedTo(e.target.value)}
-                className="w-full h-10 rounded-xl border border-[#EDEAE1] px-3 text-sm text-gray-800 focus:outline-none focus:border-[#EB6619] bg-white"
-              >
-                <option value="">Select person…</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* End point */}
-            <div>
-              <label className="block text-[10px] font-bold text-[#16205B]/50 uppercase tracking-widest mb-1.5">
-                End at
-              </label>
-              <div className="flex gap-2">
-                {([
-                  { value: 'mfs',               label: 'MFS  S3 8DG' },
-                  { value: 'ozmen_john_street',  label: 'Ozmen  S2 4QT' },
-                ] as const).map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => { setEndPoint(opt.value); setResult(null) }}
-                    className={[
-                      'flex-1 h-9 rounded-xl text-xs font-semibold border-2 transition-colors',
-                      endPoint === opt.value
-                        ? 'bg-[#16205B] border-[#16205B] text-white'
-                        : 'border-[#EDEAE1] text-[#16205B]/60 hover:border-[#16205B]/30',
-                    ].join(' ')}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+              <div>
+                <label className="block text-[9px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-0.5">
+                  Assign to
+                </label>
+                <select
+                  value={assignedTo}
+                  onChange={e => setAssignedTo(e.target.value)}
+                  className="w-full h-8 rounded-lg border border-[#EDEAE1] px-2 text-xs text-gray-800 focus:outline-none focus:border-[#EB6619] bg-white"
+                >
+                  <option value="">Select…</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} ({u.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-0.5">
+                  End at
+                </label>
+                <div className="flex gap-1">
+                  {([
+                    { value: 'mfs',               label: 'MFS' },
+                    { value: 'ozmen_john_street',  label: 'Ozmen' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => { setEndPoint(opt.value); setResult(null) }}
+                      className={[
+                        'h-8 px-2.5 rounded-lg text-[10px] font-bold border-2 transition-colors whitespace-nowrap',
+                        endPoint === opt.value
+                          ? 'bg-[#16205B] border-[#16205B] text-white'
+                          : 'border-[#EDEAE1] text-[#16205B]/60 hover:border-[#16205B]/30',
+                      ].join(' ')}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
