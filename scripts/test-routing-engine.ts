@@ -82,12 +82,18 @@ function clusterAndSort(geoOrdered: TestStop[], legDurations: RoutesLeg[]): Test
     clusterOriginLegS.push(parseDuration(legDurations[currentOriginIdx]?.duration))
   }
 
-  // Pass 2b: sort clusters nearest-to-origin first
-  const order             = clusters.map((_, i) => i).sort((a, b) => clusterOriginLegS[a] - clusterOriginLegS[b])
-  const clustersNearFirst = order.map(i => clusters[i])
+  // Pass 2b: sort clusters nearest-to-origin first — but ONLY if hasPriority
+  const hasPriority = geoOrdered.some(s => s.priority !== 'none')
+  let clustersOrdered: TestStop[][]
+  if (hasPriority) {
+    const order     = clusters.map((_, i) => i).sort((a, b) => clusterOriginLegS[a] - clusterOriginLegS[b])
+    clustersOrdered = order.map(i => clusters[i])
+  } else {
+    clustersOrdered = clusters  // all-standard: trust Google's sequence
+  }
 
-  // Pass 3: priority sort within each cluster
-  return clustersNearFirst.map(cl =>
+  // Pass 3: priority sort within each cluster (no-op for all-standard)
+  return clustersOrdered.map(cl =>
     [...cl].sort((a, b) =>
       (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2)
     )
@@ -455,6 +461,71 @@ test('Near-first: when Google returns correct order, Pass 2b keeps it unchanged'
   const clusters = clusterAndSort(NEAR_FIRST_GEO_ORDERED, NEAR_FIRST_LEGS)
   eq(clusters[0][0].name, 'Sheffield Customer')
   eq(clusters[1][0].name, 'Worksop Urgent')
+})
+
+// ─── Suite 3c: hasPriority bypass ─────────────────────────────────────────────
+// When ALL stops are standard, Pass 2b must NOT re-sort clusters — Google's
+// efficient sequence (which may be furthest-first) should be preserved.
+// When ANY stop is urgent/priority, Pass 2b MUST enforce local-first.
+
+console.log('\n── Suite 3c: All-standard bypass vs mixed-priority enforcement')
+
+// All-standard: Google returns [Worksop Std, Sheffield Std] (furthest-first)
+// Pass 2b should KEEP that order — no SLA reason to override mileage efficiency
+const ALL_STD_FAR_FIRST: TestStop[] = [
+  { customerId: 'f1', name: 'Worksop Std',   postcode: 'S801EJ', lat: 53.305, lng: -1.125, priority: 'none', lockedPosition: false },
+  { customerId: 'f2', name: 'Sheffield Std', postcode: 'S101TE', lat: 53.385, lng: -1.508, priority: 'none', lockedPosition: false },
+]
+const ALL_STD_LEGS: RoutesLeg[] = [
+  { duration: '2100s' },  // [0] origin → Worksop (35min, FAR first from Google)
+  { duration: '1920s' },  // [1] Worksop → Sheffield (32min, > threshold → split)
+]
+
+test('All-standard: furthest-first Google sequence is PRESERVED (no re-sort)', () => {
+  const clusters = clusterAndSort(ALL_STD_FAR_FIRST, ALL_STD_LEGS)
+  eq(clusters.length, 2)
+  // Worksop stays first — Google chose this, no priority reason to override
+  eq(clusters[0][0].name, 'Worksop Std',
+    `Expected Worksop first (Google's sequence), got ${clusters[0][0].name}`)
+  eq(clusters[1][0].name, 'Sheffield Std')
+})
+
+test('All-standard: hasPriority is false for all-none stops', () => {
+  const hasPriority = ALL_STD_FAR_FIRST.some(s => s.priority !== 'none')
+  eq(hasPriority, false)
+})
+
+// Mixed: same two stops but Worksop is now URGENT
+// Pass 2b MUST re-sort → Sheffield (8min) before Worksop (35min)
+const MIXED_FAR_FIRST: TestStop[] = [
+  { customerId: 'm1', name: 'Worksop Urgent', postcode: 'S801EJ', lat: 53.305, lng: -1.125, priority: 'urgent', lockedPosition: false },
+  { customerId: 'm2', name: 'Sheffield Std',  postcode: 'S101TE', lat: 53.385, lng: -1.508, priority: 'none',   lockedPosition: false },
+]
+// Google returns same furthest-first legs
+const MIXED_LEGS: RoutesLeg[] = [
+  { duration: '2100s' },  // origin → Worksop (35min)
+  { duration: '1920s' },  // Worksop → Sheffield (32min, > threshold)
+]
+
+test('Mixed-priority: Pass 2b re-sorts so near cluster (Sheffield) runs first', () => {
+  const clusters = clusterAndSort(MIXED_FAR_FIRST, MIXED_LEGS)
+  eq(clusters.length, 2)
+  eq(clusters[0][0].name, 'Sheffield Std',
+    `Expected Sheffield first (local-first enforcement), got ${clusters[0][0].name}`)
+  eq(clusters[1][0].name, 'Worksop Urgent')
+})
+
+test('Mixed-priority: urgent Worksop stays urgent but does NOT jump ahead of Sheffield cluster', () => {
+  const clusters   = clusterAndSort(MIXED_FAR_FIRST, MIXED_LEGS)
+  const finalOrder = reinsertLocked(MIXED_FAR_FIRST, clusters.flat())
+  eq(finalOrder[0].name, 'Sheffield Std')
+  eq(finalOrder[1].name, 'Worksop Urgent')
+  eq(finalOrder[1].priority, 'urgent')
+})
+
+test('Mixed-priority: hasPriority is true when any stop is urgent', () => {
+  const hasPriority = MIXED_FAR_FIRST.some(s => s.priority !== 'none')
+  eq(hasPriority, true)
 })
 
 // ─── Suite 4: Cluster boundary edge cases ────────────────────────────────────

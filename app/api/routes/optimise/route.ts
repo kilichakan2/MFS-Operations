@@ -299,21 +299,38 @@ export async function POST(req: NextRequest) {
       stops:          cl.map(s => `${s.customer.name} (${s.input.priority})`),
     })))
 
-    // Pass 2b — Sort clusters nearest-to-origin first
-    // Google's TSP may return furthest-first to minimise total mileage.
-    // MFS operations require local drops cleared before cross-country legs.
-    const clusterOrder       = clusters.map((_, i) => i).sort((a, b) => clusterOriginLegS[a] - clusterOriginLegS[b])
-    const clustersNearFirst  = clusterOrder.map(i => clusters[i])
-    const originLegsNearFirst = clusterOrder.map(i => clusterOriginLegS[i])
+    // Pass 2b — Sort clusters nearest-to-origin first (priority routes only)
+    //
+    // If the route contains ANY urgent or priority stops, we enforce local-first
+    // ordering: the cluster closest to MFS runs first regardless of what Google's
+    // TSP returned. This ensures local SLA drops are cleared before highway travel.
+    //
+    // If ALL stops are standard, we skip this sort and trust Google's round-trip
+    // optimised sequence — furthest-first may genuinely save total mileage and
+    // there are no SLA windows to protect.
+    const hasPriority = unlockedStops.some(s => s.input.priority !== 'none')
 
-    console.log('[optimise] Pass 2b — Clusters sorted near→far:', clustersNearFirst.map((cl, i) => ({
-      cluster:        i + 1,
-      originDriveMin: Math.round(originLegsNearFirst[i] / 60),
-      stops:          cl.map(s => `${s.customer.name} (${s.input.priority})`),
-    })))
+    let clustersOrdered: WorkingStop[][]
+    let originLegsOrdered: number[]
+
+    if (hasPriority) {
+      const clusterOrder   = clusters.map((_, i) => i).sort((a, b) => clusterOriginLegS[a] - clusterOriginLegS[b])
+      clustersOrdered      = clusterOrder.map(i => clusters[i])
+      originLegsOrdered    = clusterOrder.map(i => clusterOriginLegS[i])
+      console.log('[optimise] Pass 2b — Priority route: clusters re-sorted near→far:', clustersOrdered.map((cl, i) => ({
+        cluster:        i + 1,
+        originDriveMin: Math.round(originLegsOrdered[i] / 60),
+        stops:          cl.map(s => `${s.customer.name} (${s.input.priority})`),
+      })))
+    } else {
+      clustersOrdered   = clusters
+      originLegsOrdered = clusterOriginLegS
+      console.log('[optimise] Pass 2b — All-standard route: keeping Google\'s sequence (no re-sort)')
+    }
 
     // Pass 3 — Priority sort within each cluster (urgent > priority > none)
-    const sorted = clustersNearFirst.map(cl =>
+    // For all-standard routes this is a no-op — all priorities are equal.
+    const sorted = clustersOrdered.map(cl =>
       [...cl].sort((a, b) =>
         (PRIORITY_ORDER[a.input.priority] ?? 2) - (PRIORITY_ORDER[b.input.priority] ?? 2)
       )
