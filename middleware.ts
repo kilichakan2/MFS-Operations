@@ -56,6 +56,7 @@ const SHARED_API_PATHS = [
   '/api/routes/today',
   '/api/routes/customers',
   '/api/routes/users',
+  '/api/test-routes',   // TEMPORARY — delete after infrastructure test
 ]
 
 export function middleware(req: NextRequest) {
