@@ -113,7 +113,38 @@ function buildOutput(finalOrdered: TestStop[], p4Legs: RoutesLeg[], baseDepartur
   })
 }
 
-// ─── Real customer data (verified from DB) ────────────────────────────────────
+// ─── Service time helper (mirrors route.ts) ───────────────────────────────────
+
+const SERVICE_TIME_MINS = 15
+const SERVICE_TIME_MS   = SERVICE_TIME_MINS * 60 * 1000
+
+function buildOutputWithServiceTime(
+  finalOrdered: TestStop[],
+  p4Legs: RoutesLeg[],
+  baseDepartureMs: number,
+) {
+  let cumMs = 0
+  const stops = finalOrdered.map((s, i) => {
+    const leg   = p4Legs[i]
+    const legS  = parseDuration(leg?.duration)
+    const legKm = (leg?.distanceMeters ?? 0) / 1000
+    cumMs += legS * 1000
+    const arrival = toHHMM(baseDepartureMs + cumMs)
+    cumMs += SERVICE_TIME_MS   // unloading — affects next stop's ETA
+    return {
+      position:             i + 1,
+      customerId:           s.customerId,
+      customerName:         s.name,
+      postcode:             s.postcode,
+      estimatedArrival:     arrival,
+      driveTimeFromPrevMin: Math.round(legS / 60),
+      distanceFromPrevKm:   Math.round(legKm * 10) / 10,
+    }
+  })
+  const totalDriveS  = p4Legs.reduce((acc, l) => acc + parseDuration(l.duration), 0)
+  const totalDurMin  = Math.round(totalDriveS / 60) + finalOrdered.length * SERVICE_TIME_MINS
+  return { stops, totalDurMin }
+}
 
 const REAL_6: TestStop[] = [
   { customerId: 'c1', name: 'BRILL BURGER SHEFFIELD', postcode: 'S10 1TE', lat: 53.385617, lng: -1.508355, priority: 'none', lockedPosition: false },
@@ -239,26 +270,46 @@ test('6-stop: full pipeline produces 6 orderedStops', () => {
   eq(finalOrder.map(s => s.customerId), ['c1','c2','c3','c4','c5','c6'])
 })
 
-test('6-stop: ETAs calculated correctly from mocked P4 legs', () => {
+test('6-stop: ETAs include 15-min service time at each stop', () => {
   const clusters   = clusterAndSort(REAL_6, MOCK_P1_LEGS)
   const finalOrder = reinsertLocked(REAL_6, clusters.flat())
   const departure  = new Date('2026-03-27T08:00:00').getTime()
-  const output     = buildOutput(finalOrder, MOCK_P4_LEGS, departure)
+  const { stops: output } = buildOutputWithServiceTime(finalOrder, MOCK_P4_LEGS, departure)
   eq(output.length, 6)
   output.forEach(s => {
     assert(/^\d{2}:\d{2}$/.test(s.estimatedArrival), `ETA "${s.estimatedArrival}" is not HH:MM`)
-    assert(s.driveTimeFromPrevMin >= 0, `driveTime must be >= 0`)
   })
-  eq(output[0].estimatedArrival, '08:08')   // 510s = 8.5min → 08:08
-  eq(output[1].estimatedArrival, '08:30')   // 510+1340=1850s = 30.8min → 08:30
-  eq(output[0].driveTimeFromPrevMin, 9)     // 510s → 8.5 → rounds to 9
+  // Stop 0: 510s drive only              → 08:08
+  // Stop 1: +15min service +1340s drive  → 08:45
+  // Stop 2: +15min service +800s drive   → 09:14
+  // Stop 3: +15min service +1950s drive  → 10:01
+  // Stop 4: +15min service +190s drive   → 10:19
+  // Stop 5: +15min service +250s drive   → 10:39
+  eq(output[0].estimatedArrival, '08:08')
+  eq(output[1].estimatedArrival, '08:45')
+  eq(output[2].estimatedArrival, '09:14')
+  eq(output[3].estimatedArrival, '10:01')
+  eq(output[4].estimatedArrival, '10:19')
+  eq(output[5].estimatedArrival, '10:39')
+  // driveTimeFromPrevMin is raw leg — not inflated by service time
+  eq(output[0].driveTimeFromPrevMin, 9)    // 510s → 9min
+  eq(output[1].driveTimeFromPrevMin, 22)   // 1340s → 22min
 })
 
-test('6-stop: total route metrics are plausible', () => {
+test('6-stop: totalDurationMin = drive time + 6 stops × 15min service time', () => {
+  const clusters   = clusterAndSort(REAL_6, MOCK_P1_LEGS)
+  const finalOrder = reinsertLocked(REAL_6, clusters.flat())
+  const departure  = new Date('2026-03-27T08:00:00').getTime()
+  const { totalDurMin } = buildOutputWithServiceTime(finalOrder, MOCK_P4_LEGS, departure)
+  // Drive: 510+1340+800+1950+190+250 = 5040s = 84min
+  // Service: 6 × 15min = 90min
+  // Total: 174min
+  eq(totalDurMin, 174)
+})
+
+test('6-stop: total distance is plausible', () => {
   const totalDistM = MOCK_P4_LEGS.reduce((s, l) => s + (l.distanceMeters ?? 0), 0)
-  const totalDurS  = MOCK_P4_LEGS.reduce((s, l) => s + parseDuration(l.duration), 0)
   assert(totalDistM > 30000, `Distance ${totalDistM}m seems too low`)
-  assert(totalDurS  > 2000,  `Duration ${totalDurS}s seems too low`)
 })
 
 // ─── Suite 2: VRP — Worksop urgency ──────────────────────────────────────────
@@ -435,19 +486,22 @@ test('Sniffer uses TRAFFIC_AWARE and has no optimizeWaypointOrder', () => {
 
 console.log('\n── Suite 7: ETA calculation')
 
-test('ETAs strictly increment across all 6 stops', () => {
+test('ETAs strictly increment across all 6 stops (with service time)', () => {
   const finalOrder = reinsertLocked(REAL_6, clusterAndSort(REAL_6, MOCK_P1_LEGS).flat())
-  const output     = buildOutput(finalOrder, MOCK_P4_LEGS, new Date('2026-03-27T08:00:00').getTime())
+  const { stops: output } = buildOutputWithServiceTime(finalOrder, MOCK_P4_LEGS, new Date('2026-03-27T08:00:00').getTime())
   for (let i = 1; i < output.length; i++) {
     assert(output[i].estimatedArrival >= output[i-1].estimatedArrival,
       `Stop ${i+1} ETA ${output[i].estimatedArrival} < stop ${i} ETA ${output[i-1].estimatedArrival}`)
   }
 })
 
-test('Last stop ETA is within 8am-1pm range for this route', () => {
+test('Last stop ETA is within 8am-1pm range (service time pushes last stop to ~10:39)', () => {
   const finalOrder = reinsertLocked(REAL_6, clusterAndSort(REAL_6, MOCK_P1_LEGS).flat())
-  const output     = buildOutput(finalOrder, MOCK_P4_LEGS, new Date('2026-03-27T08:00:00').getTime())
-  const lastHour   = parseInt(output[output.length - 1].estimatedArrival.split(':')[0], 10)
+  const { stops: output } = buildOutputWithServiceTime(finalOrder, MOCK_P4_LEGS, new Date('2026-03-27T08:00:00').getTime())
+  const lastETA  = output[output.length - 1].estimatedArrival
+  const lastHour = parseInt(lastETA.split(':')[0], 10)
+  // Without service time last stop was ~08:30; with 6×15min service time it's ~10:39
+  eq(lastETA, '10:39')
   assert(lastHour >= 8 && lastHour <= 13, `Last ETA hour ${lastHour} outside expected range`)
 })
 

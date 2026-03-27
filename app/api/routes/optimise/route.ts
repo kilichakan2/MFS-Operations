@@ -37,6 +37,10 @@ const OZMEN_PC  = 'S24QT'    // Ozmen John Street
 // 25-minute cluster boundary in seconds
 const CLUSTER_THRESHOLD_S = 25 * 60
 
+// 15-minute unloading/service time added at every stop
+const SERVICE_TIME_MINS = 15
+const SERVICE_TIME_MS   = SERVICE_TIME_MINS * 60 * 1000
+
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, priority: 1, none: 2 }
 
 const supabase = createClient(SUPA_URL, SUPA_KEY)
@@ -364,12 +368,19 @@ export async function POST(req: NextRequest) {
     const totalDurS  = parseDuration(p4Res.routes[0].duration) ||
                        p4Legs.reduce((s, l) => s + parseDuration(l.duration), 0)
 
+    // Accumulate drive time + 15-min service time at each stop.
+    // Formula: Arrival[N] = Departure + sum(drive[0..N]) + (N × SERVICE_TIME)
+    //   - First stop: add drive time only (no prior service time)
+    //   - Each subsequent stop: add service time from previous stop, then drive time
     let cumMs = 0
     const orderedStops = finalOrdered.map((s, i) => {
       const leg   = p4Legs[i]
       const legS  = parseDuration(leg?.duration)
       const legKm = (leg?.distanceMeters ?? 0) / 1000
-      cumMs += legS * 1000
+
+      cumMs += legS * 1000                    // drive time to reach this stop
+      const arrival = toHHMM(departureDt.getTime() + cumMs)
+      cumMs += SERVICE_TIME_MS               // unloading at this stop (affects next ETA)
 
       return {
         position:             i + 1,
@@ -381,20 +392,23 @@ export async function POST(req: NextRequest) {
         priority:             s.input.priority,
         lockedPosition:       s.input.lockedPosition,
         priorityNote:         s.input.priorityNote ?? null,
-        estimatedArrival:     toHHMM(departureDt.getTime() + cumMs),
+        estimatedArrival:     arrival,
         driveTimeFromPrevMin: Math.round(legS / 60),
         distanceFromPrevKm:   Math.round(legKm * 10) / 10,
       }
     })
 
+    // True shift length = Google drive time + 15 min unloading at every stop
+    const totalDurationMin = Math.round(totalDurS / 60) + finalOrdered.length * SERVICE_TIME_MINS
+
     const googleMapsUrl = buildDeepLink(ORIGIN_PC, destinationPC, finalOrdered)
     console.log('[optimise] Complete —', orderedStops.length, 'stops,',
-      Math.round(totalDurS / 60), 'min,', Math.round(totalDistM / 1000), 'km')
+      totalDurationMin, 'min total (inc. service time),', Math.round(totalDistM / 1000), 'km')
 
     return NextResponse.json({
       orderedStops,
       totalDistanceKm:  Math.round((totalDistM / 1000) * 10) / 10,
-      totalDurationMin: Math.round(totalDurS / 60),
+      totalDurationMin,
       googleMapsUrl,
     })
 
