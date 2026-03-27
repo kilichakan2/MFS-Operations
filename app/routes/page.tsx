@@ -38,9 +38,10 @@ interface Customer {
 }
 
 interface StopCard extends Customer {
-  priority:       'none' | 'urgent' | 'priority'
-  lockedPosition: boolean
-  priorityNote:   string
+  priority:         'none' | 'urgent' | 'priority'
+  lockedPosition:   boolean
+  priorityNote:     string
+  estimatedArrival: string | null  // populated from optimise result, null until then
 }
 
 interface User {
@@ -163,6 +164,12 @@ function StopCardRow({
                 className="text-[10px] text-gray-300 hover:text-[#EB6619] transition-colors" title="Edit postcode"
               >✏</button>
             </div>
+          )}
+          {/* ETA — shown after optimise */}
+          {stop.estimatedArrival && (
+            <p className="text-[10px] font-bold text-[#EB6619] leading-tight mt-0.5">
+              ETA {stop.estimatedArrival}
+            </p>
           )}
         </div>
 
@@ -350,7 +357,7 @@ export default function RoutesPage() {
   const addStop = useCallback((customer: Customer) => {
     setStops(prev => [...prev, {
       ...customer,
-      priority: 'none', lockedPosition: false, priorityNote: '',
+      priority: 'none', lockedPosition: false, priorityNote: '', estimatedArrival: null,
     }])
     setCustomerSearch('')
     setShowPicker(false)
@@ -373,7 +380,8 @@ export default function RoutesPage() {
       const swap = index + dir
       if (swap < 0 || swap >= next.length) return prev
       ;[next[index], next[swap]] = [next[swap], next[index]]
-      return next
+      // Clear all ETAs — they're now stale after manual reorder
+      return next.map(s => ({ ...s, estimatedArrival: null }))
     })
     setResult(null)
   }, [])
@@ -454,12 +462,29 @@ export default function RoutesPage() {
       }
 
       setResult(data)
-      setBrokenIds(new Set()) // clear any previous broken highlights on success
-      // Reorder stop cards to match optimised order
-      const orderMap = new Map(data.orderedStops.map((s: RouteStop) => [s.customerId, s.position]))
-      setStops(prev => [...prev].sort((a, b) =>
-        (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99)
-      ))
+      setBrokenIds(new Set())
+
+      // ── Diagnostic: log the order Google returned ────────────────────────
+      console.log('[routes/optimise] Result received:', {
+        stopCount:    (data.orderedStops as RouteStop[]).length,
+        newSequence:  (data.orderedStops as RouteStop[]).map((s: RouteStop) => `${s.position}. ${s.customerName}`),
+        totalKm:      data.totalDistanceKm,
+        totalMin:     data.totalDurationMin,
+      })
+
+      // ── Reorder stops + merge ETAs in one pass ───────────────────────────
+      // Build lookup: customerId → { position, estimatedArrival }
+      const etaMap = new Map<string, { position: number; estimatedArrival: string | null }>(
+        (data.orderedStops as RouteStop[]).map((s: RouteStop) => [
+          s.customerId,
+          { position: s.position, estimatedArrival: s.estimatedArrival ?? null },
+        ])
+      )
+      setStops(prev =>
+        [...prev]
+          .sort((a, b) => (etaMap.get(a.id)?.position ?? 99) - (etaMap.get(b.id)?.position ?? 99))
+          .map(s => ({ ...s, estimatedArrival: etaMap.get(s.id)?.estimatedArrival ?? null }))
+      )
     } catch {
       setOptimiseError('Network error — check your connection and try again.')
     } finally {
@@ -520,19 +545,19 @@ export default function RoutesPage() {
     }
   }, [assignedTo, stops, plannedDate, departureTime, endPoint, routeName, result])
 
-  // ── Map stops (use optimised result if available, else current order) ───────
-  const mapStops: RouteStop[] = result
-    ? result.orderedStops
-    : stops.map((s, i) => ({
-        position:        i + 1,
-        customerId:      s.id,
-        customerName:    s.name,
-        postcode:        s.postcode,
-        lat:             s.lat,
-        lng:             s.lng,
-        priority:        s.priority,
-        estimatedArrival: null,
-      }))
+  // ── Map stops — always from stops state so manual reorders update the polyline ──
+  // After optimise, stops are already sorted and have ETAs merged in.
+  // After manual reorder (up/down arrows), stops state changes and map redraws.
+  const mapStops: RouteStop[] = stops.map((s, i) => ({
+    position:         i + 1,
+    customerId:       s.id,
+    customerName:     s.name,
+    postcode:         s.postcode,
+    lat:              s.lat,
+    lng:              s.lng,
+    priority:         s.priority,
+    estimatedArrival: s.estimatedArrival ?? null,
+  }))
 
   return (
     <div className="min-h-screen bg-[#F5F3EE] flex flex-col">
