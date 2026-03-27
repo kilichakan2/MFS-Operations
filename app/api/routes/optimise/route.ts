@@ -24,8 +24,11 @@ const SUPA_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPA_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const MAPS_KEY  = process.env.GOOGLE_MAPS_API_KEY!
 
-const ROUTES_URL        = 'https://routes.googleapis.com/directions/v2:computeRoutes'
-const ROUTES_FIELD_MASK = 'routes.optimizedIntermediateWaypointIndex,routes.legs,routes.distanceMeters,routes.duration'
+const ROUTES_URL         = 'https://routes.googleapis.com/directions/v2:computeRoutes'
+const ROUTES_FIELD_MASK  = 'routes.optimizedIntermediateWaypointIndex,routes.legs,routes.distanceMeters,routes.duration'
+// Sniffer uses simpler A→B calls with no intermediates — optimizedIntermediateWaypointIndex
+// must NOT be requested when optimizeWaypointOrder is not set (causes INVALID_ARGUMENT)
+const SNIFFER_FIELD_MASK = 'routes.legs,routes.distanceMeters,routes.duration'
 
 // Fixed anchors — no spaces, uppercase
 const ORIGIN_PC = 'S38DG'    // MFS Sheffield, Neepsend Lane
@@ -109,13 +112,13 @@ function toHHMM(ms: number): string {
   return new Date(ms).toTimeString().slice(0, 5)
 }
 
-async function callRoutesAPI(body: Record<string, unknown>): Promise<RoutesResponse> {
+async function callRoutesAPI(body: Record<string, unknown>, fieldMask = ROUTES_FIELD_MASK): Promise<RoutesResponse> {
   const res = await fetch(ROUTES_URL, {
     method:  'POST',
     headers: {
       'Content-Type':     'application/json',
       'X-Goog-Api-Key':   MAPS_KEY,
-      'X-Goog-FieldMask': ROUTES_FIELD_MASK,
+      'X-Goog-FieldMask': fieldMask,
     },
     body: JSON.stringify(body),
   })
@@ -206,10 +209,11 @@ export async function POST(req: NextRequest) {
       const p1Body: Record<string, unknown> = {
         origin:                addrWaypoint(ORIGIN_PC),
         destination:           addrWaypoint(destinationPC),
-        // latLng required here — optimizeWaypointOrder:true rejects address strings
+        // latLng required for intermediates — optimizeWaypointOrder:true rejects address strings
         intermediates:         unlockedStops.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
         travelMode:            'DRIVE',
-        routingPreference:     'TRAFFIC_AWARE_OPTIMAL',
+        // TRAFFIC_AWARE_OPTIMAL requires a future departureTime — use TRAFFIC_AWARE when omitting it
+        routingPreference:     departureISO ? 'TRAFFIC_AWARE_OPTIMAL' : 'TRAFFIC_AWARE',
         optimizeWaypointOrder: true,
       }
       if (departureISO) p1Body.departureTime = departureISO
@@ -253,13 +257,16 @@ export async function POST(req: NextRequest) {
 
     // ════════════════════════════════════════════════════════════════════════
     // PASS 2 — Cluster by 25-min drive time threshold
+    // legs[i] = drive FROM the previous stop TO geoOrdered[i].
+    // We split when that drive time exceeds 25 minutes.
     // ════════════════════════════════════════════════════════════════════════
     const clusters: WorkingStop[][] = []
     let   current:  WorkingStop[]   = []
 
     for (let i = 0; i < geoOrdered.length; i++) {
       if (current.length === 0) { current.push(geoOrdered[i]); continue }
-      const legS = parseDuration(pass1Legs[i + 1]?.duration)
+      // FIX: use pass1Legs[i] (drive TO this stop), not [i+1] (drive TO next stop)
+      const legS = parseDuration(pass1Legs[i]?.duration)
       if (legS > CLUSTER_THRESHOLD_S) {
         clusters.push(current)
         current = [geoOrdered[i]]
@@ -314,7 +321,7 @@ export async function POST(req: NextRequest) {
       destination:           addrWaypoint(destinationPC),
       intermediates:         finalOrdered.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
       travelMode:            'DRIVE',
-      routingPreference:     'TRAFFIC_AWARE_OPTIMAL',
+      routingPreference:     departureISO ? 'TRAFFIC_AWARE_OPTIMAL' : 'TRAFFIC_AWARE',
       optimizeWaypointOrder: false,
     }
     if (departureISO) p4Body.departureTime = departureISO
@@ -414,7 +421,7 @@ async function sniffBrokenPostcodes(
       travelMode:  'DRIVE',
     }
     if (departureISO) body.departureTime = departureISO
-    const res = await callRoutesAPI(body)
+    const res = await callRoutesAPI(body, SNIFFER_FIELD_MASK)
     const ok  = !res.error && !!res.routes?.length
     console.log(`[optimise] Sniffer  ${ORIGIN_PC} → ${s.postcode} (${s.customer.name}): ${ok ? 'OK' : res.error?.status ?? 'FAIL'}`)
     if (!ok) broken.push({ customerId: s.input.customerId, name: s.customer.name, postcode: s.customer.postcode!, status: res.error?.status ?? 'FAIL' })
