@@ -172,9 +172,9 @@ function StopCardRow({
             const depMins  = h * 60 + m + 15
             const depStr   = `${String(Math.floor(depMins / 60) % 24).padStart(2, '0')}:${String(depMins % 60).padStart(2, '0')}`
             return (
-              <div className="mt-0.5">
+              <div className="mt-px">
                 <span className="text-[10px] font-bold text-[#EB6619]">↓ {stop.estimatedArrival}</span>
-                <span className="text-[9px] text-gray-400 mx-1">·</span>
+                <span className="text-[9px] text-gray-400 mx-0.5">·</span>
                 <span className="text-[10px] font-semibold text-gray-400">↑ {depStr}</span>
               </div>
             )
@@ -614,7 +614,7 @@ export default function RoutesPage() {
             </div>
 
             {/* Row 2: Depart + Assign to + End at in one tight row */}
-            <div className="grid grid-cols-[68px_1fr_auto] gap-2 items-end">
+            <div className="grid grid-cols-[110px_1fr_auto] gap-2 items-end">
               <div>
                 <label className="block text-[9px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-0.5">
                   Depart
@@ -683,28 +683,6 @@ export default function RoutesPage() {
               {stops.length > 1 && (
                 <p className="text-[10px] text-gray-400">Use arrows to reorder · 📌 to lock</p>
               )}
-            </div>
-
-            {/* Priority legend */}
-            <div className="flex items-center gap-3 mb-3 px-2 py-1.5 bg-[#F8F7F4] rounded-lg">
-              <span className="text-[9px] font-bold text-[#16205B]/40 uppercase tracking-wide flex-shrink-0">Priority</span>
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="flex items-center gap-1 text-[10px] text-gray-500">
-                  <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-                  <span className="font-semibold text-red-600">Urgent</span>
-                  <span className="text-gray-400">— first in cluster</span>
-                </span>
-                <span className="flex items-center gap-1 text-[10px] text-gray-500">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
-                  <span className="font-semibold text-amber-600">Priority</span>
-                  <span className="text-gray-400">— second</span>
-                </span>
-                <span className="flex items-center gap-1 text-[10px] text-gray-500">
-                  <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
-                  <span className="font-semibold text-gray-500">Standard</span>
-                  <span className="text-gray-400">— geo order</span>
-                </span>
-              </div>
             </div>
 
             {/* Stop cards */}
@@ -851,7 +829,38 @@ export default function RoutesPage() {
 
         {/* ── RIGHT PANEL — MAP ────────────────────────────────────────────────── */}
         <div className="hidden lg:flex flex-1 flex-col">
-          <div className="flex-1 rounded-xl overflow-hidden border border-[#EDEAE1] min-h-[500px]">
+          <div className="relative flex-1 rounded-xl overflow-hidden border border-[#EDEAE1] min-h-[500px]">
+            {/* Floating legend overlay — shown when stops exist */}
+            {mapStops.length > 0 && (
+              <div className="absolute top-3 left-3 z-[1000] bg-white/95 backdrop-blur-sm shadow-md rounded-lg px-3 py-2 text-xs pointer-events-none">
+                <p className="text-[8px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-1.5">Route key</p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                    <span className="font-bold text-red-600 text-[10px]">Urgent</span>
+                    <span className="text-gray-400 text-[9px]">first in cluster</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                    <span className="font-bold text-amber-600 text-[10px]">Priority</span>
+                    <span className="text-gray-400 text-[9px]">second</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+                    <span className="font-bold text-gray-500 text-[10px]">Standard</span>
+                    <span className="text-gray-400 text-[9px]">geo order</span>
+                  </div>
+                  <div className="border-t border-gray-100 mt-1 pt-1 flex items-center gap-1.5">
+                    <span className="text-[10px] text-[#16205B]/60 font-bold">↑↓</span>
+                    <span className="text-gray-400 text-[9px]">Manual override</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-[#16205B] font-bold">🔒</span>
+                    <span className="text-gray-400 text-[9px]">Locked stop</span>
+                  </div>
+                </div>
+              </div>
+            )}
             {mapStops.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full bg-[#F5F3EE] text-center px-6">
                 <div className="w-16 h-16 rounded-full bg-[#16205B]/5 flex items-center justify-center mb-4">
