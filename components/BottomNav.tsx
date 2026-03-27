@@ -102,4 +102,11 @@ export const Icons = {
       <line x1="15" y1="6" x2="15" y2="21"/>
     </svg>
   ),
+  routes: (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/>
+      <path d="M12 19h4.5a3.5 3.5 0 0 0 0-7h-8a3.5 3.5 0 0 1 0-7H12"/>
+    </svg>
+  ),
 }

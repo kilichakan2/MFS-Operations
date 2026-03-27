@@ -696,6 +696,7 @@ export default function Screen4Page() {
 
       <BottomNav items={[
         { href: '/screen4', label: 'Dashboard', icon: Icons.dashboard },
+        { href: '/routes',  label: 'Routes',    icon: Icons.routes    },
         { href: '/screen5', label: 'Admin',     icon: Icons.admin     },
         { href: '/screen6', label: 'Map',       icon: Icons.map       },
       ]} />

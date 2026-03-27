@@ -30,9 +30,16 @@ const ROUTES_FIELD_MASK  = 'routes.optimizedIntermediateWaypointIndex,routes.leg
 // must NOT be requested when optimizeWaypointOrder is not set (causes INVALID_ARGUMENT)
 const SNIFFER_FIELD_MASK = 'routes.legs,routes.distanceMeters,routes.duration'
 
-// Fixed anchors — no spaces, uppercase
-const ORIGIN_PC = 'S38DG'    // MFS Sheffield, Neepsend Lane
-const OZMEN_PC  = 'S24QT'    // Ozmen John Street
+// Fixed hub coordinates — hard-coded latLng, eliminates Google address-string geocoding.
+// Source: OS/Royal Mail postcode centroids (doogal.co.uk, 6 decimal places).
+// MFS:   Unit 2-3, Rutland Way, Sheffield S3 8DG
+// Ozmen: John Street, Sheffield S2 4QT
+const MFS_COORDS   = { lat: 53.392371, lng: -1.479496 } as const
+const OZMEN_COORDS = { lat: 53.370449, lng: -1.475525 } as const
+
+// Postcode strings kept for deep-link builder and log messages only
+const ORIGIN_PC = 'S3 8DG'
+const OZMEN_PC  = 'S2 4QT'
 
 // 25-minute cluster boundary in seconds
 const CLUSTER_THRESHOLD_S = 25 * 60
@@ -149,7 +156,9 @@ export async function POST(req: NextRequest) {
     if (stops.length > 23) return NextResponse.json({ error: 'Max 23 stops per route' },      { status: 400 })
     if (!MAPS_KEY)         return NextResponse.json({ error: 'GOOGLE_MAPS_API_KEY not set' }, { status: 500 })
 
-    const destinationPC = endPoint === 'ozmen_john_street' ? OZMEN_PC : ORIGIN_PC
+    // Hub destination: latLng object for Google Routes API — no address-string guessing
+    const destCoords = endPoint === 'ozmen_john_street' ? OZMEN_COORDS : MFS_COORDS
+    const destinationPC = endPoint === 'ozmen_john_street' ? OZMEN_PC : ORIGIN_PC  // for logs/deep-link only
 
     // ── 1. Fetch customer data ───────────────────────────────────────────────
     const { data: customers, error: custErr } = await supabase
@@ -211,8 +220,8 @@ export async function POST(req: NextRequest) {
       geoOrdered = unlockedStops
     } else {
       const p1Body: Record<string, unknown> = {
-        origin:                addrWaypoint(ORIGIN_PC),
-        destination:           addrWaypoint(destinationPC),
+        origin:                latLngWaypoint(MFS_COORDS.lat, MFS_COORDS.lng),
+        destination:           latLngWaypoint(destCoords.lat, destCoords.lng),
         // latLng required for intermediates — optimizeWaypointOrder:true rejects address strings
         intermediates:         unlockedStops.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
         travelMode:            'DRIVE',
@@ -227,7 +236,7 @@ export async function POST(req: NextRequest) {
 
       console.log('[optimise] Pass 1 — Geographic spine:', {
         stops:       unlockedStops.map(s => `${s.customer.name} (${s.postcode}) [${s.customer.lat},${s.customer.lng}]`),
-        destination: destinationPC,
+        destination: destinationPC,   // S2 4QT or S3 8DG — for log only
         departure:   departureISO ?? 'now (live traffic)',
         waypointFormat: 'latLng',
       })
@@ -363,8 +372,8 @@ export async function POST(req: NextRequest) {
     // Use latLng for all waypoints for consistency and accuracy
     // ════════════════════════════════════════════════════════════════════════
     const p4Body: Record<string, unknown> = {
-      origin:                addrWaypoint(ORIGIN_PC),
-      destination:           addrWaypoint(destinationPC),
+      origin:                latLngWaypoint(MFS_COORDS.lat, MFS_COORDS.lng),
+      destination:           latLngWaypoint(destCoords.lat, destCoords.lng),
       intermediates:         finalOrdered.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
       travelMode:            'DRIVE',
       routingPreference:     departureISO ? 'TRAFFIC_AWARE_OPTIMAL' : 'TRAFFIC_AWARE',
@@ -469,7 +478,7 @@ async function sniffBrokenPostcodes(
 
   for (const s of stops) {
     const body: Record<string, unknown> = {
-      origin:      addrWaypoint(ORIGIN_PC),
+      origin:      latLngWaypoint(MFS_COORDS.lat, MFS_COORDS.lng),
       destination: (s.customer.lat && s.customer.lng)
         ? latLngWaypoint(s.customer.lat, s.customer.lng)
         : addrWaypoint(s.postcode),
