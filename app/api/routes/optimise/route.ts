@@ -1,21 +1,15 @@
 /**
  * app/api/routes/optimise/route.ts
  *
- * POST — Preview an optimised route via Google Directions API.
- * Does NOT save anything to the database — this is a pure preview step.
- * The client calls this, shows the result, then calls POST /api/routes to save.
+ * POST — Two-pass routing engine using Google Routes API v2.
  *
- * Body:
- *   stops[]          Array of { customerId, locked_position, priority, priority_note }
- *   departureTime    "08:00" (HH:MM, local UK time)
- *   endPoint         "mfs" | "ozmen_john_street"
- *   plannedDate      "YYYY-MM-DD" — used to build the departure datetime
+ * Algorithm (4 passes):
+ *   Pass 1 — Geographic spine: computeRoutes with optimizeWaypointOrder:true
+ *   Pass 2 — Cluster: group stops ≤25 min apart by drive time
+ *   Pass 3 — Priority sort within each cluster (urgent > priority > none)
+ *   Pass 4 — Final ETAs: computeRoutes with optimizeWaypointOrder:false
  *
- * Returns:
- *   orderedStops[]   Stops in optimised order with estimated arrival times
- *   totalDistanceKm
- *   totalDurationMin
- *   googleMapsUrl    Deep link for the full route
+ * Spec: docs/routing-engine-spec.md
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -25,17 +19,27 @@ const SUPA_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPA_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const MAPS_KEY  = process.env.GOOGLE_MAPS_API_KEY!
 
-// Fixed location postcodes — verified addresses, trimmed and uppercased
-const ORIGIN_POSTCODE      = 'S3 8DG'   // MFS Sheffield warehouse (Neepsend Lane)
-const OZMEN_POSTCODE       = 'S2 4QT'   // Ozmen John Street
+const ROUTES_URL        = 'https://routes.googleapis.com/directions/v2:computeRoutes'
+const ROUTES_FIELD_MASK = 'routes.optimizedIntermediateWaypointIndex,routes.legs,routes.distanceMeters,routes.duration'
+
+// Fixed anchors — no spaces, uppercase
+const ORIGIN_PC = 'S38DG'    // MFS Sheffield, Neepsend Lane
+const OZMEN_PC  = 'S24QT'    // Ozmen John Street
+
+// 25-minute cluster boundary in seconds
+const CLUSTER_THRESHOLD_S = 25 * 60
+
+const PRIORITY_ORDER: Record<string, number> = { urgent: 0, priority: 1, none: 2 }
 
 const supabase = createClient(SUPA_URL, SUPA_KEY)
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 interface StopInput {
-  customerId:      string
-  lockedPosition:  boolean
-  priority:        'none' | 'urgent' | 'priority'
-  priorityNote?:   string
+  customerId:     string
+  lockedPosition: boolean
+  priority:       'none' | 'urgent' | 'priority'
+  priorityNote?:  string
 }
 
 interface CustomerRow {
@@ -46,9 +50,64 @@ interface CustomerRow {
   lng:      number | null
 }
 
+interface WorkingStop {
+  input:    StopInput
+  customer: CustomerRow
+  postcode: string
+}
+
+interface RoutesLeg {
+  duration?:       string
+  distanceMeters?: number
+}
+
+interface RoutesResponse {
+  error?: { code: number; message: string; status: string }
+  routes?: Array<{
+    optimizedIntermediateWaypointIndex?: number[]
+    legs:            RoutesLeg[]
+    distanceMeters?: number
+    duration?:       string
+  }>
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function cleanPostcode(pc: string): string {
+  return pc.replace(/\s+/g, '').trim().toUpperCase()
+}
+
+function parseDuration(d: string | undefined): number {
+  if (!d) return 0
+  return parseInt(d.replace('s', ''), 10) || 0
+}
+
+function toHHMM(ms: number): string {
+  return new Date(ms).toTimeString().slice(0, 5)
+}
+
+async function callRoutesAPI(body: Record<string, unknown>): Promise<RoutesResponse> {
+  const res = await fetch(ROUTES_URL, {
+    method:  'POST',
+    headers: {
+      'Content-Type':     'application/json',
+      'X-Goog-Api-Key':   MAPS_KEY,
+      'X-Goog-FieldMask': ROUTES_FIELD_MASK,
+    },
+    body: JSON.stringify(body),
+  })
+  return res.json() as Promise<RoutesResponse>
+}
+
+function addr(postcode: string): Record<string, unknown> {
+  return { address: `${postcode}, UK` }
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   try {
-    // ── 1. Parse and validate body ──────────────────────────────────────────
+    // ── 0. Parse + validate ──────────────────────────────────────────────────
     const body = await req.json() as {
       stops:         StopInput[]
       departureTime: string
@@ -58,18 +117,19 @@ export async function POST(req: NextRequest) {
 
     const { stops, departureTime, endPoint, plannedDate } = body
 
-    if (!stops?.length)       return NextResponse.json({ error: 'stops required' },         { status: 400 })
-    if (!departureTime)       return NextResponse.json({ error: 'departureTime required' }, { status: 400 })
-    if (!plannedDate)         return NextResponse.json({ error: 'plannedDate required' },   { status: 400 })
-    if (stops.length > 23)    return NextResponse.json({ error: 'Max 23 stops per route' }, { status: 400 })
-    if (!MAPS_KEY)            return NextResponse.json({ error: 'GOOGLE_MAPS_API_KEY not configured' }, { status: 500 })
+    if (!stops?.length)    return NextResponse.json({ error: 'stops required' },               { status: 400 })
+    if (!departureTime)    return NextResponse.json({ error: 'departureTime required' },       { status: 400 })
+    if (!plannedDate)      return NextResponse.json({ error: 'plannedDate required' },         { status: 400 })
+    if (stops.length > 23) return NextResponse.json({ error: 'Max 23 stops per route' },      { status: 400 })
+    if (!MAPS_KEY)         return NextResponse.json({ error: 'GOOGLE_MAPS_API_KEY not set' }, { status: 500 })
 
-    // ── 2. Fetch customer postcodes from Supabase ───────────────────────────
-    const customerIds = stops.map(s => s.customerId)
+    const destinationPC = endPoint === 'ozmen_john_street' ? OZMEN_PC : ORIGIN_PC
+
+    // ── 1. Fetch customer data ───────────────────────────────────────────────
     const { data: customers, error: custErr } = await supabase
       .from('customers')
       .select('id, name, postcode, lat, lng')
-      .in('id', customerIds)
+      .in('id', stops.map(s => s.customerId))
 
     if (custErr) return NextResponse.json({ error: custErr.message }, { status: 500 })
 
@@ -77,309 +137,270 @@ export async function POST(req: NextRequest) {
       (customers ?? []).map(c => [c.id, c as CustomerRow])
     )
 
-    // Validate every stop has a postcode
     const missing = stops.filter(s => !custMap.get(s.customerId)?.postcode)
     if (missing.length > 0) {
-      const names = missing.map(s => custMap.get(s.customerId)?.name ?? s.customerId)
       return NextResponse.json(
-        { error: `Missing postcodes for: ${names.join(', ')}. Add postcodes to these customers first.` },
+        { error: `Missing postcodes for: ${missing.map(s => custMap.get(s.customerId)?.name ?? s.customerId).join(', ')}` },
         { status: 422 }
       )
     }
 
-    // ── 3. Separate locked vs optimisable stops ─────────────────────────────
-    // Locked stops stay exactly where they are in the stops[] array.
-    // Unlocked stops are sent to Google with optimizeWaypoints: true.
-    //
-    // Strategy:
-    //   - Build a slot array matching stops.length positions
-    //   - Locked stops occupy their slot index immediately
-    //   - Unlocked stops fill remaining slots in Google's optimised order
+    const workingStops: WorkingStop[] = stops.map(s => ({
+      input:    s,
+      customer: custMap.get(s.customerId)!,
+      postcode: cleanPostcode(custMap.get(s.customerId)!.postcode!),
+    }))
 
-    const destination = endPoint === 'ozmen_john_street' ? OZMEN_POSTCODE : ORIGIN_POSTCODE
-
-    const lockedIndices   = stops.map((s, i) => s.lockedPosition ? i : -1).filter(i => i >= 0)
-    const unlockableStops = stops.filter(s => !s.lockedPosition)
-
-    // ── 4. Call Google Directions API ───────────────────────────────────────
-    // We pass all unlocked stops as waypoints with optimize:true.
-    // Locked stops are handled in post-processing (see step 5).
-    //
-    // Google Directions waypoints format:
-    //   "optimize:true|postcode1|postcode2|..."
-    //
-    // Cleanse every postcode before sending: strip all whitespace, uppercase.
-    // Google sometimes returns ZERO_RESULTS for "S7  0EQ" (double space) or
-    // "s70 1gw" (lowercase) even when the postcode is valid.
-
-    // Strip ALL spaces — Google resolves spaceless UK postcodes perfectly (S38DG, S701GW)
-    // This eliminates any possibility of space-encoding bugs downstream.
-    function cleanPostcode(pc: string): string {
-      return pc.replace(/\s+/g, '').trim().toUpperCase()
+    // Departure time — omit if in the past (Google will use live traffic)
+    const departureDt      = new Date(`${plannedDate}T${departureTime}:00`)
+    const departureISO     = departureDt.getTime() > Date.now() ? departureDt.toISOString() : null
+    if (!departureISO) {
+      console.log(`[optimise] Departure ${departureDt.toISOString()} is in the past — omitting (live traffic)`)
     }
 
-    // Cleanse postcodes — no encodeURIComponent here because we build the
-    // URL string manually below. URLSearchParams would double-encode any
-    // pre-encoded string (% → %25), which is what caused S10%201TE → S10%25201TE.
-    const unlockablePostcodes = unlockableStops
-      .map(s => cleanPostcode(custMap.get(s.customerId)!.postcode!))
+    const lockedStops   = workingStops.filter(s => s.input.lockedPosition)
+    const unlockedStops = workingStops.filter(s => !s.input.lockedPosition)
 
-    let googleOrder: number[]       = unlockableStops.map((_, i) => i) // default: as-is
-    let googleLegs:  GoogleLeg[]    = []
-    let totalDistanceM              = 0
-    let totalDurationS              = 0
+    // ════════════════════════════════════════════════════════════════════════
+    // PASS 1 — Geographic spine
+    // ════════════════════════════════════════════════════════════════════════
+    let geoOrdered: WorkingStop[]
+    let pass1Legs: RoutesLeg[] = []
 
-    if (unlockableStops.length > 0) {
-      // Build the waypoints value — postcodes are already clean (no spaces, uppercase)
-      // The pipe | and colon : in "optimize:true|PC1|PC2" are safe unencoded for Google
-      const waypointsValue = unlockablePostcodes.length > 0
-        ? `optimize:true|${unlockablePostcodes.join('|')}`
-        : ''
-
-      // Build departure time as Unix timestamp for traffic-aware routing
-      const departureDt   = new Date(`${plannedDate}T${departureTime}:00`)
-      const departureUnix = Math.floor(departureDt.getTime() / 1000)
-
-      // Failsafe: Google rejects departure_time in the past with INVALID_REQUEST.
-      // If the requested time has already passed (e.g. planning at 9pm with 8am default),
-      // send "now" instead — Google treats this as current time with live traffic.
-      const nowUnix        = Math.floor(Date.now() / 1000)
-      const departureParam = departureUnix < nowUnix ? 'now' : String(departureUnix)
-      if (departureParam === 'now') {
-        console.log(`[routes/optimise] Requested departure ${departureDt.toISOString()} is in the past — using "now" for traffic`)
+    if (unlockedStops.length <= 1) {
+      geoOrdered = unlockedStops
+    } else {
+      const p1Body: Record<string, unknown> = {
+        origin:                addr(ORIGIN_PC),
+        destination:           addr(destinationPC),
+        intermediates:         unlockedStops.map(s => addr(s.postcode)),
+        travelMode:            'DRIVE',
+        routingPreference:     'TRAFFIC_AWARE_OPTIMAL',
+        optimizeWaypointOrder: true,
       }
+      if (departureISO) p1Body.departureTime = departureISO
 
-      // Build URL manually — do NOT use URLSearchParams for the waypoints field.
-      // URLSearchParams encodes everything including pipe (|) and percent (%) which
-      // breaks pre-formatted waypoint strings and causes double-encoding.
-      const cleanOrigin      = cleanPostcode(ORIGIN_POSTCODE)
-      const cleanDestination = cleanPostcode(destination)
-      const baseUrl = 'https://maps.googleapis.com/maps/api/directions/json'
-      const manualUrl = `${baseUrl}?origin=${cleanOrigin}&destination=${cleanDestination}` +
-        (waypointsValue ? `&waypoints=${waypointsValue}` : '') +
-        `&travelmode=driving&departure_time=${departureParam}&traffic_model=best_guess` +
-        `&key=${MAPS_KEY}&region=gb&units=metric`
-
-      // Log with key redacted
-      console.log('[routes/optimise] Calling Google Directions API:', {
-        origin:          cleanOrigin,
-        destination:     cleanDestination,
-        waypoints:       unlockablePostcodes,
-        locked_stops:    lockedIndices.length,
-        unlocked_stops:  unlockableStops.length,
-        departure_time:  departureParam,
-        api_key_present: !!MAPS_KEY,
-        api_key_prefix:  MAPS_KEY ? MAPS_KEY.slice(0, 10) + '...' : 'MISSING',
-        full_url_no_key: manualUrl.replace(MAPS_KEY, '[REDACTED]'),
+      console.log('[optimise] Pass 1 — Geographic spine:', {
+        stops: unlockedStops.map(s => `${s.customer.name} (${s.postcode})`),
+        destination: destinationPC,
+        departure: departureISO ?? 'now',
       })
 
-      const mapsRes  = await fetch(manualUrl)
-      const mapsData = await mapsRes.json() as GoogleDirectionsResponse
+      const p1Res = await callRoutesAPI(p1Body)
 
-      if (mapsData.status !== 'OK') {
-        console.error('[routes/optimise] Google Directions API failure:', {
-          status:         mapsData.status,
-          error_message:  mapsData.error_message ?? '(none)',
-          origin:         ORIGIN_POSTCODE,
-          destination,
-          waypoint_count: unlockablePostcodes.length,
-        })
+      if (p1Res.error || !p1Res.routes?.length) {
+        const status = p1Res.error?.status ?? 'UNKNOWN'
+        const msg    = p1Res.error?.message ?? 'No routes returned'
+        console.error('[optimise] Pass 1 failed:', { status, msg })
 
-        // ── Per-stop sniffer ───────────────────────────────────────────────
-        // Run for ZERO_RESULTS and INVALID_REQUEST — both indicate a bad
-        // postcode somewhere in the batch. Test each stop individually so
-        // we can tell the user (and highlight) exactly which one is broken.
-        if (mapsData.status === 'ZERO_RESULTS' || mapsData.status === 'INVALID_REQUEST') {
-          const brokenPostcodes: Array<{
-            customerId: string
-            name:       string
-            postcode:   string
-            status:     string
-          }> = []
-
-          const allTestStops = stops.map(s => ({
-            customerId: s.customerId,
-            customer:   custMap.get(s.customerId)!,
-          }))
-
-          console.log(`[routes/optimise] ${mapsData.status} — sniffing ${allTestStops.length} stops individually`)
-
-          for (const { customerId, customer } of allTestStops) {
-            const testPostcode  = cleanPostcode(customer.postcode!)
-            const cleanOrig     = cleanPostcode(ORIGIN_POSTCODE)
-            // Manual URL — no URLSearchParams to avoid double-encoding
-            const testUrl = `https://maps.googleapis.com/maps/api/directions/json` +
-              `?origin=${cleanOrig}&destination=${testPostcode}&travelmode=driving&key=${MAPS_KEY}&region=gb`
-            const testRes  = await fetch(testUrl)
-            const testData = await testRes.json() as { status: string }
-            console.log(`[routes/optimise] Leg test  ${cleanOrig} → ${testPostcode} (${customer.name}): ${testData.status}`)
-
-            if (testData.status !== 'OK') {
-              brokenPostcodes.push({
-                customerId,
-                name:     customer.name,
-                postcode: customer.postcode!,
-                status:   testData.status,
-              })
-            }
-          }
-
-          console.log('[routes/optimise] Sniffer result:', brokenPostcodes.length === 0
-            ? 'All individual legs OK — may be routing between stops that fails'
-            : `Broken: ${brokenPostcodes.map(b => `${b.name} (${b.postcode}) → ${b.status}`).join(', ')}`)
-
-          return NextResponse.json(
-            {
-              error:           'ZERO_RESULTS',  // use consistent key so UI handles both the same way
-              brokenPostcodes,
-              message:         brokenPostcodes.length > 0
-                ? `Could not route to: ${brokenPostcodes.map(b => `${b.name} (${b.postcode})`).join(', ')}. Check the postcode${brokenPostcodes.length > 1 ? 's' : ''} and try again.`
-                : 'Could not calculate a route. Please check all postcodes are correct UK format and reachable by road.',
-            },
-            { status: 422 }
-          )
+        if (status === 'INVALID_ARGUMENT' || status === 'NOT_FOUND') {
+          return sniffBrokenPostcodes(workingStops, destinationPC, departureISO)
         }
-
-        // Non-routing errors (quota, auth) — no sniffer needed
-        const hint =
-          mapsData.status === 'REQUEST_DENIED'
-            ? 'Directions API may not be enabled, or the API key has HTTP referrer restrictions blocking server-side calls.'
-            : mapsData.status === 'OVER_DAILY_LIMIT' || mapsData.status === 'OVER_QUERY_LIMIT'
-            ? 'Google Maps quota exceeded — try again tomorrow.'
-            : 'Unexpected Google API error.'
-        return NextResponse.json(
-          { error: `${mapsData.status}: ${hint}` },
-          { status: 502 }
-        )
+        const hint = status === 'RESOURCE_EXHAUSTED'
+          ? 'Google Maps quota exceeded — try again tomorrow.'
+          : status === 'PERMISSION_DENIED'
+          ? 'Routes API not enabled or API key invalid.'
+          : msg
+        return NextResponse.json({ error: hint }, { status: 502 })
       }
 
-      // Google returns waypoint_order: the optimised sequence indices into our unlocked stops array
-      googleOrder = mapsData.routes[0].waypoint_order ?? googleOrder
-      googleLegs  = mapsData.routes[0].legs ?? []
+      const optIdx = p1Res.routes[0].optimizedIntermediateWaypointIndex ?? unlockedStops.map((_, i) => i)
+      pass1Legs    = p1Res.routes[0].legs ?? []
 
-      // Sum total distance and duration (legs = origin→wp1, wp1→wp2, ..., wpN→destination)
-      for (const leg of googleLegs) {
-        totalDistanceM += leg.distance.value
-        totalDurationS += (leg.duration_in_traffic?.value ?? leg.duration.value)
+      console.log('[optimise] Pass 1 result:', {
+        original:  unlockedStops.map((s, i) => `${i}: ${s.customer.name}`),
+        optimised: optIdx.map((i, pos) => `${pos + 1}. ${unlockedStops[i].customer.name}`),
+      })
+
+      geoOrdered = optIdx.map(i => unlockedStops[i])
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PASS 2 — Cluster by 25-min drive time threshold
+    // ════════════════════════════════════════════════════════════════════════
+    const clusters: WorkingStop[][] = []
+    let   current:  WorkingStop[]   = []
+
+    for (let i = 0; i < geoOrdered.length; i++) {
+      if (current.length === 0) { current.push(geoOrdered[i]); continue }
+      const legS = parseDuration(pass1Legs[i + 1]?.duration)
+      if (legS > CLUSTER_THRESHOLD_S) {
+        clusters.push(current)
+        current = [geoOrdered[i]]
+      } else {
+        current.push(geoOrdered[i])
       }
     }
+    if (current.length > 0) clusters.push(current)
 
-    // ── 5. Reconstruct the final ordered stop list ──────────────────────────
-    // Merge locked stops back into their original positions.
-    //
-    // Algorithm:
-    //   1. Start with an empty slot[] of length stops.length
-    //   2. Place locked stops at their slot indices
-    //   3. Fill remaining slots in Google's optimised order
+    console.log('[optimise] Pass 2 — Clusters:', clusters.map((cl, i) => ({
+      cluster: i + 1,
+      stops:   cl.map(s => `${s.customer.name} (${s.input.priority})`),
+    })))
 
-    const slots: (StopInput | null)[] = new Array(stops.length).fill(null)
+    // ════════════════════════════════════════════════════════════════════════
+    // PASS 3 — Priority sort within each cluster
+    // ════════════════════════════════════════════════════════════════════════
+    const sorted = clusters.map(cl =>
+      [...cl].sort((a, b) =>
+        (PRIORITY_ORDER[a.input.priority] ?? 2) - (PRIORITY_ORDER[b.input.priority] ?? 2)
+      )
+    )
 
-    // Place locked stops
-    for (const idx of lockedIndices) {
-      slots[idx] = stops[idx]
+    console.log('[optimise] Pass 3 — After priority sort:', sorted.map((cl, i) => ({
+      cluster: i + 1,
+      stops:   cl.map(s => `${s.customer.name} (${s.input.priority})`),
+    })))
+
+    // Flatten + re-insert locked stops at their original index positions
+    const clusteredUnlocked = sorted.flat()
+    const finalOrdered: WorkingStop[] = new Array(workingStops.length).fill(null)
+
+    for (const s of lockedStops) {
+      const idx = workingStops.findIndex(w => w.input.customerId === s.input.customerId)
+      if (idx >= 0) finalOrdered[idx] = s
+    }
+    let cur = 0
+    for (let i = 0; i < finalOrdered.length; i++) {
+      if (finalOrdered[i] === null) finalOrdered[i] = clusteredUnlocked[cur++]
     }
 
-    // Fill remaining slots with Google's optimised unlocked stops
-    const optimisedUnlocked = googleOrder.map(i => unlockableStops[i])
-    let   unlockCursor = 0
-    for (let i = 0; i < slots.length; i++) {
-      if (slots[i] === null) {
-        slots[i] = optimisedUnlocked[unlockCursor++] ?? null
-      }
+    console.log('[optimise] Pass 3 final order:', finalOrdered.map((s, i) =>
+      `${i + 1}. ${s.customer.name} (${s.input.priority}${s.input.lockedPosition ? ', LOCKED' : ''})`
+    ))
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PASS 4 — Final ETAs with locked order
+    // ════════════════════════════════════════════════════════════════════════
+    const p4Body: Record<string, unknown> = {
+      origin:                addr(ORIGIN_PC),
+      destination:           addr(destinationPC),
+      intermediates:         finalOrdered.map(s => addr(s.postcode)),
+      travelMode:            'DRIVE',
+      routingPreference:     'TRAFFIC_AWARE_OPTIMAL',
+      optimizeWaypointOrder: false,
+    }
+    if (departureISO) p4Body.departureTime = departureISO
+
+    console.log('[optimise] Pass 4 — Final ETA confirmation for', finalOrdered.length, 'stops')
+
+    const p4Res = await callRoutesAPI(p4Body)
+
+    // If Pass 4 fails, return order without ETAs rather than crash
+    if (p4Res.error || !p4Res.routes?.length) {
+      console.error('[optimise] Pass 4 failed — returning order without ETAs:', p4Res.error)
+      const fallback = finalOrdered.map((s, i) => ({
+        position:             i + 1,
+        customerId:           s.input.customerId,
+        customerName:         s.customer.name,
+        postcode:             s.customer.postcode,
+        lat:                  s.customer.lat,
+        lng:                  s.customer.lng,
+        priority:             s.input.priority,
+        lockedPosition:       s.input.lockedPosition,
+        priorityNote:         s.input.priorityNote ?? null,
+        estimatedArrival:     null,
+        driveTimeFromPrevMin: 0,
+        distanceFromPrevKm:   0,
+      }))
+      return NextResponse.json({
+        orderedStops:    fallback,
+        totalDistanceKm: 0,
+        totalDurationMin: 0,
+        googleMapsUrl:   buildDeepLink(ORIGIN_PC, destinationPC, finalOrdered),
+        warning:         'ETAs unavailable — route order is correct.',
+      })
     }
 
-    // ── 6. Calculate estimated arrivals per stop ────────────────────────────
-    // We use departure time + cumulative drive time from Google legs.
-    // Legs[0] = origin → stop[0], Legs[1] = stop[0] → stop[1], etc.
-    // The last leg goes to the destination (end point), not a stop.
+    const p4Legs       = p4Res.routes[0].legs ?? []
+    const totalDistM   = p4Res.routes[0].distanceMeters ?? p4Legs.reduce((s, l) => s + (l.distanceMeters ?? 0), 0)
+    const totalDurS    = parseDuration(p4Res.routes[0].duration) ||
+                         p4Legs.reduce((s, l) => s + parseDuration(l.duration), 0)
 
-    const departureMs = new Date(`${plannedDate}T${departureTime}:00`).getTime()
-    let   cumulativeMs = 0
-
-    const orderedStops = slots.map((stop, i) => {
-      if (!stop) return null
-
-      const customer = custMap.get(stop.customerId)!
-
-      // Leg i drives FROM previous stop (or origin) TO this stop
-      const leg = googleLegs[i]
-      const legDurationS  = leg ? (leg.duration_in_traffic?.value ?? leg.duration.value) : 0
-      const legDistanceKm = leg ? leg.distance.value / 1000 : 0
-
-      cumulativeMs += legDurationS * 1000
-      const arrivalMs   = departureMs + cumulativeMs
-      const arrivalTime = new Date(arrivalMs)
-        .toTimeString()
-        .slice(0, 5) // "HH:MM"
+    let cumMs = 0
+    const orderedStops = finalOrdered.map((s, i) => {
+      const leg   = p4Legs[i]
+      const legS  = parseDuration(leg?.duration)
+      const legKm = (leg?.distanceMeters ?? 0) / 1000
+      cumMs += legS * 1000
 
       return {
-        position:              i + 1,
-        customerId:            stop.customerId,
-        customerName:          customer.name,
-        postcode:              customer.postcode,
-        lat:                   customer.lat,
-        lng:                   customer.lng,
-        priority:              stop.priority,
-        lockedPosition:        stop.lockedPosition,
-        priorityNote:          stop.priorityNote ?? null,
-        estimatedArrival:      arrivalTime,
-        driveTimeFromPrevMin:  Math.round(legDurationS / 60),
-        distanceFromPrevKm:    Math.round(legDistanceKm * 10) / 10,
+        position:             i + 1,
+        customerId:           s.input.customerId,
+        customerName:         s.customer.name,
+        postcode:             s.customer.postcode,
+        lat:                  s.customer.lat,
+        lng:                  s.customer.lng,
+        priority:             s.input.priority,
+        lockedPosition:       s.input.lockedPosition,
+        priorityNote:         s.input.priorityNote ?? null,
+        estimatedArrival:     toHHMM(departureDt.getTime() + cumMs),
+        driveTimeFromPrevMin: Math.round(legS / 60),
+        distanceFromPrevKm:   Math.round(legKm * 10) / 10,
       }
-    }).filter(Boolean)
+    })
 
-    const totalDistanceKm  = Math.round((totalDistanceM / 1000) * 10) / 10
-    const totalDurationMin = Math.round(totalDurationS / 60)
+    const googleMapsUrl = buildDeepLink(ORIGIN_PC, destinationPC, finalOrdered)
+    console.log('[optimise] Complete —', orderedStops.length, 'stops,',
+      Math.round(totalDurS / 60), 'min,', Math.round(totalDistM / 1000), 'km')
 
-    // ── 7. Build Google Maps deep link ──────────────────────────────────────
-    // cleanPostcode strips all spaces so no encoding needed for postcodes.
-    // The Google Maps dir URL accepts bare postcodes without encoding.
-    const cleanOriginLink = cleanPostcode(ORIGIN_POSTCODE)
-    const cleanDestLink   = cleanPostcode(destination)
-    const waypointPostcodes = orderedStops
-      .slice(0, -1)
-      .map(s => s!.postcode ? cleanPostcode(s!.postcode) : encodeURIComponent(s!.customerName))
-      .join('|')
-
-    const googleMapsUrl = [
-      'https://www.google.com/maps/dir/?api=1',
-      `&origin=${cleanOriginLink}`,
-      `&destination=${cleanDestLink}`,
-      waypointPostcodes ? `&waypoints=${waypointPostcodes}` : '',
-      '&travelmode=driving',
-    ].join('')
-
-    console.log('[routes/optimise] Generated deep link:', googleMapsUrl)
-
-    // ── 8. Return preview result ─────────────────────────────────────────────
     return NextResponse.json({
       orderedStops,
-      totalDistanceKm,
-      totalDurationMin,
+      totalDistanceKm:  Math.round((totalDistM / 1000) * 10) / 10,
+      totalDurationMin: Math.round(totalDurS / 60),
       googleMapsUrl,
     })
 
   } catch (err) {
-    console.error('[routes/optimise] Unexpected error:', err)
+    console.error('[optimise] Unexpected error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// ─── Google Directions API types (minimal) ────────────────────────────────────
+// ─── Sniffer ──────────────────────────────────────────────────────────────────
 
-interface GoogleLeg {
-  distance:             { value: number; text: string }
-  duration:             { value: number; text: string }
-  duration_in_traffic?: { value: number; text: string }
-  start_address:        string
-  end_address:          string
+async function sniffBrokenPostcodes(
+  stops: WorkingStop[],
+  destinationPC: string,
+  departureISO: string | null,
+): Promise<NextResponse> {
+  const broken: Array<{ customerId: string; name: string; postcode: string; status: string }> = []
+  console.log(`[optimise] Sniffer — testing ${stops.length} stops individually`)
+
+  for (const s of stops) {
+    const body: Record<string, unknown> = {
+      origin:      addr(ORIGIN_PC),
+      destination: addr(s.postcode),
+      travelMode:  'DRIVE',
+    }
+    if (departureISO) body.departureTime = departureISO
+    const res = await callRoutesAPI(body)
+    const ok  = !res.error && !!res.routes?.length
+    console.log(`[optimise] Sniffer  ${ORIGIN_PC} → ${s.postcode} (${s.customer.name}): ${ok ? 'OK' : res.error?.status ?? 'FAIL'}`)
+    if (!ok) broken.push({ customerId: s.input.customerId, name: s.customer.name, postcode: s.customer.postcode!, status: res.error?.status ?? 'FAIL' })
+  }
+
+  return NextResponse.json(
+    {
+      error:           'ZERO_RESULTS',
+      brokenPostcodes: broken,
+      message:         broken.length > 0
+        ? `Could not route to: ${broken.map(b => `${b.name} (${b.postcode})`).join(', ')}. Check postcode${broken.length > 1 ? 's' : ''} and try again.`
+        : 'Could not calculate a route. All individual postcodes OK but combined route failed.',
+    },
+    { status: 422 }
+  )
 }
 
-interface GoogleDirectionsResponse {
-  status:         string
-  error_message?: string
-  routes: Array<{
-    waypoint_order: number[]
-    legs:           GoogleLeg[]
-  }>
+// ─── Deep link builder ────────────────────────────────────────────────────────
+
+function buildDeepLink(origin: string, destination: string, stops: WorkingStop[]): string {
+  const wps = stops.map(s => s.postcode).join('|')
+  return [
+    'https://www.google.com/maps/dir/?api=1',
+    `&origin=${origin}`,
+    `&destination=${destination}`,
+    wps ? `&waypoints=${wps}` : '',
+    '&travelmode=driving',
+  ].join('')
 }

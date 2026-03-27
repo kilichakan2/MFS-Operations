@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Paths that are public (no auth required)
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team', '/api/test-routes']
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team']
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -56,7 +56,6 @@ const SHARED_API_PATHS = [
   '/api/routes/today',
   '/api/routes/customers',
   '/api/routes/users',
-  '/api/test-routes',   // TEMPORARY — delete after infrastructure test
 ]
 
 export function middleware(req: NextRequest) {
