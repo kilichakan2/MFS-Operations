@@ -119,10 +119,11 @@ function StopCardRow({
 
   return (
     <div className={['bg-white rounded-xl border-2 transition-colors', borderClass].join(' ')}>
-      {/* ── Main row ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 px-2 py-1.5">
 
-        {/* Position badge + up/down arrows stacked vertically */}
+      {/* ── Row 1: position + customer name (full width, no squash) ──────── */}
+      <div className="flex items-center gap-1.5 px-2 pt-1.5 pb-0">
+
+        {/* Position badge + up/down arrows */}
         <div className="flex flex-col items-center flex-shrink-0 w-5">
           <button type="button" disabled={index === 0 || stop.lockedPosition}
             onClick={() => onMove(index, -1)}
@@ -141,11 +142,20 @@ function StopCardRow({
           </button>
         </div>
 
-        {/* Customer name + postcode */}
+        {/* Customer name — gets full remaining width, never truncated by controls */}
+        <p className="flex-1 min-w-0 text-xs font-semibold text-[#16205B] truncate leading-tight">
+          {stop.name}
+        </p>
+      </div>
+
+      {/* ── Row 2: postcode / ETA on left · controls on right ────────────── */}
+      <div className="flex items-center gap-1.5 px-2 pb-1.5 pt-0.5">
+
+        {/* Postcode + ETA — left side */}
+        <div className="w-5 flex-shrink-0" />{/* spacer aligns with number column above */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-[#16205B] truncate leading-tight">{stop.name}</p>
           {broken ? (
-            <div className="flex items-center gap-1 mt-0.5">
+            <div className="flex items-center gap-1">
               <span className="text-[10px] text-red-600 font-bold">🔴 Bad postcode</span>
               <button type="button" style={{ touchAction: 'manipulation' }}
                 onClick={() => { setEditingPost(v => !v); setPostcodeInput(stop.postcode ?? '') }}
@@ -167,12 +177,11 @@ function StopCardRow({
           )}
           {/* Arrive / Depart — shown after optimise */}
           {stop.estimatedArrival && (() => {
-            // Calculate depart time = arrival + 15min service time
-            const [h, m]   = stop.estimatedArrival.split(':').map(Number)
-            const depMins  = h * 60 + m + 15
-            const depStr   = `${String(Math.floor(depMins / 60) % 24).padStart(2, '0')}:${String(depMins % 60).padStart(2, '0')}`
+            const [h, m]  = stop.estimatedArrival.split(':').map(Number)
+            const depMins = h * 60 + m + 15
+            const depStr  = `${String(Math.floor(depMins / 60) % 24).padStart(2, '0')}:${String(depMins % 60).padStart(2, '0')}`
             return (
-              <div className="mt-px">
+              <div className="mt-px leading-none">
                 <span className="text-[10px] font-bold text-[#EB6619]">↓ {stop.estimatedArrival}</span>
                 <span className="text-[9px] text-gray-400 mx-0.5">·</span>
                 <span className="text-[10px] font-semibold text-gray-400">↑ {depStr}</span>
@@ -181,14 +190,13 @@ function StopCardRow({
           })()}
         </div>
 
-        {/* Controls row: priority · lock · note · remove — all 28px height */}
+        {/* Controls: priority · lock · note · remove */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Priority select */}
           <select
             value={stop.priority}
             onChange={e => onChange(stop.id, { priority: e.target.value as StopCard['priority'] })}
             className={[
-              'text-[10px] font-bold border rounded-md px-1 py-0.5 bg-white focus:outline-none focus:border-[#EB6619] h-7',
+              'text-[10px] font-bold border rounded-md px-1 py-0.5 bg-white focus:outline-none focus:border-[#EB6619] h-6',
               stop.priority === 'priority' ? 'border-red-400 text-red-600'
                 : stop.priority === 'urgent' ? 'border-amber-400 text-amber-600'
                 : 'border-[#EDEAE1] text-[#16205B]/60',
@@ -200,15 +208,12 @@ function StopCardRow({
             ))}
           </select>
 
-          {/* Lock */}
           <button type="button"
             onClick={() => onChange(stop.id, { lockedPosition: !stop.lockedPosition })}
             title={stop.lockedPosition ? 'Unlock' : 'Lock position'}
             className={[
-              'w-7 h-7 flex items-center justify-center rounded-md border transition-colors',
-              stop.lockedPosition
-                ? 'bg-[#16205B] border-[#16205B] text-white'
-                : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
+              'w-6 h-6 flex items-center justify-center rounded-md border transition-colors',
+              stop.lockedPosition ? 'bg-[#16205B] border-[#16205B] text-white' : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
             ].join(' ')}
             style={{ touchAction: 'manipulation' }}
           >
@@ -217,15 +222,12 @@ function StopCardRow({
             </svg>
           </button>
 
-          {/* Note toggle */}
           <button type="button"
             onClick={() => setShowNote(v => !v)}
             title="Add note"
             className={[
-              'w-7 h-7 flex items-center justify-center rounded-md border transition-colors',
-              showNote || stop.priorityNote
-                ? 'border-[#EB6619]/60 text-[#EB6619]'
-                : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
+              'w-6 h-6 flex items-center justify-center rounded-md border transition-colors',
+              showNote || stop.priorityNote ? 'border-[#EB6619]/60 text-[#EB6619]' : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
             ].join(' ')}
             style={{ touchAction: 'manipulation' }}
           >
@@ -234,9 +236,8 @@ function StopCardRow({
             </svg>
           </button>
 
-          {/* Remove */}
           <button type="button" onClick={() => onRemove(stop.id)}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-[#16205B]/20 hover:text-red-500 hover:bg-red-50 transition-colors"
+            className="w-6 h-6 flex items-center justify-center rounded-md text-[#16205B]/20 hover:text-red-500 hover:bg-red-50 transition-colors"
             style={{ touchAction: 'manipulation' }}
           >
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-3 h-3">
@@ -829,10 +830,10 @@ export default function RoutesPage() {
 
         {/* ── RIGHT PANEL — MAP ────────────────────────────────────────────────── */}
         <div className="hidden lg:flex flex-1 flex-col">
-          <div className="relative flex-1 rounded-xl overflow-hidden border border-[#EDEAE1] min-h-[500px]">
+          <div className="relative flex-1 rounded-xl overflow-hidden border border-[#EDEAE1] min-h-[500px] isolate">
             {/* Floating legend overlay — shown when stops exist */}
             {mapStops.length > 0 && (
-              <div className="absolute top-3 left-3 z-[1000] bg-white/95 backdrop-blur-sm shadow-md rounded-lg px-3 py-2 text-xs pointer-events-none">
+              <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm shadow-md rounded-lg px-3 py-2 text-xs pointer-events-none">
                 <p className="text-[8px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-1.5">Route key</p>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5">
