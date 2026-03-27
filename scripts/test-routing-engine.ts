@@ -55,22 +55,39 @@ interface RoutesLeg {
 //   legs[i] = stop[i-1] → stop[i]   (used when processing stop i)
 
 function clusterAndSort(geoOrdered: TestStop[], legDurations: RoutesLeg[]): TestStop[][] {
-  const clusters: TestStop[][] = []
+  // Pass 2: build clusters by consecutive drive gap
+  const clusters:          TestStop[][] = []
+  const clusterOriginLegS: number[]    = []
   let current: TestStop[] = []
+  let currentOriginIdx = 0
 
   for (let i = 0; i < geoOrdered.length; i++) {
-    if (current.length === 0) { current.push(geoOrdered[i]); continue }
-    // legs[i] = drive FROM the previous stop TO this stop
-    const legS = parseDuration(legDurations[i]?.duration)
-    if (legS > CLUSTER_THRESHOLD_S) {
+    if (current.length === 0) {
+      current.push(geoOrdered[i])
+      currentOriginIdx = i
+      continue
+    }
+    const driveS = parseDuration(legDurations[i]?.duration)
+    if (driveS > CLUSTER_THRESHOLD_S) {
       clusters.push(current)
+      clusterOriginLegS.push(parseDuration(legDurations[currentOriginIdx]?.duration))
       current = [geoOrdered[i]]
+      currentOriginIdx = i
     } else {
       current.push(geoOrdered[i])
     }
   }
-  if (current.length > 0) clusters.push(current)
-  return clusters.map(cl =>
+  if (current.length > 0) {
+    clusters.push(current)
+    clusterOriginLegS.push(parseDuration(legDurations[currentOriginIdx]?.duration))
+  }
+
+  // Pass 2b: sort clusters nearest-to-origin first
+  const order             = clusters.map((_, i) => i).sort((a, b) => clusterOriginLegS[a] - clusterOriginLegS[b])
+  const clustersNearFirst = order.map(i => clusters[i])
+
+  // Pass 3: priority sort within each cluster
+  return clustersNearFirst.map(cl =>
     [...cl].sort((a, b) =>
       (PRIORITY_ORDER[a.priority] ?? 2) - (PRIORITY_ORDER[b.priority] ?? 2)
     )
@@ -367,6 +384,77 @@ test('Locked stop stays at original index after clustering', () => {
   const final      = reinsertLocked(withLocked, clusters.flat())
   eq(final[3].name, 'JENNYS CAFE')
   eq(final[3].lockedPosition, true)
+})
+
+// ─── Suite 3b: "Furthest First" — Google returns far stop first ──────────────
+// This is the production bug: Sheffield (8min) + Worksop (35min).
+// Google's TSP returns Worksop first (minimises round-trip mileage).
+// Pass 2b must re-sort so Sheffield cluster runs before Worksop cluster.
+
+console.log('\n── Suite 3b: Google "Furthest First" fix')
+
+const FURTHEST_FIRST_STOPS: TestStop[] = [
+  // Sheffield is NEAR (8min from origin)
+  { customerId: 'near1', name: 'Sheffield Customer', postcode: 'S101TE', lat: 53.385, lng: -1.508, priority: 'none',   lockedPosition: false },
+  // Worksop is FAR (35min from origin) — marked urgent to show it does NOT jump clusters
+  { customerId: 'far1',  name: 'Worksop Urgent',     postcode: 'S801EJ', lat: 53.305, lng: -1.125, priority: 'urgent', lockedPosition: false },
+]
+
+// Google returns them FAR FIRST: [Worksop, Sheffield]
+// legs[0] = origin→Worksop = 2100s (35min)
+// legs[1] = Worksop→Sheffield = 1920s (32min) > threshold → new cluster
+const FURTHEST_FIRST_GEO_ORDERED: TestStop[] = [
+  FURTHEST_FIRST_STOPS[1],  // Worksop first (Google's TSP choice)
+  FURTHEST_FIRST_STOPS[0],  // Sheffield second
+]
+const FURTHEST_FIRST_LEGS: RoutesLeg[] = [
+  { duration: '2100s', distanceMeters: 40000 },   // [0] origin → Worksop (35min, FAR)
+  { duration: '1920s', distanceMeters: 30000 },   // [1] Worksop → Sheffield (32min, > 25min threshold)
+  { duration: '2100s', distanceMeters: 40000 },   // [2] Sheffield → destination
+]
+
+test('Furthest-first: Pass 2 correctly detects 2 clusters', () => {
+  const clusters = clusterAndSort(FURTHEST_FIRST_GEO_ORDERED, FURTHEST_FIRST_LEGS)
+  eq(clusters.length, 2, `Expected 2 clusters, got ${clusters.length}`)
+})
+
+test('Furthest-first: Pass 2b re-sorts so Sheffield (8min) runs BEFORE Worksop (35min)', () => {
+  const clusters = clusterAndSort(FURTHEST_FIRST_GEO_ORDERED, FURTHEST_FIRST_LEGS)
+  // Even though Google gave us [Worksop, Sheffield], Pass 2b must flip them
+  eq(clusters[0][0].name, 'Sheffield Customer',
+    `Cluster 0 should be Sheffield (near), got ${clusters[0][0].name}`)
+  eq(clusters[1][0].name, 'Worksop Urgent',
+    `Cluster 1 should be Worksop (far), got ${clusters[1][0].name}`)
+})
+
+test('Furthest-first: urgent label on Worksop does NOT promote it before Sheffield', () => {
+  const clusters   = clusterAndSort(FURTHEST_FIRST_GEO_ORDERED, FURTHEST_FIRST_LEGS)
+  const finalOrder = reinsertLocked(FURTHEST_FIRST_STOPS, clusters.flat())
+  // Sheffield (standard) MUST come before Worksop (urgent) — different clusters
+  eq(finalOrder[0].name, 'Sheffield Customer')
+  eq(finalOrder[1].name, 'Worksop Urgent')
+})
+
+test('Furthest-first: final flattened order is Sheffield → Worksop', () => {
+  const clusters = clusterAndSort(FURTHEST_FIRST_GEO_ORDERED, FURTHEST_FIRST_LEGS)
+  const flat     = clusters.flat()
+  eq(flat.map(s => s.name), ['Sheffield Customer', 'Worksop Urgent'])
+})
+
+// Also test the reverse: when Google correctly returns near-first, it stays near-first
+const NEAR_FIRST_GEO_ORDERED: TestStop[] = [
+  FURTHEST_FIRST_STOPS[0],  // Sheffield first (correct order)
+  FURTHEST_FIRST_STOPS[1],  // Worksop second
+]
+const NEAR_FIRST_LEGS: RoutesLeg[] = [
+  { duration: '480s',  distanceMeters: 3200  },   // [0] origin → Sheffield (8min)
+  { duration: '1620s', distanceMeters: 27000 },   // [1] Sheffield → Worksop (27min, > 25min)
+]
+
+test('Near-first: when Google returns correct order, Pass 2b keeps it unchanged', () => {
+  const clusters = clusterAndSort(NEAR_FIRST_GEO_ORDERED, NEAR_FIRST_LEGS)
+  eq(clusters[0][0].name, 'Sheffield Customer')
+  eq(clusters[1][0].name, 'Worksop Urgent')
 })
 
 // ─── Suite 4: Cluster boundary edge cases ────────────────────────────────────

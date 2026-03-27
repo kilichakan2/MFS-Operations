@@ -267,31 +267,53 @@ export async function POST(req: NextRequest) {
     // legs[i] = drive FROM the previous stop TO geoOrdered[i].
     // We split when that drive time exceeds 25 minutes.
     // ════════════════════════════════════════════════════════════════════════
-    const clusters: WorkingStop[][] = []
+    const clusters:           WorkingStop[][] = []
+    const clusterOriginLegS:  number[]        = []  // origin drive time for each cluster's first stop
     let   current:  WorkingStop[]   = []
+    let   currentOriginLegIdx = 0
 
     for (let i = 0; i < geoOrdered.length; i++) {
-      if (current.length === 0) { current.push(geoOrdered[i]); continue }
-      // FIX: use pass1Legs[i] (drive TO this stop), not [i+1] (drive TO next stop)
+      if (current.length === 0) {
+        current.push(geoOrdered[i])
+        currentOriginLegIdx = i
+        continue
+      }
       const legS = parseDuration(pass1Legs[i]?.duration)
       if (legS > CLUSTER_THRESHOLD_S) {
         clusters.push(current)
+        clusterOriginLegS.push(parseDuration(pass1Legs[currentOriginLegIdx]?.duration))
         current = [geoOrdered[i]]
+        currentOriginLegIdx = i
       } else {
         current.push(geoOrdered[i])
       }
     }
-    if (current.length > 0) clusters.push(current)
+    if (current.length > 0) {
+      clusters.push(current)
+      clusterOriginLegS.push(parseDuration(pass1Legs[currentOriginLegIdx]?.duration))
+    }
 
-    console.log('[optimise] Pass 2 — Clusters:', clusters.map((cl, i) => ({
-      cluster: i + 1,
-      stops:   cl.map(s => `${s.customer.name} (${s.input.priority})`),
+    console.log('[optimise] Pass 2 — Clusters (pre-sort):', clusters.map((cl, i) => ({
+      cluster:        i + 1,
+      originDriveMin: Math.round(clusterOriginLegS[i] / 60),
+      stops:          cl.map(s => `${s.customer.name} (${s.input.priority})`),
     })))
 
-    // ════════════════════════════════════════════════════════════════════════
-    // PASS 3 — Priority sort within each cluster
-    // ════════════════════════════════════════════════════════════════════════
-    const sorted = clusters.map(cl =>
+    // Pass 2b — Sort clusters nearest-to-origin first
+    // Google's TSP may return furthest-first to minimise total mileage.
+    // MFS operations require local drops cleared before cross-country legs.
+    const clusterOrder       = clusters.map((_, i) => i).sort((a, b) => clusterOriginLegS[a] - clusterOriginLegS[b])
+    const clustersNearFirst  = clusterOrder.map(i => clusters[i])
+    const originLegsNearFirst = clusterOrder.map(i => clusterOriginLegS[i])
+
+    console.log('[optimise] Pass 2b — Clusters sorted near→far:', clustersNearFirst.map((cl, i) => ({
+      cluster:        i + 1,
+      originDriveMin: Math.round(originLegsNearFirst[i] / 60),
+      stops:          cl.map(s => `${s.customer.name} (${s.input.priority})`),
+    })))
+
+    // Pass 3 — Priority sort within each cluster (urgent > priority > none)
+    const sorted = clustersNearFirst.map(cl =>
       [...cl].sort((a, b) =>
         (PRIORITY_ORDER[a.input.priority] ?? 2) - (PRIORITY_ORDER[b.input.priority] ?? 2)
       )
