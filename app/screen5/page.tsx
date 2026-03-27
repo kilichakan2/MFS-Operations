@@ -19,7 +19,7 @@ interface AppUser {
   created_at:    string
 }
 
-interface AppCustomer { id: string; name: string; active: boolean; created_at: string }
+interface AppCustomer { id: string; name: string; postcode: string | null; lat: number | null; lng: number | null; active: boolean; created_at: string }
 interface AppProduct  { id: string; name: string; category: string | null; code: string | null; box_size: string | null; active: boolean; created_at: string }
 interface CleanRow    { name: string; category?: string | null; code?: string | null; box_size?: string | null }
 interface FlaggedRow  { row: number; raw: string; reason: string }
@@ -492,7 +492,33 @@ function ImporterSection({
   const [fetching,     setFetching]     = useState(true)
   const [importDone,   setImportDone]   = useState<{ inserted: number; skipped: number } | null>(null)
 
-  // ── Manual mapper state (products only) ─────────────────────────────────────
+  // ── Postcode inline edit (customers only) ────────────────────────────────────
+  const [editingPostcodeId, setEditingPostcodeId] = useState<string | null>(null)
+  const [postcodeInput,     setPostcodeInput]     = useState('')
+  const [savingPostcode,    setSavingPostcode]     = useState(false)
+  const [postcodeErr,       setPostcodeErr]        = useState('')
+  const [postcodeOk,        setPostcodeOk]         = useState<string | null>(null)  // id of last saved
+
+  async function savePostcode(id: string) {
+    const trimmed = postcodeInput.replace(/\s+/g, ' ').trim().toUpperCase()
+    if (!trimmed) return
+    setSavingPostcode(true); setPostcodeErr('')
+    try {
+      const res  = await fetch(patchUrl(id), {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body:   JSON.stringify({ postcode: trimmed }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setPostcodeErr(data.error ?? 'Save failed'); return }
+      // Update local list with new postcode + lat/lng
+      setItems(prev => prev.map(i => i.id === id ? { ...i, postcode: data.postcode, lat: data.lat, lng: data.lng } : i))
+      setEditingPostcodeId(null)
+      setPostcodeOk(id)
+      setTimeout(() => setPostcodeOk(null), 2500)
+      if (data._warning) setPostcodeErr(data._warning)
+    } catch { setPostcodeErr('Network error') }
+    finally { setSavingPostcode(false) }
+  }
   const [parsedRows,   setParsedRows]   = useState<string[][]>([])
   const [headers,      setHeaders]      = useState<string[]>([])
   const [mapping,      setMapping]      = useState<ColMapping>({ name: 1, code: 0, category: null, box_size: 2 })
@@ -606,7 +632,7 @@ function ImporterSection({
 
   function reset() { setImportState('list'); setRawInput(''); setResult(null); setParsedRows([]); setApiError('') }
 
-  const listCols = showCategory ? ['Code', 'Name', 'Category', 'Box Size', 'Added', 'Active'] : ['Name', 'Added', 'Active']
+  const listCols = showCategory ? ['Code', 'Name', 'Category', 'Box Size', 'Added', 'Active'] : ['Name', 'Postcode', 'Added', 'Active']
 
   // ── Column option list for dropdowns ─────────────────────────────────────────
   const colOptions = headers.map((h, i) => ({ value: i, label: `Col ${i + 1}: ${h}` }))
@@ -849,6 +875,66 @@ function ImporterSection({
                       )}
                       {showCategory && (
                         <td className="py-3 px-3 text-sm text-gray-400">{(item as AppProduct).box_size ?? '—'}</td>
+                      )}
+                      {/* Postcode cell — customers only (not products) */}
+                      {!showCategory && (
+                        <td className="py-2 px-3">
+                          {editingPostcodeId === item.id ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                autoFocus
+                                type="text"
+                                maxLength={8}
+                                value={postcodeInput}
+                                onChange={e => { setPostcodeInput(e.target.value.toUpperCase()); setPostcodeErr('') }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') savePostcode(item.id)
+                                  if (e.key === 'Escape') { setEditingPostcodeId(null); setPostcodeErr('') }
+                                }}
+                                className="w-24 h-7 border-2 border-[#EB6619] rounded px-2 text-xs font-mono focus:outline-none uppercase"
+                              />
+                              <button
+                                onClick={() => savePostcode(item.id)}
+                                disabled={savingPostcode}
+                                className="h-7 px-2 rounded bg-[#EB6619] text-white text-xs font-bold disabled:opacity-40"
+                              >{savingPostcode ? '⟳' : '✓'}</button>
+                              <button
+                                onClick={() => { setEditingPostcodeId(null); setPostcodeErr('') }}
+                                className="h-7 px-1.5 rounded border border-gray-200 text-xs text-gray-400"
+                              >✕</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingPostcodeId(item.id)
+                                setPostcodeInput((item as AppCustomer).postcode ?? '')
+                                setPostcodeErr('')
+                              }}
+                              className="group flex items-center gap-1 text-left"
+                            >
+                              {postcodeOk === item.id ? (
+                                <span className="text-xs text-green-600 font-semibold">✓ Saved</span>
+                              ) : (item as AppCustomer).lat ? (
+                                <span className="text-xs text-gray-500 font-mono group-hover:text-[#EB6619] transition-colors">
+                                  {(item as AppCustomer).postcode ?? '—'}
+                                </span>
+                              ) : (item as AppCustomer).postcode ? (
+                                <span className="text-xs text-amber-600 font-mono">
+                                  {(item as AppCustomer).postcode} <span className="text-amber-400 text-[9px]">⚠</span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-300 italic">add postcode</span>
+                              )}
+                              <span className="text-[10px] text-gray-300 group-hover:text-[#EB6619] transition-colors">✏</span>
+                            </button>
+                          )}
+                          {editingPostcodeId === item.id && postcodeErr && (
+                            <p className="text-[10px] text-red-600 mt-0.5">{postcodeErr}</p>
+                          )}
+                          {savingPostcode && editingPostcodeId === item.id && (
+                            <p className="text-[10px] text-[#EB6619] mt-0.5">Saving & geocoding…</p>
+                          )}
+                        </td>
                       )}
                       <td className="py-3 px-3 text-sm text-gray-400">
                         {new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}

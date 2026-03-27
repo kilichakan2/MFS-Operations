@@ -88,7 +88,7 @@ function StopCardRow({
   onRemove:          (id: string) => void
   onMove:            (index: number, dir: -1 | 1) => void
   broken?:           boolean
-  onPostcodeUpdate?: (id: string, newPostcode: string) => void
+  onPostcodeUpdate?: (id: string, newPostcode: string, lat: number | null, lng: number | null) => void
 }) {
   const [showNote,      setShowNote]      = useState(false)
   const [editingPost,   setEditingPost]   = useState(false)
@@ -101,13 +101,18 @@ function StopCardRow({
     if (!trimmed) return
     setSaving(true); setSaveErr('')
     try {
+      // Step 1: PATCH postcode to DB (backend also geocodes inline)
       const res  = await fetch(`/api/routes/customers/${stop.id}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body:   JSON.stringify({ postcode: trimmed }),
       })
       const data = await res.json()
       if (!res.ok) { setSaveErr(data.error ?? 'Save failed'); return }
-      onPostcodeUpdate?.(stop.id, trimmed)
+
+      // Backend returns lat/lng if geocoding succeeded
+      const lat = data.customer?.lat ?? null
+      const lng = data.customer?.lng ?? null
+      onPostcodeUpdate?.(stop.id, trimmed, lat, lng)
       setEditingPost(false); setSaveErr('')
     } catch { setSaveErr('Network error') }
     finally   { setSaving(false) }
@@ -117,174 +122,184 @@ function StopCardRow({
     ? 'border-red-500 bg-red-50/30'
     : PRIORITY_RING[stop.priority]
 
+  // Postcode status: broken > no-lat (not geocoded) > normal
+  const postcodeStatus: 'broken' | 'ungeoced' | 'ok' =
+    broken          ? 'broken'
+    : !stop.lat     ? 'ungeoced'
+    : 'ok'
+
   return (
     <div className={['bg-white rounded-xl border-2 transition-colors', borderClass].join(' ')}>
 
-      {/* ── Row 1: position + customer name (full width, no squash) ──────── */}
-      <div className="flex items-center gap-1.5 px-2 pt-1.5 pb-0">
+      {/* ── Single padded wrapper — tighter than two separate rows ─────── */}
+      <div className="px-2 py-1">
 
-        {/* Position badge + up/down arrows */}
-        <div className="flex flex-col items-center flex-shrink-0 w-5">
-          <button type="button" disabled={index === 0 || stop.lockedPosition}
-            onClick={() => onMove(index, -1)}
-            className="text-[#16205B]/25 hover:text-[#16205B] disabled:opacity-0 transition-colors leading-none"
-            style={{ touchAction: 'manipulation' }}
-          >
-            <svg viewBox="0 0 10 6" fill="currentColor" className="w-2 h-1.5"><path d="M5 0L10 6H0L5 0Z"/></svg>
-          </button>
-          <span className="text-[11px] font-bold text-[#16205B] leading-none my-0.5">{index + 1}</span>
-          <button type="button" disabled={index === total - 1 || stop.lockedPosition}
-            onClick={() => onMove(index, 1)}
-            className="text-[#16205B]/25 hover:text-[#16205B] disabled:opacity-0 transition-colors leading-none"
-            style={{ touchAction: 'manipulation' }}
-          >
-            <svg viewBox="0 0 10 6" fill="currentColor" className="w-2 h-1.5"><path d="M5 6L0 0H10L5 6Z"/></svg>
-          </button>
+        {/* Row 1: position arrows + customer name */}
+        <div className="flex items-center gap-1.5">
+          <div className="flex flex-col items-center flex-shrink-0 w-5">
+            <button type="button" disabled={index === 0 || stop.lockedPosition}
+              onClick={() => onMove(index, -1)}
+              className="text-[#16205B]/25 hover:text-[#16205B] disabled:opacity-0 leading-none"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <svg viewBox="0 0 10 6" fill="currentColor" className="w-2 h-1"><path d="M5 0L10 6H0L5 0Z"/></svg>
+            </button>
+            <span className="text-[11px] font-bold text-[#16205B] leading-none">{index + 1}</span>
+            <button type="button" disabled={index === total - 1 || stop.lockedPosition}
+              onClick={() => onMove(index, 1)}
+              className="text-[#16205B]/25 hover:text-[#16205B] disabled:opacity-0 leading-none"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <svg viewBox="0 0 10 6" fill="currentColor" className="w-2 h-1"><path d="M5 6L0 0H10L5 6Z"/></svg>
+            </button>
+          </div>
+          <p className="flex-1 min-w-0 text-[11px] font-semibold text-[#16205B] truncate leading-tight">
+            {stop.name}
+          </p>
         </div>
 
-        {/* Customer name — gets full remaining width, never truncated by controls */}
-        <p className="flex-1 min-w-0 text-xs font-semibold text-[#16205B] truncate leading-tight">
-          {stop.name}
-        </p>
-      </div>
+        {/* Row 2: postcode/ETA on left · controls on right */}
+        <div className="flex items-center gap-1 mt-0.5">
+          <div className="w-5 flex-shrink-0" />{/* aligns under number */}
 
-      {/* ── Row 2: postcode / ETA on left · controls on right ────────────── */}
-      <div className="flex items-center gap-1.5 px-2 pb-1.5 pt-0.5">
-
-        {/* Postcode + ETA — left side */}
-        <div className="w-5 flex-shrink-0" />{/* spacer aligns with number column above */}
-        <div className="flex-1 min-w-0">
-          {broken ? (
+          {/* Postcode + ETA */}
+          <div className="flex-1 min-w-0">
+            {/* Postcode line — Edit always available */}
             <div className="flex items-center gap-1">
-              <span className="text-[10px] text-red-600 font-bold">🔴 Bad postcode</span>
+              {postcodeStatus === 'broken' && (
+                <span className="text-[9px] text-red-600 font-bold">🔴</span>
+              )}
+              {postcodeStatus === 'ungeoced' && (
+                <span className="text-[9px] text-amber-500 font-bold">⚠</span>
+              )}
+              <span className={[
+                'text-[9px] leading-tight',
+                postcodeStatus === 'broken'   ? 'text-red-600 font-bold'
+                : postcodeStatus === 'ungeoced' ? 'text-amber-600 font-semibold'
+                : 'text-gray-400',
+              ].join(' ')}>
+                {stop.postcode ?? 'No postcode'}
+                {postcodeStatus === 'ungeoced' && ' (not geocoded)'}
+              </span>
               <button type="button" style={{ touchAction: 'manipulation' }}
                 onClick={() => { setEditingPost(v => !v); setPostcodeInput(stop.postcode ?? '') }}
-                className="text-[10px] text-red-500 underline hover:text-red-700 font-semibold"
-              >Edit</button>
-            </div>
-          ) : !stop.postcode || !stop.lat ? (
-            <p className="text-[10px] text-amber-600 font-semibold leading-tight">
-              ⚠ {!stop.postcode ? 'No postcode' : 'Not geocoded'}
-            </p>
-          ) : (
-            <div className="flex items-center gap-1">
-              <p className="text-[10px] text-gray-400 leading-tight">{stop.postcode}</p>
-              <button type="button" style={{ touchAction: 'manipulation' }}
-                onClick={() => { setEditingPost(v => !v); setPostcodeInput(stop.postcode ?? '') }}
-                className="text-[10px] text-gray-300 hover:text-[#EB6619] transition-colors" title="Edit postcode"
+                className="text-[9px] text-gray-300 hover:text-[#EB6619] transition-colors leading-none flex-shrink-0"
+                title="Edit postcode"
               >✏</button>
             </div>
-          )}
-          {/* Arrive / Depart — shown after optimise */}
-          {stop.estimatedArrival && (() => {
-            const [h, m]  = stop.estimatedArrival.split(':').map(Number)
-            const depMins = h * 60 + m + 15
-            const depStr  = `${String(Math.floor(depMins / 60) % 24).padStart(2, '0')}:${String(depMins % 60).padStart(2, '0')}`
-            return (
-              <div className="mt-px leading-none">
-                <span className="text-[10px] font-bold text-[#EB6619]">↓ {stop.estimatedArrival}</span>
-                <span className="text-[9px] text-gray-400 mx-0.5">·</span>
-                <span className="text-[10px] font-semibold text-gray-400">↑ {depStr}</span>
-              </div>
-            )
-          })()}
-        </div>
+            {/* ETA */}
+            {stop.estimatedArrival && (() => {
+              const [h, m]  = stop.estimatedArrival.split(':').map(Number)
+              const depMins = h * 60 + m + 15
+              const depStr  = `${String(Math.floor(depMins / 60) % 24).padStart(2, '0')}:${String(depMins % 60).padStart(2, '0')}`
+              return (
+                <div className="leading-none">
+                  <span className="text-[9px] font-bold text-[#EB6619]">↓{stop.estimatedArrival}</span>
+                  <span className="text-[9px] text-gray-400 mx-0.5">·</span>
+                  <span className="text-[9px] font-semibold text-gray-400">↑{depStr}</span>
+                </div>
+              )
+            })()}
+          </div>
 
-        {/* Controls: priority · lock · note · remove */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <select
-            value={stop.priority}
-            onChange={e => onChange(stop.id, { priority: e.target.value as StopCard['priority'] })}
-            className={[
-              'text-[10px] font-bold border rounded-md px-1 py-0.5 bg-white focus:outline-none focus:border-[#EB6619] h-6',
-              stop.priority === 'priority' ? 'border-red-400 text-red-600'
-                : stop.priority === 'urgent' ? 'border-amber-400 text-amber-600'
-                : 'border-[#EDEAE1] text-[#16205B]/60',
-            ].join(' ')}
-            style={{ touchAction: 'manipulation' }}
-          >
-            {Object.entries(PRIORITY_LABEL).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </select>
+          {/* Controls */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            <select
+              value={stop.priority}
+              onChange={e => onChange(stop.id, { priority: e.target.value as StopCard['priority'] })}
+              className={[
+                'text-[9px] font-bold border rounded px-0.5 py-px bg-white focus:outline-none h-5',
+                stop.priority === 'priority' ? 'border-red-400 text-red-600'
+                  : stop.priority === 'urgent' ? 'border-amber-400 text-amber-600'
+                  : 'border-[#EDEAE1] text-[#16205B]/60',
+              ].join(' ')}
+              style={{ touchAction: 'manipulation' }}
+            >
+              {Object.entries(PRIORITY_LABEL).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
 
-          <button type="button"
-            onClick={() => onChange(stop.id, { lockedPosition: !stop.lockedPosition })}
-            title={stop.lockedPosition ? 'Unlock' : 'Lock position'}
-            className={[
-              'w-6 h-6 flex items-center justify-center rounded-md border transition-colors',
-              stop.lockedPosition ? 'bg-[#16205B] border-[#16205B] text-white' : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
-            ].join(' ')}
-            style={{ touchAction: 'manipulation' }}
-          >
-            <svg viewBox="0 0 14 14" fill="currentColor" className="w-3 h-3">
-              <path d="M9.5 5.5V4a2.5 2.5 0 0 0-5 0v1.5H3.5A.5.5 0 0 0 3 6v5a.5.5 0 0 0 .5.5h7A.5.5 0 0 0 11 11V6a.5.5 0 0 0-.5-.5H9.5ZM6 4a1 1 0 0 1 2 0v1.5H6V4Zm1 4.5a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-1.5 0v-.75A.75.75 0 0 1 7 8.5Z"/>
-            </svg>
-          </button>
+            <button type="button"
+              onClick={() => onChange(stop.id, { lockedPosition: !stop.lockedPosition })}
+              title={stop.lockedPosition ? 'Unlock' : 'Lock'}
+              className={[
+                'w-5 h-5 flex items-center justify-center rounded border transition-colors',
+                stop.lockedPosition ? 'bg-[#16205B] border-[#16205B] text-white' : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
+              ].join(' ')}
+              style={{ touchAction: 'manipulation' }}
+            >
+              <svg viewBox="0 0 14 14" fill="currentColor" className="w-2.5 h-2.5">
+                <path d="M9.5 5.5V4a2.5 2.5 0 0 0-5 0v1.5H3.5A.5.5 0 0 0 3 6v5a.5.5 0 0 0 .5.5h7A.5.5 0 0 0 11 11V6a.5.5 0 0 0-.5-.5H9.5ZM6 4a1 1 0 0 1 2 0v1.5H6V4Zm1 4.5a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-1.5 0v-.75A.75.75 0 0 1 7 8.5Z"/>
+              </svg>
+            </button>
 
-          <button type="button"
-            onClick={() => setShowNote(v => !v)}
-            title="Add note"
-            className={[
-              'w-6 h-6 flex items-center justify-center rounded-md border transition-colors',
-              showNote || stop.priorityNote ? 'border-[#EB6619]/60 text-[#EB6619]' : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
-            ].join(' ')}
-            style={{ touchAction: 'manipulation' }}
-          >
-            <svg viewBox="0 0 14 14" fill="currentColor" className="w-3 h-3">
-              <path fillRule="evenodd" d="M1 7.5C1 5.3 2.8 3.5 5 3.5h4C11.2 3.5 13 5.3 13 7.5S11.2 11.5 9 11.5h-.6l-2 1.4a.4.4 0 0 1-.65-.37v-1.03H5C2.8 11.5 1 9.7 1 7.5Z" clipRule="evenodd"/>
-            </svg>
-          </button>
+            <button type="button"
+              onClick={() => setShowNote(v => !v)}
+              title="Note"
+              className={[
+                'w-5 h-5 flex items-center justify-center rounded border transition-colors',
+                showNote || stop.priorityNote ? 'border-[#EB6619]/60 text-[#EB6619]' : 'border-[#EDEAE1] text-[#16205B]/30 hover:text-[#16205B]',
+              ].join(' ')}
+              style={{ touchAction: 'manipulation' }}
+            >
+              <svg viewBox="0 0 14 14" fill="currentColor" className="w-2.5 h-2.5">
+                <path fillRule="evenodd" d="M1 7.5C1 5.3 2.8 3.5 5 3.5h4C11.2 3.5 13 5.3 13 7.5S11.2 11.5 9 11.5h-.6l-2 1.4a.4.4 0 0 1-.65-.37v-1.03H5C2.8 11.5 1 9.7 1 7.5Z" clipRule="evenodd"/>
+              </svg>
+            </button>
 
-          <button type="button" onClick={() => onRemove(stop.id)}
-            className="w-6 h-6 flex items-center justify-center rounded-md text-[#16205B]/20 hover:text-red-500 hover:bg-red-50 transition-colors"
-            style={{ touchAction: 'manipulation' }}
-          >
-            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-3 h-3">
-              <path d="M3 3l8 8M11 3l-8 8"/>
-            </svg>
-          </button>
+            <button type="button" onClick={() => onRemove(stop.id)}
+              className="w-5 h-5 flex items-center justify-center rounded text-[#16205B]/20 hover:text-red-500 hover:bg-red-50 transition-colors"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-2.5 h-2.5">
+                <path d="M3 3l8 8M11 3l-8 8"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* ── Inline postcode editor ─────────────────────────────────────── */}
       {editingPost && (
-        <div className="px-2 pb-2 pt-0">
-          <div className="flex items-center gap-1.5">
+        <div className="px-2 pb-1.5 pt-0">
+          <div className="flex items-center gap-1">
             <input type="text" autoFocus maxLength={8}
               value={postcodeInput}
               onChange={e => { setPostcodeInput(e.target.value.toUpperCase()); setSaveErr('') }}
               onKeyDown={e => e.key === 'Enter' && savePostcode()}
               placeholder="e.g. S3 8DG"
-              className="flex-1 h-8 rounded-lg border-2 border-[#EB6619] px-2.5 text-xs font-mono text-gray-800 focus:outline-none uppercase"
+              className="flex-1 h-7 rounded-md border-2 border-[#EB6619] px-2 text-[10px] font-mono text-gray-800 focus:outline-none uppercase"
             />
             <button type="button" onClick={savePostcode}
               disabled={saving || !postcodeInput.trim()}
-              className="h-8 px-3 rounded-lg bg-[#EB6619] text-white text-xs font-bold disabled:opacity-40 flex-shrink-0"
+              className="h-7 px-2 rounded-md bg-[#EB6619] text-white text-[10px] font-bold disabled:opacity-40 flex-shrink-0"
               style={{ touchAction: 'manipulation' }}
-            >{saving ? '…' : 'Save'}</button>
+            >{saving ? '⟳' : 'Save'}</button>
             <button type="button" onClick={() => { setEditingPost(false); setSaveErr('') }}
-              className="h-8 px-2 rounded-lg border border-[#EDEAE1] text-xs text-gray-400 flex-shrink-0"
+              className="h-7 px-1.5 rounded-md border border-[#EDEAE1] text-[10px] text-gray-400 flex-shrink-0"
               style={{ touchAction: 'manipulation' }}
             >✕</button>
           </div>
-          {saveErr && <p className="text-[10px] text-red-600 mt-1">{saveErr}</p>}
+          {saving && <p className="text-[9px] text-[#EB6619] mt-0.5">Saving & geocoding…</p>}
+          {saveErr && <p className="text-[9px] text-red-600 mt-0.5">{saveErr}</p>}
         </div>
       )}
       {/* ── Note input ───────────────────────────────────────────────────── */}
       {showNote && (
-        <div className="px-2 pb-2 pt-0">
+        <div className="px-2 pb-1.5 pt-0">
           <input type="text"
             value={stop.priorityNote}
             onChange={e => onChange(stop.id, { priorityNote: e.target.value })}
             placeholder="e.g. Early delivery, call ahead"
-            className="w-full h-8 rounded-lg border border-[#EDEAE1] px-2.5 text-xs text-gray-700 focus:outline-none focus:border-[#EB6619]"
+            className="w-full h-7 rounded-md border border-[#EDEAE1] px-2 text-[10px] text-gray-700 focus:outline-none focus:border-[#EB6619]"
           />
         </div>
       )}
     </div>
   )
 }
+
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
@@ -698,9 +713,9 @@ export default function RoutesPage() {
                   onRemove={removeStop}
                   onMove={moveStop}
                   broken={brokenIds.has(stop.id)}
-                  onPostcodeUpdate={(id, newPostcode) => {
-                    // Update local stop state with new postcode so card re-renders immediately
-                    setStops(prev => prev.map(s => s.id === id ? { ...s, postcode: newPostcode } : s))
+                  onPostcodeUpdate={(id, newPostcode, lat, lng) => {
+                    // Update local stop state — postcode + coordinates from backend geocode
+                    setStops(prev => prev.map(s => s.id === id ? { ...s, postcode: newPostcode, lat: lat ?? s.lat, lng: lng ?? s.lng } : s))
                     // Clear broken flag for this stop — user has fixed it
                     setBrokenIds(prev => { const n = new Set(prev); n.delete(id); return n })
                     setOptimiseError('')
@@ -833,7 +848,7 @@ export default function RoutesPage() {
           <div className="relative flex-1 rounded-xl overflow-hidden border border-[#EDEAE1] min-h-[500px] isolate">
             {/* Floating legend overlay — shown when stops exist */}
             {mapStops.length > 0 && (
-              <div className="absolute top-3 left-3 z-10 bg-white/95 backdrop-blur-sm shadow-md rounded-lg px-3 py-2 text-xs pointer-events-none">
+              <div className="absolute bottom-3 left-3 z-10 bg-white/95 backdrop-blur-sm shadow-md rounded-lg px-3 py-2 text-xs pointer-events-none">
                 <p className="text-[8px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-1.5">Route key</p>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5">
