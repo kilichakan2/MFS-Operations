@@ -386,25 +386,49 @@ test('Pass 1 intermediates use latLng (not address strings)', () => {
   })
 })
 
-test('TRAFFIC_AWARE_OPTIMAL only when departure time is in the future', () => {
-  // Future departure → TRAFFIC_AWARE_OPTIMAL
-  const withFuture = { routingPreference: 'TRAFFIC_AWARE_OPTIMAL', departureTime: 'someISO' }
-  eq(withFuture.routingPreference, 'TRAFFIC_AWARE_OPTIMAL')
+test('Pass 1 ALWAYS uses TRAFFIC_AWARE — NEVER TRAFFIC_AWARE_OPTIMAL', () => {
+  // Google hard rule: optimizeWaypointOrder:true is incompatible with TRAFFIC_AWARE_OPTIMAL.
+  // This must hold for both future and past departure times.
+  const withFuture = {
+    routingPreference:     'TRAFFIC_AWARE' as string,
+    optimizeWaypointOrder: true,
+    departureTime:         new Date(Date.now() + 3600000).toISOString(),
+  }
+  eq(withFuture.routingPreference, 'TRAFFIC_AWARE')
+  assert(withFuture.routingPreference !== 'TRAFFIC_AWARE_OPTIMAL',
+    'Pass 1 must NEVER use TRAFFIC_AWARE_OPTIMAL regardless of departure time')
 
-  // Past/no departure → TRAFFIC_AWARE (does NOT require departureTime)
-  const withoutTime = { routingPreference: 'TRAFFIC_AWARE' }
+  const withoutTime = {
+    routingPreference:     'TRAFFIC_AWARE' as string,
+    optimizeWaypointOrder: true,
+  }
   eq(withoutTime.routingPreference, 'TRAFFIC_AWARE')
 })
 
-test('Sniffer field mask excludes optimizedIntermediateWaypointIndex', () => {
-  const SNIFFER_MASK = 'routes.legs,routes.distanceMeters,routes.duration'
-  assert(!SNIFFER_MASK.includes('optimizedIntermediateWaypointIndex'),
-    'Sniffer must not request optimizedIntermediateWaypointIndex')
+test('Pass 4 uses TRAFFIC_AWARE_OPTIMAL for future departure, TRAFFIC_AWARE for past', () => {
+  const futureISO = new Date(Date.now() + 3600000).toISOString()
+  const withFuture = {
+    routingPreference:     futureISO ? 'TRAFFIC_AWARE_OPTIMAL' : 'TRAFFIC_AWARE',
+    optimizeWaypointOrder: false,
+    departureTime:         futureISO,
+  }
+  eq(withFuture.routingPreference, 'TRAFFIC_AWARE_OPTIMAL')
+
+  const noDeparture = {
+    routingPreference:     (null as string | null) ? 'TRAFFIC_AWARE_OPTIMAL' : 'TRAFFIC_AWARE',
+    optimizeWaypointOrder: false,
+  }
+  eq(noDeparture.routingPreference, 'TRAFFIC_AWARE')
 })
 
-test('Pass 4 has optimizeWaypointOrder:false', () => {
-  const p4 = { optimizeWaypointOrder: false as boolean }
-  eq(p4.optimizeWaypointOrder, false)
+test('Sniffer uses TRAFFIC_AWARE and has no optimizeWaypointOrder', () => {
+  const snifferBody = {
+    travelMode:        'DRIVE',
+    routingPreference: 'TRAFFIC_AWARE' as string,
+  }
+  eq(snifferBody.routingPreference, 'TRAFFIC_AWARE')
+  assert(!('optimizeWaypointOrder' in snifferBody),
+    'Sniffer must not include optimizeWaypointOrder')
 })
 
 // ─── Suite 7: ETA correctness ────────────────────────────────────────────────

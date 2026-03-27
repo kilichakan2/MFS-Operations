@@ -212,8 +212,11 @@ export async function POST(req: NextRequest) {
         // latLng required for intermediates — optimizeWaypointOrder:true rejects address strings
         intermediates:         unlockedStops.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
         travelMode:            'DRIVE',
-        // TRAFFIC_AWARE_OPTIMAL requires a future departureTime — use TRAFFIC_AWARE when omitting it
-        routingPreference:     departureISO ? 'TRAFFIC_AWARE_OPTIMAL' : 'TRAFFIC_AWARE',
+        // CRITICAL: TRAFFIC_AWARE_OPTIMAL is incompatible with optimizeWaypointOrder:true.
+        // Google returns 400: 'optimize_waypoint_order is not supported for TRAFFIC_AWARE_OPTIMAL'.
+        // Pass 1 MUST always use TRAFFIC_AWARE regardless of whether we have a future departure time.
+        // Pass 4 (optimizeWaypointOrder:false) can use TRAFFIC_AWARE_OPTIMAL for accurate ETAs.
+        routingPreference:     'TRAFFIC_AWARE',
         optimizeWaypointOrder: true,
       }
       if (departureISO) p1Body.departureTime = departureISO
@@ -414,11 +417,11 @@ async function sniffBrokenPostcodes(
   for (const s of stops) {
     const body: Record<string, unknown> = {
       origin:      addrWaypoint(ORIGIN_PC),
-      // Use latLng for destination in sniffer if available, else address
       destination: (s.customer.lat && s.customer.lng)
         ? latLngWaypoint(s.customer.lat, s.customer.lng)
         : addrWaypoint(s.postcode),
-      travelMode:  'DRIVE',
+      travelMode:        'DRIVE',
+      routingPreference: 'TRAFFIC_AWARE',  // no optimizeWaypointOrder, no OPTIMAL
     }
     if (departureISO) body.departureTime = departureISO
     const res = await callRoutesAPI(body, SNIFFER_FIELD_MASK)
