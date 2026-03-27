@@ -10,6 +10,11 @@
  *   Pass 4 — Final ETAs: computeRoutes with optimizeWaypointOrder:false
  *
  * Spec: docs/routing-engine-spec.md
+ *
+ * KEY FIX: Pass 1 intermediates use latLng coordinates (not address strings).
+ * Routes API v2 requires latLng for intermediate waypoints when
+ * optimizeWaypointOrder:true — address strings are rejected with INVALID_ARGUMENT.
+ * Origin and destination use address format (fixed anchors, not being optimised).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -53,11 +58,11 @@ interface CustomerRow {
 interface WorkingStop {
   input:    StopInput
   customer: CustomerRow
-  postcode: string
+  postcode: string   // cleaned
 }
 
 interface RoutesLeg {
-  duration?:       string
+  duration?:       string   // "723s" protobuf Duration format
   distanceMeters?: number
 }
 
@@ -71,7 +76,25 @@ interface RoutesResponse {
   }>
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Waypoint helpers ─────────────────────────────────────────────────────────
+
+/**
+ * latLngWaypoint — REQUIRED for intermediate waypoints in Pass 1
+ * (optimizeWaypointOrder:true rejects address strings — must use coordinates)
+ */
+function latLngWaypoint(lat: number, lng: number): Record<string, unknown> {
+  return { location: { latLng: { latitude: lat, longitude: lng } } }
+}
+
+/**
+ * addrWaypoint — used for origin and destination (fixed anchors, not optimised)
+ * Also used in Pass 4 where optimizeWaypointOrder:false accepts address strings
+ */
+function addrWaypoint(postcode: string): Record<string, unknown> {
+  return { address: `${postcode}, UK` }
+}
+
+// ─── Other helpers ────────────────────────────────────────────────────────────
 
 function cleanPostcode(pc: string): string {
   return pc.replace(/\s+/g, '').trim().toUpperCase()
@@ -97,10 +120,6 @@ async function callRoutesAPI(body: Record<string, unknown>): Promise<RoutesRespo
     body: JSON.stringify(body),
   })
   return res.json() as Promise<RoutesResponse>
-}
-
-function addr(postcode: string): Record<string, unknown> {
-  return { address: `${postcode}, UK` }
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
@@ -145,15 +164,27 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Check lat/lng for Pass 1 — all stops need coordinates for optimisation
+    const missingCoords = stops.filter(s => {
+      const c = custMap.get(s.customerId)
+      return !c?.lat || !c?.lng
+    })
+    if (missingCoords.length > 0) {
+      return NextResponse.json(
+        { error: `Missing coordinates for: ${missingCoords.map(s => custMap.get(s.customerId)?.name ?? s.customerId).join(', ')}. Re-geocode these customers first.` },
+        { status: 422 }
+      )
+    }
+
     const workingStops: WorkingStop[] = stops.map(s => ({
       input:    s,
       customer: custMap.get(s.customerId)!,
       postcode: cleanPostcode(custMap.get(s.customerId)!.postcode!),
     }))
 
-    // Departure time — omit if in the past (Google will use live traffic)
-    const departureDt      = new Date(`${plannedDate}T${departureTime}:00`)
-    const departureISO     = departureDt.getTime() > Date.now() ? departureDt.toISOString() : null
+    // Departure time — omit if in the past (Google uses live traffic)
+    const departureDt  = new Date(`${plannedDate}T${departureTime}:00`)
+    const departureISO = departureDt.getTime() > Date.now() ? departureDt.toISOString() : null
     if (!departureISO) {
       console.log(`[optimise] Departure ${departureDt.toISOString()} is in the past — omitting (live traffic)`)
     }
@@ -163,6 +194,8 @@ export async function POST(req: NextRequest) {
 
     // ════════════════════════════════════════════════════════════════════════
     // PASS 1 — Geographic spine
+    // Intermediates MUST use latLng — address strings rejected by Routes API
+    // when optimizeWaypointOrder:true
     // ════════════════════════════════════════════════════════════════════════
     let geoOrdered: WorkingStop[]
     let pass1Legs: RoutesLeg[] = []
@@ -171,9 +204,10 @@ export async function POST(req: NextRequest) {
       geoOrdered = unlockedStops
     } else {
       const p1Body: Record<string, unknown> = {
-        origin:                addr(ORIGIN_PC),
-        destination:           addr(destinationPC),
-        intermediates:         unlockedStops.map(s => addr(s.postcode)),
+        origin:                addrWaypoint(ORIGIN_PC),
+        destination:           addrWaypoint(destinationPC),
+        // latLng required here — optimizeWaypointOrder:true rejects address strings
+        intermediates:         unlockedStops.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
         travelMode:            'DRIVE',
         routingPreference:     'TRAFFIC_AWARE_OPTIMAL',
         optimizeWaypointOrder: true,
@@ -181,9 +215,10 @@ export async function POST(req: NextRequest) {
       if (departureISO) p1Body.departureTime = departureISO
 
       console.log('[optimise] Pass 1 — Geographic spine:', {
-        stops: unlockedStops.map(s => `${s.customer.name} (${s.postcode})`),
+        stops:       unlockedStops.map(s => `${s.customer.name} (${s.postcode}) [${s.customer.lat},${s.customer.lng}]`),
         destination: destinationPC,
-        departure: departureISO ?? 'now',
+        departure:   departureISO ?? 'now (live traffic)',
+        waypointFormat: 'latLng',
       })
 
       const p1Res = await callRoutesAPI(p1Body)
@@ -191,7 +226,7 @@ export async function POST(req: NextRequest) {
       if (p1Res.error || !p1Res.routes?.length) {
         const status = p1Res.error?.status ?? 'UNKNOWN'
         const msg    = p1Res.error?.message ?? 'No routes returned'
-        console.error('[optimise] Pass 1 failed:', { status, msg })
+        console.error('[optimise] Pass 1 failed:', { status, message: msg, fullError: p1Res.error })
 
         if (status === 'INVALID_ARGUMENT' || status === 'NOT_FOUND') {
           return sniffBrokenPostcodes(workingStops, destinationPC, departureISO)
@@ -199,7 +234,7 @@ export async function POST(req: NextRequest) {
         const hint = status === 'RESOURCE_EXHAUSTED'
           ? 'Google Maps quota exceeded — try again tomorrow.'
           : status === 'PERMISSION_DENIED'
-          ? 'Routes API not enabled or API key invalid.'
+          ? 'Routes API not enabled or API key invalid. Enable at console.cloud.google.com → Routes API.'
           : msg
         return NextResponse.json({ error: hint }, { status: 502 })
       }
@@ -210,6 +245,7 @@ export async function POST(req: NextRequest) {
       console.log('[optimise] Pass 1 result:', {
         original:  unlockedStops.map((s, i) => `${i}: ${s.customer.name}`),
         optimised: optIdx.map((i, pos) => `${pos + 1}. ${unlockedStops[i].customer.name}`),
+        leg_durations_s: pass1Legs.map(l => parseDuration(l.duration)),
       })
 
       geoOrdered = optIdx.map(i => unlockedStops[i])
@@ -271,11 +307,12 @@ export async function POST(req: NextRequest) {
 
     // ════════════════════════════════════════════════════════════════════════
     // PASS 4 — Final ETAs with locked order
+    // Use latLng for all waypoints for consistency and accuracy
     // ════════════════════════════════════════════════════════════════════════
     const p4Body: Record<string, unknown> = {
-      origin:                addr(ORIGIN_PC),
-      destination:           addr(destinationPC),
-      intermediates:         finalOrdered.map(s => addr(s.postcode)),
+      origin:                addrWaypoint(ORIGIN_PC),
+      destination:           addrWaypoint(destinationPC),
+      intermediates:         finalOrdered.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
       travelMode:            'DRIVE',
       routingPreference:     'TRAFFIC_AWARE_OPTIMAL',
       optimizeWaypointOrder: false,
@@ -312,10 +349,10 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const p4Legs       = p4Res.routes[0].legs ?? []
-    const totalDistM   = p4Res.routes[0].distanceMeters ?? p4Legs.reduce((s, l) => s + (l.distanceMeters ?? 0), 0)
-    const totalDurS    = parseDuration(p4Res.routes[0].duration) ||
-                         p4Legs.reduce((s, l) => s + parseDuration(l.duration), 0)
+    const p4Legs     = p4Res.routes[0].legs ?? []
+    const totalDistM = p4Res.routes[0].distanceMeters ?? p4Legs.reduce((s, l) => s + (l.distanceMeters ?? 0), 0)
+    const totalDurS  = parseDuration(p4Res.routes[0].duration) ||
+                       p4Legs.reduce((s, l) => s + parseDuration(l.duration), 0)
 
     let cumMs = 0
     const orderedStops = finalOrdered.map((s, i) => {
@@ -357,7 +394,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── Sniffer ──────────────────────────────────────────────────────────────────
+// ─── Sniffer — identify broken postcodes ──────────────────────────────────────
 
 async function sniffBrokenPostcodes(
   stops: WorkingStop[],
@@ -369,8 +406,11 @@ async function sniffBrokenPostcodes(
 
   for (const s of stops) {
     const body: Record<string, unknown> = {
-      origin:      addr(ORIGIN_PC),
-      destination: addr(s.postcode),
+      origin:      addrWaypoint(ORIGIN_PC),
+      // Use latLng for destination in sniffer if available, else address
+      destination: (s.customer.lat && s.customer.lng)
+        ? latLngWaypoint(s.customer.lat, s.customer.lng)
+        : addrWaypoint(s.postcode),
       travelMode:  'DRIVE',
     }
     if (departureISO) body.departureTime = departureISO
