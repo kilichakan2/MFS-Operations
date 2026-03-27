@@ -165,11 +165,16 @@ function StopCardRow({
               >✏</button>
             </div>
           )}
-          {/* ETA — shown after optimise */}
+          {/* ETA + service time — shown after optimise */}
           {stop.estimatedArrival && (
-            <p className="text-[10px] font-bold text-[#EB6619] leading-tight mt-0.5">
-              ETA {stop.estimatedArrival}
-            </p>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <p className="text-[10px] font-bold text-[#EB6619] leading-tight">
+                ETA {stop.estimatedArrival}
+              </p>
+              <span className="text-[9px] text-gray-400 bg-gray-100 rounded px-1 py-px leading-tight flex-shrink-0">
+                + 15m drop
+              </span>
+            </div>
           )}
         </div>
 
@@ -679,6 +684,28 @@ export default function RoutesPage() {
               {stops.length > 1 && (
                 <p className="text-[10px] text-gray-400">Use arrows to reorder · 📌 to lock</p>
               )}
+            </div>
+
+            {/* Priority legend */}
+            <div className="flex items-center gap-3 mb-3 px-2 py-1.5 bg-[#F8F7F4] rounded-lg">
+              <span className="text-[9px] font-bold text-[#16205B]/40 uppercase tracking-wide flex-shrink-0">Priority</span>
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="flex items-center gap-1 text-[10px] text-gray-500">
+                  <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                  <span className="font-semibold text-red-600">Urgent</span>
+                  <span className="text-gray-400">— first in cluster</span>
+                </span>
+                <span className="flex items-center gap-1 text-[10px] text-gray-500">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                  <span className="font-semibold text-amber-600">Priority</span>
+                  <span className="text-gray-400">— second</span>
+                </span>
+                <span className="flex items-center gap-1 text-[10px] text-gray-500">
+                  <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
+                  <span className="font-semibold text-gray-500">Standard</span>
+                  <span className="text-gray-400">— geo order</span>
+                </span>
+              </div>
             </div>
 
             {/* Stop cards */}
