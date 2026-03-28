@@ -25,7 +25,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   office:    ['/screen1', '/screen2', '/routes'],
   sales:     ['/screen2', '/screen3', '/routes'],
   admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/api/reference', '/api/admin', '/api/dashboard', '/api/map'],
-  driver:    ['/driver', '/routes'],  // drivers can also access /routes to view their assigned schedule
+  driver:    ['/driver', '/routes', '/screen2'],  // drivers: route view + complaints
 }
 
 // Default landing page per role

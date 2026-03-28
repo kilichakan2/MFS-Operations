@@ -11,7 +11,7 @@
  *   sales     → Complaints | Visits | Routes
  *   office    → Dispatch | Complaints | Routes
  *   warehouse → Dispatch | Routes
- *   driver    → (no nav — driver only sees /driver)
+ *   driver    → My Route (/driver) | Complaints (/screen2)
  *
  * The mfs_role cookie is set at login alongside the httpOnly mfs_session.
  * Middleware enforces real access control server-side; this only controls
@@ -61,8 +61,10 @@ export default function RoleNav() {
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
         ]
       case 'driver':
-      default:
-        return []  // drivers see no nav — /driver page has its own logout
+        return [
+          { href: '/driver',  label: 'My Route',   icon: Icons.routes    },
+          { href: '/screen2', label: 'Complaints',  icon: Icons.complaint },
+        ]
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])  // stable: role from cookie, t() stable within session
