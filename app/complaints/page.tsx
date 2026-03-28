@@ -283,6 +283,7 @@ function ComplaintCard({ complaint, onResolve }: {
 // ─── All Complaints tab ───────────────────────────────────────────────────────
 
 function AllComplaintsTab() {
+  const { t }                      = useLanguage()
   const [complaints,   setComplaints]   = useState<ComplaintRow[]>([])
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState('')
