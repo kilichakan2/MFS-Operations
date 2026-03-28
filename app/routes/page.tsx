@@ -588,14 +588,8 @@ export default function RoutesPage() {
   }))
 
   return (
-    <div className="bg-[#F5F3EE] flex flex-col" style={{ height: "100dvh" }}>
-      <AppHeader />
-
-      {/* Page header */}
-      <div className="bg-[#16205B] px-4 pb-4">
-        <h1 className="text-white font-bold text-lg">Route Planner</h1>
-        <p className="text-white/50 text-xs mt-0.5">Build, optimise and assign delivery routes</p>
-      </div>
+    <div className="bg-[#EDEAE1] flex flex-col" style={{ height: "100dvh" }}>
+      <AppHeader title="Route Planner" />
 
       {/* Two-panel layout */}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-0 lg:gap-4 lg:p-4 overflow-hidden">
@@ -891,7 +885,7 @@ export default function RoutesPage() {
               </div>
             )}
             {mapStops.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full bg-[#F5F3EE] text-center px-6">
+              <div className="flex flex-col items-center justify-center h-full bg-[#EDEAE1] text-center px-6">
                 <div className="w-16 h-16 rounded-full bg-[#16205B]/5 flex items-center justify-center mb-4">
                   <svg viewBox="0 0 24 24" fill="none" stroke="#16205B" strokeWidth="1.5" className="w-8 h-8 opacity-30">
                     <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
