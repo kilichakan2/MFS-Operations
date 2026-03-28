@@ -35,7 +35,7 @@ export default function BottomNav({ items }: BottomNavProps) {
               className={[
                 'flex-1 flex flex-col items-center justify-center py-1.5 gap-px min-h-[48px]',
                 'text-[9px] font-bold tracking-wide uppercase transition-colors duration-100',
-                active ? 'text-[#EB6619]' : 'text-gray-500 hover:text-gray-700',
+                active ? 'text-[#EB6619]' : 'text-gray-500',
               ].join(' ')}
               aria-current={active ? 'page' : undefined}
               style={{ touchAction: 'manipulation' }}

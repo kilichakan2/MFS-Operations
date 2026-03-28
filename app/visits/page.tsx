@@ -19,13 +19,23 @@ import type { TodayVisit }      from '@/app/api/screen3/today/route'
 const PIPELINE_LINEAR = ['Logged', 'In Talks', 'Trial Order Placed', 'Awaiting Feedback', 'Won'] as const
 type LinearStage = typeof PIPELINE_LINEAR[number]
 
-// Short display labels for the visual stepper nodes
-const STAGE_SHORT: Record<string, string> = {
-  'Logged':             'Logged',
-  'In Talks':           'In Talks',
-  'Trial Order Placed': 'Trial',
-  'Awaiting Feedback':  'Feedback',
-  'Won':                'Won',
+// Translation key maps — DB values → translation keys for display
+const STAGE_TR_KEY: Record<string, string> = {
+  'Logged':             'stageLogged',
+  'In Talks':           'stageInTalks',
+  'Trial Order Placed': 'stageTrialFull',
+  'Awaiting Feedback':  'stageFeedbackFull',
+  'Won':                'stageWon',
+  'Not Progressing':    'stageNotProgressing',
+  'Not Won':            'stageNotWon',
+}
+// Short keys for stepper nodes
+const STAGE_TR_SHORT_KEY: Record<string, string> = {
+  'Logged':             'stageLogged',
+  'In Talks':           'stageInTalks',
+  'Trial Order Placed': 'stageTrial',
+  'Awaiting Feedback':  'stageFeedback',
+  'Won':                'stageWon',
 }
 
 // Off-ramp statuses — not on the linear path
@@ -46,7 +56,7 @@ function isTerminal(status: string): boolean {
 // Colour map for pipeline badges (card + stepper + DetailModal)
 const PIPELINE_BADGE: Record<string, string> = {
   'Logged':              'bg-gray-100 text-gray-500 border-gray-200',
-  'In Talks':            'bg-purple-50 text-purple-700 border-purple-200',
+  'In Talks':            'bg-teal-50 text-teal-800 border-teal-200',
   'Not Progressing':     'bg-red-50 text-red-600 border-red-200',
   'Trial Order Placed':  'bg-blue-50 text-blue-700 border-blue-200',
   'Awaiting Feedback':   'bg-amber-50 text-amber-700 border-amber-200',
@@ -198,6 +208,7 @@ function SuccessBanner({visible,isUpdate}:{visible:boolean;isUpdate:boolean}) {
 // ─── Search bar + Time chips ──────────────────────────────────────────────────
 
 function SearchBar({value,onChange}:{value:string;onChange:(v:string)=>void}) {
+  const { t } = useLanguage()
   return (
     <div className="sticky top-0 z-10 bg-[#EDEAE1] px-4 pt-3 pb-2">
       <div className="relative">
@@ -206,25 +217,30 @@ function SearchBar({value,onChange}:{value:string;onChange:(v:string)=>void}) {
           <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd"/>
         </svg>
         <input type="search" value={value} onChange={e=>onChange(e.target.value)}
-          placeholder="Search by customer…"
+          placeholder={t('searchByCustomer')}
           className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#16205B]/10 bg-white text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-[#EB6619] transition-colors"/>
       </div>
     </div>
   )
 }
 
-const TIME_CHIPS: {id:TimeChip;label:string}[] = [
-  {id:'today',label:'Today'}, {id:'yesterday',label:'Yesterday'},
-  {id:'this_week',label:'This Week'}, {id:'this_month',label:'This Month'}, {id:'all_time',label:'All Time'},
+type TimeChipConfig = { id:TimeChip; key:string }
+const TIME_CHIP_CONFIGS: TimeChipConfig[] = [
+  {id:'today',      key:'chipToday'},
+  {id:'yesterday',  key:'chipYesterday'},
+  {id:'this_week',  key:'chipThisWeek'},
+  {id:'this_month', key:'chipThisMonth'},
+  {id:'all_time',   key:'chipAllTime'},
 ]
 function TimeChips({active,onChange}:{active:TimeChip;onChange:(c:TimeChip)=>void}) {
+  const { t } = useLanguage()
   return (
     <div className="flex gap-2 overflow-x-auto px-4 pb-3" style={{scrollbarWidth:'none'}}>
-      {TIME_CHIPS.map(c=>(
-        <button key={c.id} type="button" onClick={()=>onChange(c.id)}
+      {TIME_CHIP_CONFIGS.map(cfg=>(
+        <button key={cfg.id} type="button" onClick={()=>onChange(cfg.id)}
           className={['flex-shrink-0 h-7 px-3 rounded-full text-xs font-bold transition-all',
-            active===c.id?'bg-[#16205B] text-white shadow-sm':'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
-          {c.label}
+            active===cfg.id?'bg-[#16205B] text-white shadow-sm':'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
+          {t(cfg.key as Parameters<typeof t>[0])}
         </button>
       ))}
     </div>
@@ -274,6 +290,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
   const loggedBy      = (!isPending && (visit as TodayVisit).logged_by_name) ? (visit as TodayVisit).logged_by_name : null
   const typeColour    = TYPE_COLOUR[vtype]??'#6B7280'
   const isManager     = typeof document !== 'undefined' && (getClientRole() === 'admin' || getClientRole() === 'office')
+  const { t }         = useLanguage()
 
   const [showSheet,      setShowSheet]      = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -315,7 +332,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
             <span className="text-[11px] text-gray-400">{fmtTime(createdAt)}</span>
             {isPending && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 ml-1">
-                <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>Pending
+                <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>{t('pendingLabel')}
               </span>
             )}
           </div>
@@ -327,7 +344,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
           )}
           {/* Admin/office: who logged it */}
           {isManager && loggedBy && (
-            <p className="text-[10px] text-gray-400 mt-1">by <span className="font-medium text-gray-500">{loggedBy}</span></p>
+            <p className="text-[10px] text-gray-400 mt-1">{t('loggedByPrefix')} <span className="font-medium text-gray-500">{loggedBy}</span></p>
           )}
         </button>
 
@@ -353,7 +370,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
                   <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd"/>
                 </svg>
               )}
-              {updatingStatus ? 'Updating…' : `Move to ${nextStep}`}
+              {updatingStatus ? t('updatingStatus') : `${t('moveTo')} ${nextStep ? t(STAGE_TR_KEY[nextStep] as Parameters<typeof t>[0]) : ''}`}
             </button>
           </div>
         )}
@@ -365,7 +382,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
               <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z"/>
             </svg>
-            Edit
+            {t('editAction')}
           </button>
           <div className="w-px h-5 bg-[#EDEAE1]"/>
           <button type="button" onClick={onDelete} aria-label="Delete visit"
@@ -373,19 +390,19 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
               <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd"/>
             </svg>
-            Delete
+            {t('deleteAction')}
           </button>
         </div>
       </div>
 
-      {/* Pipeline stepper bottom sheet */}
+      {/* Pipeline stepper — centered modal (avoids browser URL bar on mobile) */}
       {showSheet && !isPending && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
           onClick={() => setShowSheet(false)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-sm pb-safe" onClick={e=>e.stopPropagation()}>
-            {/* Handle */}
+          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e=>e.stopPropagation()}>
+            {/* Header drag bar */}
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-1"/>
-            <p className="text-sm font-bold text-[#16205B] px-5 pt-2 pb-0.5">Pipeline Status</p>
+            <p className="text-sm font-bold text-[#16205B] px-5 pt-2 pb-0.5">{t('pipelineStatus')}</p>
             <p className="text-xs text-gray-400 px-5 pb-4 truncate">{name}</p>
 
             {/* Visual horizontal stepper */}
@@ -422,7 +439,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
                       </div>
                       <p className={['text-[9px] font-semibold mt-1.5 text-center leading-tight',
                         isActive ? 'text-[#16205B]' : isPast ? 'text-[#16205B]/60' : 'text-gray-400'].join(' ')}>
-                        {STAGE_SHORT[stage]}
+                        {t(STAGE_TR_SHORT_KEY[stage] as Parameters<typeof t>[0])}
                       </p>
                     </div>
                   )
@@ -432,7 +449,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
 
             {/* Off-ramp buttons */}
             <div className="px-4 pb-6 space-y-2 border-t border-[#EDEAE1] pt-4">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Off-Ramps</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{t('offRamps')}</p>
               {PIPELINE_OFF_RAMPS.map(s => {
                 const isCurrent = pipelineStatus === s
                 return (
@@ -444,7 +461,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
                           ? 'text-red-600 border-red-200 bg-red-50 hover:bg-red-100'
                           : 'text-gray-500 border-gray-200 bg-gray-50 hover:bg-gray-100'
                     ].join(' ')}>
-                    {isCurrent ? `✓ ${s}` : s}
+                    {isCurrent ? `✓ ${t(STAGE_TR_KEY[s] as Parameters<typeof t>[0])}` : t(STAGE_TR_KEY[s] as Parameters<typeof t>[0])}
                   </button>
                 )
               })}
@@ -492,9 +509,9 @@ function MyVisitsTab({
             </svg>
           </div>
           <p className="text-sm font-semibold text-gray-700">
-            {search ? `No visits matching "${search}"` : 'No visits logged'}
+            {search ? `${t('noVisitsLogged')}: "${search}"` : t('noVisitsLogged')}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Try a different time period or log a new visit</p>
+          <p className="text-xs text-gray-400 mt-1">{t('tryDifferentVisit')}</p>
         </div>
       ) : (
         <div className="max-w-lg mx-auto px-4 space-y-3">
@@ -681,7 +698,7 @@ export default function VisitsPage() {
         {/* Tab switcher */}
         <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="max-w-lg mx-auto flex">
-            {([['log','Log New'],['my','My Visits']] as const).map(([tab,label])=>(
+            {([['log',t('logNew')],['my',t('myVisits')]] as ['log'|'my', string][]).map(([tab,label])=>(
               <button key={tab} type="button" onClick={()=>setActiveTab(tab)}
                 className={['flex-1 py-3.5 text-sm font-semibold border-b-2 transition-colors',
                   activeTab===tab?'border-[#EB6619] text-[#EB6619]':'border-transparent text-gray-400 hover:text-gray-600'].join(' ')}>

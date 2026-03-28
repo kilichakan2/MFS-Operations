@@ -159,6 +159,7 @@ function SuccessBanner({ visible }: { visible: boolean }) {
 // ─── Search bar ───────────────────────────────────────────────────────────────
 
 function SearchBar({ value, onChange }: { value: string; onChange: (v:string)=>void }) {
+  const { t } = useLanguage()
   return (
     <div className="sticky top-0 z-10 bg-[#EDEAE1] px-4 pt-3 pb-2">
       <div className="relative">
@@ -176,22 +177,24 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v:string)=>v
 
 // ─── Time chips ───────────────────────────────────────────────────────────────
 
-const TIME_CHIPS: { id: TimeChip; label: string }[] = [
-  { id:'today',      label:'Today'      },
-  { id:'yesterday',  label:'Yesterday'  },
-  { id:'this_week',  label:'This Week'  },
-  { id:'this_month', label:'This Month' },
-  { id:'all_time',   label:'All Time'   },
+type TimeChipConfig = { id: TimeChip; key: string }
+const TIME_CHIP_CONFIGS: TimeChipConfig[] = [
+  { id:'today',      key:'chipToday'     },
+  { id:'yesterday',  key:'chipYesterday' },
+  { id:'this_week',  key:'chipThisWeek'  },
+  { id:'this_month', key:'chipThisMonth' },
+  { id:'all_time',   key:'chipAllTime'   },
 ]
 
 function TimeChips({ active, onChange }: { active: TimeChip; onChange: (c:TimeChip)=>void }) {
+  const { t } = useLanguage()
   return (
     <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-none" style={{ scrollbarWidth:'none' }}>
-      {TIME_CHIPS.map(c => (
-        <button key={c.id} type="button" onClick={()=>onChange(c.id)}
+      {TIME_CHIP_CONFIGS.map(cfg => (
+        <button key={cfg.id} type="button" onClick={()=>onChange(cfg.id)}
           className={['flex-shrink-0 h-7 px-3 rounded-full text-xs font-bold transition-all',
-            active===c.id ? 'bg-[#16205B] text-white shadow-sm' : 'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
-          {c.label}
+            active===cfg.id ? 'bg-[#16205B] text-white shadow-sm' : 'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
+          {t(cfg.key as Parameters<typeof t>[0])}
         </button>
       ))}
     </div>
@@ -216,6 +219,7 @@ function ComplaintCard({ complaint, onResolve }: {
   complaint: ComplaintRow
   onResolve: (id:string, note:string) => void
 }) {
+  const { t }                     = useLanguage()
   const [expanded, setExpanded]   = useState(false)
   const [note,     setNote]       = useState('')
   const [saving,   setSaving]     = useState(false)
@@ -251,7 +255,7 @@ function ComplaintCard({ complaint, onResolve }: {
         {complaint.status === 'open' && (
           <button type="button" onClick={()=>setExpanded(e=>!e)}
             className="mt-2 text-xs font-semibold text-[#EB6619] flex items-center gap-1">
-            Resolve
+            {t('resolveAction')}
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"
               className={['w-3 h-3 transition-transform', expanded?'rotate-180':''].join(' ')}>
               <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd"/>
@@ -268,7 +272,7 @@ function ComplaintCard({ complaint, onResolve }: {
           <button type="button" onClick={handleResolve} disabled={!note.trim()||saving}
             className={['w-full h-9 rounded-xl text-sm font-bold',
               !note.trim()||saving ? 'bg-gray-100 text-gray-400' : 'bg-[#16205B] text-white active:scale-[0.98]'].join(' ')}>
-            {saving ? 'Saving…' : 'Mark Resolved'}
+            {saving ? t('saving') : t('markResolved')}
           </button>
         </div>
       )}
@@ -351,9 +355,9 @@ function AllComplaintsTab() {
             </svg>
           </div>
           <p className="text-sm font-semibold text-gray-700">
-            {search ? `No complaints matching "${search}"` : 'Nothing here'}
+            {search ? `${t('nothingHere')}: "${search}"` : t('nothingHere')}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Try a different time period or search term</p>
+          <p className="text-xs text-gray-400 mt-1">{t('tryDifferentFilter')}</p>
         </div>
       )}
       {!loading && !error && visible.length > 0 && (
@@ -447,7 +451,7 @@ export default function ComplaintsPage() {
         {/* Tab switcher */}
         <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="max-w-lg mx-auto flex">
-            {([['log','Log New'],['all','All Complaints']] as const).map(([tab,label])=>(
+            {([['log',t('logNew')],['all',t('allComplaints')]] as ['log'|'all', string][]).map(([tab,label])=>(
               <button key={tab} type="button" onClick={()=>setActiveTab(tab)}
                 className={['flex-1 py-3.5 text-sm font-semibold border-b-2 transition-colors',
                   activeTab===tab ? 'border-[#EB6619] text-[#EB6619]' : 'border-transparent text-gray-400 hover:text-gray-600'].join(' ')}>

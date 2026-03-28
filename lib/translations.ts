@@ -165,6 +165,44 @@ const t = {
   switchToTr:     { en: 'TR',              tr: 'TR' },
   switchToEn:     { en: 'EN',              tr: 'EN' },
 
+  // ─── CRM Pipeline stages ──────────────────────────────────────────────────
+  pipelineStatus:      { en: 'Pipeline Status',       tr: 'Satış Hattı Durumu'          },
+  offRamps:            { en: 'Off-Ramps',              tr: 'Çıkış Yolları'                },
+  stageLogged:         { en: 'Logged',                 tr: 'Kaydedildi'                   },
+  stageInTalks:        { en: 'In Talks',               tr: 'Görüşülüyor'                  },
+  stageTrial:          { en: 'Trial',                  tr: 'Deneme'                       },
+  stageTrialFull:      { en: 'Trial Order Placed',     tr: 'Deneme Siparişi Verildi'      },
+  stageFeedback:       { en: 'Feedback',               tr: 'Geri Bildirim'                },
+  stageFeedbackFull:   { en: 'Awaiting Feedback',      tr: 'Geri Bildirim Bekleniyor'     },
+  stageWon:            { en: 'Won',                    tr: 'Kazanıldı'                    },
+  stageNotProgressing: { en: 'Not Progressing',        tr: 'İlerlemiyor'                  },
+  stageNotWon:         { en: 'Not Won',                tr: 'Kazanılmadı'                  },
+  moveTo:              { en: 'Move to',                tr: 'Geçiş:'                       },
+  updatingStatus:      { en: 'Updating…',              tr: 'Güncelleniyor…'               },
+  currentStage:        { en: 'Current',                tr: 'Mevcut'                       },
+
+  // ─── /visits & /complaints UX strings ─────────────────────────────────────
+  myVisits:            { en: 'My Visits',              tr: 'Ziyaretlerim'                 },
+  logNew:              { en: 'Log New',                tr: 'Yeni Kaydet'                  },
+  allComplaints:       { en: 'All Complaints',         tr: 'Tüm Şikayetler'               },
+  searchByCustomer:    { en: 'Search by customer…',    tr: 'Müşteri ara…'                 },
+  chipToday:           { en: 'Today',                  tr: 'Bugün'                        },
+  chipYesterday:       { en: 'Yesterday',              tr: 'Dün'                          },
+  chipThisWeek:        { en: 'This Week',              tr: 'Bu Hafta'                     },
+  chipThisMonth:       { en: 'This Month',             tr: 'Bu Ay'                        },
+  chipAllTime:         { en: 'All Time',               tr: 'Tümü'                         },
+  resolveAction:       { en: 'Resolve',                tr: 'Çöz'                          },
+  editAction:          { en: 'Edit',                   tr: 'Düzenle'                      },
+  deleteAction:        { en: 'Delete',                 tr: 'Sil'                          },
+  pendingLabel:        { en: 'Pending',                tr: 'Bekliyor'                     },
+  loggedByPrefix:      { en: 'by',                     tr: 'Kaydeden:'                    },
+  nothingHere:         { en: 'Nothing here',           tr: 'Henüz kayıt yok'              },
+  tryDifferentFilter:  { en: 'Try a different time period or search term',
+                         tr: 'Farklı bir zaman dilimi veya arama terimi deneyin'          },
+  noVisitsLogged:      { en: 'No visits logged',       tr: 'Ziyaret girilmedi'            },
+  tryDifferentVisit:   { en: 'Try a different time period or log a new visit',
+                         tr: 'Farklı bir zaman dilimi deneyin veya yeni ziyaret ekleyin'  },
+
 } as const
 
 export type TranslationKey = keyof typeof t
