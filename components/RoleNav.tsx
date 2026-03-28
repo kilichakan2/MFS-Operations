@@ -65,6 +65,8 @@ export default function RoleNav() {
           { href: '/driver',  label: 'My Route',   icon: Icons.routes    },
           { href: '/screen2', label: 'Complaints',  icon: Icons.complaint },
         ]
+      default:
+        return []  // unknown role or SSR (document undefined → role = '')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])  // stable: role from cookie, t() stable within session
