@@ -446,6 +446,7 @@ export default function RoutesPage() {
     // Client-side log so you can see exactly what's being sent
     console.log('[routes/optimise] Sending payload:', {
       stopCount:     payload.stops.length,
+      stops:         payload.stops.map(s => `${s.customerId} priority=${s.priority} locked=${s.lockedPosition}`),
       postcodes:     stops.map(s => `${s.name}: ${s.postcode}`),
       departureTime: payload.departureTime,
       endPoint:      payload.endPoint,
@@ -587,7 +588,7 @@ export default function RoutesPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-[#F5F3EE] flex flex-col pb-16 lg:pb-0">
+    <div className="bg-[#F5F3EE] flex flex-col" style={{ height: "100dvh" }}>
       <AppHeader />
 
       {/* Page header */}
@@ -597,7 +598,7 @@ export default function RoutesPage() {
       </div>
 
       {/* Two-panel layout */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-0 lg:gap-4 lg:p-4 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-0 lg:gap-4 lg:p-4 overflow-hidden">
 
         {/* ── LEFT PANEL ──────────────────────────────────────────────────────── */}
         <div className="lg:w-[420px] lg:flex-shrink-0 flex flex-col overflow-y-auto pb-20 lg:pb-0">

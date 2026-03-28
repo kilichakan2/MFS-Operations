@@ -314,6 +314,8 @@ export async function POST(req: NextRequest) {
     // optimised sequence — furthest-first may genuinely save total mileage and
     // there are no SLA windows to protect.
     const hasPriority = unlockedStops.some(s => s.input.priority !== 'none')
+    // SHORT log — Vercel truncates long messages; this fits in one line
+    console.log(`[optimise] hasPriority=${hasPriority} stops=${unlockedStops.map(s => s.customer.name.split(' ')[0]+':'+s.input.priority).join(',')}`)
 
     let clustersOrdered: WorkingStop[][]
     let originLegsOrdered: number[]
