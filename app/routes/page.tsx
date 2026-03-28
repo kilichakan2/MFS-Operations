@@ -15,7 +15,8 @@ import {
   useState, useCallback, useEffect, useRef, useMemo
 } from 'react'
 import AppHeader           from '@/components/AppHeader'
-import RoleNav from '@/components/RoleNav'
+import RoleNav          from '@/components/RoleNav'
+import DesktopRouteNav  from '@/components/DesktopRouteNav'
 import type { RouteStop }  from '@/components/RouteMap'
 
 // RouteMap must be client-only (Leaflet uses window)
@@ -588,14 +589,14 @@ export default function RoutesPage() {
   }))
 
   return (
-    <div className="bg-[#EDEAE1] flex flex-col" style={{ height: "100dvh" }}>
+    <div className="bg-[#EDEAE1] h-screen flex flex-col overflow-hidden">
       <AppHeader title="Route Planner" />
 
-      {/* Two-panel layout */}
-      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-0 lg:gap-4 lg:p-4 overflow-hidden">
+      {/* Two-panel layout — fills space between header and nav */}
+      <div className="flex-1 flex min-h-0 overflow-hidden flex-col lg:flex-row gap-0 lg:gap-4 lg:p-4">
 
         {/* ── LEFT PANEL ──────────────────────────────────────────────────────── */}
-        <div className="flex-1 min-h-0 lg:flex-none lg:w-[420px] flex flex-col overflow-y-auto pb-20 lg:pb-0">
+        <div className="w-full lg:w-[420px] h-full overflow-y-auto flex flex-col">
 
           {/* Route meta — compact two-row layout */}
           <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-3 space-y-2">
@@ -954,7 +955,13 @@ export default function RoutesPage() {
         </div>
       </div>
 
-      <RoleNav />
+      {/* Mobile nav — fixed, below content (mobile only) */}
+      <div className="lg:hidden">
+        <RoleNav />
+      </div>
+
+      {/* Desktop nav — in-flow Bottom Bread, never overlaps content */}
+      <DesktopRouteNav />
     </div>
   )
 }
