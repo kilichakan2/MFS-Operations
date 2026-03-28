@@ -21,7 +21,7 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-  warehouse: ['/screen1', '/routes'],
+  warehouse: ['/screen1', '/routes', '/runs'],
   office:    ['/screen1', '/complaints', '/routes', '/runs'],
   sales:     ['/complaints', '/visits', '/routes', '/runs'],
   admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
