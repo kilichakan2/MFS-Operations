@@ -12,7 +12,7 @@
 
 import dynamic from 'next/dynamic'
 import {
-  useState, useCallback, useEffect, useRef, useMemo
+  useState, useCallback, useEffect, useRef, useMemo, Suspense
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader           from '@/components/AppHeader'
@@ -306,7 +306,7 @@ function StopCardRow({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function RoutesPage() {
+function RoutesPageInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const editId       = searchParams.get('editId')   // set when opening from /runs Edit button
@@ -1058,5 +1058,15 @@ export default function RoutesPage() {
       {/* Desktop nav — in-flow Bottom Bread, never overlaps content */}
       <DesktopRouteNav />
     </div>
+  )
+}
+
+// useSearchParams() requires a Suspense boundary in Next.js 15 App Router.
+// The inner component holds all the logic; this shell satisfies the constraint.
+export default function RoutesPage() {
+  return (
+    <Suspense>
+      <RoutesPageInner />
+    </Suspense>
   )
 }
