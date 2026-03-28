@@ -59,6 +59,7 @@ export default function DesktopRouteNav() {
         return [
           { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch  },
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
+          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
         ]
       default:
         return []
