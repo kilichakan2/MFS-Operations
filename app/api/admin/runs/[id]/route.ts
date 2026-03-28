@@ -1,9 +1,8 @@
 /**
  * app/api/admin/runs/[id]/route.ts
  *
- * PATCH — Update a route's status.
- *   Body: { status: 'completed' | 'active' | 'draft' }
- *   Only admins can call this (middleware enforces /api/admin/*).
+ * PATCH { status } — update route status
+ * DELETE          — delete route (route_stops cascade automatically)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -22,9 +21,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id }   = await params
-    const body     = await req.json() as { status?: string }
-    const status   = body.status as RouteStatus | undefined
+    const { id }  = await params
+    const body    = await req.json() as { status?: string }
+    const status  = body.status as RouteStatus | undefined
 
     if (!status || !VALID_STATUSES.includes(status)) {
       return NextResponse.json(
@@ -47,6 +46,33 @@ export async function PATCH(
 
   } catch (err) {
     console.error('[admin/runs/:id PATCH]', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    // route_stops has ON DELETE CASCADE — single delete removes all stops too
+    const { error } = await supabase
+      .from('routes')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      console.error('[admin/runs/:id DELETE]', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    console.log(`[admin/runs/:id DELETE] route ${id} deleted`)
+    return new NextResponse(null, { status: 204 })
+
+  } catch (err) {
+    console.error('[admin/runs/:id DELETE]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

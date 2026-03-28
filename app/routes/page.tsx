@@ -14,6 +14,7 @@ import dynamic from 'next/dynamic'
 import {
   useState, useCallback, useEffect, useRef, useMemo
 } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader           from '@/components/AppHeader'
 import RoleNav          from '@/components/RoleNav'
 import DesktopRouteNav  from '@/components/DesktopRouteNav'
@@ -306,6 +307,10 @@ function StopCardRow({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function RoutesPage() {
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const editId       = searchParams.get('editId')   // set when opening from /runs Edit button
+
   // ── Form state ──────────────────────────────────────────────────────────────
   // Dynamic date/time defaults — evaluated once on mount using browser local time.
   // Before 10:00 local → today at 10:00. At/after 10:00 → tomorrow at 10:00.
@@ -331,6 +336,8 @@ export default function RoutesPage() {
   const [customerSearch, setCustomerSearch] = useState('')
   const [showPicker,     setShowPicker]     = useState(false)
   const [showHelp,       setShowHelp]       = useState(false)
+  const [editRouteId,    setEditRouteId]    = useState<string | null>(null)
+  const [loadingEdit,    setLoadingEdit]    = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   // ── Optimise result ─────────────────────────────────────────────────────────
@@ -379,6 +386,48 @@ export default function RoutesPage() {
       })
       .catch(err => console.error('[routes/page] Users fetch network error:', err))
   }, [])
+
+  // ── Edit mode: hydrate planner from existing route when ?editId= is set ─────
+  useEffect(() => {
+    if (!editId) return
+    setLoadingEdit(true)
+    fetch(`/api/routes/${editId}`)
+      .then(r => r.json())
+      .then(d => {
+        const route = d.route
+        if (!route) { console.error('[routes/page] Edit route not found'); return }
+
+        // Hydrate header fields
+        setEditRouteId(route.id)
+        setRouteName(route.name ?? '')
+        setPlannedDate(route.planned_date)
+        setDepartureTime(route.departure_time.slice(0, 5))
+        setEndPoint(route.end_point as 'mfs' | 'ozmen_john_street')
+        setAssignedTo(route.assigned_to ?? '')
+
+        // Hydrate stops
+        const hydratedStops: StopCard[] = (route.route_stops ?? []).map((s: {
+          customer: Customer; priority: StopCard['priority']
+          locked_position: boolean; priority_note: string | null
+          estimated_arrival: string | null
+        }) => ({
+          id:               s.customer.id,
+          name:             s.customer.name,
+          postcode:         s.customer.postcode,
+          lat:              s.customer.lat,
+          lng:              s.customer.lng,
+          priority:         s.priority ?? 'none',
+          lockedPosition:   s.locked_position ?? false,
+          priorityNote:     s.priority_note ?? '',
+          estimatedArrival: s.estimated_arrival ?? null,
+        }))
+        setStops(hydratedStops)
+        console.log(`[routes/page] Edit mode: loaded route ${route.id} with ${hydratedStops.length} stops`)
+      })
+      .catch(err => console.error('[routes/page] Edit hydration error:', err))
+      .finally(() => setLoadingEdit(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId])  // only re-run when editId changes
 
   // ── Customer search filter ──────────────────────────────────────────────────
   const filteredCustomers = useMemo(() => {
@@ -557,31 +606,46 @@ export default function RoutesPage() {
         distanceFromPrevKm:    (s as RouteStop).distanceFromPrevKm ?? null,
       }))
 
-      const res = await fetch('/api/routes', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          name:             routeName.trim() || null,
-          plannedDate,
-          assignedTo,
-          departureTime,
-          endPoint,
-          stops:            stopsPayload,
-          totalDistanceKm:  result?.totalDistanceKm  ?? null,
-          totalDurationMin: result?.totalDurationMin ?? null,
-          googleMapsUrl:    result?.googleMapsUrl    ?? null,
-        }),
+      const body = JSON.stringify({
+        name:             routeName.trim() || null,
+        plannedDate,
+        assignedTo,
+        departureTime,
+        endPoint,
+        stops:            stopsPayload,
+        totalDistanceKm:  result?.totalDistanceKm  ?? null,
+        totalDurationMin: result?.totalDurationMin ?? null,
+        googleMapsUrl:    result?.googleMapsUrl    ?? null,
       })
-      const data = await res.json()
-      if (!res.ok) { setSaveError(data.error ?? 'Save failed'); return }
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
+
+      if (editRouteId) {
+        // Edit mode — update existing route, then return to Runs manager
+        const res = await fetch(`/api/routes/${editRouteId}`, {
+          method:  'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        })
+        const data = await res.json()
+        if (!res.ok) { setSaveError(data.error ?? 'Update failed'); return }
+        router.push('/runs')
+      } else {
+        // Create mode — save new route
+        const res = await fetch('/api/routes', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        })
+        const data = await res.json()
+        if (!res.ok) { setSaveError(data.error ?? 'Save failed'); return }
+        setSaved(true)
+        setTimeout(() => setSaved(false), 3000)
+      }
     } catch {
       setSaveError('Network error — try again')
     } finally {
       setSaving(false)
     }
-  }, [assignedTo, stops, plannedDate, departureTime, endPoint, routeName, result])
+  }, [assignedTo, stops, plannedDate, departureTime, endPoint, routeName, result, editRouteId, router])
 
   // ── Map stops — always from stops state so manual reorders update the polyline ──
   // After optimise, stops are already sorted and have ETAs merged in.
@@ -599,7 +663,29 @@ export default function RoutesPage() {
 
   return (
     <div className="bg-[#EDEAE1] h-screen flex flex-col overflow-hidden">
-      <AppHeader title="Route Planner" />
+      <AppHeader title={editRouteId ? 'Edit Route' : 'Route Planner'} />
+
+      {/* Edit mode loading overlay */}
+      {loadingEdit && (
+        <div className="flex items-center justify-center gap-2 py-3 bg-[#16205B]/5 border-b border-[#EDEAE1]">
+          <svg className="animate-spin w-4 h-4 text-[#16205B]/40" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+          <span className="text-xs text-[#16205B]/50">Loading route…</span>
+        </div>
+      )}
+
+      {/* Edit mode banner */}
+      {editRouteId && !loadingEdit && (
+        <div className="flex items-center justify-between px-4 py-1.5 bg-[#EB6619]/10 border-b border-[#EB6619]/20">
+          <span className="text-xs text-[#EB6619] font-semibold">✏ Editing existing route</span>
+          <button type="button" onClick={() => router.push('/runs')}
+            className="text-[10px] text-[#EB6619]/70 hover:text-[#EB6619] underline">
+            ← Back to Runs
+          </button>
+        </div>
+      )}
 
       {/* Two-panel layout — fills space between header and nav */}
       <div className="flex-1 flex min-h-0 overflow-hidden flex-col lg:flex-row gap-0 lg:gap-4 lg:p-4">
@@ -851,7 +937,7 @@ export default function RoutesPage() {
                   </svg>
                   Saving…
                 </>
-              ) : saved ? '✓ Saved!' : '💾 Save & Assign'}
+              ) : saved ? '✓ Saved!' : editRouteId ? '💾 Update Route' : '💾 Save & Assign'}
             </button>
           </div>
 

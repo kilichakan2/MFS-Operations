@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import AppHeader  from '@/components/AppHeader'
 import RoleNav    from '@/components/RoleNav'
 import DesktopRouteNav from '@/components/DesktopRouteNav'
@@ -85,6 +86,8 @@ export default function RunsPage() {
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState('')
   const [patching, setPatching] = useState<string | null>(null)  // id being patched
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)  // id pending delete
+  const [deleting,      setDeleting]      = useState(false)
 
   const fetchRuns = useCallback(async () => {
     setLoading(true); setError('')
@@ -119,6 +122,27 @@ export default function RunsPage() {
       setError('Network error')
     } finally {
       setPatching(null)
+    }
+  }
+
+  async function deleteRun(id: string) {
+    setDeleting(true)
+    // Optimistic remove
+    setRuns(prev => prev.filter(r => r.id !== id))
+    setConfirmDelete(null)
+    try {
+      const res = await fetch(`/api/admin/runs/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        // Revert — re-fetch the week
+        fetchRuns()
+        const data = await res.json() as { error?: string }
+        setError(data.error ?? 'Delete failed')
+      }
+    } catch {
+      fetchRuns()
+      setError('Network error')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -220,22 +244,50 @@ export default function RunsPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {run.status !== 'completed' ? (
-                            <button type="button"
-                              onClick={() => patchStatus(run.id, 'completed')}
-                              disabled={isBusy}
-                              className="h-7 px-3 rounded-lg bg-[#16205B] text-white text-[10px] font-bold disabled:opacity-40 hover:bg-[#16205B]/80 transition-colors"
-                            >
-                              {isBusy ? '…' : 'Mark Complete'}
-                            </button>
+                          {confirmDelete === run.id ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="text-[10px] text-red-600 font-semibold">Delete?</span>
+                              <button type="button" onClick={() => deleteRun(run.id)} disabled={deleting}
+                                className="h-7 px-2 rounded-lg bg-red-600 text-white text-[10px] font-bold disabled:opacity-40">
+                                {deleting ? '…' : 'Yes'}
+                              </button>
+                              <button type="button" onClick={() => setConfirmDelete(null)}
+                                className="h-7 px-2 rounded-lg border border-[#EDEAE1] text-[10px] text-gray-500">
+                                No
+                              </button>
+                            </div>
                           ) : (
-                            <button type="button"
-                              onClick={() => patchStatus(run.id, 'active')}
-                              disabled={isBusy}
-                              className="h-7 px-3 rounded-lg border border-[#EDEAE1] text-[#16205B]/50 text-[10px] font-bold disabled:opacity-40 hover:border-[#16205B]/30 transition-colors"
-                            >
-                              {isBusy ? '…' : 'Reopen'}
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {run.status !== 'completed' ? (
+                                <button type="button"
+                                  onClick={() => patchStatus(run.id, 'completed')}
+                                  disabled={isBusy}
+                                  className="h-7 px-3 rounded-lg bg-[#16205B] text-white text-[10px] font-bold disabled:opacity-40 hover:bg-[#16205B]/80 transition-colors"
+                                >
+                                  {isBusy ? '…' : 'Complete'}
+                                </button>
+                              ) : (
+                                <button type="button"
+                                  onClick={() => patchStatus(run.id, 'active')}
+                                  disabled={isBusy}
+                                  className="h-7 px-3 rounded-lg border border-[#EDEAE1] text-[#16205B]/50 text-[10px] font-bold disabled:opacity-40 hover:border-[#16205B]/30 transition-colors"
+                                >
+                                  {isBusy ? '…' : 'Reopen'}
+                                </button>
+                              )}
+                              <Link href={`/routes?editId=${run.id}`}
+                                className="h-7 px-3 rounded-lg border border-[#EDEAE1] text-[#16205B]/60 text-[10px] font-bold hover:border-[#EB6619] hover:text-[#EB6619] transition-colors flex items-center">
+                                Edit
+                              </Link>
+                              <button type="button" onClick={() => setConfirmDelete(run.id)}
+                                className="h-7 w-7 rounded-lg border border-[#EDEAE1] text-[#16205B]/30 hover:border-red-300 hover:text-red-500 transition-colors flex items-center justify-center"
+                                title="Delete route"
+                              >
+                                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                                  <path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5ZM11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H2.506a.58.58 0 0 0-.01 0H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1h-.995a.59.59 0 0 0-.01 0H11Z"/>
+                                </svg>
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -267,22 +319,49 @@ export default function RunsPage() {
                         {s.label}
                       </span>
                     </div>
-                    {run.status !== 'completed' ? (
-                      <button type="button"
-                        onClick={() => patchStatus(run.id, 'completed')}
-                        disabled={isBusy}
-                        className="w-full h-9 rounded-xl bg-[#16205B] text-white text-sm font-bold disabled:opacity-40"
-                      >
-                        {isBusy ? '…' : '✓ Mark Complete'}
-                      </button>
+                    {confirmDelete === run.id ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-red-600 font-semibold flex-1">Delete this route?</span>
+                        <button type="button" onClick={() => deleteRun(run.id)} disabled={deleting}
+                          className="h-8 px-3 rounded-lg bg-red-600 text-white text-sm font-bold disabled:opacity-40">
+                          {deleting ? '…' : 'Delete'}
+                        </button>
+                        <button type="button" onClick={() => setConfirmDelete(null)}
+                          className="h-8 px-3 rounded-lg border border-[#EDEAE1] text-sm text-gray-500">
+                          Cancel
+                        </button>
+                      </div>
                     ) : (
-                      <button type="button"
-                        onClick={() => patchStatus(run.id, 'active')}
-                        disabled={isBusy}
-                        className="w-full h-9 rounded-xl border border-[#EDEAE1] text-[#16205B]/50 text-sm font-bold disabled:opacity-40"
-                      >
-                        {isBusy ? '…' : 'Reopen'}
-                      </button>
+                      <div className="flex gap-2">
+                        {run.status !== 'completed' ? (
+                          <button type="button"
+                            onClick={() => patchStatus(run.id, 'completed')}
+                            disabled={isBusy}
+                            className="flex-1 h-9 rounded-xl bg-[#16205B] text-white text-sm font-bold disabled:opacity-40"
+                          >
+                            {isBusy ? '…' : '✓ Complete'}
+                          </button>
+                        ) : (
+                          <button type="button"
+                            onClick={() => patchStatus(run.id, 'active')}
+                            disabled={isBusy}
+                            className="flex-1 h-9 rounded-xl border border-[#EDEAE1] text-[#16205B]/50 text-sm font-bold disabled:opacity-40"
+                          >
+                            {isBusy ? '…' : 'Reopen'}
+                          </button>
+                        )}
+                        <Link href={`/routes?editId=${run.id}`}
+                          className="h-9 px-4 rounded-xl border border-[#EDEAE1] text-[#16205B]/60 text-sm font-bold hover:border-[#EB6619] hover:text-[#EB6619] transition-colors flex items-center">
+                          Edit
+                        </Link>
+                        <button type="button" onClick={() => setConfirmDelete(run.id)}
+                          className="h-9 w-9 rounded-xl border border-[#EDEAE1] text-[#16205B]/30 hover:border-red-300 hover:text-red-500 transition-colors flex items-center justify-center flex-shrink-0"
+                        >
+                          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+                            <path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5ZM11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H2.506a.58.58 0 0 0-.01 0H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1h-.995a.59.59 0 0 0-.01 0H11Z"/>
+                          </svg>
+                        </button>
+                      </div>
                     )}
                   </div>
                 )

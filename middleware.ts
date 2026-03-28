@@ -53,10 +53,6 @@ const SHARED_API_PATHS = [
   '/api/admin/geocode-all',
   '/api/admin/runs',
   '/api/routes',
-  '/api/routes/optimise',
-  '/api/routes/today',
-  '/api/routes/customers',
-  '/api/routes/users',
 ]
 
 export function middleware(req: NextRequest) {
