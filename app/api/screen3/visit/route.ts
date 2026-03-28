@@ -14,6 +14,7 @@ const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
 const VALID_PIPELINE_STATUSES = [
   'Logged',
+  'In Talks',
   'Not Progressing',
   'Trial Order Placed',
   'Awaiting Feedback',

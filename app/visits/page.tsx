@@ -13,15 +13,46 @@ import { triggerSync }     from '@/lib/syncEngine'
 import type { SelectableItem }  from '@/components/BottomSheetSelector'
 import type { TodayVisit }      from '@/app/api/screen3/today/route'
 
-// Pipeline status options — must match API validation list exactly
-const PIPELINE_STATUSES = [
-  'Not Progressing',
-  'Trial Order Placed',
-  'Awaiting Feedback',
-  'Won',
-  'Not Won',
-] as const
-type PipelineStatus = typeof PIPELINE_STATUSES[number]
+// ─── Pipeline configuration ────────────────────────────────────────────────────
+
+// Linear main path (left to right)
+const PIPELINE_LINEAR = ['Logged', 'In Talks', 'Trial Order Placed', 'Awaiting Feedback', 'Won'] as const
+type LinearStage = typeof PIPELINE_LINEAR[number]
+
+// Short display labels for the visual stepper nodes
+const STAGE_SHORT: Record<string, string> = {
+  'Logged':             'Logged',
+  'In Talks':           'In Talks',
+  'Trial Order Placed': 'Trial',
+  'Awaiting Feedback':  'Feedback',
+  'Won':                'Won',
+}
+
+// Off-ramp statuses — not on the linear path
+const PIPELINE_OFF_RAMPS = ['Not Progressing', 'Not Won'] as const
+
+// "Next logical step" on the linear path — returns null for terminal/off-ramp states
+function getNextStep(current: string): string | null {
+  const idx = PIPELINE_LINEAR.indexOf(current as LinearStage)
+  if (idx === -1 || idx === PIPELINE_LINEAR.length - 1) return null
+  return PIPELINE_LINEAR[idx + 1]
+}
+
+// True if current status is a terminal state (no next step button shown)
+function isTerminal(status: string): boolean {
+  return status === 'Won' || status === 'Not Won' || status === 'Not Progressing'
+}
+
+// Colour map for pipeline badges (card + stepper + DetailModal)
+const PIPELINE_BADGE: Record<string, string> = {
+  'Logged':              'bg-gray-100 text-gray-500 border-gray-200',
+  'In Talks':            'bg-purple-50 text-purple-700 border-purple-200',
+  'Not Progressing':     'bg-red-50 text-red-600 border-red-200',
+  'Trial Order Placed':  'bg-blue-50 text-blue-700 border-blue-200',
+  'Awaiting Feedback':   'bg-amber-50 text-amber-700 border-amber-200',
+  'Won':                 'bg-green-50 text-green-700 border-green-200',
+  'Not Won':             'bg-gray-100 text-gray-500 border-gray-200',
+}
 
 function getClientRole(): string {
   if (typeof document === 'undefined') return ''
@@ -219,15 +250,7 @@ function OutcomeBadge({outcome}:{outcome:string}) {
   )
 }
 
-// Pipeline status badge colours
-const PIPELINE_BADGE: Record<string, string> = {
-  'Logged':              'bg-gray-100 text-gray-500 border-gray-200',
-  'Not Progressing':     'bg-red-50 text-red-600 border-red-200',
-  'Trial Order Placed':  'bg-blue-50 text-blue-700 border-blue-200',
-  'Awaiting Feedback':   'bg-amber-50 text-amber-700 border-amber-200',
-  'Won':                 'bg-green-50 text-green-700 border-green-200',
-  'Not Won':             'bg-gray-100 text-gray-500 border-gray-200',
-}
+// Static pipeline badge — used on terminal/pending states
 function PipelineBadge({status}:{status:string}) {
   return (
     <span className={['inline-flex items-center text-[10px] font-bold rounded-full px-2 py-0.5 border whitespace-nowrap', PIPELINE_BADGE[status]??'bg-gray-100 text-gray-500 border-gray-200'].join(' ')}>
@@ -236,29 +259,30 @@ function PipelineBadge({status}:{status:string}) {
   )
 }
 
-function VisitCard({visit,onEdit,onDelete,onStatusUpdate}:{
+function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
   visit:TodayVisit|PendingItem; onEdit:()=>void; onDelete:()=>void
   onStatusUpdate?:(id:string, status:string)=>void
 }) {
-  const isPending='isPending' in visit
-  const name       = isPending ? (visit as PendingItem).name : ((visit as TodayVisit).customer_name||(visit as TodayVisit).prospect_name||'Unknown')
-  const outcome    = isPending ? (visit as PendingItem).outcome : (visit as TodayVisit).outcome
-  const vtype      = isPending ? (visit as PendingItem).visitType : (visit as TodayVisit).visit_type
-  const notes      = isPending ? (visit as PendingItem).notes : (visit as TodayVisit).notes
-  const commitment = isPending ? (visit as PendingItem).commitmentDetail : (visit as TodayVisit).commitment_detail
-  const createdAt  = isPending ? (visit as PendingItem).createdAt : (visit as TodayVisit).created_at
-  const pipelineStatus = (!isPending && (visit as TodayVisit).pipeline_status) ? (visit as TodayVisit).pipeline_status : null
-  const loggedBy   = (!isPending && (visit as TodayVisit).logged_by_name) ? (visit as TodayVisit).logged_by_name : null
-  const typeColour = TYPE_COLOUR[vtype]??'#6B7280'
-  const isManager  = typeof document !== 'undefined' && (getClientRole() === 'admin' || getClientRole() === 'office')
+  const isPending     = 'isPending' in visit
+  const name          = isPending ? (visit as PendingItem).name : ((visit as TodayVisit).customer_name||(visit as TodayVisit).prospect_name||'Unknown')
+  const outcome       = isPending ? (visit as PendingItem).outcome : (visit as TodayVisit).outcome
+  const vtype         = isPending ? (visit as PendingItem).visitType : (visit as TodayVisit).visit_type
+  const notes         = isPending ? (visit as PendingItem).notes : (visit as TodayVisit).notes
+  const commitment    = isPending ? (visit as PendingItem).commitmentDetail : (visit as TodayVisit).commitment_detail
+  const createdAt     = isPending ? (visit as PendingItem).createdAt : (visit as TodayVisit).created_at
+  const pipelineStatus = (!isPending && (visit as TodayVisit).pipeline_status) ? (visit as TodayVisit).pipeline_status : 'Logged'
+  const loggedBy      = (!isPending && (visit as TodayVisit).logged_by_name) ? (visit as TodayVisit).logged_by_name : null
+  const typeColour    = TYPE_COLOUR[vtype]??'#6B7280'
+  const isManager     = typeof document !== 'undefined' && (getClientRole() === 'admin' || getClientRole() === 'office')
 
-  const [showPipelineSheet, setShowPipelineSheet] = useState(false)
-  const [updatingStatus,    setUpdatingStatus]    = useState(false)
+  const [showSheet,      setShowSheet]      = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   async function handlePipelineUpdate(newStatus: string) {
     if (isPending || !onStatusUpdate) return
+    if (newStatus === pipelineStatus) { setShowSheet(false); return }
     setUpdatingStatus(true)
-    setShowPipelineSheet(false)
+    setShowSheet(false)
     try {
       const res = await fetch('/api/screen3/visit', {
         method: 'PATCH', headers: {'Content-Type':'application/json'},
@@ -269,80 +293,158 @@ function VisitCard({visit,onEdit,onDelete,onStatusUpdate}:{
     finally { setUpdatingStatus(false) }
   }
 
+  const nextStep = isPending ? null : getNextStep(pipelineStatus)
+  const terminal = isPending ? false : isTerminal(pipelineStatus)
+
   return (
     <>
-      <div className="bg-white rounded-2xl border border-[#EDEAE1] px-4 py-3">
-        {/* Top row: name + outcome badge */}
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <p className="font-bold text-[#16205B] text-sm leading-tight">{name}</p>
-          <OutcomeBadge outcome={outcome}/>
-        </div>
-        {/* Sub row: type + time + pending badge */}
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{background:typeColour}}/>
-          <span className="text-[11px] font-semibold" style={{color:typeColour}}>{TYPE_LABEL[vtype]??vtype}</span>
-          <span className="text-gray-300 text-xs">·</span>
-          <span className="text-[11px] text-gray-400">{fmtTime(createdAt)}</span>
-          {isPending && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 ml-1">
-              <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>Pending
-            </span>
+      <div className="bg-white rounded-2xl border border-[#EDEAE1] overflow-hidden">
+        {/* Tappable body — opens stepper sheet */}
+        <button type="button" onClick={() => !isPending && setShowSheet(true)}
+          className="w-full text-left px-4 pt-3 pb-2 block active:bg-gray-50 transition-colors">
+          {/* Top row: name + outcome badge */}
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <p className="font-bold text-[#16205B] text-sm leading-tight">{name}</p>
+            <OutcomeBadge outcome={outcome}/>
+          </div>
+          {/* Sub row: type + time + pending badge */}
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{background:typeColour}}/>
+            <span className="text-[11px] font-semibold" style={{color:typeColour}}>{TYPE_LABEL[vtype]??vtype}</span>
+            <span className="text-gray-300 text-xs">·</span>
+            <span className="text-[11px] text-gray-400">{fmtTime(createdAt)}</span>
+            {isPending && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 ml-1">
+                <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>Pending
+              </span>
+            )}
+          </div>
+          {notes && <p className="text-[11px] text-gray-400 italic line-clamp-1 mb-1">{notes}</p>}
+          {commitment && <p className="text-[11px] text-[#EB6619] font-medium line-clamp-1">💬 {commitment}</p>}
+          {/* Terminal / pending static badge */}
+          {(terminal || isPending) && pipelineStatus && (
+            <div className="mt-1.5"><PipelineBadge status={pipelineStatus}/></div>
           )}
-        </div>
-        {/* Pipeline status row — tappable for non-pending visits */}
-        {!isPending && pipelineStatus && (
-          <button type="button"
-            onClick={() => !updatingStatus && setShowPipelineSheet(true)}
-            disabled={updatingStatus}
-            className="flex items-center gap-1.5 mb-1.5 group disabled:opacity-50"
-            title="Tap to update pipeline status">
-            <PipelineBadge status={updatingStatus ? 'Updating…' : pipelineStatus}/>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"
-              className="w-3 h-3 text-gray-300 group-hover:text-gray-500 transition-colors flex-shrink-0">
-              <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM4.75 7.5a.75.75 0 0 0 0 1.5h.5a.75.75 0 0 0 0-1.5h-.5ZM3 10.75a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM3.75 13a.75.75 0 0 0 0 1.5H8a.75.75 0 0 0 0-1.5H3.75Z"/>
-            </svg>
-          </button>
+          {/* Admin/office: who logged it */}
+          {isManager && loggedBy && (
+            <p className="text-[10px] text-gray-400 mt-1">by <span className="font-medium text-gray-500">{loggedBy}</span></p>
+          )}
+        </button>
+
+        {/* Quick action — "Next Step" button for linear stages */}
+        {!isPending && !terminal && nextStep && (
+          <div className="px-3 pb-3">
+            <button type="button"
+              onClick={e => { e.stopPropagation(); handlePipelineUpdate(nextStep) }}
+              disabled={updatingStatus}
+              className={[
+                'w-full h-10 rounded-xl flex items-center justify-center gap-2',
+                'text-xs font-bold transition-all active:scale-[0.98]',
+                'bg-[#16205B]/5 hover:bg-[#16205B]/10 text-[#16205B] border border-[#16205B]/10',
+                'disabled:opacity-40',
+              ].join(' ')}>
+              {updatingStatus ? (
+                <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 flex-shrink-0">
+                  <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd"/>
+                </svg>
+              )}
+              {updatingStatus ? 'Updating…' : `Move to ${nextStep}`}
+            </button>
+          </div>
         )}
-        {notes && <p className="text-[11px] text-gray-400 italic line-clamp-1 mb-1">{notes}</p>}
-        {commitment && <p className="text-[11px] text-[#EB6619] font-medium line-clamp-1">💬 {commitment}</p>}
-        {/* Admin/office: show who logged it */}
-        {isManager && loggedBy && (
-          <p className="text-[10px] text-gray-400 mt-1">by <span className="font-medium text-gray-500">{loggedBy}</span></p>
-        )}
-        {/* Actions */}
-        <div className="flex justify-end gap-0.5 mt-1">
+
+        {/* Edit + delete always at bottom */}
+        <div className="flex items-center border-t border-[#EDEAE1]">
           <button type="button" onClick={onEdit} aria-label="Edit visit"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/30 hover:text-[#16205B] hover:bg-[#EDEAE1] transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path d="M2.695 14.763l-1.262 3.154a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.885L17.5 5.5a2.121 2.121 0 0 0-3-3L3.58 13.42a4 4 0 0 0-.885 1.343Z"/>
+            className="flex-1 h-9 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-[#16205B]/40 hover:text-[#16205B] hover:bg-[#EDEAE1] transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+              <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474Z"/>
             </svg>
+            Edit
           </button>
+          <div className="w-px h-5 bg-[#EDEAE1]"/>
           <button type="button" onClick={onDelete} aria-label="Delete visit"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/30 hover:text-red-600 hover:bg-red-50 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-              <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd"/>
+            className="flex-1 h-9 flex items-center justify-center gap-1.5 text-[10px] font-semibold text-[#16205B]/40 hover:text-red-600 hover:bg-red-50 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+              <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5a.75.75 0 0 1 .786-.711Z" clipRule="evenodd"/>
             </svg>
+            Delete
           </button>
         </div>
       </div>
 
-      {/* Pipeline status bottom sheet */}
-      {showPipelineSheet && (
+      {/* Pipeline stepper bottom sheet */}
+      {showSheet && !isPending && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
-          onClick={() => setShowPipelineSheet(false)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-sm pb-8" onClick={e=>e.stopPropagation()}>
-            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-4"/>
-            <p className="text-sm font-bold text-[#16205B] px-5 mb-3">Update Pipeline Status</p>
-            <p className="text-xs text-gray-400 px-5 mb-4 font-medium">{name}</p>
-            <div className="space-y-1 px-3">
-              {PIPELINE_STATUSES.map(s => {
+          onClick={() => setShowSheet(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-sm pb-safe" onClick={e=>e.stopPropagation()}>
+            {/* Handle */}
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-1"/>
+            <p className="text-sm font-bold text-[#16205B] px-5 pt-2 pb-0.5">Pipeline Status</p>
+            <p className="text-xs text-gray-400 px-5 pb-4 truncate">{name}</p>
+
+            {/* Visual horizontal stepper */}
+            <div className="px-4 pb-4">
+              <div className="flex items-start justify-between gap-0">
+                {PIPELINE_LINEAR.map((stage, idx) => {
+                  const linearIdx   = PIPELINE_LINEAR.indexOf(pipelineStatus as LinearStage)
+                  const isActive    = pipelineStatus === stage
+                  const isPast      = linearIdx > idx
+                  const isFuture    = linearIdx < idx
+                  const isLast      = idx === PIPELINE_LINEAR.length - 1
+                  const dotClass    = isActive ? 'bg-[#16205B] ring-4 ring-[#16205B]/10 scale-110'
+                                    : isPast   ? 'bg-[#16205B]/70'
+                                               : 'bg-gray-200'
+                  const lineClass   = isPast ? 'bg-[#16205B]/70' : 'bg-gray-200'
+                  return (
+                    <div key={stage} className="flex-1 flex flex-col items-center">
+                      <div className="w-full flex items-center">
+                        <button type="button" onClick={() => handlePipelineUpdate(stage)}
+                          className={['w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center transition-all', dotClass].join(' ')}
+                          title={stage}>
+                          {isActive && (
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="white" className="w-3 h-3">
+                              <path fillRule="evenodd" d="M10.22 2.97a.75.75 0 0 1 0 1.06l-5.5 5.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06l1.97 1.97 4.97-4.97a.75.75 0 0 1 1.06 0Z" clipRule="evenodd"/>
+                            </svg>
+                          )}
+                          {isPast && !isActive && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-white"/>
+                          )}
+                        </button>
+                        {!isLast && (
+                          <div className={['h-0.5 flex-1 mx-0.5 transition-colors', lineClass].join(' ')}/>
+                        )}
+                      </div>
+                      <p className={['text-[9px] font-semibold mt-1.5 text-center leading-tight',
+                        isActive ? 'text-[#16205B]' : isPast ? 'text-[#16205B]/60' : 'text-gray-400'].join(' ')}>
+                        {STAGE_SHORT[stage]}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Off-ramp buttons */}
+            <div className="px-4 pb-6 space-y-2 border-t border-[#EDEAE1] pt-4">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Off-Ramps</p>
+              {PIPELINE_OFF_RAMPS.map(s => {
                 const isCurrent = pipelineStatus === s
                 return (
                   <button key={s} type="button" onClick={() => handlePipelineUpdate(s)}
-                    className={['w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-colors',
-                      isCurrent ? 'bg-[#16205B] text-white' : 'text-gray-700 hover:bg-[#EDEAE1]'].join(' ')}>
-                    {s}
-                    {isCurrent && <span className="float-right text-white/60 text-xs">Current</span>}
+                    className={['w-full h-11 rounded-xl text-sm font-bold border-2 transition-all',
+                      isCurrent
+                        ? 'bg-[#16205B] text-white border-[#16205B]'
+                        : s === 'Not Progressing'
+                          ? 'text-red-600 border-red-200 bg-red-50 hover:bg-red-100'
+                          : 'text-gray-500 border-gray-200 bg-gray-50 hover:bg-gray-100'
+                    ].join(' ')}>
+                    {isCurrent ? `✓ ${s}` : s}
                   </button>
                 )
               })}

@@ -79,6 +79,7 @@ function OutcomePill({ value }: { value: string }) {
 
 const PIPELINE_BADGE: Record<string, string> = {
   'Logged':              'bg-gray-100 text-gray-500',
+  'In Talks':            'bg-purple-50 text-purple-700',
   'Not Progressing':     'bg-red-50 text-red-600',
   'Trial Order Placed':  'bg-blue-50 text-blue-700',
   'Awaiting Feedback':   'bg-amber-50 text-amber-700',
