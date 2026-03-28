@@ -1,9 +1,18 @@
 /**
  * GET /api/screen3/today
  *
- * Returns today's visits logged by the current user.
- * Used by the Screen 3 activity feed and daily progress stats.
- * Auth: middleware injects x-mfs-user-id header.
+ * Returns visits for the My Visits tab on /visits.
+ *
+ * Role logic:
+ *   admin / office → returns ALL visits from all reps (no user_id filter)
+ *   sales / other  → returns only the current user's own visits
+ *
+ * Date filtering:
+ *   The "Today only" restriction has been removed — the frontend date chips
+ *   (Today / Yesterday / This Week / This Month / All Time) do client-side
+ *   filtering on the full result set. The API now returns all visits in scope.
+ *
+ * Auth: middleware injects x-mfs-user-id and x-mfs-user-role headers.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -16,6 +25,7 @@ export interface TodayVisit {
   created_at:        string
   visit_type:        string
   outcome:           string
+  pipeline_status:   string
   commitment_made:   boolean
   commitment_detail: string | null
   notes:             string | null
@@ -23,32 +33,41 @@ export interface TodayVisit {
   customer_name:     string | null
   prospect_name:     string | null
   prospect_postcode: string | null
+  logged_by_name:    string | null   // populated for admin/office views
+  logged_by_id:      string | null
 }
 
 export async function GET(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
+  const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
-  // Today midnight in UTC — consistent with the rest of the app
-  const todayStart = new Date()
-  todayStart.setHours(0, 0, 0, 0)
+  // Admin and office see all reps' visits; sales sees only their own
+  const isManager = role === 'admin' || role === 'office'
 
-  // Fetch visits with customer name joined
-  const res = await fetch(
+  const selectFields = [
+    'id', 'created_at', 'visit_type', 'outcome', 'pipeline_status',
+    'commitment_made', 'commitment_detail', 'notes',
+    'customer_id', 'prospect_name', 'prospect_postcode',
+    'customers!visits_customer_id_fkey(name)',
+    'rep:users!visits_user_id_fkey(id,name)',
+  ].join(',')
+
+  // Build query — only apply user_id filter for non-managers
+  const userFilter = isManager ? '' : `&user_id=eq.${userId}`
+
+  const url =
     `${SUPA_URL}/rest/v1/visits` +
-    `?select=id,created_at,visit_type,outcome,commitment_made,commitment_detail,notes,` +
-    `customer_id,prospect_name,prospect_postcode,` +
-    `customers!visits_customer_id_fkey(name)` +
-    `&user_id=eq.${userId}` +
-    `&created_at=gte.${todayStart.toISOString()}` +
-    `&order=created_at.desc`,
-    {
-      headers: {
-        'apikey':         SUPA_KEY,
-        'Authorization': `Bearer ${SUPA_KEY}`,
-      },
-    }
-  )
+    `?select=${encodeURIComponent(selectFields)}` +
+    userFilter +
+    `&order=created_at.desc`
+
+  const res = await fetch(url, {
+    headers: {
+      'apikey':         SUPA_KEY,
+      'Authorization': `Bearer ${SUPA_KEY}`,
+    },
+  })
 
   if (!res.ok) {
     const err = await res.text()
@@ -58,9 +77,11 @@ export async function GET(req: NextRequest) {
 
   const raw = await res.json() as {
     id: string; created_at: string; visit_type: string; outcome: string
-    commitment_made: boolean; commitment_detail: string | null; notes: string | null
+    pipeline_status: string; commitment_made: boolean
+    commitment_detail: string | null; notes: string | null
     customer_id: string | null; prospect_name: string | null; prospect_postcode: string | null
     customers: { name: string } | null
+    rep: { id: string; name: string } | null
   }[]
 
   const visits: TodayVisit[] = raw.map(r => ({
@@ -68,6 +89,7 @@ export async function GET(req: NextRequest) {
     created_at:        r.created_at,
     visit_type:        r.visit_type,
     outcome:           r.outcome,
+    pipeline_status:   r.pipeline_status ?? 'Logged',
     commitment_made:   r.commitment_made,
     commitment_detail: r.commitment_detail,
     notes:             r.notes,
@@ -75,6 +97,8 @@ export async function GET(req: NextRequest) {
     customer_name:     r.customers?.name ?? null,
     prospect_name:     r.prospect_name,
     prospect_postcode: r.prospect_postcode,
+    logged_by_name:    r.rep?.name ?? null,
+    logged_by_id:      r.rep?.id   ?? null,
   }))
 
   return NextResponse.json({ visits })

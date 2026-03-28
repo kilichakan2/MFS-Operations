@@ -13,6 +13,22 @@ import { triggerSync }     from '@/lib/syncEngine'
 import type { SelectableItem }  from '@/components/BottomSheetSelector'
 import type { TodayVisit }      from '@/app/api/screen3/today/route'
 
+// Pipeline status options — must match API validation list exactly
+const PIPELINE_STATUSES = [
+  'Not Progressing',
+  'Trial Order Placed',
+  'Awaiting Feedback',
+  'Won',
+  'Not Won',
+] as const
+type PipelineStatus = typeof PIPELINE_STATUSES[number]
+
+function getClientRole(): string {
+  if (typeof document === 'undefined') return ''
+  const match = document.cookie.match(/(?:^|;\s*)mfs_role=([^;]+)/)
+  return match?.[1] ?? ''
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type VisitType    = 'routine'|'new_pitch'|'complaint_followup'|'delivery_issue'
@@ -203,65 +219,149 @@ function OutcomeBadge({outcome}:{outcome:string}) {
   )
 }
 
-function VisitCard({visit,onEdit,onDelete}:{
+// Pipeline status badge colours
+const PIPELINE_BADGE: Record<string, string> = {
+  'Logged':              'bg-gray-100 text-gray-500 border-gray-200',
+  'Not Progressing':     'bg-red-50 text-red-600 border-red-200',
+  'Trial Order Placed':  'bg-blue-50 text-blue-700 border-blue-200',
+  'Awaiting Feedback':   'bg-amber-50 text-amber-700 border-amber-200',
+  'Won':                 'bg-green-50 text-green-700 border-green-200',
+  'Not Won':             'bg-gray-100 text-gray-500 border-gray-200',
+}
+function PipelineBadge({status}:{status:string}) {
+  return (
+    <span className={['inline-flex items-center text-[10px] font-bold rounded-full px-2 py-0.5 border whitespace-nowrap', PIPELINE_BADGE[status]??'bg-gray-100 text-gray-500 border-gray-200'].join(' ')}>
+      {status}
+    </span>
+  )
+}
+
+function VisitCard({visit,onEdit,onDelete,onStatusUpdate}:{
   visit:TodayVisit|PendingItem; onEdit:()=>void; onDelete:()=>void
+  onStatusUpdate?:(id:string, status:string)=>void
 }) {
   const isPending='isPending' in visit
-  const name    = isPending ? (visit as PendingItem).name : ((visit as TodayVisit).customer_name||(visit as TodayVisit).prospect_name||'Unknown')
-  const outcome = isPending ? (visit as PendingItem).outcome : (visit as TodayVisit).outcome
-  const vtype   = isPending ? (visit as PendingItem).visitType : (visit as TodayVisit).visit_type
-  const notes   = isPending ? (visit as PendingItem).notes : (visit as TodayVisit).notes
+  const name       = isPending ? (visit as PendingItem).name : ((visit as TodayVisit).customer_name||(visit as TodayVisit).prospect_name||'Unknown')
+  const outcome    = isPending ? (visit as PendingItem).outcome : (visit as TodayVisit).outcome
+  const vtype      = isPending ? (visit as PendingItem).visitType : (visit as TodayVisit).visit_type
+  const notes      = isPending ? (visit as PendingItem).notes : (visit as TodayVisit).notes
   const commitment = isPending ? (visit as PendingItem).commitmentDetail : (visit as TodayVisit).commitment_detail
   const createdAt  = isPending ? (visit as PendingItem).createdAt : (visit as TodayVisit).created_at
+  const pipelineStatus = (!isPending && (visit as TodayVisit).pipeline_status) ? (visit as TodayVisit).pipeline_status : null
+  const loggedBy   = (!isPending && (visit as TodayVisit).logged_by_name) ? (visit as TodayVisit).logged_by_name : null
   const typeColour = TYPE_COLOUR[vtype]??'#6B7280'
+  const isManager  = typeof document !== 'undefined' && (getClientRole() === 'admin' || getClientRole() === 'office')
+
+  const [showPipelineSheet, setShowPipelineSheet] = useState(false)
+  const [updatingStatus,    setUpdatingStatus]    = useState(false)
+
+  async function handlePipelineUpdate(newStatus: string) {
+    if (isPending || !onStatusUpdate) return
+    setUpdatingStatus(true)
+    setShowPipelineSheet(false)
+    try {
+      const res = await fetch('/api/screen3/visit', {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ id: (visit as TodayVisit).id, pipeline_status: newStatus }),
+      })
+      if (res.ok) onStatusUpdate((visit as TodayVisit).id, newStatus)
+    } catch(e) { console.error('Pipeline status update failed:', e) }
+    finally { setUpdatingStatus(false) }
+  }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#EDEAE1] px-4 py-3">
-      {/* Top row */}
-      <div className="flex items-start justify-between gap-2 mb-1">
-        <p className="font-bold text-[#16205B] text-sm leading-tight">{name}</p>
-        <OutcomeBadge outcome={outcome}/>
-      </div>
-      {/* Sub row */}
-      <div className="flex items-center gap-1.5 mb-1">
-        <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{background:typeColour}}/>
-        <span className="text-[11px] font-semibold" style={{color:typeColour}}>{TYPE_LABEL[vtype]??vtype}</span>
-        <span className="text-gray-300 text-xs">·</span>
-        <span className="text-[11px] text-gray-400">{fmtTime(createdAt)}</span>
-        {isPending && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 ml-1">
-            <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>Pending
-          </span>
+    <>
+      <div className="bg-white rounded-2xl border border-[#EDEAE1] px-4 py-3">
+        {/* Top row: name + outcome badge */}
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <p className="font-bold text-[#16205B] text-sm leading-tight">{name}</p>
+          <OutcomeBadge outcome={outcome}/>
+        </div>
+        {/* Sub row: type + time + pending badge */}
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{background:typeColour}}/>
+          <span className="text-[11px] font-semibold" style={{color:typeColour}}>{TYPE_LABEL[vtype]??vtype}</span>
+          <span className="text-gray-300 text-xs">·</span>
+          <span className="text-[11px] text-gray-400">{fmtTime(createdAt)}</span>
+          {isPending && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 ml-1">
+              <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>Pending
+            </span>
+          )}
+        </div>
+        {/* Pipeline status row — tappable for non-pending visits */}
+        {!isPending && pipelineStatus && (
+          <button type="button"
+            onClick={() => !updatingStatus && setShowPipelineSheet(true)}
+            disabled={updatingStatus}
+            className="flex items-center gap-1.5 mb-1.5 group disabled:opacity-50"
+            title="Tap to update pipeline status">
+            <PipelineBadge status={updatingStatus ? 'Updating…' : pipelineStatus}/>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"
+              className="w-3 h-3 text-gray-300 group-hover:text-gray-500 transition-colors flex-shrink-0">
+              <path d="M13.488 2.513a1.75 1.75 0 0 0-2.475 0L6.75 6.774a2.75 2.75 0 0 0-.596.892l-.848 2.047a.75.75 0 0 0 .98.98l2.047-.848a2.75 2.75 0 0 0 .892-.596l4.261-4.263a1.75 1.75 0 0 0 0-2.474ZM4.75 7.5a.75.75 0 0 0 0 1.5h.5a.75.75 0 0 0 0-1.5h-.5ZM3 10.75a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75ZM3.75 13a.75.75 0 0 0 0 1.5H8a.75.75 0 0 0 0-1.5H3.75Z"/>
+            </svg>
+          </button>
         )}
+        {notes && <p className="text-[11px] text-gray-400 italic line-clamp-1 mb-1">{notes}</p>}
+        {commitment && <p className="text-[11px] text-[#EB6619] font-medium line-clamp-1">💬 {commitment}</p>}
+        {/* Admin/office: show who logged it */}
+        {isManager && loggedBy && (
+          <p className="text-[10px] text-gray-400 mt-1">by <span className="font-medium text-gray-500">{loggedBy}</span></p>
+        )}
+        {/* Actions */}
+        <div className="flex justify-end gap-0.5 mt-1">
+          <button type="button" onClick={onEdit} aria-label="Edit visit"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/30 hover:text-[#16205B] hover:bg-[#EDEAE1] transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path d="M2.695 14.763l-1.262 3.154a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.885L17.5 5.5a2.121 2.121 0 0 0-3-3L3.58 13.42a4 4 0 0 0-.885 1.343Z"/>
+            </svg>
+          </button>
+          <button type="button" onClick={onDelete} aria-label="Delete visit"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/30 hover:text-red-600 hover:bg-red-50 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd"/>
+            </svg>
+          </button>
+        </div>
       </div>
-      {notes && <p className="text-[11px] text-gray-400 italic line-clamp-1 mb-1">{notes}</p>}
-      {commitment && <p className="text-[11px] text-[#EB6619] font-medium line-clamp-1">💬 {commitment}</p>}
-      {/* Actions */}
-      <div className="flex justify-end gap-0.5 mt-1">
-        <button type="button" onClick={onEdit} aria-label="Edit visit"
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/30 hover:text-[#16205B] hover:bg-[#EDEAE1] transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-            <path d="M2.695 14.763l-1.262 3.154a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.885L17.5 5.5a2.121 2.121 0 0 0-3-3L3.58 13.42a4 4 0 0 0-.885 1.343Z"/>
-          </svg>
-        </button>
-        <button type="button" onClick={onDelete} aria-label="Delete visit"
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/30 hover:text-red-600 hover:bg-red-50 transition-colors">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-            <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd"/>
-          </svg>
-        </button>
-      </div>
-    </div>
+
+      {/* Pipeline status bottom sheet */}
+      {showPipelineSheet && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+          onClick={() => setShowPipelineSheet(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-sm pb-8" onClick={e=>e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-4"/>
+            <p className="text-sm font-bold text-[#16205B] px-5 mb-3">Update Pipeline Status</p>
+            <p className="text-xs text-gray-400 px-5 mb-4 font-medium">{name}</p>
+            <div className="space-y-1 px-3">
+              {PIPELINE_STATUSES.map(s => {
+                const isCurrent = pipelineStatus === s
+                return (
+                  <button key={s} type="button" onClick={() => handlePipelineUpdate(s)}
+                    className={['w-full text-left px-4 py-3 rounded-xl text-sm font-semibold transition-colors',
+                      isCurrent ? 'bg-[#16205B] text-white' : 'text-gray-700 hover:bg-[#EDEAE1]'].join(' ')}>
+                    {s}
+                    {isCurrent && <span className="float-right text-white/60 text-xs">Current</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
 // ─── My Visits tab ────────────────────────────────────────────────────────────
 
 function MyVisitsTab({
-  syncedVisits, pendingItems, onEdit, onDelete,
+  syncedVisits, pendingItems, onEdit, onDelete, onStatusUpdate,
 }: {
   syncedVisits:TodayVisit[]; pendingItems:PendingItem[]
   onEdit:(v:TodayVisit|PendingItem)=>void; onDelete:(v:TodayVisit|PendingItem)=>void
+  onStatusUpdate:(id:string, status:string)=>void
 }) {
   const [search, setSearch] = useState('')
   const [chip,   setChip]   = useState<TimeChip>('today')
@@ -301,7 +401,7 @@ function MyVisitsTab({
             {allVisits.pending.length>0 && ` (${allVisits.pending.length} pending sync)`}
           </p>
           {allVisits.pending.map(p=><VisitCard key={p.localId} visit={p} onEdit={()=>onEdit(p)} onDelete={()=>onDelete(p)}/>)}
-          {allVisits.synced.map(v=><VisitCard key={v.id} visit={v} onEdit={()=>onEdit(v)} onDelete={()=>onDelete(v)}/>)}
+          {allVisits.synced.map(v=><VisitCard key={v.id} visit={v} onEdit={()=>onEdit(v)} onDelete={()=>onDelete(v)} onStatusUpdate={onStatusUpdate}/>)}
         </div>
       )}
     </div>
@@ -331,6 +431,11 @@ export default function VisitsPage() {
   const [syncedVisits, setSyncedVisits] = useState<TodayVisit[]>([])
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([])
   const [deleteTarget, setDeleteTarget] = useState<TodayVisit|PendingItem|null>(null)
+
+  // Optimistic pipeline status update — replaces the status on the card immediately
+  const handleStatusUpdate = useCallback((id: string, status: string) => {
+    setSyncedVisits(prev => prev.map(v => v.id === id ? { ...v, pipeline_status: status } : v))
+  }, [])
 
   const refreshFeed = useCallback(async()=>{
     try{ const r=await fetch('/api/screen3/today'); if(r.ok){const d=await r.json(); setSyncedVisits(d.visits??[])} }
@@ -487,7 +592,7 @@ export default function VisitsPage() {
         {activeTab==='my' && (
           <MyVisitsTab
             syncedVisits={syncedVisits} pendingItems={pendingItems}
-            onEdit={handleEdit} onDelete={v=>setDeleteTarget(v)}/>
+            onEdit={handleEdit} onDelete={v=>setDeleteTarget(v)} onStatusUpdate={handleStatusUpdate}/>
         )}
 
         {activeTab==='log' && (
