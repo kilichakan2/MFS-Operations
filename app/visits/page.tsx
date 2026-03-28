@@ -482,6 +482,7 @@ function MyVisitsTab({
   onEdit:(v:TodayVisit|PendingItem)=>void; onDelete:(v:TodayVisit|PendingItem)=>void
   onStatusUpdate:(id:string, status:string)=>void
 }) {
+  const { t }            = useLanguage()
   const [search, setSearch] = useState('')
   const [chip,   setChip]   = useState<TimeChip>('today')
 
