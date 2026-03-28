@@ -1,36 +1,68 @@
 /**
  * app/api/routes/today/route.ts
  *
- * GET — Returns today's active route for the currently logged-in user.
- *       Used by:
- *         - /driver page  → shows the driver their stops for today
- *         - /screen3      → shows reps their pre-planned visit checklist
+ * GET — Returns the next active route for the currently logged-in user.
  *
- * Returns null if no route is assigned to this user for today.
+ * Logic:
+ *   1. Compute the current time in Europe/London (Vercel runs UTC in Washington DC;
+ *      we must not use new Date().getHours() server-side — it gives UTC not UK time).
+ *   2. If UK time >= 19:00, treat "today" as tomorrow (7 PM auto-rollover):
+ *      drivers see tomorrow's route from 7 PM onwards, even if today's route was
+ *      never manually marked complete.
+ *   3. Query: planned_date >= effectiveMinDate, status in [active, draft],
+ *      ordered by planned_date ASC then departure_time ASC → returns the
+ *      chronologically next route, not the most recently created one.
  *
  * Query params:
- *   ?userId=uuid   Override the session user (admin use only — to preview
- *                  another user's route). Falls back to x-mfs-user-id header.
+ *   ?userId=uuid   Admin-only override to preview another user's route.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
 
-const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
-const supabase = createClient(SUPA_URL, SUPA_KEY)
+/** Compute the current date string and hour in UK local time (handles BST/GMT). */
+function getUKDateAndHour(): { dateStr: string; hour: number } {
+  const now   = new Date()
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone:  'Europe/London',
+    year:      'numeric',
+    month:     '2-digit',
+    day:       '2-digit',
+    hour:      'numeric',
+    hour12:    false,
+  }).formatToParts(now)
+
+  const get = (type: string) => parts.find(p => p.type === type)!.value
+  // en-GB gives DD/MM/YYYY — reassemble to YYYY-MM-DD
+  const dateStr = `${get('year')}-${get('month')}-${get('day')}`
+  const hour    = parseInt(get('hour'), 10)
+  return { dateStr, hour }
+}
 
 export async function GET(req: NextRequest) {
   try {
     const sessionUserId = req.headers.get('x-mfs-user-id')
     if (!sessionUserId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-    // Allow admin to query any user's route for preview purposes
     const { searchParams } = new URL(req.url)
     const targetUserId = searchParams.get('userId') ?? sessionUserId
 
-    const today = new Date().toISOString().slice(0, 10)
+    const { dateStr: ukToday, hour: ukHour } = getUKDateAndHour()
+
+    // 7 PM rollover: after 19:00 UK time, skip today and fetch the next future route
+    let effectiveMinDate = ukToday
+    if (ukHour >= 19) {
+      const tomorrow = new Date(ukToday + 'T12:00:00')
+      tomorrow.setDate(tomorrow.getDate() + 1)
+      effectiveMinDate = tomorrow.toLocaleDateString('en-CA')
+    }
+
+    console.log(`[routes/today] ukToday=${ukToday} ukHour=${ukHour} effectiveMinDate=${effectiveMinDate} targetUser=${targetUserId}`)
 
     const { data: routes, error } = await supabase
       .from('routes')
@@ -45,10 +77,11 @@ export async function GET(req: NextRequest) {
           customer:customers (id, name, postcode, lat, lng)
         )
       `)
-      .eq('assigned_to', targetUserId)
-      .eq('planned_date', today)
-      .in('status', ['active', 'draft'])   // exclude completed routes
-      .order('created_at', { ascending: false })
+      .eq('assigned_to',  targetUserId)
+      .gte('planned_date', effectiveMinDate)   // on or after effective date (not strictly today)
+      .in('status', ['active', 'draft'])
+      .order('planned_date',   { ascending: true })  // soonest date first
+      .order('departure_time', { ascending: true })  // tiebreak by departure time
       .limit(1)
 
     if (error) {
@@ -60,7 +93,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ route: null })
     }
 
-    // Sort stops by position before returning
     const route = {
       ...routes[0],
       route_stops: [...(routes[0].route_stops ?? [])].sort(

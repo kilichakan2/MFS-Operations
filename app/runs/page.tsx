@@ -1,0 +1,301 @@
+'use client'
+
+/**
+ * app/runs/page.tsx — Route Manager
+ *
+ * Lists all routes for the current week (Mon–Sun).
+ * Week navigation: ← prev / next → buttons.
+ * Columns: Date, Driver, Stops, Status, Action.
+ * [Mark Complete] patches status to 'completed'.
+ * [Reopen] patches status back to 'active'.
+ *
+ * Accessible to admin, sales, office — same roles that have /routes in their nav.
+ */
+
+import { useState, useEffect, useCallback } from 'react'
+import AppHeader  from '@/components/AppHeader'
+import RoleNav    from '@/components/RoleNav'
+import DesktopRouteNav from '@/components/DesktopRouteNav'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface RunRow {
+  id:                 string
+  name:               string | null
+  planned_date:       string
+  departure_time:     string
+  status:             'draft' | 'active' | 'completed'
+  end_point:          string
+  total_distance_km:  number | null
+  total_duration_min: number | null
+  assignee:           { id: string; name: string } | null
+  stop_count:         number
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtDate(iso: string) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', {
+    weekday: 'short', day: 'numeric', month: 'short',
+  })
+}
+
+function fmtTime(t: string) { return t.slice(0, 5) }
+
+function fmtDuration(min: number) {
+  const h = Math.floor(min / 60), m = min % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toLocaleDateString('en-CA')
+}
+
+function getMondayOfWeek(dateStr: string): string {
+  const d   = new Date(dateStr + 'T12:00:00')
+  const day = d.getDay()
+  d.setDate(d.getDate() - ((day + 6) % 7))
+  return d.toLocaleDateString('en-CA')
+}
+
+function formatWeekLabel(from: string, to: string): string {
+  const f = new Date(from + 'T12:00:00')
+  const t = new Date(to   + 'T12:00:00')
+  if (f.getMonth() === t.getMonth())
+    return `${f.toLocaleDateString('en-GB', { day: 'numeric' })}–${t.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  return `${f.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+}
+
+const STATUS_STYLES: Record<string, { pill: string; label: string }> = {
+  draft:     { pill: 'bg-gray-100 text-gray-500',       label: 'Draft'     },
+  active:    { pill: 'bg-blue-100 text-blue-700',       label: 'Active'    },
+  completed: { pill: 'bg-green-100 text-green-700',     label: 'Complete'  },
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export default function RunsPage() {
+  const today   = new Date().toLocaleDateString('en-CA')
+  const [weekStart, setWeekStart] = useState(() => getMondayOfWeek(today))
+  const weekEnd = addDays(weekStart, 6)
+
+  const [runs,    setRuns]    = useState<RunRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+  const [patching, setPatching] = useState<string | null>(null)  // id being patched
+
+  const fetchRuns = useCallback(async () => {
+    setLoading(true); setError('')
+    try {
+      const res  = await fetch(`/api/admin/runs?from=${weekStart}&to=${weekEnd}`)
+      const data = await res.json() as { runs?: RunRow[]; error?: string }
+      if (!res.ok) { setError(data.error ?? 'Failed to load'); return }
+      setRuns(data.runs ?? [])
+    } catch { setError('Network error') }
+    finally { setLoading(false) }
+  }, [weekStart, weekEnd])
+
+  useEffect(() => { fetchRuns() }, [fetchRuns])
+
+  async function patchStatus(id: string, status: 'completed' | 'active') {
+    setPatching(id)
+    // Optimistic update
+    setRuns(prev => prev.map(r => r.id === id ? { ...r, status } : r))
+    try {
+      const res = await fetch(`/api/admin/runs/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body:   JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        // Revert on failure
+        const orig = status === 'completed' ? 'active' : 'completed'
+        setRuns(prev => prev.map(r => r.id === id ? { ...r, status: orig as RunRow['status'] } : r))
+        const data = await res.json() as { error?: string }
+        setError(data.error ?? 'Update failed')
+      }
+    } catch {
+      setError('Network error')
+    } finally {
+      setPatching(null)
+    }
+  }
+
+  return (
+    <div className="bg-[#EDEAE1] h-screen flex flex-col overflow-hidden">
+      <AppHeader title="Runs" />
+
+      <main className="flex-1 overflow-y-auto min-h-0 px-4 py-4 max-w-5xl mx-auto w-full pb-24 lg:pb-4">
+
+        {/* Week navigator */}
+        <div className="flex items-center justify-between mb-4">
+          <button type="button"
+            onClick={() => setWeekStart(addDays(weekStart, -7))}
+            className="w-9 h-9 rounded-xl bg-white border border-[#EDEAE1] flex items-center justify-center text-[#16205B] hover:border-[#16205B]/30 transition-colors"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clipRule="evenodd"/>
+            </svg>
+          </button>
+
+          <div className="text-center">
+            <p className="text-sm font-bold text-[#16205B]">{formatWeekLabel(weekStart, weekEnd)}</p>
+            <p className="text-[10px] text-gray-400">{runs.length} route{runs.length !== 1 ? 's' : ''}</p>
+          </div>
+
+          <button type="button"
+            onClick={() => setWeekStart(addDays(weekStart, 7))}
+            className="w-9 h-9 rounded-xl bg-white border border-[#EDEAE1] flex items-center justify-center text-[#16205B] hover:border-[#16205B]/30 transition-colors"
+          >
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="mb-4 px-4 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">{error}</div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex justify-center py-16">
+            <svg className="animate-spin w-6 h-6 text-[#16205B]/30" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && runs.length === 0 && (
+          <div className="flex flex-col items-center py-16 text-center">
+            <div className="w-14 h-14 rounded-full bg-[#16205B]/5 flex items-center justify-center mb-3">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#16205B" strokeWidth="1.5" className="w-7 h-7 opacity-20">
+                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                <rect x="9" y="3" width="6" height="4" rx="1"/>
+                <path d="M9 12h6M9 16h4"/>
+              </svg>
+            </div>
+            <p className="text-[#16205B] font-semibold text-sm mb-1">No routes this week</p>
+            <p className="text-gray-400 text-xs">Plan routes in the Route Planner and they&apos;ll appear here.</p>
+          </div>
+        )}
+
+        {/* Table — desktop */}
+        {!loading && runs.length > 0 && (
+          <>
+            {/* Desktop table */}
+            <div className="hidden lg:block bg-white rounded-2xl border border-[#EDEAE1] overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#EDEAE1]">
+                    {['Date', 'Driver', 'Route', 'Stops', 'Status', ''].map(h => (
+                      <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-[#16205B]/40 uppercase tracking-widest">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EDEAE1]">
+                  {runs.map(run => {
+                    const s = STATUS_STYLES[run.status]
+                    const isBusy = patching === run.id
+                    return (
+                      <tr key={run.id} className={run.status === 'completed' ? 'opacity-60' : ''}>
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-semibold text-[#16205B]">{fmtDate(run.planned_date)}</p>
+                          <p className="text-[10px] text-gray-400">{fmtTime(run.departure_time)}</p>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {run.assignee?.name ?? <span className="text-gray-300 italic">Unassigned</span>}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 max-w-[180px] truncate">
+                          {run.name ?? '—'}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-semibold text-[#16205B]">{run.stop_count}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${s.pill}`}>
+                            {s.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {run.status !== 'completed' ? (
+                            <button type="button"
+                              onClick={() => patchStatus(run.id, 'completed')}
+                              disabled={isBusy}
+                              className="h-7 px-3 rounded-lg bg-[#16205B] text-white text-[10px] font-bold disabled:opacity-40 hover:bg-[#16205B]/80 transition-colors"
+                            >
+                              {isBusy ? '…' : 'Mark Complete'}
+                            </button>
+                          ) : (
+                            <button type="button"
+                              onClick={() => patchStatus(run.id, 'active')}
+                              disabled={isBusy}
+                              className="h-7 px-3 rounded-lg border border-[#EDEAE1] text-[#16205B]/50 text-[10px] font-bold disabled:opacity-40 hover:border-[#16205B]/30 transition-colors"
+                            >
+                              {isBusy ? '…' : 'Reopen'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="lg:hidden space-y-3">
+              {runs.map(run => {
+                const s = STATUS_STYLES[run.status]
+                const isBusy = patching === run.id
+                return (
+                  <div key={run.id} className={`bg-white rounded-2xl border border-[#EDEAE1] p-4 ${run.status === 'completed' ? 'opacity-60' : ''}`}>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="font-bold text-[#16205B] text-sm">{fmtDate(run.planned_date)}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {run.assignee?.name ?? 'Unassigned'} · {run.stop_count} stop{run.stop_count !== 1 ? 's' : ''} · {fmtTime(run.departure_time)}
+                        </p>
+                        {run.name && <p className="text-xs text-gray-400 mt-0.5 truncate">{run.name}</p>}
+                        {run.total_duration_min && (
+                          <p className="text-xs text-gray-400">{fmtDuration(run.total_duration_min)}</p>
+                        )}
+                      </div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold flex-shrink-0 ${s.pill}`}>
+                        {s.label}
+                      </span>
+                    </div>
+                    {run.status !== 'completed' ? (
+                      <button type="button"
+                        onClick={() => patchStatus(run.id, 'completed')}
+                        disabled={isBusy}
+                        className="w-full h-9 rounded-xl bg-[#16205B] text-white text-sm font-bold disabled:opacity-40"
+                      >
+                        {isBusy ? '…' : '✓ Mark Complete'}
+                      </button>
+                    ) : (
+                      <button type="button"
+                        onClick={() => patchStatus(run.id, 'active')}
+                        disabled={isBusy}
+                        className="w-full h-9 rounded-xl border border-[#EDEAE1] text-[#16205B]/50 text-sm font-bold disabled:opacity-40"
+                      >
+                        {isBusy ? '…' : 'Reopen'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </main>
+
+      {/* Mobile nav */}
+      <div className="lg:hidden"><RoleNav /></div>
+      {/* Desktop nav */}
+      <DesktopRouteNav />
+    </div>
+  )
+}

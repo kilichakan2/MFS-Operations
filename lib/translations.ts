@@ -37,6 +37,7 @@ const t = {
   navAdmin:       { en: 'Admin',       tr: 'Yönetim' },
   navMap:         { en: 'Map',         tr: 'Harita'  },
   navRoutes:      { en: 'Routes',      tr: 'Rotalar' },
+  navRuns:        { en: 'Runs',         tr: 'Seferler' },
 
   // ── Login screen ─────────────────────────────────────────────────────────
   teamLogin:      { en: 'Team Login',          tr: 'Ekip Girişi' },

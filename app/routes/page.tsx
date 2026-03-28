@@ -307,10 +307,19 @@ function StopCardRow({
 
 export default function RoutesPage() {
   // ── Form state ──────────────────────────────────────────────────────────────
-  const today = new Date().toISOString().slice(0, 10)
+  // Dynamic date/time defaults — evaluated once on mount using browser local time.
+  // Before 10:00 local → today at 10:00. At/after 10:00 → tomorrow at 10:00.
+  // en-CA locale produces YYYY-MM-DD in local time (toISOString shifts by UTC offset).
+  const defaults = useMemo(() => {
+    const now     = new Date()
+    const before10 = now.getHours() < 10
+    const date    = new Date(now)
+    if (!before10) date.setDate(date.getDate() + 1)
+    return { date: date.toLocaleDateString('en-CA'), time: '10:00' }
+  }, [])
 
-  const [plannedDate,    setPlannedDate]    = useState(today)
-  const [departureTime,  setDepartureTime]  = useState('08:00')
+  const [plannedDate,    setPlannedDate]    = useState(defaults.date)
+  const [departureTime,  setDepartureTime]  = useState(defaults.time)
   const [endPoint,       setEndPoint]       = useState<'mfs' | 'ozmen_john_street'>('mfs')
   const [assignedTo,     setAssignedTo]     = useState('')
   const [routeName,      setRouteName]      = useState('')
