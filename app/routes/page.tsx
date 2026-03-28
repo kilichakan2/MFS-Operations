@@ -601,7 +601,7 @@ export default function RoutesPage() {
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-0 lg:gap-4 lg:p-4 overflow-hidden">
 
         {/* ── LEFT PANEL ──────────────────────────────────────────────────────── */}
-        <div className="lg:w-[420px] lg:flex-shrink-0 flex flex-col overflow-y-auto pb-20 lg:pb-0">
+        <div className="flex-1 min-h-0 lg:flex-none lg:w-[420px] flex flex-col overflow-y-auto pb-20 lg:pb-0">
 
           {/* Route meta — compact two-row layout */}
           <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-3 space-y-2">
