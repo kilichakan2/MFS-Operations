@@ -7,8 +7,8 @@
  *
  * Role → permitted paths:
  *   warehouse → /screen1
- *   office    → /screen1, /screen2
- *   sales     → /screen2, /screen3
+ *   office    → /screen1, /complaints
+ *   sales     → /complaints, /visits
  *   admin     → /screen4, /screen5
  *   driver    → /driver (route view only)
  * ─────────────────────────────────────────────────────────────────────────────
@@ -22,17 +22,17 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   warehouse: ['/screen1', '/routes'],
-  office:    ['/screen1', '/screen2', '/routes', '/runs'],
-  sales:     ['/screen2', '/screen3', '/routes', '/runs'],
+  office:    ['/screen1', '/complaints', '/routes', '/runs'],
+  sales:     ['/complaints', '/visits', '/routes', '/runs'],
   admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
-  driver:    ['/driver', '/routes', '/screen2'],  // drivers: route view + complaints
+  driver:    ['/driver', '/routes', '/complaints'],  // drivers: route view + complaints
 }
 
 // Default landing page per role
 const ROLE_HOME: Record<string, string> = {
   warehouse: '/screen1',
   office:    '/screen1',
-  sales:     '/screen2',
+  sales:     '/complaints',
   admin:     '/screen4',
   driver:    '/driver',
 }

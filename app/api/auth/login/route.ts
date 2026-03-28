@@ -21,7 +21,7 @@ const supabase = createClient(
 const ROLE_ROUTES: Record<string, string> = {
   warehouse: '/screen1',
   office:    '/screen1',
-  sales:     '/screen2',
+  sales:     '/complaints',
   admin:     '/screen4',
   driver:    '/driver',
 }

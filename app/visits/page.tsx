@@ -1,0 +1,621 @@
+'use client'
+
+export const dynamic = 'force-dynamic'
+
+import { useState, useCallback, useId, useEffect, useRef, useMemo } from 'react'
+import BottomSheetSelector from '@/components/BottomSheetSelector'
+import RoleNav             from '@/components/RoleNav'
+import { useLanguage }     from '@/lib/LanguageContext'
+import AppHeader           from '@/components/AppHeader'
+import { useCustomers }    from '@/hooks/useReferenceData'
+import { localDb, syncReferenceData } from '@/lib/localDb'
+import { triggerSync }     from '@/lib/syncEngine'
+import type { SelectableItem }  from '@/components/BottomSheetSelector'
+import type { TodayVisit }      from '@/app/api/screen3/today/route'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type VisitType    = 'routine'|'new_pitch'|'complaint_followup'|'delivery_issue'
+type Outcome      = 'positive'|'neutral'|'at_risk'|'lost'
+type CustomerMode = 'existing'|'prospect'
+type TimeChip     = 'today'|'yesterday'|'this_week'|'this_month'|'all_time'
+
+interface FormState {
+  customerMode:     CustomerMode
+  customer:         SelectableItem | null
+  prospectName:     string
+  prospectPostcode: string
+  visitType:        VisitType | null
+  outcome:          Outcome | null
+  commitmentMade:   boolean
+  commitmentDetail: string
+  notes:            string
+}
+const EMPTY_FORM: FormState = {
+  customerMode:'existing', customer:null, prospectName:'', prospectPostcode:'',
+  visitType:null, outcome:null, commitmentMade:false, commitmentDetail:'', notes:'',
+}
+
+interface PendingItem {
+  localId:string; name:string; visitType:string; outcome:string; createdAt:number; isPending:true
+  customerId:string|null; prospectName:string|null; prospectPostcode:string|null
+  commitmentMade:boolean; commitmentDetail:string|null; notes:string|null
+}
+interface ValidationErrors { customer?:string; prospectPostcode?:string; visitType?:string; outcome?:string; commitmentDetail?:string }
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+function VISIT_TYPES(t:(k:string)=>string) { return [
+  { value:'routine',            label:t('routine')           },
+  { value:'new_pitch',          label:t('newPitch')          },
+  { value:'complaint_followup', label:t('complaintFollowup') },
+  { value:'delivery_issue',     label:t('deliveryIssue')     },
+]}
+function OUTCOMES(t:(k:string)=>string) { return [
+  { value:'positive', label:t('positive'), active:'bg-[#16205B] text-white shadow-md'  },
+  { value:'neutral',  label:t('neutral'),  active:'bg-[#5F5E5A] text-white shadow-md'  },
+  { value:'at_risk',  label:t('atRisk'),   active:'bg-[#BA7517] text-white shadow-md'  },
+  { value:'lost',     label:t('lost'),     active:'bg-[#A32D2D] text-white shadow-md'  },
+]}
+
+const TYPE_COLOUR: Record<string,string> = { routine:'#16205B', new_pitch:'#EB6619', complaint_followup:'#DC2626', delivery_issue:'#D97706' }
+const TYPE_LABEL:  Record<string,string> = { routine:'Routine', new_pitch:'New Pitch', complaint_followup:'Complaint F/U', delivery_issue:'Delivery Issue' }
+const OUT_COLOUR:  Record<string,string> = { positive:'#15803D', neutral:'#6B7280', at_risk:'#B45309', lost:'#B91C1C' }
+const OUT_LABEL:   Record<string,string> = { positive:'Positive', neutral:'Neutral',  at_risk:'At Risk',  lost:'Lost' }
+
+// ─── Date helpers (same en-CA pattern throughout the codebase) ────────────────
+
+function todayStr()  { return new Date().toLocaleDateString('en-CA') }
+function addDaysStr(dateStr:string, days:number) {
+  const d=new Date(dateStr+'T12:00:00'); d.setDate(d.getDate()+days); return d.toLocaleDateString('en-CA')
+}
+function getMondayStr(dateStr:string) {
+  const d=new Date(dateStr+'T12:00:00'); const day=d.getDay(); d.setDate(d.getDate()-((day+6)%7)); return d.toLocaleDateString('en-CA')
+}
+function getFirstOfMonthStr(dateStr:string) { return dateStr.slice(0,8)+'01' }
+function chipToRange(chip:TimeChip): { from:string; to:string }|null {
+  const today=todayStr()
+  switch(chip) {
+    case 'today':      return { from:today, to:today }
+    case 'yesterday':  return { from:addDaysStr(today,-1), to:addDaysStr(today,-1) }
+    case 'this_week':  return { from:getMondayStr(today), to:today }
+    case 'this_month': return { from:getFirstOfMonthStr(today), to:today }
+    case 'all_time':   return null
+  }
+}
+function inRange(isoDate:string, range:{from:string;to:string}|null): boolean {
+  if(!range) return true; const d=isoDate.slice(0,10); return d>=range.from && d<=range.to
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function vibrate(pattern:number|number[]) {
+  if(typeof window!=='undefined'&&window.navigator?.vibrate) window.navigator.vibrate(pattern)
+}
+function fmtTime(v:string|number):string {
+  const d=typeof v==='number'?new Date(v):new Date(v)
+  return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
+}
+function fmtDate(iso:string) {
+  try { return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Europe/London'}) } catch { return '' }
+}
+function validate(form:FormState):ValidationErrors {
+  const e:ValidationErrors={}
+  if(form.customerMode==='existing'&&!form.customer) e.customer='Select a customer'
+  if(form.customerMode==='prospect'&&!form.prospectName.trim()) e.customer='Enter the prospect name'
+  if(form.customerMode==='prospect'&&form.prospectName.trim().length>0&&form.prospectName.trim().length<3) e.customer='Name must be at least 3 characters'
+  if(form.customerMode==='prospect'&&!form.prospectPostcode.trim()) e.prospectPostcode='Enter a postcode (e.g. S10 1TE)'
+  if(!form.visitType) e.visitType='Select a visit type'
+  if(!form.outcome)   e.outcome='Select an outcome'
+  if(form.commitmentMade&&!form.commitmentDetail.trim()) e.commitmentDetail='Describe the commitment made'
+  return e
+}
+
+// ─── Shared primitives ────────────────────────────────────────────────────────
+
+function Label({children}:{children:React.ReactNode}) {
+  return <p className="text-xs font-bold tracking-widest uppercase text-[#16205B]/50 mb-2 px-1">{children}</p>
+}
+function FieldError({message}:{message?:string}) {
+  if(!message) return null
+  return <p className="text-red-500 text-xs mt-1.5 px-1 font-medium" role="alert">{message}</p>
+}
+function SelectorButton({label,placeholder,onClick,error}:{label?:string;placeholder:string;onClick:()=>void;error?:string}) {
+  return (
+    <div>
+      <button type="button" onClick={onClick} aria-haspopup="dialog"
+        className={['w-full min-h-[56px] flex items-center justify-between px-4 rounded-xl border-2 text-left transition-colors duration-100 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EB6619]',
+          error?'border-red-400 bg-red-50':label?'border-[#16205B] bg-white':'border-[#16205B]/20 bg-white'].join(' ')}>
+        <span className={label?'text-base font-semibold text-gray-900':'text-base text-gray-500'}>{label??placeholder}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 flex-shrink-0 ml-2 text-gray-400">
+          <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd"/>
+        </svg>
+      </button>
+      <FieldError message={error}/>
+    </div>
+  )
+}
+function SuccessBanner({visible,isUpdate}:{visible:boolean;isUpdate:boolean}) {
+  return (
+    <div aria-live="polite" aria-atomic="true"
+      className={['fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-5 py-3 bg-[#16205B] text-white rounded-full shadow-xl text-sm font-semibold transition-all duration-300',
+        visible?'opacity-100 translate-y-0 scale-100':'opacity-0 -translate-y-2 scale-95 pointer-events-none'].join(' ')}>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-[#EB6619]">
+        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd"/>
+      </svg>
+      {isUpdate?'Updated':'Logged'}
+    </div>
+  )
+}
+
+// ─── Search bar + Time chips ──────────────────────────────────────────────────
+
+function SearchBar({value,onChange}:{value:string;onChange:(v:string)=>void}) {
+  return (
+    <div className="sticky top-0 z-10 bg-[#EDEAE1] px-4 pt-3 pb-2">
+      <div className="relative">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#16205B]/30 pointer-events-none">
+          <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z" clipRule="evenodd"/>
+        </svg>
+        <input type="search" value={value} onChange={e=>onChange(e.target.value)}
+          placeholder="Search by customer…"
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-[#16205B]/10 bg-white text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-[#EB6619] transition-colors"/>
+      </div>
+    </div>
+  )
+}
+
+const TIME_CHIPS: {id:TimeChip;label:string}[] = [
+  {id:'today',label:'Today'}, {id:'yesterday',label:'Yesterday'},
+  {id:'this_week',label:'This Week'}, {id:'this_month',label:'This Month'}, {id:'all_time',label:'All Time'},
+]
+function TimeChips({active,onChange}:{active:TimeChip;onChange:(c:TimeChip)=>void}) {
+  return (
+    <div className="flex gap-2 overflow-x-auto px-4 pb-3" style={{scrollbarWidth:'none'}}>
+      {TIME_CHIPS.map(c=>(
+        <button key={c.id} type="button" onClick={()=>onChange(c.id)}
+          className={['flex-shrink-0 h-7 px-3 rounded-full text-xs font-bold transition-all',
+            active===c.id?'bg-[#16205B] text-white shadow-sm':'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
+          {c.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Visit card ───────────────────────────────────────────────────────────────
+
+function OutcomeBadge({outcome}:{outcome:string}) {
+  const colour=OUT_COLOUR[outcome]??'#6B7280'
+  const label=OUT_LABEL[outcome]??outcome
+  const bgMap: Record<string,string> = {
+    positive:'bg-green-50 border-green-200 text-green-700',
+    neutral: 'bg-gray-100 border-gray-200 text-gray-600',
+    at_risk: 'bg-amber-50 border-amber-200 text-amber-700',
+    lost:    'bg-red-50  border-red-200  text-red-700',
+  }
+  return (
+    <span className={['inline-flex items-center text-[10px] font-bold rounded-full px-2 py-0.5 border', bgMap[outcome]??'bg-gray-100 border-gray-200 text-gray-600'].join(' ')}
+      style={{color:colour}}>
+      {label}
+    </span>
+  )
+}
+
+function VisitCard({visit,onEdit,onDelete}:{
+  visit:TodayVisit|PendingItem; onEdit:()=>void; onDelete:()=>void
+}) {
+  const isPending='isPending' in visit
+  const name    = isPending ? (visit as PendingItem).name : ((visit as TodayVisit).customer_name||(visit as TodayVisit).prospect_name||'Unknown')
+  const outcome = isPending ? (visit as PendingItem).outcome : (visit as TodayVisit).outcome
+  const vtype   = isPending ? (visit as PendingItem).visitType : (visit as TodayVisit).visit_type
+  const notes   = isPending ? (visit as PendingItem).notes : (visit as TodayVisit).notes
+  const commitment = isPending ? (visit as PendingItem).commitmentDetail : (visit as TodayVisit).commitment_detail
+  const createdAt  = isPending ? (visit as PendingItem).createdAt : (visit as TodayVisit).created_at
+  const typeColour = TYPE_COLOUR[vtype]??'#6B7280'
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#EDEAE1] px-4 py-3">
+      {/* Top row */}
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <p className="font-bold text-[#16205B] text-sm leading-tight">{name}</p>
+        <OutcomeBadge outcome={outcome}/>
+      </div>
+      {/* Sub row */}
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{background:typeColour}}/>
+        <span className="text-[11px] font-semibold" style={{color:typeColour}}>{TYPE_LABEL[vtype]??vtype}</span>
+        <span className="text-gray-300 text-xs">·</span>
+        <span className="text-[11px] text-gray-400">{fmtTime(createdAt)}</span>
+        {isPending && (
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 ml-1">
+            <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>Pending
+          </span>
+        )}
+      </div>
+      {notes && <p className="text-[11px] text-gray-400 italic line-clamp-1 mb-1">{notes}</p>}
+      {commitment && <p className="text-[11px] text-[#EB6619] font-medium line-clamp-1">💬 {commitment}</p>}
+      {/* Actions */}
+      <div className="flex justify-end gap-0.5 mt-1">
+        <button type="button" onClick={onEdit} aria-label="Edit visit"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/30 hover:text-[#16205B] hover:bg-[#EDEAE1] transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path d="M2.695 14.763l-1.262 3.154a.5.5 0 0 0 .65.65l3.155-1.262a4 4 0 0 0 1.343-.885L17.5 5.5a2.121 2.121 0 0 0-3-3L3.58 13.42a4 4 0 0 0-.885 1.343Z"/>
+          </svg>
+        </button>
+        <button type="button" onClick={onDelete} aria-label="Delete visit"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-[#16205B]/30 hover:text-red-600 hover:bg-red-50 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── My Visits tab ────────────────────────────────────────────────────────────
+
+function MyVisitsTab({
+  syncedVisits, pendingItems, onEdit, onDelete,
+}: {
+  syncedVisits:TodayVisit[]; pendingItems:PendingItem[]
+  onEdit:(v:TodayVisit|PendingItem)=>void; onDelete:(v:TodayVisit|PendingItem)=>void
+}) {
+  const [search, setSearch] = useState('')
+  const [chip,   setChip]   = useState<TimeChip>('today')
+
+  const range = chipToRange(chip)
+
+  const allVisits = useMemo(() => {
+    const synced = syncedVisits
+      .filter(v => inRange(v.created_at, range))
+      .filter(v => !search || (v.customer_name??v.prospect_name??'').toLowerCase().includes(search.toLowerCase()))
+    const pending = pendingItems
+      .filter(p => inRange(new Date(p.createdAt).toISOString(), range))
+      .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
+    return { synced, pending, total: synced.length + pending.length }
+  }, [syncedVisits, pendingItems, range, search, chip]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="pb-24">
+      <SearchBar value={search} onChange={setSearch}/>
+      <TimeChips active={chip} onChange={setChip}/>
+      {allVisits.total === 0 ? (
+        <div className="flex flex-col items-center py-16 text-center px-6">
+          <div className="w-12 h-12 rounded-full bg-[#16205B]/5 flex items-center justify-center mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="#16205B" strokeWidth="1.5" className="w-6 h-6 opacity-20">
+              <path d="M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM1.49 15.326a.78.78 0 0 1-.358-.442 3 3 0 0 1 4.308-3.516 6.484 6.484 0 0 0-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 0 1-2.07-.655ZM16.44 15.98a4.97 4.97 0 0 0 2.07-.654.78.78 0 0 0 .357-.442 3 3 0 0 0-4.308-3.517 6.484 6.484 0 0 1 1.907 3.96 2.32 2.32 0 0 1-.026.654ZM18 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM5.304 16.19a.844.844 0 0 1-.277-.71 5 5 0 0 1 9.947 0 .843.843 0 0 1-.277.71A6.975 6.975 0 0 1 10 18a6.974 6.974 0 0 1-4.696-1.81Z"/>
+            </svg>
+          </div>
+          <p className="text-sm font-semibold text-gray-700">
+            {search ? `No visits matching "${search}"` : 'No visits logged'}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">Try a different time period or log a new visit</p>
+        </div>
+      ) : (
+        <div className="max-w-lg mx-auto px-4 space-y-3">
+          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest px-1">
+            {allVisits.total} visit{allVisits.total!==1?'s':''}
+            {allVisits.pending.length>0 && ` (${allVisits.pending.length} pending sync)`}
+          </p>
+          {allVisits.pending.map(p=><VisitCard key={p.localId} visit={p} onEdit={()=>onEdit(p)} onDelete={()=>onDelete(p)}/>)}
+          {allVisits.synced.map(v=><VisitCard key={v.id} visit={v} onEdit={()=>onEdit(v)} onDelete={()=>onDelete(v)}/>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function VisitsPage() {
+  const { t }      = useLanguage()
+  const visitTypes = VISIT_TYPES(t)
+  const outcomes   = OUTCOMES(t)
+  const formId     = useId()
+  const formRef    = useRef<HTMLDivElement>(null)
+
+  useEffect(()=>{ syncReferenceData().catch(console.error) },[])
+  const customers = useCustomers()
+
+  const [activeTab,    setActiveTab]    = useState<'log'|'my'>('log')
+  const [form,         setForm]         = useState<FormState>(EMPTY_FORM)
+  const [errors,       setErrors]       = useState<ValidationErrors>({})
+  const [sheetOpen,    setSheetOpen]    = useState(false)
+  const [showSuccess,  setShowSuccess]  = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingId,    setEditingId]    = useState<string|null>(null)
+  const [editingLocalId, setEditingLocalId] = useState<string|null>(null)
+  const [syncedVisits, setSyncedVisits] = useState<TodayVisit[]>([])
+  const [pendingItems, setPendingItems] = useState<PendingItem[]>([])
+  const [deleteTarget, setDeleteTarget] = useState<TodayVisit|PendingItem|null>(null)
+
+  const refreshFeed = useCallback(async()=>{
+    try{ const r=await fetch('/api/screen3/today'); if(r.ok){const d=await r.json(); setSyncedVisits(d.visits??[])} }
+    catch{}
+  },[])
+
+  const refreshPending = useCallback(async()=>{
+    const start=new Date(); start.setHours(0,0,0,0)
+    const q=await localDb.queue.filter(r=>r.screen==='screen3'&&!r.synced&&r.createdAt>=start.getTime()).toArray()
+    setPendingItems(q.map(r=>{
+      const p=r.payload as Record<string,unknown>
+      return{
+        localId:r.localId, name:!p.customer_id?String(p.prospect_name??'Unknown prospect'):'Syncing…',
+        visitType:String(p.visit_type??''), outcome:String(p.outcome??''),
+        createdAt:r.createdAt, isPending:true as const,
+        customerId:p.customer_id as string|null, prospectName:p.prospect_name as string|null,
+        prospectPostcode:p.prospect_postcode as string|null, commitmentMade:Boolean(p.commitment_made),
+        commitmentDetail:p.commitment_detail as string|null, notes:p.notes as string|null,
+      }
+    }))
+  },[])
+
+  useEffect(()=>{ refreshFeed(); refreshPending() },[refreshFeed,refreshPending])
+
+  const set=useCallback(<K extends keyof FormState>(key:K,value:FormState[K])=>{
+    setForm(p=>({...p,[key]:value})); setErrors(p=>({...p,[key]:undefined}))
+  },[])
+  const switchMode=useCallback((mode:CustomerMode)=>{
+    setForm(p=>({...p,customerMode:mode,customer:null,prospectName:'',prospectPostcode:''}))
+    setErrors(p=>({...p,customer:undefined}))
+  },[])
+  const setCommitment=useCallback((made:boolean)=>{
+    setForm(p=>({...p,commitmentMade:made,commitmentDetail:made?p.commitmentDetail:''}))
+    setErrors(p=>({...p,commitmentDetail:undefined}))
+  },[])
+
+  const handleEdit=useCallback((visit:TodayVisit|PendingItem)=>{
+    let f:FormState
+    if('isPending' in visit){
+      f={customerMode:visit.customerId?'existing':'prospect',
+        customer:null, prospectName:visit.prospectName??'', prospectPostcode:visit.prospectPostcode??'',
+        visitType:visit.visitType as VisitType??null, outcome:visit.outcome as Outcome??null,
+        commitmentMade:visit.commitmentMade, commitmentDetail:visit.commitmentDetail??'', notes:visit.notes??''}
+      setEditingLocalId(visit.localId); setEditingId(null)
+    } else {
+      const existingCustomer = visit.customer_id&&visit.customer_name ? {id:visit.customer_id,label:visit.customer_name} : null
+      f={customerMode:visit.customer_id?'existing':'prospect', customer:existingCustomer,
+        prospectName:visit.prospect_name??'', prospectPostcode:visit.prospect_postcode??'',
+        visitType:visit.visit_type as VisitType, outcome:visit.outcome as Outcome,
+        commitmentMade:visit.commitment_made, commitmentDetail:visit.commitment_detail??'', notes:visit.notes??''}
+      setEditingId(visit.id); setEditingLocalId(null)
+    }
+    setForm(f); setErrors({})
+    setActiveTab('log')
+    setTimeout(()=>formRef.current?.scrollIntoView({behavior:'smooth',block:'start'}),50)
+  },[])
+
+  const cancelEdit=useCallback(()=>{ setForm(EMPTY_FORM); setErrors({}); setEditingId(null); setEditingLocalId(null) },[])
+
+  const handleSubmit=useCallback(async()=>{
+    const errs=validate(form)
+    if(Object.keys(errs).length>0){setErrors(errs); window.scrollTo({top:0,behavior:'smooth'}); return}
+    vibrate(50)
+    setIsSubmitting(true)
+    const isDbRecord=editingId!==null
+    try{
+      if(editingLocalId) await localDb.queue.where('localId').equals(editingLocalId).delete()
+      const recordId=editingId??editingLocalId??crypto.randomUUID()
+      await localDb.queue.put({
+        localId:recordId, screen:'screen3',
+        payload:{
+          id:recordId, _upsert:isDbRecord,
+          customer_id:form.customerMode==='existing'?form.customer?.id??null:null,
+          prospect_name:form.customerMode==='prospect'?form.prospectName.trim():null,
+          prospect_postcode:form.customerMode==='prospect'?form.prospectPostcode.trim()||null:null,
+          visit_type:form.visitType!, outcome:form.outcome!,
+          commitment_made:form.commitmentMade,
+          commitment_detail:form.commitmentMade?form.commitmentDetail.trim():null,
+          notes:form.notes.trim()||null,
+        },
+        createdAt:Date.now(), synced:false, retries:0,
+      })
+      setForm(EMPTY_FORM); setErrors({}); setEditingId(null); setEditingLocalId(null)
+      setShowSuccess(true); setTimeout(()=>setShowSuccess(false),2000)
+      triggerSync()
+      setTimeout(()=>{ refreshFeed(); refreshPending() },1500)
+    } catch(err){ console.error('Failed to write to local queue:',err) }
+    finally{ setIsSubmitting(false) }
+  },[form,editingId,editingLocalId,refreshFeed,refreshPending])
+
+  const handleDeleteConfirm=useCallback(async()=>{
+    if(!deleteTarget) return
+    vibrate([50,100,50])
+    const target=deleteTarget; setDeleteTarget(null)
+    try{
+      if('isPending' in target){
+        await localDb.queue.where('localId').equals(target.localId).delete()
+        await refreshPending()
+      } else {
+        await fetch(`/api/screen3/visit?id=${target.id}`,{method:'DELETE'})
+        await localDb.queue.where('localId').equals(target.id).delete().catch(()=>{})
+        await refreshFeed(); await refreshPending()
+      }
+    } catch(err){ console.error('Delete failed:',err) }
+  },[deleteTarget,refreshFeed,refreshPending])
+
+  const isProspectMode=form.customerMode==='prospect'
+  const isEditing=editingId!==null||editingLocalId!==null
+
+  return (
+    <>
+      <SuccessBanner visible={showSuccess} isUpdate={isEditing}/>
+
+      {sheetOpen&&(
+        <BottomSheetSelector
+          title={t('selectCustomer')} items={customers} selectedId={form.customer?.id}
+          searchPlaceholder={t('searchCustomers')}
+          onSelect={item=>{set('customer',item);setSheetOpen(false)}}
+          onDismiss={()=>setSheetOpen(false)}/>
+      )}
+
+      {/* Delete confirm modal */}
+      {deleteTarget&&(
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/40" onClick={()=>setDeleteTarget(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 space-y-3" onClick={e=>e.stopPropagation()}>
+            <p className="text-base font-bold text-gray-900">Delete visit?</p>
+            <p className="text-sm text-gray-500">{'isPending' in deleteTarget?'This pending visit will be removed.':'This visit will be permanently deleted.'}</p>
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={()=>setDeleteTarget(null)}
+                className="flex-1 h-11 rounded-xl border-2 border-gray-200 text-sm font-bold text-gray-600">Cancel</button>
+              <button type="button" onClick={handleDeleteConfirm}
+                className="flex-1 h-11 rounded-xl bg-red-600 text-white text-sm font-bold">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="min-h-screen bg-[#EDEAE1]">
+        <AppHeader title={t('visitLog')} maxWidth="lg"/>
+
+        {/* Tab switcher */}
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+          <div className="max-w-lg mx-auto flex">
+            {([['log','Log New'],['my','My Visits']] as const).map(([tab,label])=>(
+              <button key={tab} type="button" onClick={()=>setActiveTab(tab)}
+                className={['flex-1 py-3.5 text-sm font-semibold border-b-2 transition-colors',
+                  activeTab===tab?'border-[#EB6619] text-[#EB6619]':'border-transparent text-gray-400 hover:text-gray-600'].join(' ')}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeTab==='my' && (
+          <MyVisitsTab
+            syncedVisits={syncedVisits} pendingItems={pendingItems}
+            onEdit={handleEdit} onDelete={v=>setDeleteTarget(v)}/>
+        )}
+
+        {activeTab==='log' && (
+          <main className="max-w-lg mx-auto px-4 py-6 pb-24 space-y-6" id={formId} ref={formRef}>
+
+            {isEditing&&(
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[#EB6619]/10 border border-[#EB6619]/20 rounded-xl">
+                <span className="text-xs font-semibold text-[#EB6619]">✏ Editing visit</span>
+                <button type="button" onClick={cancelEdit} className="text-xs text-[#EB6619]/70 hover:text-[#EB6619] underline">Cancel</button>
+              </div>
+            )}
+
+            {/* Customer mode toggle */}
+            <section>
+              <Label>{t('customer')}</Label>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {(['existing','prospect'] as CustomerMode[]).map(mode=>(
+                  <button key={mode} type="button" onClick={()=>switchMode(mode)}
+                    className={['h-10 rounded-xl text-sm font-bold transition-all',
+                      form.customerMode===mode?'bg-[#16205B] text-white shadow-sm':'bg-white text-gray-500 border-2 border-gray-200'].join(' ')}>
+                    {mode==='existing'?t('existingCustomer'):t('prospect')}
+                  </button>
+                ))}
+              </div>
+              {!isProspectMode ? (
+                <SelectorButton label={form.customer?.label} placeholder={t('selectCustomer')}
+                  onClick={()=>setSheetOpen(true)} error={errors.customer}/>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <input type="text" placeholder={t('prospectNameField')} value={form.prospectName} autoFocus
+                      onChange={e=>{set('prospectName',e.target.value);setErrors(p=>({...p,customer:undefined}))}}
+                      aria-label="Prospect name"
+                      className={['w-full h-[56px] rounded-xl px-4 text-base text-gray-900 placeholder:text-gray-400 border-2 bg-white focus:outline-none focus:border-[#EB6619] transition-colors',
+                        errors.customer?'border-red-400 bg-red-50':'border-gray-200'].join(' ')}/>
+                    <FieldError message={errors.customer}/>
+                  </div>
+                  <div>
+                    <input type="text" placeholder={t('prospectPostcode')} value={form.prospectPostcode} maxLength={10}
+                      onChange={e=>{set('prospectPostcode',e.target.value);setErrors(p=>({...p,prospectPostcode:undefined}))}}
+                      aria-label="Prospect postcode"
+                      className={['w-full h-[56px] rounded-xl px-4 text-base text-gray-900 placeholder:text-gray-400 border-2 bg-white focus:outline-none focus:border-[#EB6619] transition-colors',
+                        errors.prospectPostcode?'border-red-400 bg-red-50':'border-gray-200'].join(' ')}/>
+                    <FieldError message={errors.prospectPostcode}/>
+                    <p className="text-xs text-gray-400 px-1 mt-1">{t('postcodeHint')}</p>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Visit type */}
+            <section>
+              <Label>{t('visitType')}</Label>
+              <div className="grid grid-cols-2 gap-2.5" role="group" aria-label="Visit type">
+                {visitTypes.map(({value,label})=>(
+                  <button key={value} type="button" onClick={()=>set('visitType',value as VisitType)} aria-pressed={form.visitType===value}
+                    className={['min-h-[56px] rounded-xl px-3 py-3 text-sm font-bold text-center leading-tight transition-all duration-100 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#EB6619]',
+                      form.visitType===value?'bg-[#590129] text-white shadow-md':'bg-white text-gray-600 border-2 border-gray-200'].join(' ')}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <FieldError message={errors.visitType}/>
+            </section>
+
+            {/* Outcome */}
+            <section>
+              <Label>{t('outcome')}</Label>
+              <div className="grid grid-cols-2 gap-2.5" role="group" aria-label={t('visitOutcome')}>
+                {outcomes.map(({value,label,active})=>(
+                  <button key={value} type="button" onClick={()=>set('outcome',value as Outcome)} aria-pressed={form.outcome===value}
+                    className={['min-h-[56px] rounded-xl px-3 py-3 text-sm font-bold text-center leading-tight transition-all duration-100 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#EB6619]',
+                      form.outcome===value?active:'bg-white text-gray-600 border-2 border-gray-200'].join(' ')}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <FieldError message={errors.outcome}/>
+              {(form.outcome==='at_risk'||form.outcome==='lost')&&(
+                <div className={['mt-2.5 px-4 py-2.5 rounded-xl text-xs font-medium',
+                  form.outcome==='lost'?'bg-red-50 text-red-700 border border-red-200':'bg-amber-50 text-amber-800 border border-amber-200'].join(' ')}>
+                  {form.outcome==='lost'?'This account will be flagged on the management dashboard immediately.':'Management will be alerted to this account on the dashboard.'}
+                </div>
+              )}
+            </section>
+
+            {/* Commitment */}
+            <section>
+              <Label>{t('commitmentMade')}</Label>
+              <div className="grid grid-cols-2 gap-3" role="group" aria-label={t('commitmentMade')}>
+                {([{value:true,label:t('yes')},{value:false,label:t('no')}] as const).map(({value,label})=>(
+                  <button key={String(value)} type="button" onClick={()=>setCommitment(value)} aria-pressed={form.commitmentMade===value}
+                    className={['h-[72px] rounded-2xl text-base font-bold transition-all duration-100 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#EB6619]',
+                      form.commitmentMade===value&&value===true?'bg-[#EB6619] text-white shadow-md':form.commitmentMade===value&&value===false?'bg-[#16205B] text-white shadow-md':'bg-white text-gray-500 border-2 border-gray-200'].join(' ')}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className={['transition-all duration-200 overflow-hidden',form.commitmentMade?'opacity-100 scale-100 mt-3':'opacity-0 pointer-events-none scale-95 h-0 !mt-0'].join(' ')} aria-hidden={!form.commitmentMade}>
+                <textarea rows={2} placeholder={t('commitmentPrompt')} value={form.commitmentDetail} maxLength={300}
+                  onChange={e=>set('commitmentDetail',e.target.value)} tabIndex={form.commitmentMade?0:-1} aria-label="Commitment detail"
+                  className={['w-full rounded-xl px-4 py-3 resize-none text-base text-gray-900 placeholder:text-gray-400 leading-relaxed border-2 bg-white focus:outline-none focus:border-[#EB6619] transition-colors',
+                    errors.commitmentDetail?'border-red-400 bg-red-50':'border-gray-200'].join(' ')}/>
+                <FieldError message={errors.commitmentDetail}/>
+              </div>
+            </section>
+
+            {/* Notes */}
+            <section>
+              <Label>{t('notesOptional')}</Label>
+              <textarea rows={2} placeholder={t('notesPrompt')} value={form.notes} maxLength={400}
+                onChange={e=>set('notes',e.target.value)} aria-label="Additional notes"
+                className="w-full rounded-xl px-4 py-3 resize-none text-base text-gray-900 placeholder:text-gray-400 leading-relaxed border-2 border-gray-200 bg-white focus:outline-none focus:border-[#EB6619] transition-colors"/>
+            </section>
+
+            {/* Submit */}
+            <section>
+              <button type="button" onClick={handleSubmit} disabled={isSubmitting}
+                className={['w-full h-16 rounded-2xl text-white text-lg font-bold transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#EB6619]',
+                  isSubmitting?'bg-gray-300 text-gray-500 cursor-not-allowed':'bg-[#EB6619] active:scale-[0.98] active:bg-[#c95510] shadow-lg shadow-orange-200'].join(' ')}>
+                {isSubmitting?t('saving'):isEditing?t('updateVisit'):t('logVisit')}
+              </button>
+            </section>
+
+          </main>
+        )}
+      </div>
+      <RoleNav/>
+    </>
+  )
+}
