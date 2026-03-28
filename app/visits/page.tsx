@@ -338,8 +338,8 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
           </div>
           {notes && <p className="text-[11px] text-gray-400 italic line-clamp-1 mb-1">{notes}</p>}
           {commitment && <p className="text-[11px] text-[#EB6619] font-medium line-clamp-1">💬 {commitment}</p>}
-          {/* Terminal / pending static badge */}
-          {(terminal || isPending) && pipelineStatus && (
+          {/* Pipeline status badge — always visible for synced visits so colour reflects current stage */}
+          {!isPending && pipelineStatus && (
             <div className="mt-1.5"><PipelineBadge status={pipelineStatus}/></div>
           )}
           {/* Admin/office: who logged it */}

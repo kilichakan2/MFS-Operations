@@ -9,6 +9,17 @@ import DetailModal, { type ModalType } from '@/components/DetailModal'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OpenComplaint        { id: string; customer: string; category: string; description: string; loggedBy: string; hoursAgo: number }
+// ─── Pipeline badge colours (matches /visits and DetailModal) ────────────────
+const PIPELINE_BADGE_CLASS: Record<string, string> = {
+  'Logged':             'bg-gray-100 text-gray-500',
+  'In Talks':           'bg-teal-50 text-teal-800',
+  'Not Progressing':    'bg-red-50 text-red-600',
+  'Trial Order Placed': 'bg-blue-50 text-blue-700',
+  'Awaiting Feedback':  'bg-amber-50 text-amber-700',
+  'Won':                'bg-green-50 text-green-700',
+  'Not Won':            'bg-gray-100 text-gray-500',
+}
+
 interface AtRiskAccount        { id: string; customer: string; outcome: 'at_risk'|'lost'; rep: string; hoursAgo: number }
 interface UnreviewedCommitment { id: string; customer: string; detail: string; rep: string; hoursAgo: number }
 interface Discrepancy          { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string; orderedQty: number|null; sentQty: number|null; loggedBy: string; createdAt: string }
@@ -216,7 +227,7 @@ function TodayTabs({ data, onRowClick }: {
                               <span className="text-[10px] text-gray-400 capitalize">{vi.visitType}</span>
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize ${oc}`}>{vi.outcome.replace(/_/g,' ')}</span>
                               {vi.pipelineStatus && vi.pipelineStatus !== 'Logged' && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 whitespace-nowrap">{vi.pipelineStatus}</span>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${PIPELINE_BADGE_CLASS[vi.pipelineStatus] ?? 'bg-gray-100 text-gray-500'}`}>{vi.pipelineStatus}</span>
                               )}
                             </div>
                           </div>
