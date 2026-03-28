@@ -508,7 +508,7 @@ export default function VisitsPage() {
                   <button key={mode} type="button" onClick={()=>switchMode(mode)}
                     className={['h-10 rounded-xl text-sm font-bold transition-all',
                       form.customerMode===mode?'bg-[#16205B] text-white shadow-sm':'bg-white text-gray-500 border-2 border-gray-200'].join(' ')}>
-                    {mode==='existing'?t('existingCustomer'):t('prospect')}
+                    {mode==='existing'?t('existingCustomer'):t('newProspect')}
                   </button>
                 ))}
               </div>
