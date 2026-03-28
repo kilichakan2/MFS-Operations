@@ -212,7 +212,7 @@ export default function RunsPage() {
         {!loading && runs.length > 0 && (
           <>
             {/* Desktop table */}
-            <div className="hidden lg:block bg-white rounded-2xl border border-[#EDEAE1] overflow-hidden">
+            <div className="hidden lg:block bg-white rounded-2xl border border-[#EDEAE1]">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#EDEAE1]">
@@ -243,7 +243,7 @@ export default function RunsPage() {
                             {s.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right whitespace-nowrap w-px">
                           {confirmDelete === run.id ? (
                             <div className="flex items-center justify-end gap-2">
                               <span className="text-[10px] text-red-600 font-semibold">Delete?</span>
