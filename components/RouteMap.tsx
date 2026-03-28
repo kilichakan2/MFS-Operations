@@ -4,18 +4,15 @@
  * RouteMap.tsx
  *
  * Leaflet map for the route planner preview.
- * Shows numbered pins (1, 2, 3…) connected by a polyline in order.
- * Imported via dynamic({ ssr: false }) — Leaflet requires window.
- *
- * Props:
- *   stops  — ordered array of stops with lat/lng
- *   origin — { lat, lng } for MFS Sheffield start pin
+ * Shows numbered pins connected by a polyline: origin → stops → destination.
+ * When endPoint is 'ozmen_john_street', the polyline ends at Ozmen coords.
  */
 
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import { useEffect, useRef } from 'react'
+import { MFS_COORDS, OZMEN_COORDS } from '@/lib/hubs'
 
 // Leaflet icon fix
 delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl
@@ -26,31 +23,29 @@ L.Icon.Default.mergeOptions({
 })
 
 export interface RouteStop {
-  position:        number
-  customerId:      string
-  customerName:    string
-  postcode:        string | null
-  lat:             number | null
-  lng:             number | null
-  priority:        'none' | 'urgent' | 'priority'
+  position:         number
+  customerId:       string
+  customerName:     string
+  postcode:         string | null
+  lat:              number | null
+  lng:              number | null
+  priority:         'none' | 'urgent' | 'priority'
   estimatedArrival?: string | null
 }
 
 interface RouteMapProps {
-  stops:  RouteStop[]
-  origin?: { lat: number; lng: number }  // MFS Sheffield
+  stops:    RouteStop[]
+  endPoint?: 'mfs' | 'ozmen_john_street'
 }
 
-// Priority colour for pin ring
 const PRIORITY_COLOUR: Record<string, string> = {
-  priority: '#DC2626',   // red
-  urgent:   '#D97706',   // amber
-  none:     '#16205B',   // navy
+  priority: '#DC2626',
+  urgent:   '#D97706',
+  none:     '#16205B',
 }
 
-// Numbered DivIcon
 function numberedPin(n: number, priority: string): L.DivIcon {
-  const ring  = PRIORITY_COLOUR[priority] ?? '#16205B'
+  const ring = PRIORITY_COLOUR[priority] ?? '#16205B'
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
       <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.3 21.7 0 14 0z"
@@ -60,67 +55,50 @@ function numberedPin(n: number, priority: string): L.DivIcon {
             font-family="system-ui,sans-serif" font-size="11" font-weight="700"
             fill="${ring}">${n}</text>
     </svg>`
-  return L.divIcon({
-    html:        svg,
-    className:   '',
-    iconSize:    [28, 36],
-    iconAnchor:  [14, 36],
-    popupAnchor: [0, -38],
-  })
+  return L.divIcon({ html: svg, className: '', iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -38] })
 }
 
-// Origin/destination pin (house icon)
-function depotPin(label: string): L.DivIcon {
+function depotPin(emoji: string): L.DivIcon {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
       <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.3 21.7 0 14 0z"
             fill="#EB6619" stroke="white" stroke-width="1.5"/>
       <text x="14" y="20" text-anchor="middle"
-            font-family="system-ui,sans-serif" font-size="14" fill="white">🏭</text>
+            font-family="system-ui,sans-serif" font-size="14" fill="white">${emoji}</text>
     </svg>`
-  return L.divIcon({
-    html:        svg,
-    className:   '',
-    iconSize:    [28, 36],
-    iconAnchor:  [14, 36],
-    popupAnchor: [0, -38],
-    tooltipAnchor: [0, -38],
-  })
+  return L.divIcon({ html: svg, className: '', iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -38] })
 }
 
-// Auto-fit bounds when stops change
 function BoundsFitter({ positions }: { positions: [number, number][] }) {
-  const map    = useMap()
+  const map     = useMap()
   const prevLen = useRef(0)
-
   useEffect(() => {
     if (positions.length === 0) return
     if (positions.length === prevLen.current) return
     prevLen.current = positions.length
-
-    const bounds = L.latLngBounds(positions)
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 })
+    map.fitBounds(L.latLngBounds(positions), { padding: [40, 40], maxZoom: 13 })
   }, [map, positions])
-
   return null
 }
 
-// MFS Sheffield warehouse coords
-const MFS_ORIGIN = { lat: 53.3789, lng: -1.4730 }
+export default function RouteMap({ stops, endPoint = 'mfs' }: RouteMapProps) {
+  const origin = MFS_COORDS
+  const dest   = endPoint === 'ozmen_john_street' ? OZMEN_COORDS : MFS_COORDS
+  const sameHub = endPoint === 'mfs'
 
-export default function RouteMap({ stops, origin = MFS_ORIGIN }: RouteMapProps) {
   const plottable = stops.filter(s => s.lat != null && s.lng != null)
 
-  // Build polyline: origin → stop1 → stop2 → … → origin
+  // Polyline: origin → stops → destination
   const polylinePoints: [number, number][] = [
     [origin.lat, origin.lng],
     ...plottable.map(s => [s.lat!, s.lng!] as [number, number]),
-    [origin.lat, origin.lng],
+    [dest.lat, dest.lng],
   ]
 
   const allPositions: [number, number][] = [
     [origin.lat, origin.lng],
     ...plottable.map(s => [s.lat!, s.lng!] as [number, number]),
+    ...(sameHub ? [] : [[dest.lat, dest.lng] as [number, number]]),
   ]
 
   return (
@@ -145,12 +123,17 @@ export default function RouteMap({ stops, origin = MFS_ORIGIN }: RouteMapProps) 
         />
       )}
 
-      {/* Origin/depot marker */}
-      <Marker position={[origin.lat, origin.lng]} icon={depotPin('MFS')}>
-        <Popup>
-          <strong>MFS Sheffield</strong><br />Start / End
-        </Popup>
+      {/* Origin — always MFS */}
+      <Marker position={[origin.lat, origin.lng]} icon={depotPin('🏭')}>
+        <Popup><strong>{origin.label}</strong><br />Start</Popup>
       </Marker>
+
+      {/* Destination — Ozmen if endPoint is ozmen_john_street */}
+      {!sameHub && (
+        <Marker position={[dest.lat, dest.lng]} icon={depotPin('🏪')}>
+          <Popup><strong>{dest.label}</strong><br />End</Popup>
+        </Marker>
+      )}
 
       {/* Stop markers */}
       {plottable.map(stop => (
@@ -170,7 +153,7 @@ export default function RouteMap({ stops, origin = MFS_ORIGIN }: RouteMapProps) 
               )}
               {stop.priority !== 'none' && (
                 <div style={{ fontSize: 11, color: PRIORITY_COLOUR[stop.priority], marginTop: 2, fontWeight: 600 }}>
-                  {stop.priority === 'priority' ? '🔴 Priority stop' : '⚠️ Urgent'}
+                  {stop.priority === 'priority' ? '🔴 Priority' : '⚠️ Urgent'}
                 </div>
               )}
             </div>

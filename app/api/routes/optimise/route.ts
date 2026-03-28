@@ -30,16 +30,12 @@ const ROUTES_FIELD_MASK  = 'routes.optimizedIntermediateWaypointIndex,routes.leg
 // must NOT be requested when optimizeWaypointOrder is not set (causes INVALID_ARGUMENT)
 const SNIFFER_FIELD_MASK = 'routes.legs,routes.distanceMeters,routes.duration'
 
-// Fixed hub coordinates — hard-coded latLng, eliminates Google address-string geocoding.
-// Source: OS/Royal Mail postcode centroids (doogal.co.uk, 6 decimal places).
-// MFS:   Unit 2-3, Rutland Way, Sheffield S3 8DG
-// Ozmen: John Street, Sheffield S2 4QT
-const MFS_COORDS   = { lat: 53.392371, lng: -1.479496 } as const
-const OZMEN_COORDS = { lat: 53.370449, lng: -1.475525 } as const
+// Hub coordinates — imported from shared constants (lib/hubs.ts)
+import { MFS_COORDS, OZMEN_COORDS } from '@/lib/hubs'
 
-// Postcode strings kept for deep-link builder and log messages only
-const ORIGIN_PC = 'S3 8DG'
-const OZMEN_PC  = 'S2 4QT'
+// Postcode strings for deep-link builder and log messages only
+const ORIGIN_PC = MFS_COORDS.postcode
+const OZMEN_PC  = OZMEN_COORDS.postcode
 
 // 25-minute cluster boundary in seconds
 const CLUSTER_THRESHOLD_S = 25 * 60

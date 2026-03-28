@@ -704,7 +704,7 @@ export default function RoutesPage() {
                 )}
               </h2>
               {stops.length > 1 && (
-                <p className="text-[10px] text-gray-400">Use arrows to reorder · 📌 to lock</p>
+                <p className="text-[10px] text-gray-400">Use ↑↓ to reorder · 🔒 to lock stop</p>
               )}
             </div>
 
@@ -772,29 +772,37 @@ export default function RoutesPage() {
             )}
 
             {/* Result summary */}
-            {result && (
-              <div className="mt-3 px-3 py-3 bg-[#16205B]/5 rounded-xl border border-[#16205B]/10">
-                <div className="flex items-center gap-4 text-[#16205B]">
-                  <div className="text-center">
-                    <p className="text-base font-bold">{fmtDuration(result.totalDurationMin)}</p>
-                    <p className="text-[10px] text-[#16205B]/50">Drive time</p>
+            {result && (() => {
+              const stopCount    = stops.length
+              const driveMin     = result.totalDurationMin - stopCount * 15  // strip service time back out
+              const unloadMin    = stopCount * 15
+              const totalMin     = result.totalDurationMin
+              const miles        = Math.round(result.totalDistanceKm * 0.621371 * 10) / 10
+              return (
+                <div className="mt-3 px-3 py-3 bg-[#16205B]/5 rounded-xl border border-[#16205B]/10">
+                  <div className="space-y-1 mb-3">
+                    <div className="flex items-center justify-between text-[#16205B]">
+                      <span className="text-[11px]">🚗 Driving</span>
+                      <span className="text-[11px] font-bold">{fmtDuration(driveMin)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[#16205B]">
+                      <span className="text-[11px]">📦 Unloading</span>
+                      <span className="text-[11px] font-bold">{fmtDuration(unloadMin)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[#16205B] border-t border-[#16205B]/10 pt-1">
+                      <span className="text-[11px] font-semibold">⏱️ Total Shift</span>
+                      <span className="text-[11px] font-bold">{fmtDuration(totalMin)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[#16205B]/60 pt-0.5">
+                      <span className="text-[10px]">Distance</span>
+                      <span className="text-[10px] font-semibold">{miles} mi</span>
+                    </div>
                   </div>
-                  <div className="w-px h-8 bg-[#16205B]/10" />
-                  <div className="text-center">
-                    <p className="text-base font-bold">{result.totalDistanceKm} km</p>
-                    <p className="text-[10px] text-[#16205B]/50">Distance</p>
-                  </div>
-                  <div className="w-px h-8 bg-[#16205B]/10" />
-                  <div className="text-center">
-                    <p className="text-base font-bold">{stops.length}</p>
-                    <p className="text-[10px] text-[#16205B]/50">Stops</p>
-                  </div>
-                </div>
                 <a
                   href={result.googleMapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-3 flex items-center justify-center gap-2 w-full h-9 rounded-xl bg-white border border-[#EDEAE1] text-xs font-semibold text-[#16205B] hover:bg-[#F5F3EE] transition-colors"
+                  className="flex items-center justify-center gap-2 w-full h-9 rounded-xl bg-white border border-[#EDEAE1] text-xs font-semibold text-[#16205B] hover:bg-[#F5F3EE] transition-colors"
                 >
                   <svg viewBox="0 0 20 20" fill="none" className="w-4 h-4">
                     <path d="M10 2C6.13 2 3 5.13 3 9c0 5.25 7 11 7 11s7-5.75 7-11c0-3.87-3.13-7-7-7Z" stroke="#EB6619" strokeWidth="1.5"/>
@@ -803,7 +811,8 @@ export default function RoutesPage() {
                   Preview in Google Maps
                 </a>
               </div>
-            )}
+              )
+            })()}
           </div>
 
           {/* Action buttons */}
@@ -853,33 +862,33 @@ export default function RoutesPage() {
         {/* ── RIGHT PANEL — MAP ────────────────────────────────────────────────── */}
         <div className="hidden lg:flex flex-1 flex-col">
           <div className="relative flex-1 rounded-xl overflow-hidden border border-[#EDEAE1] min-h-[500px] isolate">
-            {/* Floating legend overlay — shown when stops exist */}
+            {/* Floating legend — top-left, below Leaflet zoom (+/-) buttons */}
             {mapStops.length > 0 && (
-              <div className="absolute bottom-3 left-3 z-10 bg-white/95 backdrop-blur-sm shadow-md rounded-lg px-3 py-2 text-xs pointer-events-none">
+              <div className="absolute top-20 left-2.5 z-10 bg-white/95 backdrop-blur-sm shadow-md rounded-lg px-2.5 py-2 text-xs pointer-events-none">
                 <p className="text-[8px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-1.5">Route key</p>
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                    <span className="text-[10px]">🔴</span>
                     <span className="font-bold text-red-600 text-[10px]">Urgent</span>
-                    <span className="text-gray-400 text-[9px]">first in cluster</span>
+                    <span className="text-gray-400 text-[9px]">Priority #1</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+                    <span className="text-[10px]">🟠</span>
                     <span className="font-bold text-amber-600 text-[10px]">Priority</span>
-                    <span className="text-gray-400 text-[9px]">second</span>
+                    <span className="text-gray-400 text-[9px]">Priority #2</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
                     <span className="font-bold text-gray-500 text-[10px]">Standard</span>
-                    <span className="text-gray-400 text-[9px]">geo order</span>
+                    <span className="text-gray-400 text-[9px]">Geo order</span>
                   </div>
                   <div className="border-t border-gray-100 mt-1 pt-1 flex items-center gap-1.5">
-                    <span className="text-[10px] text-[#16205B]/60 font-bold">↑↓</span>
-                    <span className="text-gray-400 text-[9px]">Manual override</span>
+                    <span className="text-[10px] text-[#16205B] font-bold">🔒</span>
+                    <span className="text-gray-400 text-[9px]">Locked (Stay put)</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-[#16205B] font-bold">🔒</span>
-                    <span className="text-gray-400 text-[9px]">Locked stop</span>
+                    <span className="text-[10px] text-[#16205B]/60 font-bold">↑↓</span>
+                    <span className="text-gray-400 text-[9px]">Manual (Drag to move)</span>
                   </div>
                 </div>
               </div>
@@ -896,7 +905,7 @@ export default function RoutesPage() {
                 <p className="text-[#16205B]/30 text-sm font-medium">Add stops to see the route map</p>
               </div>
             ) : (
-              <RouteMap stops={mapStops} />
+              <RouteMap stops={mapStops} endPoint={endPoint} />
             )}
           </div>
         </div>
