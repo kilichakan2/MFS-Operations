@@ -51,6 +51,7 @@ const SHARED_API_PATHS = [
   '/api/detail/complaint',
   '/api/detail/discrepancy',
   '/api/admin/geocode-all',
+  '/api/admin/runs',
   '/api/routes',
   '/api/routes/optimise',
   '/api/routes/today',

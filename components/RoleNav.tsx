@@ -41,7 +41,7 @@ export default function RoleNav() {
           { href: '/screen4', label: t('navDashboard'),  icon: Icons.dashboard },
           { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs,   badge: 'Desktop' },
+          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs   },
           { href: '/screen5', label: t('navAdmin'),      icon: Icons.admin     },
         ]
       case 'sales':
@@ -49,14 +49,14 @@ export default function RoleNav() {
           { href: '/screen2', label: t('navComplaints'), icon: Icons.complaint },
           { href: '/screen3', label: t('navVisits'),     icon: Icons.visit     },
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs,   badge: 'Desktop' },
+          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs   },
         ]
       case 'office':
         return [
           { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch  },
           { href: '/screen2', label: t('navComplaints'), icon: Icons.complaint },
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs,   badge: 'Desktop' },
+          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs   },
         ]
       case 'warehouse':
         return [
