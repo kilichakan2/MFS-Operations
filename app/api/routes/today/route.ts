@@ -25,24 +25,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-/** Compute the current date string and hour in UK local time (handles BST/GMT). */
-function getUKDateAndHour(): { dateStr: string; hour: number } {
-  const now   = new Date()
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone:  'Europe/London',
-    year:      'numeric',
-    month:     '2-digit',
-    day:       '2-digit',
-    hour:      'numeric',
-    hour12:    false,
-  }).formatToParts(now)
-
-  const get = (type: string) => parts.find(p => p.type === type)!.value
-  // en-GB gives DD/MM/YYYY — reassemble to YYYY-MM-DD
-  const dateStr = `${get('year')}-${get('month')}-${get('day')}`
-  const hour    = parseInt(get('hour'), 10)
-  return { dateStr, hour }
-}
+import { getUKDateAndHour, getEffectiveMinDate } from '@/lib/utils/ukDateAndHour'
 
 export async function GET(req: NextRequest) {
   try {
@@ -55,12 +38,7 @@ export async function GET(req: NextRequest) {
     const { dateStr: ukToday, hour: ukHour } = getUKDateAndHour()
 
     // 7 PM rollover: after 19:00 UK time, skip today and fetch the next future route
-    let effectiveMinDate = ukToday
-    if (ukHour >= 19) {
-      const tomorrow = new Date(ukToday + 'T12:00:00')
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      effectiveMinDate = tomorrow.toLocaleDateString('en-CA')
-    }
+    const effectiveMinDate = getEffectiveMinDate(ukToday, ukHour)
 
     console.log(`[routes/today] ukToday=${ukToday} ukHour=${ukHour} effectiveMinDate=${effectiveMinDate} targetUser=${targetUserId}`)
 
