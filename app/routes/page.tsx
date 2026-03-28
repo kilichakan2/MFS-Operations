@@ -596,7 +596,7 @@ export default function RoutesPage() {
       <div className="flex-1 flex min-h-0 overflow-hidden flex-col lg:flex-row gap-0 lg:gap-4 lg:p-4">
 
         {/* ── LEFT PANEL ──────────────────────────────────────────────────────── */}
-        <div className="w-full lg:w-[420px] h-full overflow-y-auto flex flex-col">
+        <div className="w-full lg:w-[420px] h-full flex flex-col">
 
           {/* Route meta — compact two-row layout */}
           <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-3 space-y-2">
@@ -687,7 +687,7 @@ export default function RoutesPage() {
           </div>
 
           {/* Stops section */}
-          <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-4 mt-0 lg:mt-3 flex-1">
+          <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-4 mt-0 lg:mt-3 flex-1 overflow-y-auto min-h-0">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-[#16205B]">
                 Stops
@@ -853,7 +853,7 @@ export default function RoutesPage() {
 
         {/* ── RIGHT PANEL — MAP ────────────────────────────────────────────────── */}
         <div className="hidden lg:flex flex-1 flex-col">
-          <div className="relative flex-1 rounded-xl overflow-hidden border border-[#EDEAE1] min-h-[500px] isolate">
+          <div className="relative flex-1 rounded-xl overflow-hidden border border-[#EDEAE1] isolate">
             {/* Floating legend — top-left, below Leaflet zoom (+/-) buttons */}
             {mapStops.length > 0 && (
               <div className="absolute top-20 left-2.5 z-10 bg-white/95 backdrop-blur-sm shadow-md rounded-lg px-2.5 py-2 text-xs pointer-events-none">
@@ -876,11 +876,11 @@ export default function RoutesPage() {
                   </div>
                   <div className="border-t border-gray-100 mt-1 pt-1 flex items-center gap-1.5">
                     <span className="text-[10px] text-[#16205B] font-bold">🔒</span>
-                    <span className="text-gray-400 text-[9px]">Locked (Stay put)</span>
+                    <span className="text-gray-400 text-[9px]">Stay put</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] text-[#16205B]/60 font-bold">↑↓</span>
-                    <span className="text-gray-400 text-[9px]">Manual (Drag to move)</span>
+                    <span className="text-gray-400 text-[9px]">Drag to move</span>
                   </div>
                 </div>
               </div>
