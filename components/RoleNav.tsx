@@ -18,7 +18,7 @@
  * which tabs are visible.
  */
 
-import { useMemo, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { useLanguage }             from '@/lib/LanguageContext'
 import BottomNav, { Icons }        from '@/components/BottomNav'
 
@@ -33,47 +33,50 @@ function getClientRole(): Role {
 export default function RoleNav() {
   const { t } = useLanguage()
 
-  const items = useMemo(() => {
+  const [items, setItems] = useState<NavItem[]>([])
+
+  useEffect(() => {
+    // Runs after mount on client — document.cookie is available.
+    // useEffect (not useMemo) guarantees cookie is readable after hydration.
     const role = getClientRole()
     switch (role) {
       case 'admin':
-        return [
+        setItems([
           { href: '/screen4', label: t('navDashboard'),  icon: Icons.dashboard },
           { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
-          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs   },
+          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
+          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
           { href: '/screen5', label: t('navAdmin'),      icon: Icons.admin     },
-        ]
+        ]); break
       case 'sales':
-        return [
+        setItems([
           { href: '/complaints', label: t('navComplaints'), icon: Icons.complaint },
-          { href: '/visits',   label: t('navVisits'),     icon: Icons.visit     },
-          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs   },
-        ]
+          { href: '/visits',     label: t('navVisits'),     icon: Icons.visit     },
+          { href: '/routes',     label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
+          { href: '/runs',       label: t('navRuns'),       icon: Icons.runs     },
+        ]); break
       case 'office':
-        return [
-          { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch  },
+        setItems([
+          { href: '/screen1',    label: t('navDispatch'),   icon: Icons.dispatch  },
           { href: '/complaints', label: t('navComplaints'), icon: Icons.complaint },
-          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs   },
-        ]
+          { href: '/routes',     label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
+          { href: '/runs',       label: t('navRuns'),       icon: Icons.runs     },
+        ]); break
       case 'warehouse':
-        return [
+        setItems([
           { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch  },
-          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs   },
-        ]
+          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
+          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
+        ]); break
       case 'driver':
-        return [
-          { href: '/driver',  label: 'My Route',   icon: Icons.routes    },
-          { href: '/complaints', label: 'Complaints',  icon: Icons.complaint },
-        ]
+        setItems([
+          { href: '/driver',      label: 'My Route',    icon: Icons.routes    },
+          { href: '/complaints',  label: 'Complaints',  icon: Icons.complaint },
+        ]); break
       default:
-        return []  // unknown role or SSR (document undefined → role = '')
+        setItems([]); break
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])  // stable: role from cookie, t() stable within session
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return <BottomNav items={items} />
 }

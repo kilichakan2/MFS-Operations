@@ -147,6 +147,7 @@ export default function RunsPage() {
   }
 
   return (
+    <>
     <div className="bg-[#EDEAE1] h-screen flex flex-col overflow-hidden">
       <AppHeader title="Runs" />
 
@@ -371,10 +372,12 @@ export default function RunsPage() {
         )}
       </main>
 
-      {/* Mobile nav */}
-      <div className="lg:hidden"><RoleNav /></div>
-      {/* Desktop nav */}
+      {/* Desktop nav — in-flow, stays inside flex sandwich */}
       <DesktopRouteNav />
     </div>
+    {/* Mobile RoleNav MUST be outside overflow-hidden — position:fixed inside
+        overflow:hidden breaks touch events on iOS Safari/WebKit */}
+    <div className="lg:hidden"><RoleNav /></div>
+    </>
   )
 }

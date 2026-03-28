@@ -218,6 +218,7 @@ export default function DriverPage() {
   const stops = route?.route_stops ?? []
 
   return (
+    <>
     <div className="bg-[#EDEAE1] h-[100dvh] flex flex-col overflow-hidden">
 
       {/* Top bread */}
@@ -305,8 +306,10 @@ export default function DriverPage() {
         )}
       </main>
 
-      {/* Bottom bread — fixed RoleNav renders My Route + Complaints for driver role */}
-      <RoleNav />
     </div>
+    {/* RoleNav must be OUTSIDE the overflow-hidden container — position:fixed inside
+        overflow:hidden breaks touch event routing on iOS Safari / WebKit */}
+    <RoleNav />
+    </>
   )
 }

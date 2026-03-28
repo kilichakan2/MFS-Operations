@@ -13,7 +13,7 @@
 
 import Link            from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useMemo }     from 'react'
+import { useState, useEffect }     from 'react'
 import { Icons }       from '@/components/BottomNav'
 import type { NavItem } from '@/components/BottomNav'
 import { useLanguage } from '@/lib/LanguageContext'
@@ -30,42 +30,50 @@ export default function DesktopRouteNav() {
   const pathname = usePathname()
   const { t }   = useLanguage()
 
-  const items: NavItem[] = useMemo(() => {
+  const [items, setItems] = useState<NavItem[]>([])
+
+  useEffect(() => {
+    // Runs after mount on client — document.cookie is available.
+    // useEffect (not useMemo) guarantees cookie is readable after hydration.
     const role = getClientRole()
     switch (role) {
       case 'admin':
-        return [
+        setItems([
           { href: '/screen4', label: t('navDashboard'),  icon: Icons.dashboard },
           { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
           { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
           { href: '/screen5', label: t('navAdmin'),      icon: Icons.admin     },
-        ]
+        ]); break
       case 'sales':
-        return [
+        setItems([
           { href: '/complaints', label: t('navComplaints'), icon: Icons.complaint },
-          { href: '/visits',   label: t('navVisits'),     icon: Icons.visit     },
-          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
-        ]
+          { href: '/visits',     label: t('navVisits'),     icon: Icons.visit     },
+          { href: '/routes',     label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
+          { href: '/runs',       label: t('navRuns'),       icon: Icons.runs     },
+        ]); break
       case 'office':
-        return [
-          { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch  },
+        setItems([
+          { href: '/screen1',    label: t('navDispatch'),   icon: Icons.dispatch  },
           { href: '/complaints', label: t('navComplaints'), icon: Icons.complaint },
-          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
-        ]
+          { href: '/routes',     label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
+          { href: '/runs',       label: t('navRuns'),       icon: Icons.runs     },
+        ]); break
       case 'warehouse':
-        return [
+        setItems([
           { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch  },
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
           { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
-        ]
+        ]); break
+      
+        
+          
+          
+        
       default:
-        return []
+        setItems([]); break
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (items.length === 0) return null
 

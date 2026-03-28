@@ -22,7 +22,14 @@ export default function BottomNav({ items }: BottomNavProps) {
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-[9999] bg-white border-t border-[#EDEAE1]"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        // translateZ(0) forces a hardware compositing layer — ensures iOS Safari
+        // renders and routes touch events correctly regardless of ancestor overflow
+        transform: 'translateZ(0)',
+        WebkitTransform: 'translateZ(0)',
+        touchAction: 'manipulation',
+      }}
       aria-label="Main navigation"
     >
       <div className="flex">
