@@ -1,12 +1,13 @@
 'use client'
 
-import Link from 'next/link'
+import Link           from 'next/link'
 import { usePathname } from 'next/navigation'
 
-interface NavItem {
-  href:  string
-  label: string
-  icon:  React.ReactNode
+export interface NavItem {
+  href:   string
+  label:  string
+  icon:   React.ReactNode
+  badge?: string  // small sub-label (e.g. "Desktop")
 }
 
 interface BottomNavProps {
@@ -16,7 +17,7 @@ interface BottomNavProps {
 export default function BottomNav({ items }: BottomNavProps) {
   const pathname = usePathname()
 
-  if (items.length <= 1) return null   // no nav needed for single-screen roles
+  if (items.length === 0) return null
 
   return (
     <nav
@@ -32,12 +33,9 @@ export default function BottomNav({ items }: BottomNavProps) {
               key={item.href}
               href={item.href}
               className={[
-                'flex-1 flex flex-col items-center justify-center py-2 gap-0.5 min-h-[48px]',
-                'text-[10px] font-bold tracking-wide uppercase',
-                'transition-colors duration-100',
-                active
-                  ? 'text-[#EB6619]'
-                  : 'text-gray-500 hover:text-gray-700',
+                'flex-1 flex flex-col items-center justify-center py-1.5 gap-px min-h-[48px]',
+                'text-[9px] font-bold tracking-wide uppercase transition-colors duration-100',
+                active ? 'text-[#EB6619]' : 'text-gray-500 hover:text-gray-700',
               ].join(' ')}
               aria-current={active ? 'page' : undefined}
               style={{ touchAction: 'manipulation' }}
@@ -46,6 +44,11 @@ export default function BottomNav({ items }: BottomNavProps) {
                 {item.icon}
               </span>
               {item.label}
+              {item.badge && (
+                <span className="text-[8px] text-gray-400 font-medium normal-case tracking-normal -mt-px">
+                  {item.badge}
+                </span>
+              )}
             </Link>
           )
         })}
@@ -54,7 +57,7 @@ export default function BottomNav({ items }: BottomNavProps) {
   )
 }
 
-// ─── Icon set — inline SVG, no icon library needed ────────────────────────────
+// ─── Icon set ─────────────────────────────────────────────────────────────────
 
 export const Icons = {
   dispatch: (

@@ -320,6 +320,7 @@ export default function RoutesPage() {
   const [stops,          setStops]          = useState<StopCard[]>([])
   const [customerSearch, setCustomerSearch] = useState('')
   const [showPicker,     setShowPicker]     = useState(false)
+  const [showHelp,       setShowHelp]       = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
 
   // ── Optimise result ─────────────────────────────────────────────────────────
@@ -586,7 +587,7 @@ export default function RoutesPage() {
   }))
 
   return (
-    <div className="min-h-screen bg-[#F5F3EE] flex flex-col">
+    <div className="min-h-screen bg-[#F5F3EE] flex flex-col pb-16 lg:pb-0">
       <AppHeader />
 
       {/* Page header */}
@@ -901,6 +902,58 @@ export default function RoutesPage() {
               </div>
             ) : (
               <RouteMap stops={mapStops} endPoint={endPoint} />
+            )}
+
+            {/* ? Help button — bottom-left of map, click to open/close */}
+            <button
+              type="button"
+              onClick={() => setShowHelp(v => !v)}
+              title={showHelp ? 'Close help' : 'How does the planner work?'}
+              className={[
+                'absolute bottom-3 left-3 z-10 w-7 h-7 rounded-full text-xs font-bold',
+                'flex items-center justify-center shadow-md border transition-colors',
+                showHelp
+                  ? 'bg-[#EB6619] border-[#EB6619] text-white'
+                  : 'bg-white/95 border-gray-200 text-[#16205B]/50 hover:text-[#EB6619] hover:border-[#EB6619]',
+              ].join(' ')}
+            >
+              ?
+            </button>
+
+            {/* Help panel — slides up from bottom-left when open */}
+            {showHelp && (
+              <div className="absolute bottom-12 left-3 z-10 w-72 bg-white rounded-xl shadow-xl border border-[#EDEAE1] p-4 text-xs">
+                <p className="text-[10px] font-bold text-[#EB6619] uppercase tracking-widest mb-3">How the planner works</p>
+                <div className="space-y-3 text-[#16205B]/80 leading-snug">
+                  <div>
+                    <p className="font-bold text-[#16205B] mb-0.5">1 · Build your route</p>
+                    <p>Search for customers and add them as stops. Set the date, departure time, who the route is assigned to, and where it ends (MFS or Ozmen).</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-[#16205B] mb-0.5">2 · Optimise</p>
+                    <p>Hit <span className="font-bold text-[#EB6619]">Optimise Route</span>. Google calculates the fastest sequence based on live traffic. Estimated arrival and departure times appear on each stop.</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-[#16205B] mb-0.5">3 · Priority stops</p>
+                    <p>Mark a stop <span className="font-bold text-red-600">Urgent</span> or <span className="font-bold text-amber-600">Priority</span> and re-optimise. Urgent stops are always served first within their local area — they won&apos;t jump across town.</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-[#16205B] mb-0.5">4 · Manual overrides</p>
+                    <p>Use <span className="font-bold">↑↓</span> to drag stops into any order. Hit <span className="font-bold">🔒</span> to lock a stop in place so the optimiser never moves it.</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-[#16205B] mb-0.5">5 · Save & assign</p>
+                    <p>Once happy, hit <span className="font-bold text-[#16205B]">Save & Assign</span>. The route is saved to the driver&apos;s view so they can navigate each stop in order.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowHelp(false)}
+                  className="mt-3 w-full h-7 rounded-lg bg-[#16205B]/5 text-[10px] font-bold text-[#16205B]/60 hover:bg-[#16205B]/10 transition-colors"
+                >
+                  Got it ✓
+                </button>
+              </div>
             )}
           </div>
         </div>

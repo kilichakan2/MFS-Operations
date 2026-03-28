@@ -9,7 +9,7 @@ import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useSearchParams }                             from 'next/navigation'
 import AuthKeypad                                      from '@/components/AuthKeypad'
 
-type Mode = 'select' | 'team' | 'admin' | 'routes'
+type Mode = 'select' | 'team' | 'admin'
 
 interface TeamMember { id: string; name: string; role: string }
 
@@ -138,26 +138,6 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
           </div>
         </button>
 
-        {/* Route Planner card */}
-        <button type="button" onClick={() => onSelect('routes')}
-          className="w-full rounded-2xl bg-white/10 hover:bg-white/15 active:bg-white/20 active:scale-[0.98] transition-all p-5 text-left border border-[#EB6619]/40 hover:border-[#EB6619]/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
-          <div className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-xl bg-[#EB6619]/15 flex items-center justify-center flex-shrink-0">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#EB6619" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-                <line x1="9" y1="3" x2="9" y2="18"/>
-                <line x1="15" y1="6" x2="15" y2="21"/>
-              </svg>
-            </div>
-            <div>
-              <p className="text-[#EB6619] font-bold text-base leading-tight">{t('routePlanner')}</p>
-              <p className="text-white/40 text-xs mt-0.5">{t('routePlannerSub')}</p>
-            </div>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="#EB6619" className="w-5 h-5 ml-auto opacity-50">
-              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd"/>
-            </svg>
-          </div>
-        </button>
 
         </div>{/* /space-y-4 */}
 
@@ -200,7 +180,7 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
 
 // ─── Screen B: Team login (POS grid → PIN pad) ────────────────────────────────
 
-function TeamLogin({ onBack, from, routeMode }: { onBack: () => void; from: string | null; routeMode?: boolean }) {
+function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }) {
   const { t } = useLanguage()
   const [step,        setStep]        = useState<'grid' | 'pin'>('grid')
   const [selected,    setSelected]    = useState<TeamMember | null>(null)
@@ -416,7 +396,6 @@ function LoginForm() {
 
   return mode === 'select' ? <ModeSelect onSelect={setMode} />
        : mode === 'team'   ? <TeamLogin  onBack={() => setMode('select')} from={from} />
-       : mode === 'routes' ? <TeamLogin  onBack={() => setMode('select')} from='/routes' routeMode />
        :                     <AdminLogin  onBack={() => setMode('select')} from={from} />
 }
 
