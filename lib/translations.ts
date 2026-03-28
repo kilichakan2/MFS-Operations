@@ -36,6 +36,7 @@ const t = {
   navDashboard:   { en: 'Dashboard',   tr: 'Panel'   },
   navAdmin:       { en: 'Admin',       tr: 'Yönetim' },
   navMap:         { en: 'Map',         tr: 'Harita'  },
+  navRoutes:      { en: 'Routes',      tr: 'Rotalar' },
 
   // ── Login screen ─────────────────────────────────────────────────────────
   teamLogin:      { en: 'Team Login',          tr: 'Ekip Girişi' },

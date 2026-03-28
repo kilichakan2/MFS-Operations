@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import BottomNav, { Icons } from '@/components/BottomNav'
+import RoleNav from '@/components/RoleNav'
 import AppHeader             from '@/components/AppHeader'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1184,12 +1184,7 @@ export default function Screen5Page() {
         {activeTab === 'audit'       && <AuditSection />}
       </main>
 
-      <BottomNav items={[
-        { href: '/screen4', label: 'Dashboard', icon: Icons.dashboard },
-        { href: '/routes',  label: 'Routes',    icon: Icons.routes    },
-        { href: '/screen5', label: 'Admin',     icon: Icons.admin     },
-        { href: '/screen6', label: 'Map',       icon: Icons.map       },
-      ]} />
+      <RoleNav />
     </div>
   )
 }

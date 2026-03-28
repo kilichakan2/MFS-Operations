@@ -15,7 +15,7 @@ import {
   useState, useCallback, useEffect, useRef, useMemo
 } from 'react'
 import AppHeader           from '@/components/AppHeader'
-import BottomNav, { Icons } from '@/components/BottomNav'
+import RoleNav from '@/components/RoleNav'
 import type { RouteStop }  from '@/components/RouteMap'
 
 // RouteMap must be client-only (Leaflet uses window)
@@ -307,11 +307,6 @@ function StopCardRow({
 export default function RoutesPage() {
   // ── Form state ──────────────────────────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10)
-
-  // Read role from the non-httpOnly mfs_role cookie (set at login for nav rendering)
-  const role = typeof document !== 'undefined'
-    ? document.cookie.split('; ').find(r => r.startsWith('mfs_role='))?.split('=')[1] ?? ''
-    : ''
 
   const [plannedDate,    setPlannedDate]    = useState(today)
   const [departureTime,  setDepartureTime]  = useState('08:00')
@@ -911,21 +906,7 @@ export default function RoutesPage() {
         </div>
       </div>
 
-      {/* ── BottomNav — admin/sales/office only; drivers never see the planner link ── */}
-      {role === 'admin' && (
-        <BottomNav items={[
-          { href: '/screen4', label: 'Dashboard', icon: Icons.dashboard },
-          { href: '/routes',  label: 'Routes',    icon: Icons.routes    },
-          { href: '/screen5', label: 'Admin',     icon: Icons.admin     },
-          { href: '/screen6', label: 'Map',       icon: Icons.map       },
-        ]} />
-      )}
-      {(role === 'sales' || role === 'office') && (
-        <BottomNav items={[
-          { href: '/screen2', label: role === 'sales' ? 'Visits' : 'Ops', icon: Icons.visit },
-          { href: '/routes',  label: 'Routes', icon: Icons.routes },
-        ]} />
-      )}
+      <RoleNav />
     </div>
   )
 }
