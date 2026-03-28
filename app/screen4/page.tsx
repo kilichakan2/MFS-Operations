@@ -13,7 +13,7 @@ interface AtRiskAccount        { id: string; customer: string; outcome: 'at_risk
 interface UnreviewedCommitment { id: string; customer: string; detail: string; rep: string; hoursAgo: number }
 interface Discrepancy          { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string; orderedQty: number|null; sentQty: number|null; loggedBy: string; createdAt: string }
 interface TodayComplaint       { id: string; customer: string; category: string; status: 'open'|'resolved'; description: string; resolutionNote: string|null; loggedBy: string; createdAt: string }
-interface TodayVisitItem       { id: string; customer: string; visitType: string; outcome: string; notes: string | null }
+interface TodayVisitItem       { id: string; customer: string; visitType: string; outcome: string; pipelineStatus: string; notes: string | null }
 interface TodayVisit           { rep: string; count: number; outcomes: { positive: number; neutral: number; at_risk: number; lost: number }; visits: TodayVisitItem[] }
 interface WeekDiscrepancyByReason   { reason: string; count: number }
 interface WeekDiscrepancyByProduct  { product: string; count: number }
@@ -215,6 +215,9 @@ function TodayTabs({ data, onRowClick }: {
                             <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
                               <span className="text-[10px] text-gray-400 capitalize">{vi.visitType}</span>
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize ${oc}`}>{vi.outcome.replace(/_/g,' ')}</span>
+                              {vi.pipelineStatus && vi.pipelineStatus !== 'Logged' && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 whitespace-nowrap">{vi.pipelineStatus}</span>
+                              )}
                             </div>
                           </div>
                         )

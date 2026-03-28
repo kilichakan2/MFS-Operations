@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
     const params = new URLSearchParams({
       select: [
-        'id', 'created_at', 'visit_type', 'outcome',
+        'id', 'created_at', 'visit_type', 'outcome', 'pipeline_status',
         'commitment_made', 'commitment_detail', 'notes',
         'prospect_name', 'prospect_postcode',
         'customers(id,name)',
@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
       prospectName:     r.prospect_name ?? null,
       prospectPostcode: r.prospect_postcode ?? null,
       loggedBy:         r.users?.name ?? 'Unknown',
+      pipelineStatus:   r.pipeline_status ?? 'Logged',
     })
   } catch (err) {
     console.error('[detail/visit]', err)

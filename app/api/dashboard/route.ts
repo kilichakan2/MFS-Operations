@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       // ── Zone 2: Visits today ───────────────────────────────────────────────
       supabase
         .from('visits')
-        .select('id, created_at, outcome, visit_type, notes, customer_id, prospect_name, customers(name), users!visits_user_id_fkey(name)')
+        .select('id, created_at, outcome, visit_type, notes, pipeline_status, customer_id, prospect_name, customers(name), users!visits_user_id_fkey(name)')
         .gte('created_at', zoneFrom)
         .lte('created_at', zoneTo)
         .order('created_at', { ascending: false })
@@ -234,6 +234,7 @@ export async function GET(req: NextRequest) {
         customer:  cust?.name ?? String(vr.prospect_name ?? 'Prospect'),
         visitType: String(vr.visit_type ?? '').replace(/_/g, ' '),
         outcome,
+        pipelineStatus: String((vr as Record<string,unknown>).pipeline_status ?? 'Logged'),
         notes:     (vr.notes as string | null) ?? null,
       })
     }

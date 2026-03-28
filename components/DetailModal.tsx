@@ -8,6 +8,7 @@ export type ModalType = 'visit' | 'complaint' | 'discrepancy'
 
 interface VisitDetail {
   id: string; createdAt: string; visitType: string; outcome: string
+  pipelineStatus: string
   commitmentMade: boolean; commitmentDetail: string | null; notes: string | null
   customer: string | null; prospectName: string | null; prospectPostcode: string | null
   loggedBy: string
@@ -76,14 +77,34 @@ function OutcomePill({ value }: { value: string }) {
 
 // ─── Visit detail body ────────────────────────────────────────────────────────
 
+const PIPELINE_BADGE: Record<string, string> = {
+  'Logged':              'bg-gray-100 text-gray-500',
+  'Not Progressing':     'bg-red-50 text-red-600',
+  'Trial Order Placed':  'bg-blue-50 text-blue-700',
+  'Awaiting Feedback':   'bg-amber-50 text-amber-700',
+  'Won':                 'bg-green-50 text-green-700',
+  'Not Won':             'bg-gray-100 text-gray-500',
+}
+function PipelinePill({ status }: { status: string }) {
+  const cls = PIPELINE_BADGE[status] ?? 'bg-gray-100 text-gray-500'
+  return (
+    <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full ${cls}`}>
+      {status}
+    </span>
+  )
+}
+
 function VisitBody({ d }: { d: VisitDetail }) {
   return (
     <>
-      <div className="flex items-center gap-3 mb-5">
-        <h2 className="text-lg font-bold text-gray-900 flex-1 truncate">
+      <div className="flex flex-col gap-2 mb-5">
+        <h2 className="text-lg font-bold text-gray-900 truncate">
           {d.customer ?? d.prospectName ?? 'Unknown'}
         </h2>
-        <OutcomePill value={d.outcome} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <OutcomePill value={d.outcome} />
+          <PipelinePill status={d.pipelineStatus} />
+        </div>
       </div>
 
       {d.commitmentMade && d.commitmentDetail && (
