@@ -599,7 +599,7 @@ export default function RoutesPage() {
         <div className="w-full lg:w-[420px] h-full flex flex-col">
 
           {/* Route meta — compact two-row layout */}
-          <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-3 space-y-2">
+          <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-3 py-2 space-y-2 flex-shrink-0">
 
             {/* Row 1: Route name + Date */}
             <div className="grid grid-cols-2 gap-2">
@@ -687,7 +687,7 @@ export default function RoutesPage() {
           </div>
 
           {/* Stops section */}
-          <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-4 py-4 mt-0 lg:mt-3 flex-1 overflow-y-auto min-h-0">
+          <div className="bg-white border-b border-[#EDEAE1] lg:rounded-xl lg:border px-3 py-2 mt-0 lg:mt-2 flex-1 overflow-y-auto min-h-0">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-[#16205B]">
                 Stops
@@ -808,12 +808,12 @@ export default function RoutesPage() {
           </div>
 
           {/* Action buttons */}
-          <div className="bg-white border-t border-[#EDEAE1] lg:bg-transparent lg:border-0 px-4 py-4 lg:px-0 flex gap-3">
+          <div className="bg-white border-t border-[#EDEAE1] lg:bg-transparent lg:border-0 px-3 py-2 lg:px-0 flex gap-2 flex-shrink-0">
             <button
               type="button"
               onClick={handleOptimise}
               disabled={optimising || stops.length < 2 || stops.some(s => !s.postcode)}
-              className="flex-1 h-12 rounded-xl bg-[#16205B] text-white font-bold text-sm disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              className="flex-1 h-9 rounded-lg bg-[#16205B] text-white font-bold text-sm disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               style={{ touchAction: 'manipulation' }}
             >
               {optimising ? (
@@ -831,7 +831,7 @@ export default function RoutesPage() {
               type="button"
               onClick={handleSave}
               disabled={saving || stops.length === 0 || !assignedTo}
-              className="flex-1 h-12 rounded-xl bg-[#EB6619] text-white font-bold text-sm disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+              className="flex-1 h-9 rounded-lg bg-[#EB6619] text-white font-bold text-sm disabled:opacity-40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
               style={{ touchAction: 'manipulation' }}
             >
               {saving ? (
@@ -906,7 +906,7 @@ export default function RoutesPage() {
               onClick={() => setShowHelp(v => !v)}
               title={showHelp ? 'Close help' : 'How does the planner work?'}
               className={[
-                'absolute bottom-3 left-3 z-10 w-7 h-7 rounded-full text-xs font-bold',
+                'absolute bottom-3 left-3 z-10 w-8 h-8 rounded-full text-sm font-bold',
                 'flex items-center justify-center shadow-md border transition-colors',
                 showHelp
                   ? 'bg-[#EB6619] border-[#EB6619] text-white'
@@ -918,7 +918,7 @@ export default function RoutesPage() {
 
             {/* Help panel — slides up from bottom-left when open */}
             {showHelp && (
-              <div className="absolute bottom-12 left-3 z-10 w-72 bg-white rounded-xl shadow-xl border border-[#EDEAE1] p-4 text-xs">
+              <div className="absolute bottom-12 left-3 z-10 w-72 max-w-xs bg-white rounded-xl shadow-xl border border-[#EDEAE1] p-3 text-xs max-h-[70vh] overflow-y-auto">
                 <p className="text-[10px] font-bold text-[#EB6619] uppercase tracking-widest mb-3">How the planner works</p>
                 <div className="space-y-3 text-[#16205B]/80 leading-snug">
                   <div>

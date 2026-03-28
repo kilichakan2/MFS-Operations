@@ -7,7 +7,7 @@
  * bottom navigation for the authenticated user's role.
  *
  * Nav matrix:
- *   admin     → Dashboard | Routes | Admin | Map
+ *   admin     → Dashboard | Map | Routes | Admin
  *   sales     → Complaints | Visits | Routes
  *   office    → Dispatch | Complaints | Routes
  *   warehouse → Dispatch | Routes
@@ -39,9 +39,9 @@ export default function RoleNav() {
       case 'admin':
         return [
           { href: '/screen4', label: t('navDashboard'),  icon: Icons.dashboard },
+          { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes, badge: 'Desktop' },
           { href: '/screen5', label: t('navAdmin'),      icon: Icons.admin     },
-          { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
         ]
       case 'sales':
         return [

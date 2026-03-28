@@ -36,9 +36,9 @@ export default function DesktopRouteNav() {
       case 'admin':
         return [
           { href: '/screen4', label: t('navDashboard'),  icon: Icons.dashboard },
+          { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
           { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
           { href: '/screen5', label: t('navAdmin'),      icon: Icons.admin     },
-          { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
         ]
       case 'sales':
         return [
