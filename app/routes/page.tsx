@@ -392,7 +392,7 @@ function buildDebugReport(p: CopyRouteInfoProps): string {
     '',
     '── ALGORITHM INFO ──',
     `Urgent front-block: ${urgentCount > 0 ? `YES — ${urgentCount} stop(s) pulled to front, nearest-hub first` : 'NO (no urgent stops)'}`,
-    `Greedy resequence:  ${urgentCount > 0 ? 'YES — non-urgent stops re-sequenced from last urgent stop' : 'NO (no urgent stops)'}`,
+    `Non-urgent resequence: ${urgentCount > 0 ? 'YES — Pass 3c Google TSP from last urgent stop (greedy fallback if API fails)' : 'NO (no urgent stops — Pass 1 loop order used)'}`,
     `Priority cluster:   ${priorityCount > 0 ? 'YES — priority stops sorted first within their area' : 'NO (no priority stops)'}`,
     `Locked stops:       ${lockedCount > 0 ? `${lockedCount} stop(s) pinned to original position` : 'none'}`,
     '',
