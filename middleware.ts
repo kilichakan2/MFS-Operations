@@ -44,6 +44,8 @@ const SHARED_API_PATHS = [
   '/api/screen2/sync',
   '/api/screen2/open',
   '/api/screen2/resolve',
+  '/api/screen2/all',
+  '/api/screen2/note',
   '/api/screen3/sync',
   '/api/screen3/today',
   '/api/screen3/visit',

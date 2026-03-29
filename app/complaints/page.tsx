@@ -32,6 +32,13 @@ const EMPTY_FORM: FormState = {
   receivedVia: null, status: null, resolutionNote: '',
 }
 
+interface NoteRow {
+  id:        string
+  body:      string
+  author:    string
+  createdAt: string
+}
+
 interface ComplaintRow {
   id:          string
   createdAt:   string
@@ -43,6 +50,7 @@ interface ComplaintRow {
   resolutionNote?: string | null
   resolvedBy?:     string | null
   resolvedAt?:     string | null
+  notes:           NoteRow[]
 }
 
 interface ValidationErrors {
@@ -215,26 +223,60 @@ function StatusBadge({ status }: { status: Status }) {
     : <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">✅ Resolved</span>
 }
 
-function ComplaintCard({ complaint, onResolve }: {
-  complaint: ComplaintRow
-  onResolve: (id:string, note:string) => void
+function ComplaintCard({
+  complaint,
+  onResolve,
+  onNoteAdded,
+}: {
+  complaint:    ComplaintRow
+  onResolve:    (id: string, note: string) => void
+  onNoteAdded:  (id: string, note: NoteRow) => void
 }) {
-  const { t }                     = useLanguage()
-  const [expanded, setExpanded]   = useState(false)
-  const [note,     setNote]       = useState('')
-  const [saving,   setSaving]     = useState(false)
+  const { t }                        = useLanguage()
+  const [expandResolve, setExpandR]  = useState(false)
+  const [resolveNote,   setRNote]    = useState('')
+  const [resolveSaving, setRSaving]  = useState(false)
+  const [showNotes,     setShowN]    = useState(complaint.notes.length > 0)
+  const [newNote,       setNewNote]  = useState('')
+  const [noteSaving,    setNSaving]  = useState(false)
+  const [noteError,     setNError]   = useState('')
 
   async function handleResolve() {
-    if (!note.trim()) return
-    setSaving(true)
-    await onResolve(complaint.id, note.trim())
-    setSaving(false)
+    if (!resolveNote.trim()) return
+    setRSaving(true)
+    await onResolve(complaint.id, resolveNote.trim())
+    setRSaving(false)
+    setExpandR(false)
   }
+
+  async function handleAddNote() {
+    if (!newNote.trim()) return
+    setNSaving(true); setNError('')
+    try {
+      const res  = await fetch('/api/screen2/note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ complaint_id: complaint.id, body: newNote.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setNError(data.error ?? 'Failed to save note'); return }
+      onNoteAdded(complaint.id, {
+        id:        data.id,
+        body:      data.body,
+        author:    data.author,
+        createdAt: data.createdAt,
+      })
+      setNewNote('')
+    } catch { setNError('Network error') }
+    finally   { setNSaving(false) }
+  }
+
+  const noteCount = complaint.notes.length
 
   return (
     <div className="bg-white rounded-2xl border border-[#EDEAE1] overflow-hidden">
       <div className="px-4 py-3">
-        {/* Top row: customer + badge */}
+        {/* Top row */}
         <div className="flex items-start justify-between gap-2 mb-1">
           <p className="font-bold text-[#16205B] text-sm leading-tight">{complaint.customer}</p>
           <StatusBadge status={complaint.status} />
@@ -242,38 +284,92 @@ function ComplaintCard({ complaint, onResolve }: {
         {/* Sub row */}
         <p className="text-[11px] text-gray-400 mb-1">
           <span className="capitalize">{complaint.category.replace(/_/g,' ')}</span>
-          {' · '}{fmtDate(complaint.createdAt)}
-          {' · by '}<span className="font-medium text-gray-500">{complaint.loggedBy}</span>
+          {'  ·  '}{fmtDate(complaint.createdAt)}
+          {'  · by '}<span className="font-medium text-gray-500">{complaint.loggedBy}</span>
         </p>
         {/* Description */}
-        <p className="text-xs text-gray-600 line-clamp-2">{complaint.description}</p>
-        {/* Resolved note if present */}
+        <p className="text-xs text-gray-600 mb-1.5">{complaint.description}</p>
+
+        {/* Resolution info */}
         {complaint.status === 'resolved' && complaint.resolutionNote && (
-          <p className="text-[11px] text-green-700 mt-1.5 italic line-clamp-1">✓ {complaint.resolutionNote}</p>
+          <div className="mt-1 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+            <p className="text-[10px] font-bold text-green-700 mb-0.5">
+              ✓ Resolved by {complaint.resolvedBy ?? 'team'} · {complaint.resolvedAt ? fmtDate(complaint.resolvedAt) : ''}
+            </p>
+            <p className="text-[11px] text-green-800">{complaint.resolutionNote}</p>
+          </div>
         )}
-        {/* Resolve button for open complaints */}
-        {complaint.status === 'open' && (
-          <button type="button" onClick={()=>setExpanded(e=>!e)}
-            className="mt-2 text-xs font-semibold text-[#EB6619] flex items-center gap-1">
-            {t('resolveAction')}
+
+        {/* Action row */}
+        <div className="flex items-center gap-3 mt-2">
+          {complaint.status === 'open' && (
+            <button type="button" onClick={() => setExpandR(e => !e)}
+              className="text-xs font-semibold text-[#EB6619] flex items-center gap-1">
+              {t('resolveAction')}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"
+                className={['w-3 h-3 transition-transform', expandResolve ? 'rotate-180' : ''].join(' ')}>
+                <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd"/>
+              </svg>
+            </button>
+          )}
+          <button type="button" onClick={() => setShowN(v => !v)}
+            className="text-xs font-semibold text-[#16205B]/60 flex items-center gap-1 ml-auto">
+            💬 {noteCount > 0 ? `${noteCount} note${noteCount !== 1 ? 's' : ''}` : 'Add note'}
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"
-              className={['w-3 h-3 transition-transform', expanded?'rotate-180':''].join(' ')}>
+              className={['w-3 h-3 transition-transform', showNotes ? 'rotate-180' : ''].join(' ')}>
               <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd"/>
             </svg>
           </button>
-        )}
+        </div>
       </div>
-      {/* Inline resolution form */}
-      {expanded && (
+
+      {/* Resolve inline form */}
+      {expandResolve && (
         <div className="px-4 pb-4 border-t border-gray-100 pt-3 space-y-2">
-          <textarea rows={2} value={note} onChange={e=>setNote(e.target.value)} maxLength={500}
+          <textarea rows={2} value={resolveNote} onChange={e => setRNote(e.target.value)} maxLength={500}
             placeholder="Describe how this was resolved…"
             className="w-full rounded-xl px-3 py-2 text-sm resize-none border-2 border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:border-[#EB6619] transition-colors"/>
-          <button type="button" onClick={handleResolve} disabled={!note.trim()||saving}
+          <button type="button" onClick={handleResolve} disabled={!resolveNote.trim() || resolveSaving}
             className={['w-full h-9 rounded-xl text-sm font-bold',
-              !note.trim()||saving ? 'bg-gray-100 text-gray-400' : 'bg-[#16205B] text-white active:scale-[0.98]'].join(' ')}>
-            {saving ? t('saving') : t('markResolved')}
+              !resolveNote.trim() || resolveSaving ? 'bg-gray-100 text-gray-400' : 'bg-[#16205B] text-white active:scale-[0.98]'].join(' ')}>
+            {resolveSaving ? t('saving') : t('markResolved')}
           </button>
+        </div>
+      )}
+
+      {/* Notes thread */}
+      {showNotes && (
+        <div className="border-t border-[#EDEAE1] bg-[#F9F8F5]">
+          {complaint.notes.length > 0 && (
+            <div className="px-4 pt-3 space-y-2.5">
+              {complaint.notes.map(n => (
+                <div key={n.id} className="flex gap-2.5">
+                  <div className="w-6 h-6 rounded-full bg-[#16205B]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-[9px] font-bold text-[#16205B]">{n.author.slice(0,2).toUpperCase()}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] text-gray-400 mb-0.5">
+                      <span className="font-semibold text-gray-600">{n.author}</span>
+                      {'  ·  '}{fmtDate(n.createdAt)}
+                    </p>
+                    <p className="text-xs text-gray-700 leading-snug">{n.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Add note */}
+          <div className="px-4 py-3 space-y-2">
+            <textarea rows={2} value={newNote} onChange={e => setNewNote(e.target.value)} maxLength={1000}
+              placeholder="Leave an internal note…"
+              className="w-full rounded-xl px-3 py-2 text-sm resize-none border-2 border-gray-200 bg-white focus:outline-none focus:border-[#16205B] transition-colors"/>
+            {noteError && <p className="text-[11px] text-red-600">{noteError}</p>}
+            <button type="button" onClick={handleAddNote} disabled={!newNote.trim() || noteSaving}
+              className={['w-full h-8 rounded-xl text-xs font-bold',
+                !newNote.trim() || noteSaving ? 'bg-gray-100 text-gray-400' : 'bg-[#16205B] text-white active:scale-[0.98]'].join(' ')}>
+              {noteSaving ? 'Saving…' : 'Post note'}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -283,25 +379,20 @@ function ComplaintCard({ complaint, onResolve }: {
 // ─── All Complaints tab ───────────────────────────────────────────────────────
 
 function AllComplaintsTab() {
-  const { t }                      = useLanguage()
-  const [complaints,   setComplaints]   = useState<ComplaintRow[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [error,        setError]        = useState('')
-  const [search,       setSearch]       = useState('')
-  const [chip,         setChip]         = useState<TimeChip>('today')
-  const [resolvedIds,  setResolvedIds]  = useState<Set<string>>(new Set())
+  const { t }                         = useLanguage()
+  const [complaints,   setComplaints] = useState<ComplaintRow[]>([])
+  const [loading,      setLoading]    = useState(true)
+  const [error,        setError]      = useState('')
+  const [search,       setSearch]     = useState('')
+  const [chip,         setChip]       = useState<TimeChip>('today')
 
   async function load() {
     setLoading(true); setError('')
     try {
-      const res = await fetch('/api/screen2/open')
+      const res = await fetch('/api/screen2/all')
       if (!res.ok) { setError('Failed to load complaints'); return }
-      const rows = await res.json() as {
-        id:string; createdAt:string; category:string; description:string
-        customer:string; loggedBy:string; status?:Status
-        resolutionNote?:string|null; resolvedBy?:string|null; resolvedAt?:string|null
-      }[]
-      setComplaints(rows.map(r => ({ ...r, status: r.status ?? 'open' })))
+      const rows = await res.json() as (Omit<ComplaintRow, 'notes'> & { notes: NoteRow[] })[]
+      setComplaints(rows.map(r => ({ ...r, status: r.status ?? 'open', notes: r.notes ?? [] })))
     } catch { setError('Network error') }
     finally   { setLoading(false) }
   }
@@ -316,18 +407,28 @@ function AllComplaintsTab() {
         payload: { complaint_id: id, resolution_note: note },
         createdAt: Date.now(), synced: false, retries: 0,
       })
-      setResolvedIds(prev => new Set([...prev, id]))
+      // Optimistically update local state
+      setComplaints(prev => prev.map(c =>
+        c.id === id ? { ...c, status: 'resolved' as Status, resolutionNote: note } : c
+      ))
       triggerSync()
     } catch (err) { console.error('resolve queue error:', err) }
   }
 
+  function handleNoteAdded(complaintId: string, note: NoteRow) {
+    setComplaints(prev => prev.map(c =>
+      c.id === complaintId ? { ...c, notes: [...c.notes, note] } : c
+    ))
+  }
+
   const range = chipToRange(chip)
-  const visible = useMemo(() => complaints
-    .filter(c => !resolvedIds.has(c.id))
+  const filtered = useMemo(() => complaints
     .filter(c => inRange(c.createdAt, range))
     .filter(c => !search.trim() || c.customer.toLowerCase().includes(search.toLowerCase())),
-    [complaints, resolvedIds, range, search, chip] // eslint-disable-line react-hooks/exhaustive-deps
+    [complaints, range, search, chip] // eslint-disable-line react-hooks/exhaustive-deps
   )
+  const openComplaints     = filtered.filter(c => c.status === 'open')
+  const resolvedComplaints = filtered.filter(c => c.status === 'resolved')
 
   return (
     <div className="pb-24">
@@ -348,7 +449,7 @@ function AllComplaintsTab() {
           <button type="button" onClick={load} className="mt-2 text-sm font-semibold text-red-600">Retry</button>
         </div>
       )}
-      {!loading && !error && visible.length === 0 && (
+      {!loading && !error && filtered.length === 0 && (
         <div className="flex flex-col items-center py-16 text-center px-6">
           <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-3">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6 text-green-600">
@@ -361,14 +462,38 @@ function AllComplaintsTab() {
           <p className="text-xs text-gray-400 mt-1">{t('tryDifferentFilter')}</p>
         </div>
       )}
-      {!loading && !error && visible.length > 0 && (
-        <div className="max-w-lg mx-auto px-4 space-y-3">
-          <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest px-1">
-            {visible.length} complaint{visible.length!==1?'s':''}
-          </p>
-          {visible.map(c => (
-            <ComplaintCard key={c.id} complaint={c} onResolve={handleResolve} />
-          ))}
+
+      {!loading && !error && filtered.length > 0 && (
+        <div className="max-w-lg mx-auto px-4 space-y-4">
+
+          {/* Open section */}
+          {openComplaints.length > 0 && (
+            <div>
+              <p className="text-[10px] text-amber-700 font-bold uppercase tracking-widest px-1 mb-2 flex items-center gap-1">
+                🟡 Open · {openComplaints.length}
+              </p>
+              <div className="space-y-3">
+                {openComplaints.map(c => (
+                  <ComplaintCard key={c.id} complaint={c} onResolve={handleResolve} onNoteAdded={handleNoteAdded} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Resolved section */}
+          {resolvedComplaints.length > 0 && (
+            <div>
+              <p className="text-[10px] text-green-700 font-bold uppercase tracking-widest px-1 mb-2 flex items-center gap-1">
+                ✅ Resolved · {resolvedComplaints.length}
+              </p>
+              <div className="space-y-3">
+                {resolvedComplaints.map(c => (
+                  <ComplaintCard key={c.id} complaint={c} onResolve={handleResolve} onNoteAdded={handleNoteAdded} />
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
       )}
     </div>

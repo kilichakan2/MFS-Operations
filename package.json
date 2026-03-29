@@ -21,7 +21,8 @@
     "react-dom": "19.2.1",
     "react-leaflet": "^4.2.1",
     "react-leaflet-cluster": "^2.1.0",
-    "recharts": "^3.8.0"
+    "recharts": "^3.8.0",
+    "resend": "^6.9.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
