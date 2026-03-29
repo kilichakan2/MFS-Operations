@@ -9,8 +9,10 @@
  *   Pass 2b — Cluster order: nearest-to-hub first when any priority/urgent stop exists
  *   Pass 3 — Within-cluster sort: urgent > priority > none
  *   Pass 3b — Urgent front-block: extract ALL urgent stops, sort nearest-to-hub first,
- *             promote to front; then greedy nearest-neighbour from last urgent stop
- *             re-sequences non-urgent stops (eliminates post-urgent-block detours)
+ *             promote to front of route before all other stops
+ *   Pass 3c — Non-urgent resequencing: if urgent stops exist, second Google TSP call
+ *             with origin = last urgent stop → re-sequences non-urgent stops from the
+ *             driver's actual mid-route position; greedy nearest-neighbour fallback
  *   Pass 4 — Final ETAs: computeRoutes with optimizeWaypointOrder:false
  *
  * Urgent = ALWAYS delivered first (kitchen prep dependency). Nearest urgent stop first.
@@ -391,26 +393,12 @@ export async function POST(req: NextRequest) {
       stops:   cl.map(s => `${s.customer.name} (${s.input.priority})`),
     })))
 
+
     // ════════════════════════════════════════════════════════════════════════
-    // PASS 3b — URGENT FRONT-BLOCK + GREEDY NON-URGENT RESEQUENCE
+    // PASS 3b — URGENT FRONT-BLOCK
     //
-    // Step 1: Extract ALL urgent (unlocked) stops. Sort nearest-to-hub first
-    //         (haversine). These run as a fixed front-block before everything.
-    //
-    // Step 2: If urgent stops exist, re-sequence the remaining non-urgent stops
-    //         using greedy nearest-neighbour starting from the LAST urgent stop.
-    //
-    //         Why greedy? Google's Pass 1 planned a closed loop from Sheffield.
-    //         The non-urgent stop order was optimal for that loop. After pulling
-    //         urgent stops to the front, the driver's actual starting point for
-    //         non-urgent deliveries is the last urgent stop (e.g. Cheadle SK8),
-    //         NOT Sheffield. Without resequencing, the loop order causes detours
-    //         (e.g. Cheadle → Crewe → back to Manchester M17 → ...).
-    //         Greedy from the last urgent stop eliminates these zigzags with no
-    //         extra API call. O(n²) on ≤23 stops, runs in <1ms.
-    //
-    //         If no urgent stops: non-urgent order is Google's loop order,
-    //         which is correct — no change to all-standard route behaviour.
+    // Extract ALL urgent (unlocked) stops. Sort nearest-to-hub first (haversine).
+    // These always run as a fixed front-block before all other stops.
     // ════════════════════════════════════════════════════════════════════════
     const clusteredFlat = sorted.flat()
 
@@ -422,26 +410,85 @@ export async function POST(req: NextRequest) {
 
     const nonUrgentRaw = clusteredFlat.filter(s => s.input.priority !== 'urgent')
 
-    // Greedy resequence only when urgent stops exist and there is something to resequence
-    const nonUrgentOrdered = (urgentFront.length > 0 && nonUrgentRaw.length > 0)
-      ? greedyNearest(
+    // ════════════════════════════════════════════════════════════════════════
+    // PASS 3c — NON-URGENT RESEQUENCING (when urgent stops exist)
+    //
+    // After the urgent front-block the driver is at the last urgent stop —
+    // NOT Sheffield. Google's Pass 1 loop was computed from Sheffield, so
+    // the non-urgent stop order in that loop is no longer optimal.
+    //
+    // Fix: second Google TSP call with:
+    //   origin      = last urgent stop (driver's actual mid-route position)
+    //   destination = end hub
+    //   stops       = all non-urgent stops
+    //   optimizeWaypointOrder: true
+    //
+    // Google sees the full non-urgent sub-problem and correctly handles
+    // disconnected clusters (e.g. Warrington north-west vs stops going south).
+    // Greedy commits locally at each step and cannot see this global structure.
+    //
+    // Falls back to greedy nearest-neighbour if the API call fails.
+    // Skipped entirely when no urgent stops exist — all-standard routes
+    // keep Google's Pass 1 loop order unchanged (it's still optimal).
+    // ════════════════════════════════════════════════════════════════════════
+    let nonUrgentOrdered = nonUrgentRaw   // default: Pass 1 loop order
+
+    if (urgentFront.length > 0 && nonUrgentRaw.length > 1) {
+      const lastUrgent = urgentFront[urgentFront.length - 1]
+
+      console.log('[optimise] Pass 3c — Re-sequencing non-urgent from last urgent stop:', {
+        origin: `${lastUrgent.customer.name} (${lastUrgent.customer.postcode})`,
+        nonUrgentCount: nonUrgentRaw.length,
+        stops: nonUrgentRaw.map(s => s.customer.name),
+      })
+
+      const p3cBody: Record<string, unknown> = {
+        origin:                latLngWaypoint(lastUrgent.customer.lat!, lastUrgent.customer.lng!),
+        destination:           latLngWaypoint(destCoords.lat, destCoords.lng),
+        intermediates:         nonUrgentRaw.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
+        travelMode:            'DRIVE',
+        // TRAFFIC_AWARE required — OPTIMAL is incompatible with optimizeWaypointOrder:true
+        routingPreference:     'TRAFFIC_AWARE',
+        optimizeWaypointOrder: true,
+      }
+
+      const p3cRes = await callRoutesAPI(p3cBody)
+
+      if (!p3cRes.error && p3cRes.routes?.length) {
+        const optIdx = p3cRes.routes[0].optimizedIntermediateWaypointIndex
+                    ?? nonUrgentRaw.map((_, i) => i)
+        nonUrgentOrdered = optIdx.map(i => nonUrgentRaw[i])
+        console.log('[optimise] Pass 3c — Google re-sequenced non-urgent:',
+          nonUrgentOrdered.map(s => s.customer.name))
+      } else {
+        // Fallback: greedy nearest-neighbour from last urgent stop
+        console.warn('[optimise] Pass 3c — API failed, falling back to greedy:', p3cRes.error?.message)
+        nonUrgentOrdered = greedyNearest(
           nonUrgentRaw,
-          urgentFront[urgentFront.length - 1].customer.lat!,
-          urgentFront[urgentFront.length - 1].customer.lng!,
+          lastUrgent.customer.lat!,
+          lastUrgent.customer.lng!,
         )
-      : nonUrgentRaw
+        console.log('[optimise] Pass 3c fallback greedy:',
+          nonUrgentOrdered.map(s => s.customer.name))
+      }
+    } else if (urgentFront.length > 0 && nonUrgentRaw.length === 1) {
+      nonUrgentOrdered = nonUrgentRaw
+      console.log('[optimise] Pass 3c — Single non-urgent stop, no re-sequencing needed')
+    } else {
+      console.log('[optimise] Pass 3c — No urgent stops, keeping Pass 1 loop order')
+    }
+
+    console.log('[optimise] Pass 3b/3c complete:', {
+      urgentCount:    urgentFront.length,
+      urgentOrder:    urgentFront.map(s =>
+        `${s.customer.name} (${haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, s.customer.lat!, s.customer.lng!).toFixed(1)}km from hub)`
+      ),
+      nonUrgentCount: nonUrgentOrdered.length,
+      nonUrgentOrder: nonUrgentOrdered.map(s => s.customer.name),
+    })
 
     const clusteredUnlocked = [...urgentFront, ...nonUrgentOrdered]
 
-    console.log('[optimise] Pass 3b — Urgent front-block + greedy resequence:', {
-      urgentCount:     urgentFront.length,
-      urgentOrder:     urgentFront.map(s =>
-        `${s.customer.name} (${haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, s.customer.lat!, s.customer.lng!).toFixed(1)}km from hub)`
-      ),
-      nonUrgentCount:  nonUrgentOrdered.length,
-      nonUrgentOrder:  nonUrgentOrdered.map(s => s.customer.name),
-      greedyApplied:   urgentFront.length > 0,
-    })
     const finalOrdered: WorkingStop[] = new Array(workingStops.length).fill(null)
 
     for (const s of lockedStops) {

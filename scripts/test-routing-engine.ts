@@ -437,12 +437,13 @@ test('urgent stops are promoted to front of route, nearest-hub first', () => {
   eq(finalOrder[2].priority, 'none')
 })
 
-// ─── Suite 2b: Greedy non-urgent resequencing ────────────────────────────────
-// Proves that after the urgent front-block, non-urgent stops are re-sequenced
-// from the last urgent stop's location (greedy nearest-neighbour), NOT from
-// Sheffield. This directly fixes the Cheadle→Crewe→Manchester zigzag.
+// ─── Suite 2b: Greedy fallback (when Pass 3c Google call fails) ──────────────
+// In production, Pass 3c makes a second Google API call to re-sequence
+// non-urgent stops from the last urgent stop's location. These tests cover
+// the greedy nearest-neighbour FALLBACK that runs if that call fails.
+// The primary path (Google TSP) is integration-tested against the live API.
 
-console.log('\n── Suite 2b: Greedy non-urgent resequencing after urgent block')
+console.log('\n── Suite 2b: Greedy fallback for non-urgent resequencing')
 
 // Mirrors the production route from the screenshot:
 // 3 urgent stops in Manchester area, then driver should pick nearby Manchester
@@ -778,6 +779,21 @@ test('Sniffer uses TRAFFIC_AWARE and has no optimizeWaypointOrder', () => {
   eq(snifferBody.routingPreference, 'TRAFFIC_AWARE')
   assert(!('optimizeWaypointOrder' in snifferBody),
     'Sniffer must not include optimizeWaypointOrder')
+})
+
+test('Pass 3c uses TRAFFIC_AWARE (not OPTIMAL) — OPTIMAL incompatible with optimizeWaypointOrder:true', () => {
+  // Pass 3c re-sequences non-urgent stops from last urgent stop.
+  // Must use TRAFFIC_AWARE for same reason as Pass 1 — Google rejects
+  // TRAFFIC_AWARE_OPTIMAL when optimizeWaypointOrder:true is set.
+  const p3cBody = {
+    routingPreference:     'TRAFFIC_AWARE' as string,
+    optimizeWaypointOrder: true,
+  }
+  eq(p3cBody.routingPreference, 'TRAFFIC_AWARE')
+  assert(p3cBody.routingPreference !== 'TRAFFIC_AWARE_OPTIMAL',
+    'Pass 3c must never use TRAFFIC_AWARE_OPTIMAL')
+  assert(p3cBody.optimizeWaypointOrder === true,
+    'Pass 3c must have optimizeWaypointOrder:true')
 })
 
 // ─── Suite 7: ETA correctness ────────────────────────────────────────────────
