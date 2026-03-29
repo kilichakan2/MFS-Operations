@@ -861,8 +861,8 @@ function RoutesPageInner() {
             {/* Result summary */}
             {result && (() => {
               const stopCount    = stops.length
-              const driveMin     = result.totalDurationMin - stopCount * 15  // strip service time back out
-              const unloadMin    = stopCount * 15
+              const driveMin     = result.totalDurationMin - stopCount * 20  // strip service time back out
+              const unloadMin    = stopCount * 20
               const totalMin     = result.totalDurationMin
               const miles        = Math.round(result.totalDistanceKm * 0.621371 * 10) / 10
               return (

@@ -138,7 +138,7 @@ function buildOutput(finalOrdered: TestStop[], p4Legs: RoutesLeg[], baseDepartur
 
 // ─── Service time helper (mirrors route.ts) ───────────────────────────────────
 
-const SERVICE_TIME_MINS = 15
+const SERVICE_TIME_MINS = 20
 const SERVICE_TIME_MS   = SERVICE_TIME_MINS * 60 * 1000
 
 function buildOutputWithServiceTime(
@@ -293,7 +293,7 @@ test('6-stop: full pipeline produces 6 orderedStops', () => {
   eq(finalOrder.map(s => s.customerId), ['c1','c2','c3','c4','c5','c6'])
 })
 
-test('6-stop: ETAs include 15-min service time at each stop', () => {
+test('6-stop: ETAs include 20-min service time at each stop', () => {
   const clusters   = clusterAndSort(REAL_6, MOCK_P1_LEGS)
   const finalOrder = reinsertLocked(REAL_6, clusters.flat())
   const departure  = new Date('2026-03-27T08:00:00').getTime()
@@ -303,31 +303,31 @@ test('6-stop: ETAs include 15-min service time at each stop', () => {
     assert(/^\d{2}:\d{2}$/.test(s.estimatedArrival), `ETA "${s.estimatedArrival}" is not HH:MM`)
   })
   // Stop 0: 510s drive only              → 08:08
-  // Stop 1: +15min service +1340s drive  → 08:45
-  // Stop 2: +15min service +800s drive   → 09:14
-  // Stop 3: +15min service +1950s drive  → 10:01
-  // Stop 4: +15min service +190s drive   → 10:19
-  // Stop 5: +15min service +250s drive   → 10:39
+  // Stop 1: +20min service +1340s drive  → 08:50
+  // Stop 2: +20min service +800s drive   → 09:23
+  // Stop 3: +20min service +1950s drive  → 10:15
+  // Stop 4: +20min service +190s drive   → 10:38
+  // Stop 5: +20min service +250s drive   → 11:02
   eq(output[0].estimatedArrival, '08:08')
-  eq(output[1].estimatedArrival, '08:45')
-  eq(output[2].estimatedArrival, '09:14')
-  eq(output[3].estimatedArrival, '10:01')
-  eq(output[4].estimatedArrival, '10:19')
-  eq(output[5].estimatedArrival, '10:39')
+  eq(output[1].estimatedArrival, '08:50')
+  eq(output[2].estimatedArrival, '09:24')
+  eq(output[3].estimatedArrival, '10:16')
+  eq(output[4].estimatedArrival, '10:39')
+  eq(output[5].estimatedArrival, '11:04')
   // driveTimeFromPrevMin is raw leg — not inflated by service time
   eq(output[0].driveTimeFromPrevMin, 9)    // 510s → 9min
   eq(output[1].driveTimeFromPrevMin, 22)   // 1340s → 22min
 })
 
-test('6-stop: totalDurationMin = drive time + 6 stops × 15min service time', () => {
+test('6-stop: totalDurationMin = drive time + 6 stops × 20min service time', () => {
   const clusters   = clusterAndSort(REAL_6, MOCK_P1_LEGS)
   const finalOrder = reinsertLocked(REAL_6, clusters.flat())
   const departure  = new Date('2026-03-27T08:00:00').getTime()
   const { totalDurMin } = buildOutputWithServiceTime(finalOrder, MOCK_P4_LEGS, departure)
   // Drive: 510+1340+800+1950+190+250 = 5040s = 84min
-  // Service: 6 × 15min = 90min
-  // Total: 174min
-  eq(totalDurMin, 174)
+  // Service: 6 × 20min = 120min
+  // Total: 204min
+  eq(totalDurMin, 204)
 })
 
 test('6-stop: total distance is plausible', () => {
@@ -654,13 +654,13 @@ test('ETAs strictly increment across all 6 stops (with service time)', () => {
   }
 })
 
-test('Last stop ETA is within 8am-1pm range (service time pushes last stop to ~10:39)', () => {
+test('Last stop ETA is within 8am-1pm range (service time pushes last stop to ~11:04)', () => {
   const finalOrder = reinsertLocked(REAL_6, clusterAndSort(REAL_6, MOCK_P1_LEGS).flat())
   const { stops: output } = buildOutputWithServiceTime(finalOrder, MOCK_P4_LEGS, new Date('2026-03-27T08:00:00').getTime())
   const lastETA  = output[output.length - 1].estimatedArrival
   const lastHour = parseInt(lastETA.split(':')[0], 10)
-  // Without service time last stop was ~08:30; with 6×15min service time it's ~10:39
-  eq(lastETA, '10:39')
+  // Without service time last stop was ~08:30; with 6×20min service time it's ~13:30
+  eq(lastETA, '11:04')
   assert(lastHour >= 8 && lastHour <= 13, `Last ETA hour ${lastHour} outside expected range`)
 })
 

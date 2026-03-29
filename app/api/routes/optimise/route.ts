@@ -41,7 +41,7 @@ const OZMEN_PC  = OZMEN_COORDS.postcode
 const CLUSTER_THRESHOLD_S = 25 * 60
 
 // 15-minute unloading/service time added at every stop
-const SERVICE_TIME_MINS = 15
+const SERVICE_TIME_MINS = 20
 const SERVICE_TIME_MS   = SERVICE_TIME_MINS * 60 * 1000
 
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, priority: 1, none: 2 }

@@ -76,8 +76,8 @@ const PRIORITY_COLOUR: Record<string, { border: string; bar: string; label: stri
 
 function SummaryCard({ route, stopCount }: { route: Route; stopCount: number }) {
   const totalMin  = route.total_duration_min ?? 0
-  const driveMin  = Math.max(0, totalMin - stopCount * 15)
-  const unloadMin = stopCount * 15
+  const driveMin  = Math.max(0, totalMin - stopCount * 20)
+  const unloadMin = stopCount * 20
   const miles     = route.total_distance_km
     ? Math.round(route.total_distance_km * 0.621371 * 10) / 10
     : null
