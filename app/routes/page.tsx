@@ -1000,6 +1000,15 @@ function RoutesPageInner() {
               const unloadMin    = stopCount * 20
               const totalMin     = result.totalDurationMin
               const miles        = Math.round(result.totalDistanceKm * 0.621371 * 10) / 10
+
+              // Return time: departure + total shift (totalDurationMin already includes drive back to hub)
+              const [depH, depM] = departureTime.split(':').map(Number)
+              const returnTotalM = depH * 60 + depM + totalMin
+              const retH         = Math.floor(returnTotalM / 60) % 24
+              const retM         = returnTotalM % 60
+              const returnTime   = `${String(retH).padStart(2, '0')}:${String(retM).padStart(2, '0')}`
+              const returnLabel  = endPoint === 'ozmen_john_street' ? 'Ozmen' : 'MFS'
+
               return (
                 <div className="mt-3 px-3 py-3 bg-[#16205B]/5 rounded-xl border border-[#16205B]/10">
                   <div className="space-y-1 mb-3">
@@ -1018,6 +1027,10 @@ function RoutesPageInner() {
                     <div className="flex items-center justify-between text-[#16205B]/60 pt-0.5">
                       <span className="text-[10px]">Distance</span>
                       <span className="text-[10px] font-semibold">{miles} mi</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1 pt-1.5 border-t border-[#EB6619]/20 bg-[#EB6619]/5 -mx-3 px-3 pb-1 rounded-b-xl">
+                      <span className="text-[11px] font-semibold text-[#EB6619]">🏠 Back at {returnLabel}</span>
+                      <span className="text-[12px] font-bold text-[#EB6619]">{returnTime}</span>
                     </div>
                   </div>
                 <a
