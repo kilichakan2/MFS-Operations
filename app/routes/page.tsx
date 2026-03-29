@@ -11,7 +11,7 @@
  */
 
 import dynamic from 'next/dynamic'
-import {
+import React, {
   useState, useCallback, useEffect, useRef, useMemo, Suspense
 } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -305,6 +305,141 @@ function StopCardRow({
 
 
 // ─── Main page ────────────────────────────────────────────────────────────────
+
+// ─── CopyRouteInfoButton ──────────────────────────────────────────────────────
+// Builds a plain-text debug report from live component state and copies it to
+// clipboard. Used inside the ? help panel so Hakan can paste route details
+// directly instead of screenshotting.
+
+interface CopyRouteInfoProps {
+  routeName:     string
+  plannedDate:   string
+  departureTime: string
+  endPoint:      'mfs' | 'ozmen_john_street'
+  assignedTo:    string
+  stops:         StopCard[]
+  result:        OptimiseResult | null
+  users:         { id: string; name: string; role: string }[]
+}
+
+function buildDebugReport(p: CopyRouteInfoProps): string {
+  // Extended type — API returns extra fields beyond the base RouteStop interface
+  type ES = RouteStop & {
+    lockedPosition?:       boolean
+    driveTimeFromPrevMin?: number | null
+    distanceFromPrevKm?:   number | null
+  }
+
+  const driverName    = p.users.find(u => u.id === p.assignedTo)?.name ?? (p.assignedTo || 'Unassigned')
+  const urgentCount   = p.stops.filter(s => s.priority === 'urgent').length
+  const priorityCount = p.stops.filter(s => s.priority === 'priority').length
+  const lockedCount   = p.stops.filter(s => s.lockedPosition).length
+
+  const lines: string[] = [
+    '=== MFS ROUTE DEBUG REPORT ===',
+    `Generated: ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}`,
+    '',
+    '── ROUTE HEADER ──',
+    `Name:       ${p.routeName || '(unnamed)'}`,
+    `Date:       ${p.plannedDate}`,
+    `Depart:     ${p.departureTime}`,
+    `End at:     ${p.endPoint === 'mfs' ? 'MFS Sheffield (S3 8DG)' : 'Ozmen John Street (S2 4QT)'}`,
+    `Assigned:   ${driverName}`,
+    `Optimised:  ${p.result ? 'YES' : 'NO — not yet optimised'}`,
+  ]
+
+  if (p.result) {
+    const stopCount = p.result.orderedStops.length
+    const totalMin  = p.result.totalDurationMin
+    const driveMin  = totalMin - stopCount * 20
+    const unloadMin = stopCount * 20
+    const miles     = Math.round(p.result.totalDistanceKm * 0.621371 * 10) / 10
+    lines.push(
+      '',
+      '── ROUTE SUMMARY ──',
+      `Stops:       ${stopCount}`,
+      `Urgent:      ${urgentCount}  |  Priority: ${priorityCount}  |  Locked: ${lockedCount}`,
+      `Driving:     ${Math.floor(driveMin / 60)}h ${driveMin % 60}m`,
+      `Unloading:   ${Math.floor(unloadMin / 60)}h ${unloadMin % 60}m (20min x ${stopCount} stops)`,
+      `Total shift: ${Math.floor(totalMin / 60)}h ${totalMin % 60}m`,
+      `Distance:    ${p.result.totalDistanceKm} km (${miles} mi)`,
+    )
+    lines.push('', '── STOP ORDER (after optimise) ──')
+    ;(p.result.orderedStops as ES[]).forEach((s, i) => {
+      const pri   = s.priority === 'urgent' ? ' [URGENT]' : s.priority === 'priority' ? ' [PRIORITY]' : ''
+      const lock  = s.lockedPosition ? ' [LOCKED]' : ''
+      const eta   = s.estimatedArrival ? `  arr ${s.estimatedArrival}` : ''
+      const dep   = s.estimatedArrival ? (() => {
+        const [h, m] = s.estimatedArrival!.split(':').map(Number)
+        const d = h * 60 + m + 20
+        return `  dep ${String(Math.floor(d / 60) % 24).padStart(2, '0')}:${String(d % 60).padStart(2, '0')}`
+      })() : ''
+      const drv   = s.driveTimeFromPrevMin != null ? `  drive ${s.driveTimeFromPrevMin}min` : ''
+      const dst   = s.distanceFromPrevKm   != null ? `  ${s.distanceFromPrevKm}km`          : ''
+      lines.push(`${String(i + 1).padStart(2)}. ${s.customerName} (${s.postcode ?? '?'})${pri}${lock}${eta}${dep}${drv}${dst}`)
+    })
+  } else {
+    lines.push('', '── STOPS (not yet optimised) ──')
+    p.stops.forEach((s, i) => {
+      const pri   = s.priority === 'urgent' ? ' [URGENT]' : s.priority === 'priority' ? ' [PRIORITY]' : ''
+      const lock  = s.lockedPosition ? ' [LOCKED]' : ''
+      const coord = s.lat != null ? `  lat=${s.lat.toFixed(4)} lng=${s.lng!.toFixed(4)}` : '  NO_COORDS'
+      lines.push(`${String(i + 1).padStart(2)}. ${s.name} (${s.postcode ?? '?'})${pri}${lock}${coord}`)
+    })
+  }
+
+  lines.push(
+    '',
+    '── ALGORITHM INFO ──',
+    `Urgent front-block: ${urgentCount > 0 ? `YES — ${urgentCount} stop(s) pulled to front, nearest-hub first` : 'NO (no urgent stops)'}`,
+    `Greedy resequence:  ${urgentCount > 0 ? 'YES — non-urgent stops re-sequenced from last urgent stop' : 'NO (no urgent stops)'}`,
+    `Priority cluster:   ${priorityCount > 0 ? 'YES — priority stops sorted first within their area' : 'NO (no priority stops)'}`,
+    `Locked stops:       ${lockedCount > 0 ? `${lockedCount} stop(s) pinned to original position` : 'none'}`,
+    '',
+    '=== END REPORT ===',
+  )
+
+  return lines.join('\n')
+}
+
+function CopyRouteInfoButton(p: CopyRouteInfoProps) {
+  const [copied, setCopied] = React.useState(false)
+
+  function handleCopy() {
+    const text = buildDebugReport(p)
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    }).catch(() => {
+      // Fallback for browsers where clipboard API requires user gesture timing
+      const el = document.createElement('textarea')
+      el.value = text
+      el.style.position = 'fixed'
+      el.style.opacity  = '0'
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className={[
+        'w-full h-8 rounded-lg text-[10px] font-bold transition-colors flex items-center justify-center gap-1.5',
+        copied
+          ? 'bg-green-50 text-green-700 border border-green-200'
+          : 'bg-[#16205B]/5 text-[#16205B]/70 border border-[#EDEAE1] hover:bg-[#16205B]/10',
+      ].join(' ')}
+    >
+      {copied ? '✓ Copied to clipboard' : '📋 Copy route info'}
+    </button>
+  )
+}
 
 function RoutesPageInner() {
   const router       = useRouter()
@@ -1039,6 +1174,22 @@ function RoutesPageInner() {
                     <p>Once happy, hit <span className="font-bold text-[#16205B]">Save & Assign</span>. The route is saved to the driver&apos;s view so they can navigate each stop in order.</p>
                   </div>
                 </div>
+
+                {/* ── Route debug info copy button ─────────────────── */}
+                <div className="mt-3 border-t border-[#EDEAE1] pt-3">
+                  <p className="text-[9px] font-bold text-[#16205B]/40 uppercase tracking-widest mb-1.5">Route info</p>
+                  <CopyRouteInfoButton
+                    routeName={routeName}
+                    plannedDate={plannedDate}
+                    departureTime={departureTime}
+                    endPoint={endPoint}
+                    assignedTo={assignedTo}
+                    stops={stops}
+                    result={result}
+                    users={users}
+                  />
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setShowHelp(false)}
