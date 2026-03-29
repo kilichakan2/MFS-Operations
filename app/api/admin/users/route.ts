@@ -19,7 +19,7 @@ const supabase = createClient(
 export async function GET() {
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, role, active, last_login_at, created_at')
+    .select('id, name, role, active, last_login_at, created_at, email')
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     const name       = String(body?.name       ?? '').trim()
     const role       = String(body?.role       ?? '').trim()
     const credential = String(body?.credential ?? '').trim()
+    const email      = body?.email ? String(body.email).trim() || null : null
 
     if (!name || !role || !credential) {
       return NextResponse.json(
@@ -73,8 +74,8 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('users')
-      .insert({ name, role, [field]: hash, active: true })
-      .select('id, name, role, active, last_login_at, created_at')
+      .insert({ name, role, [field]: hash, active: true, ...(email ? { email } : {}) })
+      .select('id, name, role, active, last_login_at, created_at, email')
       .single()
 
     if (error) {

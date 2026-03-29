@@ -24,7 +24,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   warehouse: ['/screen1', '/routes', '/runs'],
   office:    ['/screen1', '/complaints', '/routes', '/runs'],
   sales:     ['/complaints', '/visits', '/routes', '/runs'],
-  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
+  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
   driver:    ['/driver', '/routes', '/complaints'],  // drivers: route view + complaints
 }
 

@@ -39,11 +39,12 @@ export default function DesktopRouteNav() {
     switch (role) {
       case 'admin':
         setItems([
-          { href: '/screen4', label: t('navDashboard'),  icon: Icons.dashboard },
-          { href: '/screen6', label: t('navMap'),        icon: Icons.map       },
-          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
-          { href: '/screen5', label: t('navAdmin'),      icon: Icons.admin     },
+          { href: '/screen4',    label: t('navDashboard'),  icon: Icons.dashboard },
+          { href: '/screen6',    label: t('navMap'),        icon: Icons.map       },
+          { href: '/complaints', label: t('navComplaints'), icon: Icons.complaint },
+          { href: '/routes',     label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
+          { href: '/runs',       label: t('navRuns'),       icon: Icons.runs     },
+          { href: '/screen5',    label: t('navAdmin'),      icon: Icons.admin     },
         ]); break
       case 'sales':
         setItems([

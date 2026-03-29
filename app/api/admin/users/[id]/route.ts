@@ -23,12 +23,18 @@ export async function PATCH(
       active?:     boolean
       credential?: string
       role?:       string
+      email?:      string | null
     }
 
     const updates: Record<string, unknown> = {}
 
     if (body.active !== undefined) {
       updates.active = body.active
+    }
+
+    // Email update — null clears it, empty string treated as null
+    if (body.email !== undefined) {
+      updates.email = body.email?.trim() || null
     }
 
     if (body.credential && body.role) {
@@ -44,7 +50,7 @@ export async function PATCH(
       .from('users')
       .update(updates)
       .eq('id', id)
-      .select('id, name, role, active, last_login_at, created_at')
+      .select('id, name, role, active, last_login_at, created_at, email')
       .single()
 
     if (error) {
