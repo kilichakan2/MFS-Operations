@@ -486,10 +486,10 @@ export default function Screen4Page() {
           <KpiCard value={openAlertsCount} label="Open complaints" sub=">48h unresolved" accent={openAlertsCount > 0 ? 'red' : 'green'}
             icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/></svg>}
           />
-          <KpiCard value={totalVisitsToday} label="Visits today" sub={`${data.visitsToday.length} rep${data.visitsToday.length !== 1 ? 's' : ''} active`} accent="blue"
+          <KpiCard value={totalVisitsToday} label={`Visits — ${range.label}`} sub={`${data.visitsToday.length} rep${data.visitsToday.length !== 1 ? 's' : ''} active`} accent="blue"
             icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path d="M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM1.49 15.326a.78.78 0 0 1-.358-.442 3 3 0 0 1 4.308-3.516 6.484 6.484 0 0 0-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 0 1-2.07-.655ZM16.44 15.98a4.97 4.97 0 0 0 2.07-.654.78.78 0 0 0 .357-.442 3 3 0 0 0-4.308-3.517 6.484 6.484 0 0 1 1.907 3.96 2.32 2.32 0 0 1-.026.654ZM18 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM5.304 16.19a.844.844 0 0 1-.277-.71 5 5 0 0 1 9.947 0 .843.843 0 0 1-.277.71A6.975 6.975 0 0 1 10 18a6.974 6.974 0 0 1-4.696-1.81Z"/></svg>}
           />
-          <KpiCard value={totalDiscToday} label="Discrepancies" sub="logged today" accent={totalDiscToday > 0 ? 'amber' : 'green'}
+          <KpiCard value={totalDiscToday} label="Discrepancies" sub={range.label} accent={totalDiscToday > 0 ? 'amber' : 'green'}
             icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/></svg>}
           />
         </div>
