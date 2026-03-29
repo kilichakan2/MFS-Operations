@@ -40,6 +40,42 @@ function extractUrgentFront(stops: TestStop[]): TestStop[] {
   return [...urgent, ...rest]
 }
 
+// Mirror of optimise/route.ts greedyNearest
+// Re-sequences non-urgent stops from the driver's actual position after urgent block.
+function greedyNearest(stops: TestStop[], fromLat: number, fromLng: number): TestStop[] {
+  const remaining = [...stops]
+  const ordered:   TestStop[] = []
+  let curLat = fromLat
+  let curLng = fromLng
+  while (remaining.length > 0) {
+    let nearestIdx  = 0
+    let nearestDist = Infinity
+    for (let i = 0; i < remaining.length; i++) {
+      const d = haversineKm(curLat, curLng, remaining[i].lat, remaining[i].lng)
+      if (d < nearestDist) { nearestDist = d; nearestIdx = i }
+    }
+    const next = remaining.splice(nearestIdx, 1)[0]
+    ordered.push(next)
+    curLat = next.lat
+    curLng = next.lng
+  }
+  return ordered
+}
+
+// Full Pass 3b pipeline mirror: urgent front + greedy non-urgent
+function applyUrgentAndGreedy(stops: TestStop[]): TestStop[] {
+  const urgent    = [...stops.filter(s => s.priority === 'urgent')]
+    .sort((a, b) =>
+      haversineKm(MFS_LAT, MFS_LNG, a.lat, a.lng) -
+      haversineKm(MFS_LAT, MFS_LNG, b.lat, b.lng)
+    )
+  const nonUrgent = stops.filter(s => s.priority !== 'urgent')
+  if (urgent.length === 0 || nonUrgent.length === 0) return [...urgent, ...nonUrgent]
+  const lastUrgent  = urgent[urgent.length - 1]
+  const greedySorted = greedyNearest(nonUrgent, lastUrgent.lat, lastUrgent.lng)
+  return [...urgent, ...greedySorted]
+}
+
 function cleanPostcode(pc: string): string {
   return pc.replace(/\s+/g, '').trim().toUpperCase()
 }
@@ -388,16 +424,83 @@ test('urgent: cluster 2 has Jennys(urgent) and Topkapi(urgent) first', () => {
 })
 
 test('urgent stops are promoted to front of route, nearest-hub first', () => {
-  const clusters    = clusterAndSort(REAL_6_URGENT, MOCK_P1_LEGS)
-  const urgentFirst = extractUrgentFront(clusters.flat())
-  const finalOrder  = reinsertLocked(REAL_6_URGENT, urgentFirst)
+  const clusters     = clusterAndSort(REAL_6_URGENT, MOCK_P1_LEGS)
+  const resequenced  = applyUrgentAndGreedy(clusters.flat())
+  const finalOrder   = reinsertLocked(REAL_6_URGENT, resequenced)
   // Topkapi (25.27km from MFS) is nearer than Jennys (25.43km) — goes first
   eq(finalOrder[0].name, 'TOPKAPI KEBAB')
   eq(finalOrder[0].priority, 'urgent')
   eq(finalOrder[1].name, 'JENNYS CAFE')
   eq(finalOrder[1].priority, 'urgent')
-  // Standard stops follow in cluster order
+  // Greedy from Jennys (last urgent): Pizza Milano (~0.73km) is nearest
+  eq(finalOrder[2].name, 'PIZZA MILANO')
   eq(finalOrder[2].priority, 'none')
+})
+
+// ─── Suite 2b: Greedy non-urgent resequencing ────────────────────────────────
+// Proves that after the urgent front-block, non-urgent stops are re-sequenced
+// from the last urgent stop's location (greedy nearest-neighbour), NOT from
+// Sheffield. This directly fixes the Cheadle→Crewe→Manchester zigzag.
+
+console.log('\n── Suite 2b: Greedy non-urgent resequencing after urgent block')
+
+// Mirrors the production route from the screenshot:
+// 3 urgent stops in Manchester area, then driver should pick nearby Manchester
+// stops next — NOT detour south-west to Crewe first.
+//
+// Coordinates (approximate real postcodes):
+//   Cheadle SK8    53.392, -2.218  — last urgent stop, driver is HERE after urgent block
+//   Manchester M17 53.463, -2.279  — standard, ~8km from Cheadle  ← should go NEXT
+//   Crewe CW2      53.080, -2.558  — standard, ~39km from Cheadle ← should go LAST
+const CHEADLE_CREWE_STOPS: TestStop[] = [
+  { customerId: 'urg1', name: 'Cheadle Urgent',  postcode: 'SK81Y', lat: 53.392, lng: -2.218, priority: 'urgent', lockedPosition: false },
+  { customerId: 'std1', name: 'Crewe Standard',  postcode: 'CW27E', lat: 53.080, lng: -2.558, priority: 'none',   lockedPosition: false },
+  { customerId: 'std2', name: 'Manchester M17',  postcode: 'M171D', lat: 53.463, lng: -2.279, priority: 'none',   lockedPosition: false },
+]
+
+test('greedy: Manchester M17 (8km) picked before Crewe (39km) after Cheadle urgent', () => {
+  const resequenced = applyUrgentAndGreedy(CHEADLE_CREWE_STOPS)
+  // Urgent Cheadle goes first (it's the only urgent stop)
+  eq(resequenced[0].name, 'Cheadle Urgent')
+  eq(resequenced[0].priority, 'urgent')
+  // After Cheadle, Manchester M17 (8km) should come before Crewe (39km)
+  eq(resequenced[1].name, 'Manchester M17',
+    `Expected Manchester M17 next (8km from Cheadle), got ${resequenced[1].name} — Crewe would mean a 39km detour`)
+  eq(resequenced[2].name, 'Crewe Standard')
+})
+
+test('greedy: with no urgent stops, order is unchanged', () => {
+  const allStandard = CHEADLE_CREWE_STOPS.map(s => ({ ...s, priority: 'none' as const }))
+  const original  = allStandard.map(s => s.name)
+  const result    = applyUrgentAndGreedy(allStandard)
+  eq(result.map(s => s.name), original)  // greedy not applied when no urgent stops
+})
+
+test('greedy: single non-urgent stop after urgent is returned as-is', () => {
+  const stops: TestStop[] = [
+    { customerId: 'u1', name: 'Urgent A',   postcode: 'S1', lat: 53.4, lng: -1.5, priority: 'urgent', lockedPosition: false },
+    { customerId: 's1', name: 'Standard B', postcode: 'S2', lat: 53.3, lng: -1.4, priority: 'none',   lockedPosition: false },
+  ]
+  const result = applyUrgentAndGreedy(stops)
+  eq(result[0].name, 'Urgent A')
+  eq(result[1].name, 'Standard B')
+})
+
+test('greedy: multiple urgent stops sorted nearest-hub first', () => {
+  // From MFS (53.392371, -1.479496):
+  // Poynton SK12 (53.355, -2.125): ~43km
+  // Bramhall SK7  (53.360, -2.155): ~45km
+  // Cheadle SK8   (53.392, -2.218): ~47km
+  const stops: TestStop[] = [
+    { customerId: 'u1', name: 'Cheadle SK8',  postcode: 'SK81Y', lat: 53.392, lng: -2.218, priority: 'urgent', lockedPosition: false },
+    { customerId: 'u2', name: 'Bramhall SK7', postcode: 'SK71A', lat: 53.360, lng: -2.155, priority: 'urgent', lockedPosition: false },
+    { customerId: 'u3', name: 'Poynton SK12', postcode: 'SK121', lat: 53.355, lng: -2.125, priority: 'urgent', lockedPosition: false },
+  ]
+  const result = applyUrgentAndGreedy(stops)
+  // Nearest to MFS hub first: Poynton (43km) → Bramhall (45km) → Cheadle (47km)
+  eq(result[0].name, 'Poynton SK12')
+  eq(result[1].name, 'Bramhall SK7')
+  eq(result[2].name, 'Cheadle SK8')
 })
 
 // ─── Suite 3: Locked stop ────────────────────────────────────────────────────
@@ -467,8 +570,8 @@ test('Furthest-first: Pass 2b re-sorts so Sheffield (8min) runs BEFORE Worksop (
 
 test('Furthest-first: urgent Worksop IS promoted to front before Sheffield (urgent front-block)', () => {
   const clusters    = clusterAndSort(FURTHEST_FIRST_GEO_ORDERED, FURTHEST_FIRST_LEGS)
-  const urgentFirst = extractUrgentFront(clusters.flat())
-  const finalOrder  = reinsertLocked(FURTHEST_FIRST_STOPS, urgentFirst)
+  const resequenced = applyUrgentAndGreedy(clusters.flat())
+  const finalOrder  = reinsertLocked(FURTHEST_FIRST_STOPS, resequenced)
   // Urgent front-block: Worksop(urgent) goes before Sheffield(standard) — kitchen prep
   eq(finalOrder[0].name, 'Worksop Urgent')
   eq(finalOrder[0].priority, 'urgent')
@@ -551,8 +654,8 @@ test('Mixed-priority: Pass 2b re-sorts so near cluster (Sheffield) runs first', 
 
 test('Mixed-priority: urgent Worksop IS promoted to front before Sheffield (urgent front-block)', () => {
   const clusters    = clusterAndSort(MIXED_FAR_FIRST, MIXED_LEGS)
-  const urgentFirst = extractUrgentFront(clusters.flat())
-  const finalOrder  = reinsertLocked(MIXED_FAR_FIRST, urgentFirst)
+  const resequenced = applyUrgentAndGreedy(clusters.flat())
+  const finalOrder  = reinsertLocked(MIXED_FAR_FIRST, resequenced)
   // Urgent front-block: Worksop(urgent) ALWAYS goes first regardless of geography
   eq(finalOrder[0].name, 'Worksop Urgent')
   eq(finalOrder[0].priority, 'urgent')

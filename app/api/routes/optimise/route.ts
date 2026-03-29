@@ -9,7 +9,8 @@
  *   Pass 2b — Cluster order: nearest-to-hub first when any priority/urgent stop exists
  *   Pass 3 — Within-cluster sort: urgent > priority > none
  *   Pass 3b — Urgent front-block: extract ALL urgent stops, sort nearest-to-hub first,
- *             promote them to the front of the route before all other stops
+ *             promote to front; then greedy nearest-neighbour from last urgent stop
+ *             re-sequences non-urgent stops (eliminates post-urgent-block detours)
  *   Pass 4 — Final ETAs: computeRoutes with optimizeWaypointOrder:false
  *
  * Urgent = ALWAYS delivered first (kitchen prep dependency). Nearest urgent stop first.
@@ -48,7 +49,7 @@ const SERVICE_TIME_MS   = SERVICE_TIME_MINS * 60 * 1000
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, priority: 1, none: 2 }
 
 // Straight-line distance between two lat/lng points (km).
-// Used to sort urgent stops nearest-to-hub first.
+// Used to sort urgent stops nearest-to-hub first and for greedy re-sequencing.
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R    = 6371
   const dLat = (lat2 - lat1) * Math.PI / 180
@@ -57,6 +58,35 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
               + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
               * Math.sin(dLng / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// Greedy nearest-neighbour sequencing for non-urgent stops.
+// Starting from (fromLat, fromLng), repeatedly pick the closest unvisited stop.
+// O(n²) on ≤23 stops — runs in <1ms. Used after the urgent front-block to
+// re-sequence non-urgent stops from the driver's actual position (last urgent
+// stop) rather than from Sheffield (where Google's Pass 1 loop started).
+function greedyNearest(
+  stops:   WorkingStop[],
+  fromLat: number,
+  fromLng: number,
+): WorkingStop[] {
+  const remaining = [...stops]
+  const ordered:   WorkingStop[] = []
+  let curLat = fromLat
+  let curLng = fromLng
+  while (remaining.length > 0) {
+    let nearestIdx  = 0
+    let nearestDist = Infinity
+    for (let i = 0; i < remaining.length; i++) {
+      const d = haversineKm(curLat, curLng, remaining[i].customer.lat!, remaining[i].customer.lng!)
+      if (d < nearestDist) { nearestDist = d; nearestIdx = i }
+    }
+    const next = remaining.splice(nearestIdx, 1)[0]
+    ordered.push(next)
+    curLat = next.customer.lat!
+    curLng = next.customer.lng!
+  }
+  return ordered
 }
 
 const supabase = createClient(SUPA_URL, SUPA_KEY)
@@ -362,29 +392,55 @@ export async function POST(req: NextRequest) {
     })))
 
     // ════════════════════════════════════════════════════════════════════════
-    // PASS 3b — URGENT FRONT-BLOCK
-    // Extract ALL urgent (unlocked) stops and promote them to the very front
-    // of the route, sorted nearest-to-hub first (haversine).
+    // PASS 3b — URGENT FRONT-BLOCK + GREEDY NON-URGENT RESEQUENCE
     //
-    // Rationale: urgent = kitchen prep dependency. The customer needs the
-    // delivery early regardless of where they sit geographically. Nearest
-    // urgent stop goes first to minimise the distance before the first drop.
-    // Non-urgent stops follow in their cluster-sorted order.
+    // Step 1: Extract ALL urgent (unlocked) stops. Sort nearest-to-hub first
+    //         (haversine). These run as a fixed front-block before everything.
+    //
+    // Step 2: If urgent stops exist, re-sequence the remaining non-urgent stops
+    //         using greedy nearest-neighbour starting from the LAST urgent stop.
+    //
+    //         Why greedy? Google's Pass 1 planned a closed loop from Sheffield.
+    //         The non-urgent stop order was optimal for that loop. After pulling
+    //         urgent stops to the front, the driver's actual starting point for
+    //         non-urgent deliveries is the last urgent stop (e.g. Cheadle SK8),
+    //         NOT Sheffield. Without resequencing, the loop order causes detours
+    //         (e.g. Cheadle → Crewe → back to Manchester M17 → ...).
+    //         Greedy from the last urgent stop eliminates these zigzags with no
+    //         extra API call. O(n²) on ≤23 stops, runs in <1ms.
+    //
+    //         If no urgent stops: non-urgent order is Google's loop order,
+    //         which is correct — no change to all-standard route behaviour.
     // ════════════════════════════════════════════════════════════════════════
-    const clusteredFlat  = sorted.flat()
-    const urgentFront    = clusteredFlat
-      .filter(s => s.input.priority === 'urgent')
+    const clusteredFlat = sorted.flat()
+
+    const urgentFront = [...clusteredFlat.filter(s => s.input.priority === 'urgent')]
       .sort((a, b) =>
         haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, a.customer.lat!, a.customer.lng!) -
         haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, b.customer.lat!, b.customer.lng!)
       )
-    const nonUrgent      = clusteredFlat.filter(s => s.input.priority !== 'urgent')
-    const clusteredUnlocked = [...urgentFront, ...nonUrgent]
 
-    console.log('[optimise] Pass 3b — Urgent front-block:', {
-      urgentCount:    urgentFront.length,
-      urgentOrder:    urgentFront.map(s => `${s.customer.name} (${haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, s.customer.lat!, s.customer.lng!).toFixed(1)}km)`),
-      remainingFirst: nonUrgent[0]?.customer.name ?? 'none',
+    const nonUrgentRaw = clusteredFlat.filter(s => s.input.priority !== 'urgent')
+
+    // Greedy resequence only when urgent stops exist and there is something to resequence
+    const nonUrgentOrdered = (urgentFront.length > 0 && nonUrgentRaw.length > 0)
+      ? greedyNearest(
+          nonUrgentRaw,
+          urgentFront[urgentFront.length - 1].customer.lat!,
+          urgentFront[urgentFront.length - 1].customer.lng!,
+        )
+      : nonUrgentRaw
+
+    const clusteredUnlocked = [...urgentFront, ...nonUrgentOrdered]
+
+    console.log('[optimise] Pass 3b — Urgent front-block + greedy resequence:', {
+      urgentCount:     urgentFront.length,
+      urgentOrder:     urgentFront.map(s =>
+        `${s.customer.name} (${haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, s.customer.lat!, s.customer.lng!).toFixed(1)}km from hub)`
+      ),
+      nonUrgentCount:  nonUrgentOrdered.length,
+      nonUrgentOrder:  nonUrgentOrdered.map(s => s.customer.name),
+      greedyApplied:   urgentFront.length > 0,
     })
     const finalOrdered: WorkingStop[] = new Array(workingStops.length).fill(null)
 
