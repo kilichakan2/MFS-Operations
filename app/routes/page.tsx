@@ -193,7 +193,7 @@ function StopCardRow({
             {/* ETA */}
             {stop.estimatedArrival && (() => {
               const [h, m]  = stop.estimatedArrival.split(':').map(Number)
-              const depMins = h * 60 + m + 15
+              const depMins = h * 60 + m + 20
               const depStr  = `${String(Math.floor(depMins / 60) % 24).padStart(2, '0')}:${String(depMins % 60).padStart(2, '0')}`
               return (
                 <div className="leading-none">
