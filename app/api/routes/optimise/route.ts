@@ -3,18 +3,19 @@
  *
  * POST — Two-pass routing engine using Google Routes API v2.
  *
- * Algorithm (4 passes):
+ * Algorithm (5 passes):
  *   Pass 1 — Geographic spine: computeRoutes with optimizeWaypointOrder:true
  *   Pass 2 — Cluster: group stops ≤25 min apart by drive time
- *   Pass 3 — Priority sort within each cluster (urgent > priority > none)
+ *   Pass 2b — Cluster order: nearest-to-hub first when any priority/urgent stop exists
+ *   Pass 3 — Within-cluster sort: urgent > priority > none
+ *   Pass 3b — Urgent front-block: extract ALL urgent stops, sort nearest-to-hub first,
+ *             promote them to the front of the route before all other stops
  *   Pass 4 — Final ETAs: computeRoutes with optimizeWaypointOrder:false
  *
- * Spec: docs/routing-engine-spec.md
+ * Urgent = ALWAYS delivered first (kitchen prep dependency). Nearest urgent stop first.
+ * Priority = delivered early within its geographic cluster, before standard stops.
  *
- * KEY FIX: Pass 1 intermediates use latLng coordinates (not address strings).
- * Routes API v2 requires latLng for intermediate waypoints when
- * optimizeWaypointOrder:true — address strings are rejected with INVALID_ARGUMENT.
- * Origin and destination use address format (fixed anchors, not being optimised).
+ * Spec: docs/routing-engine-spec.md
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -45,6 +46,18 @@ const SERVICE_TIME_MINS = 20
 const SERVICE_TIME_MS   = SERVICE_TIME_MINS * 60 * 1000
 
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, priority: 1, none: 2 }
+
+// Straight-line distance between two lat/lng points (km).
+// Used to sort urgent stops nearest-to-hub first.
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R    = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a    = Math.sin(dLat / 2) ** 2
+              + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+              * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
 
 const supabase = createClient(SUPA_URL, SUPA_KEY)
 
@@ -348,8 +361,31 @@ export async function POST(req: NextRequest) {
       stops:   cl.map(s => `${s.customer.name} (${s.input.priority})`),
     })))
 
-    // Flatten + re-insert locked stops at their original index positions
-    const clusteredUnlocked = sorted.flat()
+    // ════════════════════════════════════════════════════════════════════════
+    // PASS 3b — URGENT FRONT-BLOCK
+    // Extract ALL urgent (unlocked) stops and promote them to the very front
+    // of the route, sorted nearest-to-hub first (haversine).
+    //
+    // Rationale: urgent = kitchen prep dependency. The customer needs the
+    // delivery early regardless of where they sit geographically. Nearest
+    // urgent stop goes first to minimise the distance before the first drop.
+    // Non-urgent stops follow in their cluster-sorted order.
+    // ════════════════════════════════════════════════════════════════════════
+    const clusteredFlat  = sorted.flat()
+    const urgentFront    = clusteredFlat
+      .filter(s => s.input.priority === 'urgent')
+      .sort((a, b) =>
+        haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, a.customer.lat!, a.customer.lng!) -
+        haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, b.customer.lat!, b.customer.lng!)
+      )
+    const nonUrgent      = clusteredFlat.filter(s => s.input.priority !== 'urgent')
+    const clusteredUnlocked = [...urgentFront, ...nonUrgent]
+
+    console.log('[optimise] Pass 3b — Urgent front-block:', {
+      urgentCount:    urgentFront.length,
+      urgentOrder:    urgentFront.map(s => `${s.customer.name} (${haversineKm(MFS_COORDS.lat, MFS_COORDS.lng, s.customer.lat!, s.customer.lng!).toFixed(1)}km)`),
+      remainingFirst: nonUrgent[0]?.customer.name ?? 'none',
+    })
     const finalOrdered: WorkingStop[] = new Array(workingStops.length).fill(null)
 
     for (const s of lockedStops) {

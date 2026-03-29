@@ -64,13 +64,13 @@ interface OptimiseResult {
 
 const PRIORITY_LABEL: Record<string, string> = {
   none:     'Standard',
-  urgent:   '⚠️ Urgent',
-  priority: '🔴 Priority',
+  urgent:   '🔴 Urgent',
+  priority: '🟠 Priority',
 }
 const PRIORITY_RING: Record<string, string> = {
   none:     'border-[#EDEAE1]',
-  urgent:   'border-amber-400',
-  priority: 'border-red-500',
+  urgent:   'border-red-500',
+  priority: 'border-amber-400',
 }
 
 function fmtDuration(min: number) {
@@ -212,8 +212,8 @@ function StopCardRow({
               onChange={e => onChange(stop.id, { priority: e.target.value as StopCard['priority'] })}
               className={[
                 'text-[9px] font-bold border rounded px-0.5 py-px bg-white focus:outline-none h-5',
-                stop.priority === 'priority' ? 'border-red-400 text-red-600'
-                  : stop.priority === 'urgent' ? 'border-amber-400 text-amber-600'
+                stop.priority === 'urgent'   ? 'border-red-400 text-red-600'
+                  : stop.priority === 'priority' ? 'border-amber-400 text-amber-600'
                   : 'border-[#EDEAE1] text-[#16205B]/60',
               ].join(' ')}
               style={{ touchAction: 'manipulation' }}
@@ -957,25 +957,27 @@ function RoutesPageInner() {
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px]">🔴</span>
                     <span className="font-bold text-red-600 text-[10px]">Urgent</span>
-                    <span className="text-gray-400 text-[9px]">Priority #1</span>
+                    <span className="text-gray-400 text-[9px]">Delivered first — always</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px]">🟠</span>
                     <span className="font-bold text-amber-600 text-[10px]">Priority</span>
-                    <span className="text-gray-400 text-[9px]">Priority #2</span>
+                    <span className="text-gray-400 text-[9px]">Early in its area</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-gray-300 flex-shrink-0" />
                     <span className="font-bold text-gray-500 text-[10px]">Standard</span>
-                    <span className="text-gray-400 text-[9px]">Geo order</span>
+                    <span className="text-gray-400 text-[9px]">Best route order</span>
                   </div>
-                  <div className="border-t border-gray-100 mt-1 pt-1 flex items-center gap-1.5">
-                    <span className="text-[10px] text-[#16205B] font-bold">🔒</span>
-                    <span className="text-gray-400 text-[9px]">Stay put</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-[#16205B]/60 font-bold">↑↓</span>
-                    <span className="text-gray-400 text-[9px]">Drag to move</span>
+                  <div className="border-t border-gray-100 mt-1 pt-1 space-y-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-[#16205B] font-bold">🔒</span>
+                      <span className="text-gray-400 text-[9px]">Stay put</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-[#16205B]/60 font-bold">↑↓</span>
+                      <span className="text-gray-400 text-[9px]">Drag to move</span>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -13,6 +13,33 @@
 const CLUSTER_THRESHOLD_S = 25 * 60
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, priority: 1, none: 2 }
 
+// MFS hub coords — mirrors lib/hubs.ts
+const MFS_LAT = 53.392371
+const MFS_LNG = -1.479496
+
+// Mirror of optimise/route.ts haversineKm
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R    = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a    = Math.sin(dLat / 2) ** 2
+              + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180)
+              * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// Mirror of optimise/route.ts Pass 3b: urgent front-block
+// Pull all urgent stops to front, sorted nearest-to-hub first.
+function extractUrgentFront(stops: TestStop[]): TestStop[] {
+  const urgent = [...stops.filter(s => s.priority === 'urgent')]
+    .sort((a, b) =>
+      haversineKm(MFS_LAT, MFS_LNG, a.lat, a.lng) -
+      haversineKm(MFS_LAT, MFS_LNG, b.lat, b.lng)
+    )
+  const rest = stops.filter(s => s.priority !== 'urgent')
+  return [...urgent, ...rest]
+}
+
 function cleanPostcode(pc: string): string {
   return pc.replace(/\s+/g, '').trim().toUpperCase()
 }
@@ -360,12 +387,17 @@ test('urgent: cluster 2 has Jennys(urgent) and Topkapi(urgent) first', () => {
   eq(clusters[1][2].name, 'PIZZA MILANO')
 })
 
-test('urgent in cluster 2 does NOT jump ahead of cluster 1 stops', () => {
-  const clusters   = clusterAndSort(REAL_6_URGENT, MOCK_P1_LEGS)
-  const finalOrder = reinsertLocked(REAL_6_URGENT, clusters.flat())
-  // Sheffield (none) must still come before Jennys (urgent) — different clusters
-  eq(finalOrder[0].name, 'BRILL BURGER SHEFFIELD')
-  eq(finalOrder[3].name, 'JENNYS CAFE')
+test('urgent stops are promoted to front of route, nearest-hub first', () => {
+  const clusters    = clusterAndSort(REAL_6_URGENT, MOCK_P1_LEGS)
+  const urgentFirst = extractUrgentFront(clusters.flat())
+  const finalOrder  = reinsertLocked(REAL_6_URGENT, urgentFirst)
+  // Topkapi (25.27km from MFS) is nearer than Jennys (25.43km) — goes first
+  eq(finalOrder[0].name, 'TOPKAPI KEBAB')
+  eq(finalOrder[0].priority, 'urgent')
+  eq(finalOrder[1].name, 'JENNYS CAFE')
+  eq(finalOrder[1].priority, 'urgent')
+  // Standard stops follow in cluster order
+  eq(finalOrder[2].priority, 'none')
 })
 
 // ─── Suite 3: Locked stop ────────────────────────────────────────────────────
@@ -433,12 +465,14 @@ test('Furthest-first: Pass 2b re-sorts so Sheffield (8min) runs BEFORE Worksop (
     `Cluster 1 should be Worksop (far), got ${clusters[1][0].name}`)
 })
 
-test('Furthest-first: urgent label on Worksop does NOT promote it before Sheffield', () => {
-  const clusters   = clusterAndSort(FURTHEST_FIRST_GEO_ORDERED, FURTHEST_FIRST_LEGS)
-  const finalOrder = reinsertLocked(FURTHEST_FIRST_STOPS, clusters.flat())
-  // Sheffield (standard) MUST come before Worksop (urgent) — different clusters
-  eq(finalOrder[0].name, 'Sheffield Customer')
-  eq(finalOrder[1].name, 'Worksop Urgent')
+test('Furthest-first: urgent Worksop IS promoted to front before Sheffield (urgent front-block)', () => {
+  const clusters    = clusterAndSort(FURTHEST_FIRST_GEO_ORDERED, FURTHEST_FIRST_LEGS)
+  const urgentFirst = extractUrgentFront(clusters.flat())
+  const finalOrder  = reinsertLocked(FURTHEST_FIRST_STOPS, urgentFirst)
+  // Urgent front-block: Worksop(urgent) goes before Sheffield(standard) — kitchen prep
+  eq(finalOrder[0].name, 'Worksop Urgent')
+  eq(finalOrder[0].priority, 'urgent')
+  eq(finalOrder[1].name, 'Sheffield Customer')
 })
 
 test('Furthest-first: final flattened order is Sheffield → Worksop', () => {
@@ -515,12 +549,14 @@ test('Mixed-priority: Pass 2b re-sorts so near cluster (Sheffield) runs first', 
   eq(clusters[1][0].name, 'Worksop Urgent')
 })
 
-test('Mixed-priority: urgent Worksop stays urgent but does NOT jump ahead of Sheffield cluster', () => {
-  const clusters   = clusterAndSort(MIXED_FAR_FIRST, MIXED_LEGS)
-  const finalOrder = reinsertLocked(MIXED_FAR_FIRST, clusters.flat())
-  eq(finalOrder[0].name, 'Sheffield Std')
-  eq(finalOrder[1].name, 'Worksop Urgent')
-  eq(finalOrder[1].priority, 'urgent')
+test('Mixed-priority: urgent Worksop IS promoted to front before Sheffield (urgent front-block)', () => {
+  const clusters    = clusterAndSort(MIXED_FAR_FIRST, MIXED_LEGS)
+  const urgentFirst = extractUrgentFront(clusters.flat())
+  const finalOrder  = reinsertLocked(MIXED_FAR_FIRST, urgentFirst)
+  // Urgent front-block: Worksop(urgent) ALWAYS goes first regardless of geography
+  eq(finalOrder[0].name, 'Worksop Urgent')
+  eq(finalOrder[0].priority, 'urgent')
+  eq(finalOrder[1].name, 'Sheffield Std')
 })
 
 test('Mixed-priority: hasPriority is true when any stop is urgent', () => {
