@@ -152,9 +152,10 @@ function AlertRow({ tone, children }: { tone: 'red'|'amber'; children: React.Rea
 
 type TodayTab = 'visits'|'complaints'|'discrepancies'
 
-function TodayTabs({ data, onRowClick }: {
+function TodayTabs({ data, onRowClick, rangeLabel }: {
   data:       DashboardData
   onRowClick: (type: ModalType, id: string) => void
+  rangeLabel: string
 }) {
   const [tab, setTab] = useState<TodayTab>('visits')
   const totalVisits    = data.visitsToday.reduce((s, v) => s + v.count, 0)
@@ -190,7 +191,7 @@ function TodayTabs({ data, onRowClick }: {
       {tab === 'visits' && (
         <div className="divide-y divide-gray-50">
           {data.visitsToday.length === 0
-            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No visits logged today</p>
+            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No visits logged — {rangeLabel}</p>
             : data.visitsToday.map(v => {
                 const warn = v.outcomes.at_risk > 0 || v.outcomes.lost > 0
                 return (
@@ -245,7 +246,7 @@ function TodayTabs({ data, onRowClick }: {
       {tab === 'complaints' && (
         <div className="divide-y divide-gray-50">
           {data.complaintsTodayList.length === 0
-            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No complaints today</p>
+            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No complaints — {rangeLabel}</p>
             : data.complaintsTodayList.map(c => (
                 <div key={c.id} onClick={() => onRowClick('complaint', c.id)} className="px-4 py-3.5 flex items-start justify-between gap-3 cursor-pointer hover:bg-[#EDEAE1] transition-colors min-h-[52px]">
                   <div className="min-w-0 flex-1">
@@ -267,7 +268,7 @@ function TodayTabs({ data, onRowClick }: {
       {tab === 'discrepancies' && (
         <div className="divide-y divide-gray-50">
           {data.discrepanciesToday.length === 0
-            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No discrepancies today</p>
+            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No discrepancies — {rangeLabel}</p>
             : data.discrepanciesToday.map(d => (
                 <div key={d.id} onClick={() => onRowClick('discrepancy', d.id)} className="px-4 py-3.5 flex items-start justify-between gap-3 cursor-pointer hover:bg-[#EDEAE1] transition-colors min-h-[52px]">
                   <div className="min-w-0 flex-1">
@@ -533,7 +534,7 @@ export default function Screen4Page() {
         {/* Today — tabbed (left column) */}
         <div className="md:sticky md:top-24">
           <SectionLabel>{range.label}</SectionLabel>
-          <TodayTabs data={data} onRowClick={(type, id) => setModal({ type, id })} />
+          <TodayTabs data={data} onRowClick={(type, id) => setModal({ type, id })} rangeLabel={range.label} />
         </div>
 
         {/* This Week (right column) */}
@@ -653,7 +654,7 @@ export default function Screen4Page() {
           {hfTotal > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold text-gray-800">This week&apos;s focus</p>
+                <p className="text-xs font-bold text-gray-800">{range.label}&apos;s focus</p>
                 <span className="text-[10px] text-gray-400">{hfTotal} total visits</span>
               </div>
               <div className="flex items-center gap-6">
