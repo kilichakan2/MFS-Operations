@@ -38,6 +38,7 @@ const t = {
   navMap:         { en: 'Map',         tr: 'Harita'  },
   navRoutes:      { en: 'Routes',      tr: 'Rotalar' },
   navRuns:        { en: 'Runs',         tr: 'Seferler' },
+  navCash:        { en: 'Cash',         tr: 'Kasa'     },
 
   // ── Login screen ─────────────────────────────────────────────────────────
   teamLogin:      { en: 'Team Login',          tr: 'Ekip Girişi' },

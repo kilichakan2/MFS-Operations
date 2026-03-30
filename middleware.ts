@@ -22,9 +22,9 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   warehouse: ['/screen1', '/routes', '/runs'],
-  office:    ['/screen1', '/complaints', '/routes', '/runs'],
+  office:    ['/screen1', '/complaints', '/routes', '/runs', '/cash'],
   sales:     ['/complaints', '/visits', '/routes', '/runs'],
-  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
+  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/cash', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
   driver:    ['/driver', '/routes', '/complaints'],  // drivers: route view + complaints
 }
 
@@ -46,6 +46,11 @@ const SHARED_API_PATHS = [
   '/api/screen2/resolve',
   '/api/screen2/all',
   '/api/screen2/note',
+  '/api/cash/month',
+  '/api/cash/entry',
+  '/api/cash/upload',
+  '/api/cash/cheques',
+  '/api/cash/export',
   '/api/screen3/sync',
   '/api/screen3/today',
   '/api/screen3/visit',
