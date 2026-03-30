@@ -112,9 +112,10 @@ export async function POST(req: NextRequest) {
       summary:   `Complaint logged: ${customer?.name ?? customer_id} — ${label} — ${status!.toUpperCase()} — by ${userName}`,
     }).catch((e) => console.error('[screen2/sync] audit error:', e))
 
-    // Email notification (fire-and-forget)
-    import('@/lib/complaint-email').then(({ sendComplaintEmail }) =>
-      sendComplaintEmail({
+    // Send email — awaited so errors surface in this request context
+    try {
+      const { sendComplaintEmail } = await import('@/lib/complaint-email')
+      await sendComplaintEmail({
         type:      'new_complaint',
         author:    userName,
         complaint: {
@@ -127,7 +128,9 @@ export async function POST(req: NextRequest) {
           loggedBy:    userName,
         },
       })
-    ).catch(e => console.error('[screen2/sync] email error:', e))
+    } catch (e) {
+      console.error('[screen2/sync] email error:', e instanceof Error ? e.stack : String(e))
+    }
 
     return NextResponse.json({ id: recordId }, { status: 201 })
 

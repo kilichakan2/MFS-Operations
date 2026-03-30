@@ -77,9 +77,10 @@ export async function POST(req: NextRequest) {
 
     const [savedNote] = await insertRes.json() as { id: string; created_at: string }[]
 
-    // 3. Fire email via shared helper (fire-and-forget)
-    import('@/lib/complaint-email').then(({ sendComplaintEmail }) =>
-      sendComplaintEmail({
+    // 3. Send email — awaited so errors surface in this request context
+    try {
+      const { sendComplaintEmail } = await import('@/lib/complaint-email')
+      await sendComplaintEmail({
         type:       'note_added',
         noteBody,
         noteAuthor: userName,
@@ -91,7 +92,9 @@ export async function POST(req: NextRequest) {
           status:      complaint.status,
         },
       })
-    ).catch(e => console.error('[screen2/note] email error:', e))
+    } catch (e) {
+      console.error('[screen2/note] email error:', e instanceof Error ? e.stack : String(e))
+    }
 
     // 4. Audit log (fire-and-forget)
     fetch(`${SUPA_URL}/rest/v1/audit_log`, {
