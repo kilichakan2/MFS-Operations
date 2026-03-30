@@ -99,9 +99,11 @@ export async function POST(req: NextRequest) {
     const recordId = rows[0]?.id
     console.log('[screen2/sync] inserted:', recordId)
 
-    // Audit log (fire-and-forget)
+    // Fetch customer name for audit log + email
     const customer = await supaGet('customers', `select=name&id=eq.${customer_id}`)
     const label = category!.replace(/_/g, ' ')
+
+    // Audit log (fire-and-forget)
     supaPost('audit_log', {
       user_id:   userId,
       screen:    'screen2',
@@ -109,6 +111,23 @@ export async function POST(req: NextRequest) {
       record_id: recordId ?? null,
       summary:   `Complaint logged: ${customer?.name ?? customer_id} — ${label} — ${status!.toUpperCase()} — by ${userName}`,
     }).catch((e) => console.error('[screen2/sync] audit error:', e))
+
+    // Email notification (fire-and-forget)
+    import('@/lib/complaint-email').then(({ sendComplaintEmail }) =>
+      sendComplaintEmail({
+        type:      'new_complaint',
+        author:    userName,
+        complaint: {
+          id:          recordId ?? '',
+          customer:    customer?.name ?? 'Unknown',
+          category:    label,
+          description: (description ?? '').trim(),
+          receivedVia: received_via?.replace(/_/g, ' '),
+          status:      status ?? 'open',
+          loggedBy:    userName,
+        },
+      })
+    ).catch(e => console.error('[screen2/sync] email error:', e))
 
     return NextResponse.json({ id: recordId }, { status: 201 })
 

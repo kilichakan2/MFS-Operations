@@ -75,6 +75,29 @@ export async function POST(req: NextRequest) {
 
     console.log('[screen2/resolve] resolved:', rows[0].id)
 
+    // Fetch complaint context then send email (fire-and-forget)
+    fetch(`${SUPA_URL}/rest/v1/complaints?id=eq.${complaint_id}&select=category,description,customers(name)`, {
+      headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then(async (data: { category: string; description: string; customers: { name: string } | null }[]) => {
+        const comp = data[0]
+        const { sendComplaintEmail } = await import('@/lib/complaint-email')
+        await sendComplaintEmail({
+          type:           'resolved',
+          resolvedBy:     userName,
+          resolutionNote: resolution_note.trim(),
+          complaint: {
+            id:          rows[0].id,
+            customer:    comp?.customers?.name ?? 'Unknown',
+            category:    (comp?.category ?? '').replace(/_/g, ' '),
+            description: comp?.description ?? '',
+            status:      'resolved',
+          },
+        })
+      })
+      .catch(e => console.error('[screen2/resolve] email error:', e))
+
     // Audit log (fire-and-forget)
     fetch(`${SUPA_URL}/rest/v1/audit_log`, {
       method:  'POST',
