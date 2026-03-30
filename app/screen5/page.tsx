@@ -471,7 +471,7 @@ function UsersSection() {
             <TableHeader cols={['Name', 'Role', 'Email', 'Last login', 'Created', 'Active', '']} />
             <tbody className="divide-y divide-gray-100">
               {users.length === 0 && (
-                <tr><td colSpan={6}><EmptyState message="No users yet" /></td></tr>
+                <tr><td colSpan={7}><EmptyState message="No users yet" /></td></tr>
               )}
               {users.map((u) => (
                 <UserRow key={u.id} u={u}
