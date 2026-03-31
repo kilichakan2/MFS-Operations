@@ -99,6 +99,15 @@ export async function PATCH(
         coords ? `geocoded (${coords.approximate ? 'approx' : 'exact'})` : 'geocoding failed'
       )
 
+      // Fire-and-forget road-time computation for this customer
+      if (coords && data?.id) {
+        fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/routes/compute-road-times`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-mfs-user-role': 'admin' },
+          body: JSON.stringify({ mode: 'customer', id: data.id }),
+        }).catch(e => console.warn('[admin/customers/:id] road-time trigger failed:', e))
+      }
+
       return NextResponse.json({
         ...data,
         _geocoded:    !!coords,

@@ -35,7 +35,8 @@ const ROUTES_FIELD_MASK  = 'routes.optimizedIntermediateWaypointIndex,routes.leg
 const SNIFFER_FIELD_MASK = 'routes.legs,routes.distanceMeters,routes.duration'
 
 // Hub coordinates — imported from shared constants (lib/hubs.ts)
-import { MFS_COORDS, OZMEN_COORDS } from '@/lib/hubs'
+import { MFS_COORDS, OZMEN_COORDS }                 from '@/lib/hubs'
+import { loadRoadTimes, MFS_HUB_ID, OZMEN_HUB_ID, type RoadTimeMatrix } from '@/lib/road-times'
 
 // Postcode strings for deep-link builder and log messages only
 const ORIGIN_PC = MFS_COORDS.postcode
@@ -105,28 +106,43 @@ function greedyNearest(
 // 11+ stops fall back to greedyNearest — same as the previous Pass 3c fallback.
 //
 function exactTSP(
-  stops:   { customer: { lat: number | null; lng: number | null } }[],
-  fromLat: number,
-  fromLng: number,
-  toLat:   number,
-  toLng:   number,
+  stops:      { customer: { lat: number | null; lng: number | null; id: string } }[],
+  fromLat:    number,
+  fromLng:    number,
+  toLat:      number,
+  toLng:      number,
+  fromId:     string,           // customer UUID or hub sentinel ID
+  toId:       string,           // customer UUID or hub sentinel ID
+  roadTimes?: RoadTimeMatrix,   // pre-loaded cache; undefined = haversine-only
 ): number[] {
   const n = stops.length
   if (n === 0) return []
   if (n === 1) return [0]
 
-  // Build NxN haversine matrix plus origin-row and dest-col
-  // dist[i][j] = haversine from stop i to stop j
-  const dist = Array.from({ length: n }, (_, i) =>
+  // Distance helper — road time (seconds) from cache, haversine (km) as fallback.
+  // Both are used as relative cost — units are consistent within each call.
+  function dist2(
+    aId: string, aLat: number, aLng: number,
+    bId: string, bLat: number, bLng: number,
+  ): number {
+    if (roadTimes) {
+      const rt = roadTimes.get(aId, bId)
+      if (rt !== null) return rt  // road seconds
+    }
+    return haversineKm(aLat, aLng, bLat, bLng) * 1000  // haversine→metres as proxy
+  }
+
+  // Build NxN cost matrix
+  const distMatrix = Array.from({ length: n }, (_, i) =>
     Array.from({ length: n }, (_, j) =>
-      haversineKm(
-        stops[i].customer.lat!, stops[i].customer.lng!,
-        stops[j].customer.lat!, stops[j].customer.lng!,
+      dist2(
+        stops[i].customer.id, stops[i].customer.lat!, stops[i].customer.lng!,
+        stops[j].customer.id, stops[j].customer.lat!, stops[j].customer.lng!,
       )
     )
   )
-  const fromDist = stops.map(s => haversineKm(fromLat, fromLng, s.customer.lat!, s.customer.lng!))
-  const toDist   = stops.map(s => haversineKm(s.customer.lat!, s.customer.lng!, toLat, toLng))
+  const fromDist = stops.map(s => dist2(fromId, fromLat, fromLng, s.customer.id, s.customer.lat!, s.customer.lng!))
+  const toDist   = stops.map(s => dist2(s.customer.id, s.customer.lat!, s.customer.lng!, toId, toLat, toLng))
 
   // Heap's algorithm — generates all n! permutations non-recursively
   const indices = Array.from({ length: n }, (_, i) => i)
@@ -137,7 +153,7 @@ function exactTSP(
 
   function scorePerm(perm: number[]): number {
     let cost = fromDist[perm[0]]
-    for (let i = 1; i < n; i++) cost += dist[perm[i - 1]][perm[i]]
+    for (let i = 1; i < n; i++) cost += distMatrix[perm[i - 1]][perm[i]]
     cost += toDist[perm[n - 1]]
     return cost
   }
@@ -524,15 +540,24 @@ export async function POST(req: NextRequest) {
 
       if (nonUrgentRaw.length <= 10) {
         // Exact TSP — guaranteed optimal for ≤10 stops
+        // Load road-time cache for all stop pairs + hub. Haversine fallback per pair if missing.
+        const hubId     = endPoint === 'ozmen_john_street' ? OZMEN_HUB_ID : MFS_HUB_ID
+        const stopIds   = nonUrgentRaw.map(s => s.customer.id)
+        const originId  = lastUrgent.customer.id   // last urgent stop — already a customer UUID
+        const roadTimes = await loadRoadTimes([...stopIds, originId], hubId)
+
         const bestOrder = exactTSP(
           nonUrgentRaw,
           lastUrgent.customer.lat!,
           lastUrgent.customer.lng!,
           destCoords.lat,
           destCoords.lng,
+          originId,
+          hubId,
+          roadTimes,
         )
         nonUrgentOrdered = bestOrder.map(i => nonUrgentRaw[i])
-        console.log('[optimise] Pass 3c — Exact TSP result:',
+        console.log('[optimise] Pass 3c — Exact TSP result (road-time):',
           nonUrgentOrdered.map(s => s.customer.name))
       } else {
         // Greedy fallback for 11+ stops

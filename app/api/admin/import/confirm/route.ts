@@ -168,6 +168,19 @@ export async function POST(req: NextRequest) {
           .filter((d: { id: string; postcode: string | null }) => d.postcode)
           .map((d: { id: string; postcode: string | null }) => ({ id: d.id, postcode: d.postcode! }))
         geocodeNewCustomers(toGeocode).catch(() => {/* swallow — already logged inside */})
+
+        // After geocoding completes (async), trigger road-time computation for all new customers.
+        // We use a delayed fire-and-forget — geocoding must finish first so lat/lng exist.
+        // Each new customer's pairs are computed individually via the compute-road-times route.
+        setTimeout(() => {
+          for (const d of data) {
+            fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/routes/compute-road-times`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-mfs-user-role': 'admin' },
+              body: JSON.stringify({ mode: 'customer', id: d.id }),
+            }).catch(e => console.warn('[import/confirm] road-time trigger failed:', e))
+          }
+        }, 5000)  // 5s delay — geocoding typically completes in 1-2s
       }
 
     } else {

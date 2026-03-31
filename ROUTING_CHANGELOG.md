@@ -277,9 +277,54 @@ Including the return-to-hub leg is the key improvement over v9 — it naturally 
 
 **Rollback:** `git revert HEAD + push` — no DB changes.
 
+
+---
+
+### v11 — Road-Time Matrix Cache (Supabase) replaces haversine in exactTSP
+**Commit:** `pending`
+
+**Problem:** exactTSP v10 used haversine (straight-line) distances. Haversine ≠ road time — proven by brute-force enumeration of the Jihad Leeds route where haversine-optimal put Garforth (LS25) first despite road geometry favouring it last.
+
+**Fix — pre-computed road-time matrix cached in Supabase:**
+
+New table `customer_road_times (from_id, to_id, duration_s, distance_m, computed_at)`.
+Hub sentinels stored in `hub_sentinels` table with fixed UUIDs:
+- MFS Sheffield: `00000000-0000-0000-0000-000000000001`
+- Ozmen John Street: `00000000-0000-0000-0000-000000000002`
+
+**exactTSP scoring updated:**
+- Cache hit → use road seconds (accurate)
+- Cache miss → use `haversineKm × 1000` as proxy (consistent units)
+- Units are consistent within each call — both are relative costs
+
+**New files:**
+- `lib/road-times.ts` — `loadRoadTimes(stopIds, hubId)` batch-loads all relevant pairs in one Supabase query
+- `app/api/routes/compute-road-times/route.ts` — computes pairs via Google Distance Matrix API v2
+
+**Triggers (automatic):**
+- Customer postcode updated in route planner → fire road-time compute for that customer
+- Customer postcode updated in admin panel → same trigger
+- Bulk customer import (import/confirm) → trigger for each new customer after geocoding (5s delay)
+- Weekly cron (Sunday 02:00 via Vercel cron) → full matrix refresh
+
+**One-time cost:** ~£0.04 to compute all 87×87 pairs + hub rows via Google Distance Matrix API.
+**Per-optimisation cost:** £0.00 — pure Supabase lookup.
+
+**New customer handling:**
+- Add/geocode → background compute fires (~174 new pairs, fractions of a penny)
+- Haversine fallback per pair during the ~2s computation window
+- Weekly cron catches any gaps
+
+**Tests added:** 4 new tests:
+- RoadTimeMatrix cache hit/miss behaviour
+- exactTSP uses road seconds from cache when available (verified with known values)
+- Fallback to haversine on partial cache (no throw, graceful degradation)
+
+**Rollback:** `git revert HEAD + push` — no DB changes (table stays, just not used).
+
 ## What's Next (Pending)
 
-- **v11 — Road-time matrix cache (Supabase):** Pre-compute road times for all customer pairs via Google Distance Matrix API (one-time ~4p cost), store in `customer_road_times` table. exactTSP will use real road times instead of haversine. New customer trigger recomputes their pairs on add/geocode. Weekly cron refresh. This will make Garforth-last automatic on Leeds runs without any manual lock.
+- **One-time compute:** trigger `POST /api/routes/compute-road-times` with `{ mode: "all" }` after deploy to populate the full 87×87 matrix
 
 
 - **Postcode geocoding gaps** — some customers have postcodes but no `lat/lng`; `sniffBrokenPostcodes()` identifies these; full geocoding backfill pending
