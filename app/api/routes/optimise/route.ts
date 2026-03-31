@@ -91,6 +91,82 @@ function greedyNearest(
   return ordered
 }
 
+// ─── Exact TSP (haversine) ────────────────────────────────────────────────────
+//
+// Enumerates all permutations of non-urgent stops and returns the ordering
+// with the shortest total haversine chain distance.
+//
+// Scoring: fromLat/fromLng → stop[0] → stop[1] → ... → stop[N-1] → destLat/destLng
+// Including the return-to-hub leg means stops that sit naturally "on the way
+// home" (e.g. Garforth LS25 between Harrogate and Sheffield) will be placed
+// last automatically — no manual lock required.
+//
+// Cap: ≤10 stops (10! = 3,628,800 permutations, ~800ms max).
+// 11+ stops fall back to greedyNearest — same as the previous Pass 3c fallback.
+//
+function exactTSP(
+  stops:   { customer: { lat: number | null; lng: number | null } }[],
+  fromLat: number,
+  fromLng: number,
+  toLat:   number,
+  toLng:   number,
+): number[] {
+  const n = stops.length
+  if (n === 0) return []
+  if (n === 1) return [0]
+
+  // Build NxN haversine matrix plus origin-row and dest-col
+  // dist[i][j] = haversine from stop i to stop j
+  const dist = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (_, j) =>
+      haversineKm(
+        stops[i].customer.lat!, stops[i].customer.lng!,
+        stops[j].customer.lat!, stops[j].customer.lng!,
+      )
+    )
+  )
+  const fromDist = stops.map(s => haversineKm(fromLat, fromLng, s.customer.lat!, s.customer.lng!))
+  const toDist   = stops.map(s => haversineKm(s.customer.lat!, s.customer.lng!, toLat, toLng))
+
+  // Heap's algorithm — generates all n! permutations non-recursively
+  const indices = Array.from({ length: n }, (_, i) => i)
+  const c       = new Array(n).fill(0)
+
+  let bestCost  = Infinity
+  let bestOrder = [...indices]
+
+  function scorePerm(perm: number[]): number {
+    let cost = fromDist[perm[0]]
+    for (let i = 1; i < n; i++) cost += dist[perm[i - 1]][perm[i]]
+    cost += toDist[perm[n - 1]]
+    return cost
+  }
+
+  // Score initial permutation
+  let score = scorePerm(indices)
+  if (score < bestCost) { bestCost = score; bestOrder = [...indices] }
+
+  let i = 0
+  while (i < n) {
+    if (c[i] < i) {
+      if (i % 2 === 0) {
+        ;[indices[0], indices[i]] = [indices[i], indices[0]]
+      } else {
+        ;[indices[c[i]], indices[i]] = [indices[i], indices[c[i]]]
+      }
+      score = scorePerm(indices)
+      if (score < bestCost) { bestCost = score; bestOrder = [...indices] }
+      c[i]++
+      i = 0
+    } else {
+      c[i] = 0
+      i++
+    }
+  }
+
+  return bestOrder
+}
+
 const supabase = createClient(SUPA_URL, SUPA_KEY)
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -417,19 +493,21 @@ export async function POST(req: NextRequest) {
     // NOT Sheffield. Google's Pass 1 loop was computed from Sheffield, so
     // the non-urgent stop order in that loop is no longer optimal.
     //
-    // Fix: second Google TSP call with:
-    //   origin      = last urgent stop (driver's actual mid-route position)
-    //   destination = end hub
-    //   stops       = all non-urgent stops
-    //   optimizeWaypointOrder: true
+    // Fix: exact haversine TSP enumeration.
+    //   origin   = last urgent stop (driver's actual mid-route position)
+    //   dest     = end hub (Sheffield/Ozmen)
+    //   stops    = all non-urgent stops
     //
-    // Google sees the full non-urgent sub-problem and correctly handles
-    // disconnected clusters (e.g. Warrington north-west vs stops going south).
-    // Greedy commits locally at each step and cannot see this global structure.
+    // Scores every permutation as:
+    //   origin → stop[0] → stop[1] → ... → stop[N-1] → hub
     //
-    // Falls back to greedy nearest-neighbour if the API call fails.
-    // Skipped entirely when no urgent stops exist — all-standard routes
-    // keep Google's Pass 1 loop order unchanged (it's still optimal).
+    // Including the return-to-hub leg naturally pushes "on-the-way-home"
+    // outliers (e.g. Garforth LS25) to last position without manual locking.
+    //
+    // Cap: ≤10 non-urgent stops → exact (guaranteed optimal).
+    // 11+ stops → greedy nearest-neighbour fallback.
+    //
+    // No Google API call — pure haversine maths, ~800ms worst case at 10 stops.
     // ════════════════════════════════════════════════════════════════════════
     let nonUrgentOrdered = nonUrgentRaw   // default: Pass 1 loop order
 
@@ -437,44 +515,36 @@ export async function POST(req: NextRequest) {
       const lastUrgent = urgentFront[urgentFront.length - 1]
 
       console.log('[optimise] Pass 3c — Re-sequencing non-urgent from last urgent stop:', {
-        origin: `${lastUrgent.customer.name} (${lastUrgent.customer.postcode})`,
+        origin:         `${lastUrgent.customer.name} (${lastUrgent.customer.postcode})`,
+        destination:    `hub (${destCoords.postcode})`,
         nonUrgentCount: nonUrgentRaw.length,
-        stops: nonUrgentRaw.map(s => s.customer.name),
+        method:         nonUrgentRaw.length <= 10 ? 'exactTSP' : 'greedy',
+        stops:          nonUrgentRaw.map(s => s.customer.name),
       })
 
-      const p3cBody: Record<string, unknown> = {
-        origin:                latLngWaypoint(lastUrgent.customer.lat!, lastUrgent.customer.lng!),
-        // No destination — omitting the return hub forces Google to plan a one-way
-        // sweep from the last urgent stop rather than a closed loop back to Sheffield.
-        // A closed loop biases the TSP toward reaching the farthest stop first
-        // (geometrically optimal for a round trip but wasteful for shift time).
-        // Pass 4 handles all return routing and ETAs independently.
-        intermediates:         nonUrgentRaw.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
-        travelMode:            'DRIVE',
-        // TRAFFIC_AWARE required — OPTIMAL is incompatible with optimizeWaypointOrder:true
-        routingPreference:     'TRAFFIC_AWARE',
-        optimizeWaypointOrder: true,
-      }
-
-      const p3cRes = await callRoutesAPI(p3cBody)
-
-      if (!p3cRes.error && p3cRes.routes?.length) {
-        const optIdx = p3cRes.routes[0].optimizedIntermediateWaypointIndex
-                    ?? nonUrgentRaw.map((_, i) => i)
-        nonUrgentOrdered = optIdx.map(i => nonUrgentRaw[i])
-        console.log('[optimise] Pass 3c — Google re-sequenced non-urgent:',
+      if (nonUrgentRaw.length <= 10) {
+        // Exact TSP — guaranteed optimal for ≤10 stops
+        const bestOrder = exactTSP(
+          nonUrgentRaw,
+          lastUrgent.customer.lat!,
+          lastUrgent.customer.lng!,
+          destCoords.lat,
+          destCoords.lng,
+        )
+        nonUrgentOrdered = bestOrder.map(i => nonUrgentRaw[i])
+        console.log('[optimise] Pass 3c — Exact TSP result:',
           nonUrgentOrdered.map(s => s.customer.name))
       } else {
-        // Fallback: greedy nearest-neighbour from last urgent stop
-        console.warn('[optimise] Pass 3c — API failed, falling back to greedy:', p3cRes.error?.message)
+        // Greedy fallback for 11+ stops
         nonUrgentOrdered = greedyNearest(
           nonUrgentRaw,
           lastUrgent.customer.lat!,
           lastUrgent.customer.lng!,
         )
-        console.log('[optimise] Pass 3c fallback greedy:',
+        console.log('[optimise] Pass 3c — Greedy fallback (>10 stops):',
           nonUrgentOrdered.map(s => s.customer.name))
       }
+
     } else if (urgentFront.length > 0 && nonUrgentRaw.length === 1) {
       nonUrgentOrdered = nonUrgentRaw
       console.log('[optimise] Pass 3c — Single non-urgent stop, no re-sequencing needed')

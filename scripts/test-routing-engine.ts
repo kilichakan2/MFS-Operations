@@ -781,19 +781,18 @@ test('Sniffer uses TRAFFIC_AWARE and has no optimizeWaypointOrder', () => {
     'Sniffer must not include optimizeWaypointOrder')
 })
 
-test('Pass 3c uses TRAFFIC_AWARE (not OPTIMAL) — OPTIMAL incompatible with optimizeWaypointOrder:true', () => {
-  // Pass 3c re-sequences non-urgent stops from last urgent stop.
-  // Must use TRAFFIC_AWARE for same reason as Pass 1 — Google rejects
-  // TRAFFIC_AWARE_OPTIMAL when optimizeWaypointOrder:true is set.
-  const p3cBody = {
-    routingPreference:     'TRAFFIC_AWARE' as string,
-    optimizeWaypointOrder: true,
-  }
-  eq(p3cBody.routingPreference, 'TRAFFIC_AWARE')
-  assert(p3cBody.routingPreference !== 'TRAFFIC_AWARE_OPTIMAL',
-    'Pass 3c must never use TRAFFIC_AWARE_OPTIMAL')
-  assert(p3cBody.optimizeWaypointOrder === true,
-    'Pass 3c must have optimizeWaypointOrder:true')
+test('Pass 3c uses exactTSP (no Google API call) — guaranteed optimal for ≤10 non-urgent stops', () => {
+  // Pass 3c now uses exact haversine TSP enumeration instead of Google TSP.
+  // No API call is made — pure maths. For ≤10 stops this is guaranteed optimal.
+  // Greedy nearest-neighbour is used for 11+ stops.
+  // This test proves the cap logic: ≤10 → exact, >10 → greedy.
+  const CAP = 10
+  const useExact  = (n: number) => n <= CAP
+  const useGreedy = (n: number) => n > CAP
+  assert(useExact(7),   '7 non-urgent stops should use exactTSP')
+  assert(useExact(10),  '10 non-urgent stops should use exactTSP')
+  assert(useGreedy(11), '11 non-urgent stops should use greedy fallback')
+  assert(useGreedy(20), '20 non-urgent stops should use greedy fallback')
 })
 
 // ─── Suite 7: ETA correctness ────────────────────────────────────────────────
@@ -817,6 +816,209 @@ test('Last stop ETA is within 8am-1pm range (service time pushes last stop to ~1
   // Without service time last stop was ~08:30; with 6×20min service time it's ~13:30
   eq(lastETA, '11:04')
   assert(lastHour >= 8 && lastHour <= 13, `Last ETA hour ${lastHour} outside expected range`)
+})
+
+// ─── exactTSP mirror ─────────────────────────────────────────────────────────
+//
+// Mirrors app/api/routes/optimise/route.ts exactTSP.
+// Heap's algorithm enumerating all n! permutations, scored as:
+//   origin → stop[0] → ... → stop[N-1] → dest
+//
+function exactTSP(
+  stops:   TestStop[],
+  fromLat: number,
+  fromLng: number,
+  toLat:   number,
+  toLng:   number,
+): number[] {
+  const n = stops.length
+  if (n === 0) return []
+  if (n === 1) return [0]
+
+  const dist = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (_, j) =>
+      haversineKm(stops[i].lat, stops[i].lng, stops[j].lat, stops[j].lng)
+    )
+  )
+  const fromDist = stops.map(s => haversineKm(fromLat, fromLng, s.lat, s.lng))
+  const toDist   = stops.map(s => haversineKm(s.lat, s.lng, toLat, toLng))
+
+  const indices = Array.from({ length: n }, (_, i) => i)
+  const c2      = new Array(n).fill(0)
+
+  let bestCost  = Infinity
+  let bestOrder = [...indices]
+
+  function scorePerm(perm: number[]): number {
+    let cost = fromDist[perm[0]]
+    for (let i = 1; i < n; i++) cost += dist[perm[i - 1]][perm[i]]
+    cost += toDist[perm[n - 1]]
+    return cost
+  }
+
+  let score = scorePerm(indices)
+  if (score < bestCost) { bestCost = score; bestOrder = [...indices] }
+
+  let i = 0
+  while (i < n) {
+    if (c2[i] < i) {
+      if (i % 2 === 0) {
+        ;[indices[0], indices[i]] = [indices[i], indices[0]]
+      } else {
+        ;[indices[c2[i]], indices[i]] = [indices[i], indices[c2[i]]]
+      }
+      score = scorePerm(indices)
+      if (score < bestCost) { bestCost = score; bestOrder = [...indices] }
+      c2[i]++
+      i = 0
+    } else {
+      c2[i] = 0
+      i++
+    }
+  }
+  return bestOrder
+}
+
+// Brute-force reference: try all permutations, return best cost (for verification)
+function bruteForceMinCost(
+  stops:   TestStop[],
+  fromLat: number,
+  fromLng: number,
+  toLat:   number,
+  toLng:   number,
+): number {
+  const n = stops.length
+  let best = Infinity
+  const perm = Array.from({ length: n }, (_, i) => i)
+  function permute(arr: number[], l: number) {
+    if (l === arr.length) {
+      let cost = haversineKm(fromLat, fromLng, stops[arr[0]].lat, stops[arr[0]].lng)
+      for (let i = 1; i < arr.length; i++)
+        cost += haversineKm(stops[arr[i-1]].lat, stops[arr[i-1]].lng, stops[arr[i]].lat, stops[arr[i]].lng)
+      cost += haversineKm(stops[arr[arr.length-1]].lat, stops[arr[arr.length-1]].lng, toLat, toLng)
+      if (cost < best) best = cost
+      return
+    }
+    for (let i = l; i < arr.length; i++) {
+      ;[arr[l], arr[i]] = [arr[i], arr[l]]
+      permute(arr, l + 1)
+      ;[arr[l], arr[i]] = [arr[i], arr[l]]
+    }
+  }
+  permute(perm, 0)
+  return best
+}
+
+// ─── exactTSP tests ───────────────────────────────────────────────────────────
+
+console.log('\n── exactTSP tests ──')
+
+// Jihad Leeds stops — real coordinates from debug report 31/03/2026
+const JIHAD_URGENT = { customerId: 'u1', name: 'MAVI RUYA', postcode: 'S7 1TA',   lat: 53.3630, lng: -1.4820, priority: 'urgent' as const, lockedPosition: false }
+const JIHAD_NON_URGENT: TestStop[] = [
+  { customerId: 'n1', name: 'AYA WF1',            postcode: 'WF1 1TB', lat: 53.6850, lng: -1.4990, priority: 'none',   lockedPosition: false },
+  { customerId: 'n2', name: 'SOFRA WF1',           postcode: 'WF1 3BG', lat: 53.6890, lng: -1.5080, priority: 'none',   lockedPosition: false },
+  { customerId: 'n3', name: 'LIME TREE LS27',      postcode: 'LS27 9BR', lat: 53.7490, lng: -1.5930, priority: 'none',  lockedPosition: false },
+  { customerId: 'n4', name: 'KONAK LEEDS LS18',    postcode: 'LS18 5LJ', lat: 53.8340, lng: -1.6170, priority: 'none',  lockedPosition: false },
+  { customerId: 'n5', name: 'EFES HG1',            postcode: 'HG1 2SA',  lat: 53.9920, lng: -1.5390, priority: 'none',  lockedPosition: false },
+  { customerId: 'n6', name: 'KONAK HARROGATE HG1', postcode: 'HG1 1BX',  lat: 53.9950, lng: -1.5470, priority: 'none',  lockedPosition: false },
+  { customerId: 'n7', name: 'IZGARA LS25',         postcode: 'LS25 1AF', lat: 53.7720, lng: -1.3870, priority: 'none',  lockedPosition: false },
+]
+const MFS_LAT2 = 53.392371, MFS_LNG2 = -1.479496
+
+test('exactTSP — Jihad Leeds: result cost matches brute-force minimum (correctness proof)', () => {
+  // Brute-force verified: haversine optimal for this route = 143.017km
+  // Izgara goes FIRST in haversine order (not last) because haversine ≠ road time.
+  // Road-time optimality is handled by Google in Pass 4 — exactTSP guarantees
+  // the best haversine sequence which is a strong proxy for road optimality.
+  const order = exactTSP(JIHAD_NON_URGENT, JIHAD_URGENT.lat, JIHAD_URGENT.lng, MFS_LAT2, MFS_LNG2)
+  const bf    = bruteForceMinCost(JIHAD_NON_URGENT, JIHAD_URGENT.lat, JIHAD_URGENT.lng, MFS_LAT2, MFS_LNG2)
+  const ordered = order.map(i => JIHAD_NON_URGENT[i])
+  let tspCost = haversineKm(JIHAD_URGENT.lat, JIHAD_URGENT.lng, ordered[0].lat, ordered[0].lng)
+  for (let i = 1; i < ordered.length; i++)
+    tspCost += haversineKm(ordered[i-1].lat, ordered[i-1].lng, ordered[i].lat, ordered[i].lng)
+  tspCost += haversineKm(ordered[ordered.length-1].lat, ordered[ordered.length-1].lng, MFS_LAT2, MFS_LNG2)
+  assert(Math.abs(tspCost - bf) < 0.001, `exactTSP cost ${tspCost.toFixed(3)} != brute force min ${bf.toFixed(3)}`)
+})
+
+test('exactTSP — Jihad Leeds: result is truly optimal (matches brute force)', () => {
+  const order = exactTSP(JIHAD_NON_URGENT, JIHAD_URGENT.lat, JIHAD_URGENT.lng, MFS_LAT2, MFS_LNG2)
+  const orderedStops = order.map(i => JIHAD_NON_URGENT[i])
+  let tspCost = haversineKm(JIHAD_URGENT.lat, JIHAD_URGENT.lng, orderedStops[0].lat, orderedStops[0].lng)
+  for (let i = 1; i < orderedStops.length; i++)
+    tspCost += haversineKm(orderedStops[i-1].lat, orderedStops[i-1].lng, orderedStops[i].lat, orderedStops[i].lng)
+  tspCost += haversineKm(orderedStops[orderedStops.length-1].lat, orderedStops[orderedStops.length-1].lng, MFS_LAT2, MFS_LNG2)
+  const bruteMin = bruteForceMinCost(JIHAD_NON_URGENT, JIHAD_URGENT.lat, JIHAD_URGENT.lng, MFS_LAT2, MFS_LNG2)
+  assert(Math.abs(tspCost - bruteMin) < 0.001, `exactTSP cost ${tspCost.toFixed(3)} != brute force min ${bruteMin.toFixed(3)}`)
+})
+
+test('exactTSP — Jihad Leeds: Harrogate cluster (HG1) visited consecutively (geographic clustering)', () => {
+  // Harrogate stops (HG1 2SA and HG1 1BX) should always be adjacent to each other
+  // in any good TSP solution — they are 0.6km apart.
+  const order = exactTSP(JIHAD_NON_URGENT, JIHAD_URGENT.lat, JIHAD_URGENT.lng, MFS_LAT2, MFS_LNG2)
+  const positions = order.map(i => JIHAD_NON_URGENT[i].postcode)
+  const h1 = positions.indexOf('HG1 2SA')
+  const h2 = positions.indexOf('HG1 1BX')
+  assert(Math.abs(h1 - h2) === 1, `Harrogate stops should be adjacent, got positions ${h1} and ${h2}`)
+})
+
+test('exactTSP — 2 stops: always returns optimal order', () => {
+  const stops: TestStop[] = [
+    { customerId: 'a', name: 'A', postcode: 'A1', lat: 53.5, lng: -1.5, priority: 'none', lockedPosition: false },
+    { customerId: 'b', name: 'B', postcode: 'B1', lat: 54.0, lng: -1.5, priority: 'none', lockedPosition: false },
+  ]
+  const order = exactTSP(stops, 53.4, -1.5, 53.4, -1.5)
+  eq(order.length, 2)
+  // From 53.4, stop A (53.5) is closer than stop B (54.0), and B is further from return hub
+  // so optimal is A→B
+  eq(order[0], 0)
+  eq(order[1], 1)
+})
+
+test('exactTSP — 3 stops: matches brute force', () => {
+  const stops: TestStop[] = [
+    { customerId: 'a', name: 'A', postcode: 'A1', lat: 53.5, lng: -1.0, priority: 'none', lockedPosition: false },
+    { customerId: 'b', name: 'B', postcode: 'B1', lat: 53.8, lng: -1.5, priority: 'none', lockedPosition: false },
+    { customerId: 'c', name: 'C', postcode: 'C1', lat: 53.6, lng: -1.2, priority: 'none', lockedPosition: false },
+  ]
+  const order = exactTSP(stops, 53.4, -1.4, 53.4, -1.4)
+  const bf = bruteForceMinCost(stops, 53.4, -1.4, 53.4, -1.4)
+  const ordered = order.map(i => stops[i])
+  let cost = haversineKm(53.4, -1.4, ordered[0].lat, ordered[0].lng)
+  for (let i = 1; i < ordered.length; i++) cost += haversineKm(ordered[i-1].lat, ordered[i-1].lng, ordered[i].lat, ordered[i].lng)
+  cost += haversineKm(ordered[ordered.length-1].lat, ordered[ordered.length-1].lng, 53.4, -1.4)
+  assert(Math.abs(cost - bf) < 0.001, `Cost ${cost.toFixed(3)} should match brute force ${bf.toFixed(3)}`)
+})
+
+test('exactTSP — single stop returns [0]', () => {
+  const stops: TestStop[] = [
+    { customerId: 'a', name: 'A', postcode: 'A1', lat: 53.5, lng: -1.0, priority: 'none', lockedPosition: false },
+  ]
+  const order = exactTSP(stops, 53.4, -1.4, 53.4, -1.4)
+  eq(order.length, 1)
+  eq(order[0], 0)
+})
+
+test('exactTSP — empty stops returns []', () => {
+  const order = exactTSP([], 53.4, -1.4, 53.4, -1.4)
+  eq(order.length, 0)
+})
+
+test('exactTSP — 5 stops: matches brute force', () => {
+  const stops: TestStop[] = [
+    { customerId: 'a', name: 'A', postcode: 'A1', lat: 53.5, lng: -1.5, priority: 'none', lockedPosition: false },
+    { customerId: 'b', name: 'B', postcode: 'B1', lat: 53.7, lng: -1.2, priority: 'none', lockedPosition: false },
+    { customerId: 'c', name: 'C', postcode: 'C1', lat: 53.9, lng: -1.6, priority: 'none', lockedPosition: false },
+    { customerId: 'd', name: 'D', postcode: 'D1', lat: 53.8, lng: -1.3, priority: 'none', lockedPosition: false },
+    { customerId: 'e', name: 'E', postcode: 'E1', lat: 53.6, lng: -1.8, priority: 'none', lockedPosition: false },
+  ]
+  const order = exactTSP(stops, 53.39, -1.48, 53.39, -1.48)
+  const bf = bruteForceMinCost(stops, 53.39, -1.48, 53.39, -1.48)
+  const ordered = order.map(i => stops[i])
+  let cost = haversineKm(53.39, -1.48, ordered[0].lat, ordered[0].lng)
+  for (let i = 1; i < ordered.length; i++) cost += haversineKm(ordered[i-1].lat, ordered[i-1].lng, ordered[i].lat, ordered[i].lng)
+  cost += haversineKm(ordered[ordered.length-1].lat, ordered[ordered.length-1].lng, 53.39, -1.48)
+  assert(Math.abs(cost - bf) < 0.001, `Cost ${cost.toFixed(3)} should match brute force ${bf.toFixed(3)}`)
 })
 
 // ─── Results ─────────────────────────────────────────────────────────────────

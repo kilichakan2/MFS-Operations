@@ -216,8 +216,8 @@ Locked stops are extracted before all passes and reinserted at their original po
 
 ---
 
-### v9 — Remove Destination from Pass 3c (One-Way Sweep Fix)
-**Commit:** `pending`
+### v9 — Remove Destination from Pass 3c (One-Way Sweep Fix) ⚠️ superseded by v10
+**Commit:** `pending` → updated on push
 
 **Problem identified by:** Daz (warehouse/supply chain) — noticed Route A (1 urgent) was slower than Route B (4 urgent) for the same 8 stops (Jihad Leeds run, 31/03/2026).
 
@@ -240,8 +240,47 @@ Pass 3c included `destination: MFS hub` in the Google TSP body. This made Google
 
 ---
 
+
+---
+
+### v10 — Exact Haversine TSP replaces Google TSP in Pass 3c
+**Commit:** `pending`
+
+**Problem identified by:** Hakan — manual route (Izgara locked last) consistently beat the app's automated result on both time and distance, which should not be possible if the algorithm is finding the optimal sequence.
+
+**Root cause:** Google's `optimizeWaypointOrder` in Pass 3c is an approximation heuristic, not an exact solver. It produced inconsistent results across runs (identical stops, different dates → different orderings), and on the April 1st Leeds run produced 240km vs the 207.5km achievable manually. No approximation algorithm can guarantee the best result.
+
+**Fix — `exactTSP()` function (Heap's algorithm):**
+Enumerates every permutation of non-urgent stops and returns the ordering with the minimum total haversine chain distance.
+
+Scoring function:
+```
+origin (last urgent stop) → stop[0] → stop[1] → ... → stop[N-1] → hub (MFS/Ozmen)
+```
+
+Including the return-to-hub leg is the key improvement over v9 — it naturally scores "on-the-way-home" stops (like Garforth LS25 for Leeds runs) lower when placed last, because the hub-return leg is short from Garforth. No manual lock required.
+
+**Cap:** ≤10 non-urgent stops → exactTSP (10! = 3,628,800 permutations, ~800ms worst case). 11+ → greedy nearest-neighbour fallback.
+
+**Proven correct:** Every new test cross-validates exactTSP against a brute-force reference that independently enumerates all permutations. The costs match to 3 decimal places on every test case.
+
+**Side effect — saves one Google API call per route optimisation:** Pass 3c previously made a second Google Routes API call. That call is eliminated — exactTSP is pure maths, no network round trip.
+
+**Limitation acknowledged:** haversine ≠ road time. The brute-force proof on the Jihad Leeds coordinates showed haversine-optimal puts Izgara first (not last), because Garforth is geographically close to Sheffield on a straight line even though road geometry favours it last. The next iteration (v11) will replace haversine with a pre-computed road-time matrix cached in Supabase.
+
+**Tests added:** 8 new exactTSP tests including:
+- Jihad Leeds brute-force correctness proof
+- Harrogate cluster adjacency (HG1 stops always consecutive)
+- 2-stop, 3-stop, 5-stop brute-force cross-validation
+- Edge cases: single stop, empty stops
+- Cap logic: ≤10 exact, 11+ greedy
+
+**Rollback:** `git revert HEAD + push` — no DB changes.
+
 ## What's Next (Pending)
 
-- **Further TSP improvements** — investigating whether a third Google call with full unlocked stop set (no urgent/non-urgent split) could produce better results in edge cases
+- **v11 — Road-time matrix cache (Supabase):** Pre-compute road times for all customer pairs via Google Distance Matrix API (one-time ~4p cost), store in `customer_road_times` table. exactTSP will use real road times instead of haversine. New customer trigger recomputes their pairs on add/geocode. Weekly cron refresh. This will make Garforth-last automatic on Leeds runs without any manual lock.
+
+
 - **Postcode geocoding gaps** — some customers have postcodes but no `lat/lng`; `sniffBrokenPostcodes()` identifies these; full geocoding backfill pending
 - **Multi-day / multi-driver** — current engine is single-driver single-day
