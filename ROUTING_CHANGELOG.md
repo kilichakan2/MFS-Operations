@@ -214,6 +214,32 @@ Locked stops are extracted before all passes and reinserted at their original po
 
 ---
 
+---
+
+### v9 — Remove Destination from Pass 3c (One-Way Sweep Fix)
+**Commit:** `pending`
+
+**Problem identified by:** Daz (warehouse/supply chain) — noticed Route A (1 urgent) was slower than Route B (4 urgent) for the same 8 stops (Jihad Leeds run, 31/03/2026).
+
+**Root cause:**
+Pass 3c included `destination: MFS hub` in the Google TSP body. This made Google plan a **closed loop**: last urgent stop → non-urgent stops → return to Sheffield. Closed-loop TSP is geometrically correct for minimising total distance on a round trip, but it biases the algorithm toward reaching the farthest stop first — which is wasteful for shift time when the driver is already near the hub.
+
+**Concrete example:**
+- Only urgent stop: MAVI RUYA (S7 Sheffield) — very close to hub
+- Pass 3c origin: S7, destination: S3 Sheffield
+- Google's closed-loop response: go to IZGARA Garforth (LS25, 65 min away) first, then sweep back through Harrogate/Leeds/Wakefield
+- Result: 65-minute dead leg at stop 2, total 4h 37m driving
+
+**Daz's workaround:** Marking WF1/LS27 stops as urgent shifted Pass 3c origin to south Leeds (LS27). From there, Google's loop TSP happened to produce the right sweep anyway. Saved 26 minutes (4h 37m → 4h 11m) despite 12.5 km more distance.
+
+**Fix:** Remove `destination` from Pass 3c body entirely. Google now plans `origin=last urgent → non-urgent stops` as a one-way sweep. Pass 4 handles all return routing and ETAs independently — it was always doing this anyway.
+
+**Change:** 1 line removed from `p3cBody` in `app/api/routes/optimise/route.ts`. All other passes untouched.
+
+**Rollback:** `git revert HEAD && git push` — instant, no DB changes.
+
+---
+
 ## What's Next (Pending)
 
 - **Further TSP improvements** — investigating whether a third Google call with full unlocked stop set (no urgent/non-urgent split) could produce better results in edge cases

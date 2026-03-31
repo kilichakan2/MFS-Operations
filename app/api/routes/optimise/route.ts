@@ -444,7 +444,11 @@ export async function POST(req: NextRequest) {
 
       const p3cBody: Record<string, unknown> = {
         origin:                latLngWaypoint(lastUrgent.customer.lat!, lastUrgent.customer.lng!),
-        destination:           latLngWaypoint(destCoords.lat, destCoords.lng),
+        // No destination — omitting the return hub forces Google to plan a one-way
+        // sweep from the last urgent stop rather than a closed loop back to Sheffield.
+        // A closed loop biases the TSP toward reaching the farthest stop first
+        // (geometrically optimal for a round trip but wasteful for shift time).
+        // Pass 4 handles all return routing and ETAs independently.
         intermediates:         nonUrgentRaw.map(s => latLngWaypoint(s.customer.lat!, s.customer.lng!)),
         travelMode:            'DRIVE',
         // TRAFFIC_AWARE required — OPTIMAL is incompatible with optimizeWaypointOrder:true
