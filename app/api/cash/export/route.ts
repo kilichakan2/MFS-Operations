@@ -102,11 +102,11 @@ export async function GET(req: NextRequest) {
       let q = supabase
         .from('cheque_records')
         .select(`
-          date, amount, cheque_number, notes, created_at, confirmed_at,
+          date, amount, cheque_number, notes, created_at, banked, banked_at,
           customer:customers(name),
           driver:users!cheque_records_driver_id_fkey(name),
           logged_by_user:users!cheque_records_logged_by_fkey(name),
-          confirmed_by_user:users!cheque_records_confirmed_by_fkey(name)
+          banked_by_user:users!cheque_records_banked_by_fkey(name)
         `)
         .gte('date', from).lte('date', to)
         .order('date').order('created_at')
@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
         '',
         csvRow(['Total Cheques', rows.length, 'Total Value', fmt(total)]),
         '',
-        csvRow(['Date', 'Customer', 'Amount', 'Cheque No.', 'Driver', 'Notes', 'Logged By', 'Status', 'Confirmed By', 'Confirmed At']),
+        csvRow(['Date', 'Customer', 'Amount', 'Cheque No.', 'Driver', 'Notes', 'Logged By', 'Status', 'Banked By', 'Banked At']),
         ...rows.map(r => csvRow([
           String(r.date),
           (r.customer as { name: string } | null)?.name ?? '',
@@ -130,9 +130,9 @@ export async function GET(req: NextRequest) {
           (r.driver as { name: string } | null)?.name ?? '',
           r.notes ? String(r.notes) : '',
           (r.logged_by_user    as { name: string } | null)?.name ?? '',
-          r.confirmed_at ? 'Confirmed' : 'Unconfirmed',
-          (r.confirmed_by_user as { name: string } | null)?.name ?? '',
-          r.confirmed_at ? String(r.confirmed_at).slice(0, 16).replace('T', ' ') : '',
+          r.banked ? 'Banked' : 'Not banked',
+          (r.banked_by_user as { name: string } | null)?.name ?? '',
+          r.banked_at ? String(r.banked_at).slice(0, 16).replace('T', ' ') : '',
         ])),
       ]
 

@@ -2,10 +2,10 @@ export const dynamic = 'force-dynamic'
 
 /**
  * PATCH /api/cash/cheques/[id]
- *   { action: 'confirm' }                     → office + admin, confirms receipt
- *   { action: 'edit', ...fields }              → admin only, edits fields
+ *   { action: 'bank' }          → office + admin, marks cheque as banked
+ *   { action: 'edit', ...fields } → admin only
  *
- * DELETE /api/cash/cheques/[id]               → admin only
+ * DELETE /api/cash/cheques/[id] → admin only
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -29,25 +29,24 @@ export async function PATCH(
     const body   = await req.json().catch(() => null)
     if (!body)   return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-    if (body.action === 'confirm') {
-      // Office + admin can confirm
+    if (body.action === 'bank') {
       if (!['office', 'admin'].includes(role ?? '')) {
         return NextResponse.json({ error: 'Office or admin only' }, { status: 403 })
       }
       const { data, error } = await supabase
         .from('cheque_records')
-        .update({ confirmed_by: userId, confirmed_at: new Date().toISOString() })
+        .update({ banked: true, banked_by: userId, banked_at: new Date().toISOString() })
         .eq('id', id)
-        .is('confirmed_by', null) // idempotency — only confirm once
+        .eq('banked', false) // idempotency — only bank once
         .select()
         .single()
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-      if (!data)  return NextResponse.json({ error: 'Already confirmed or not found' }, { status: 404 })
-      return NextResponse.json({ ok: true, confirmed_at: (data as Record<string,unknown>).confirmed_at })
+      if (!data)  return NextResponse.json({ error: 'Already banked or not found' }, { status: 404 })
+      const d = data as Record<string, unknown>
+      return NextResponse.json({ ok: true, banked_at: d.banked_at })
 
     } else if (body.action === 'edit') {
-      // Admin only
       if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
       const updates: Record<string, unknown> = {}
@@ -69,7 +68,7 @@ export async function PATCH(
       return NextResponse.json({ ok: true, record: data })
 
     } else {
-      return NextResponse.json({ error: 'action must be confirm or edit' }, { status: 400 })
+      return NextResponse.json({ error: 'action must be bank or edit' }, { status: 400 })
     }
   } catch (err) {
     console.error('[cash/cheques/[id] PATCH] error:', err)

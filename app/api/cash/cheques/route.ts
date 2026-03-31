@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 /**
- * GET  /api/cash/cheques?status=all|unconfirmed|confirmed&from=YYYY-MM-DD&to=YYYY-MM-DD
- *   Returns cheque records with customer, driver, logged_by, confirmed_by names.
+ * GET  /api/cash/cheques?status=all|not_banked|banked&from=YYYY-MM-DD&to=YYYY-MM-DD
+ *   Returns cheque records. Logging a cheque IS receiving it — no confirm step.
+ *   The only meaningful second state is whether the cheque has been banked.
  *
  * POST /api/cash/cheques
  *   Logs a new cheque. Office + admin only.
@@ -23,46 +24,47 @@ export async function GET(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
     const sp     = req.nextUrl.searchParams
-    const status = sp.get('status') ?? 'all'   // all | unconfirmed | confirmed
+    const status = sp.get('status') ?? 'all'   // all | not_banked | banked
     const from   = sp.get('from')
     const to     = sp.get('to')
 
     let query = supabase
       .from('cheque_records')
       .select(`
-        id, date, amount, cheque_number, notes, created_at, confirmed_at,
+        id, date, amount, cheque_number, notes, created_at,
+        banked, banked_at,
         customer:customers(id, name),
         driver:users!cheque_records_driver_id_fkey(id, name),
         logged_by_user:users!cheque_records_logged_by_fkey(name),
-        confirmed_by_user:users!cheque_records_confirmed_by_fkey(name)
+        banked_by_user:users!cheque_records_banked_by_fkey(name)
       `)
-      .order('date', { ascending: false })
+      .order('date',       { ascending: false })
       .order('created_at', { ascending: false })
 
-    if (status === 'unconfirmed') query = query.is('confirmed_by', null)
-    if (status === 'confirmed')   query = query.not('confirmed_by', 'is', null)
+    if (status === 'not_banked') query = query.eq('banked', false)
+    if (status === 'banked')     query = query.eq('banked', true)
     if (from) query = query.gte('date', from)
     if (to)   query = query.lte('date', to)
 
     const { data, error } = await query
-
     if (error) {
       console.error('[cash/cheques GET] error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     const shaped = (data ?? []).map((r: Record<string, unknown>) => ({
-      id:            r.id,
-      date:          r.date,
-      amount:        Number(r.amount),
-      cheque_number: r.cheque_number,
-      notes:         r.notes,
-      created_at:    r.created_at,
-      confirmed_at:  r.confirmed_at,
-      customer:      r.customer as { id: string; name: string } | null,
-      driver:        r.driver   as { id: string; name: string } | null,
-      logged_by_name:    (r.logged_by_user    as { name: string } | null)?.name ?? 'Unknown',
-      confirmed_by_name: (r.confirmed_by_user as { name: string } | null)?.name ?? null,
+      id:             r.id,
+      date:           r.date,
+      amount:         Number(r.amount),
+      cheque_number:  r.cheque_number,
+      notes:          r.notes,
+      created_at:     r.created_at,
+      banked:         Boolean(r.banked),
+      banked_at:      r.banked_at ?? null,
+      customer:       r.customer as { id: string; name: string } | null,
+      driver:         r.driver   as { id: string; name: string } | null,
+      logged_by_name: (r.logged_by_user as { name: string } | null)?.name ?? 'Unknown',
+      banked_by_name: (r.banked_by_user as { name: string } | null)?.name ?? null,
     }))
 
     return NextResponse.json(shaped)
@@ -103,9 +105,10 @@ export async function POST(req: NextRequest) {
         cheque_number: cheque_number?.trim() || null,
         notes:         notes?.trim()         || null,
         logged_by:     userId,
+        banked:        false,
       })
       .select(`
-        id, date, amount, cheque_number, notes, created_at,
+        id, date, amount, cheque_number, notes, created_at, banked, banked_at,
         customer:customers(id, name),
         driver:users!cheque_records_driver_id_fkey(id, name),
         logged_by_user:users!cheque_records_logged_by_fkey(name)
@@ -119,17 +122,18 @@ export async function POST(req: NextRequest) {
 
     const r = data as Record<string, unknown>
     return NextResponse.json({
-      id:            r.id,
-      date:          r.date,
-      amount:        Number(r.amount),
-      cheque_number: r.cheque_number,
-      notes:         r.notes,
-      created_at:    r.created_at,
-      confirmed_at:  null,
-      customer:      r.customer,
-      driver:        r.driver,
-      logged_by_name:    (r.logged_by_user as { name: string } | null)?.name ?? 'Unknown',
-      confirmed_by_name: null,
+      id:             r.id,
+      date:           r.date,
+      amount:         Number(r.amount),
+      cheque_number:  r.cheque_number,
+      notes:          r.notes,
+      created_at:     r.created_at,
+      banked:         false,
+      banked_at:      null,
+      customer:       r.customer,
+      driver:         r.driver,
+      logged_by_name: (r.logged_by_user as { name: string } | null)?.name ?? 'Unknown',
+      banked_by_name: null,
     }, { status: 201 })
   } catch (err) {
     console.error('[cash/cheques POST] error:', err)

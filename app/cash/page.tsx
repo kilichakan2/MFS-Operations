@@ -32,14 +32,14 @@ interface MonthData {
 interface ChequeRecord {
   id: string; date: string; amount: number
   cheque_number: string | null; notes: string | null
-  created_at: string; confirmed_at: string | null
+  created_at: string; banked: boolean; banked_at: string | null
   customer: { id: string; name: string } | null
   driver:   { id: string; name: string } | null
-  logged_by_name: string; confirmed_by_name: string | null
+  logged_by_name: string; banked_by_name: string | null
 }
 
 type Tab       = 'cash' | 'cheques'
-type CheqFilter = 'all' | 'unconfirmed' | 'confirmed'
+type CheqFilter = 'all' | 'not_banked' | 'banked'
 
 const EXPENSE_CATEGORIES = ['Fuel','Supplies','Wages','Petty cash','Equipment','Other']
 const MONTH_NAMES = ['January','February','March','April','May','June',
@@ -681,13 +681,13 @@ function CashTab({ role }: { role: string }) {
 function ChequesTab({ role }: { role: string }) {
   const [cheques,        setCheques]        = useState<ChequeRecord[]>([])
   const [loading,        setLoading]        = useState(true)
-  const [filter,         setFilter]         = useState<CheqFilter>('unconfirmed')
+  const [filter,         setFilter]         = useState<CheqFilter>('not_banked')
   const [showForm,       setShowForm]       = useState(false)
   const [customers,      setCustomers]      = useState<{ id: string; name: string }[]>([])
   const [drivers,        setDrivers]        = useState<{ id: string; name: string }[]>([])
   const [saving,         setSaving]         = useState(false)
   const [error,          setError]          = useState('')
-  const [pendingCount,   setPendingCount]   = useState(0)
+  const [notBankedCount,   setPendingCount]   = useState(0)
   const isAdmin = role === 'admin'
 
   // Form state
@@ -703,7 +703,7 @@ function ChequesTab({ role }: { role: string }) {
     try {
       const [listRes, pendingRes] = await Promise.all([
         fetch(`/api/cash/cheques?status=${filter}`),
-        fetch('/api/cash/cheques?status=unconfirmed'),
+        fetch('/api/cash/cheques?status=not_banked'),
       ])
       const data    = await listRes.json()
       const pending = await pendingRes.json()
@@ -726,10 +726,10 @@ function ChequesTab({ role }: { role: string }) {
   useEffect(() => { loadCheques() }, [filter]) // eslint-disable-line
   useEffect(() => { loadRefs() }, [])
 
-  async function confirm(id: string) {
+  async function markBanked(id: string) {
     const res = await fetch(`/api/cash/cheques/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'confirm' }),
+      body: JSON.stringify({ action: 'bank' }),
     })
     if (res.ok) loadCheques()
   }
@@ -764,12 +764,12 @@ function ChequesTab({ role }: { role: string }) {
       {/* Header actions */}
       <div className="flex items-center gap-2">
         <div className="flex bg-white rounded-xl border border-[#EDEAE1] p-0.5 gap-0.5">
-          {(['unconfirmed', 'all', 'confirmed'] as CheqFilter[]).map(f => (
+          {(['not_banked', 'all', 'banked'] as CheqFilter[]).map(f => (
             <button key={f} type="button" onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 filter === f ? 'bg-[#16205B] text-white' : 'text-gray-500 hover:text-gray-700'
               }`}>
-              {f === 'unconfirmed' ? `Pending${pendingCount > 0 ? ` (${pendingCount})` : ''}` : f === 'all' ? 'All' : 'Confirmed'}
+              {f === 'not_banked' ? `Not Banked${notBankedCount > 0 ? ` (${notBankedCount})` : ''}` : f === 'all' ? 'All' : 'Banked'}
             </button>
           ))}
         </div>
@@ -843,7 +843,7 @@ function ChequesTab({ role }: { role: string }) {
       {loading ? <Spinner /> : cheques.length === 0 ? (
         <div className="bg-white rounded-2xl border border-[#EDEAE1] p-6 text-center">
           <p className="text-sm text-gray-400">
-            {filter === 'unconfirmed' ? 'No pending cheques' : filter === 'confirmed' ? 'No confirmed cheques' : 'No cheques logged'}
+            {filter === 'not_banked' ? 'No unbanked cheques' : filter === 'banked' ? 'No banked cheques' : 'No cheques logged'}
           </p>
         </div>
       ) : (
@@ -876,20 +876,20 @@ function ChequesTab({ role }: { role: string }) {
 
               {/* Confirmation */}
               <div className="mt-3 pt-3 border-t border-gray-50">
-                {c.confirmed_at ? (
+                {c.banked ? (
                   <p className="text-xs font-semibold text-green-700 flex items-center gap-1.5">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
                       <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd"/>
                     </svg>
-                    Confirmed by {c.confirmed_by_name} · {fmtTime(c.confirmed_at)}
+                    Banked by {c.banked_by_name} · {c.banked_at ? fmtTime(c.banked_at) : ''}
                   </p>
                 ) : (
-                  <button type="button" onClick={() => confirm(c.id)}
+                  <button type="button" onClick={() => markBanked(c.id)}
                     className="w-full h-9 rounded-xl border-2 border-[#16205B]/20 text-[#16205B] text-xs font-bold hover:bg-[#16205B]/5 transition-colors flex items-center justify-center gap-1.5">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-4 h-4">
                       <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 0 1 .208 1.04l-5 7.5a.75.75 0 0 1-1.154.114l-3-3a.75.75 0 0 1 1.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 0 1 1.04-.207Z" clipRule="evenodd"/>
                     </svg>
-                    Confirm receipt of cheque
+                    Mark as banked
                   </button>
                 )}
               </div>
