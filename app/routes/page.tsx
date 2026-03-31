@@ -83,6 +83,7 @@ function fmtDuration(min: number) {
 
 function StopCardRow({
   stop, index, total, onChange, onRemove, onMove, broken, onPostcodeUpdate,
+  onDragStart, onDragEnter, onDrop, isDragging, isDragOver,
 }: {
   stop:              StopCard
   index:             number
@@ -92,6 +93,11 @@ function StopCardRow({
   onMove:            (index: number, dir: -1 | 1) => void
   broken?:           boolean
   onPostcodeUpdate?: (id: string, newPostcode: string, lat: number | null, lng: number | null) => void
+  onDragStart:       (index: number) => void
+  onDragEnter:       (index: number) => void
+  onDrop:            () => void
+  isDragging:        boolean
+  isDragOver:        boolean
 }) {
   const [showNote,      setShowNote]      = useState(false)
   const [editingPost,   setEditingPost]   = useState(false)
@@ -132,29 +138,42 @@ function StopCardRow({
     : 'ok'
 
   return (
-    <div className={['bg-white rounded-xl border-2 transition-colors', borderClass].join(' ')}>
+    <div
+      draggable={!stop.lockedPosition}
+      onDragStart={() => onDragStart(index)}
+      onDragEnter={() => onDragEnter(index)}
+      onDragOver={e => e.preventDefault()}
+      onDrop={e => { e.preventDefault(); onDrop() }}
+      onDragEnd={() => onDrop()}
+      className={[
+        'rounded-xl border-2 transition-all',
+        borderClass,
+        isDragging  ? 'opacity-40 scale-[0.98]' : 'bg-white',
+        isDragOver  ? 'ring-2 ring-[#EB6619] ring-offset-1' : '',
+      ].join(' ')}
+    >
 
       {/* ── Single padded wrapper — tighter than two separate rows ─────── */}
       <div className="px-2 py-1">
 
-        {/* Row 1: position arrows + customer name */}
+        {/* Row 1: drag handle + position number + customer name */}
         <div className="flex items-center gap-1.5">
-          <div className="flex flex-col items-center flex-shrink-0 w-5">
-            <button type="button" disabled={index === 0 || stop.lockedPosition}
-              onClick={() => onMove(index, -1)}
-              className="text-[#16205B]/25 hover:text-[#16205B] disabled:opacity-0 leading-none"
-              style={{ touchAction: 'manipulation' }}
-            >
-              <svg viewBox="0 0 10 6" fill="currentColor" className="w-2 h-1"><path d="M5 0L10 6H0L5 0Z"/></svg>
-            </button>
-            <span className="text-[11px] font-bold text-[#16205B] leading-none">{index + 1}</span>
-            <button type="button" disabled={index === total - 1 || stop.lockedPosition}
-              onClick={() => onMove(index, 1)}
-              className="text-[#16205B]/25 hover:text-[#16205B] disabled:opacity-0 leading-none"
-              style={{ touchAction: 'manipulation' }}
-            >
-              <svg viewBox="0 0 10 6" fill="currentColor" className="w-2 h-1"><path d="M5 6L0 0H10L5 6Z"/></svg>
-            </button>
+          <div className="flex flex-col items-center flex-shrink-0 w-5 gap-0.5">
+            {/* Drag handle — hidden for locked stops */}
+            {stop.lockedPosition ? (
+              <span className="text-[11px] font-bold text-[#16205B] leading-none">{index + 1}</span>
+            ) : (
+              <>
+                <svg viewBox="0 0 12 8" fill="currentColor"
+                  className="w-3 h-2 text-[#16205B]/30 cursor-grab active:cursor-grabbing flex-shrink-0"
+                  style={{ touchAction: 'none' }}>
+                  <rect y="0" width="12" height="1.5" rx="0.75"/>
+                  <rect y="3" width="12" height="1.5" rx="0.75"/>
+                  <rect y="6" width="12" height="1.5" rx="0.75"/>
+                </svg>
+                <span className="text-[11px] font-bold text-[#16205B] leading-none">{index + 1}</span>
+              </>
+            )}
           </div>
           <p className="flex-1 min-w-0 text-[11px] font-semibold text-[#16205B] truncate leading-tight">
             {stop.name}
@@ -468,6 +487,8 @@ function RoutesPageInner() {
   const [users,          setUsers]          = useState<User[]>([])
   const [customers,      setCustomers]      = useState<Customer[]>([])
   const [stops,          setStops]          = useState<StopCard[]>([])
+  const [dragIndex,      setDragIndex]      = useState<number | null>(null)
+  const [dragOverIndex,  setDragOverIndex]  = useState<number | null>(null)
   const [customerSearch, setCustomerSearch] = useState('')
   const [showPicker,     setShowPicker]     = useState(false)
   const [showHelp,       setShowHelp]       = useState(false)
@@ -606,6 +627,28 @@ function RoutesPageInner() {
     })
     setResult(null)
   }, [])
+
+  const handleDragStart = useCallback((index: number) => {
+    setDragIndex(index)
+    setDragOverIndex(index)
+  }, [])
+
+  const handleDragEnter = useCallback((index: number) => {
+    setDragOverIndex(index)
+  }, [])
+
+  const handleDrop = useCallback(() => {
+    setStops(prev => {
+      if (dragIndex === null || dragOverIndex === null || dragIndex === dragOverIndex) return prev
+      const next = [...prev]
+      const [dragged] = next.splice(dragIndex, 1)
+      next.splice(dragOverIndex, 0, dragged)
+      return next.map(s => ({ ...s, estimatedArrival: null }))
+    })
+    setResult(null)
+    setDragIndex(null)
+    setDragOverIndex(null)
+  }, [dragIndex, dragOverIndex])
 
   // ── Optimise ────────────────────────────────────────────────────────────────
   const handleOptimise = useCallback(async () => {
@@ -926,7 +969,7 @@ function RoutesPageInner() {
                 )}
               </h2>
               {stops.length > 1 && (
-                <p className="text-[10px] text-gray-400">Use ↑↓ to reorder · 🔒 to lock stop</p>
+                <p className="text-[10px] text-gray-400">Drag to reorder · 🔒 to lock stop</p>
               )}
             </div>
 
@@ -942,10 +985,13 @@ function RoutesPageInner() {
                   onRemove={removeStop}
                   onMove={moveStop}
                   broken={brokenIds.has(stop.id)}
+                  onDragStart={handleDragStart}
+                  onDragEnter={handleDragEnter}
+                  onDrop={handleDrop}
+                  isDragging={dragIndex === i}
+                  isDragOver={dragOverIndex === i && dragIndex !== i}
                   onPostcodeUpdate={(id, newPostcode, lat, lng) => {
-                    // Update local stop state — postcode + coordinates from backend geocode
                     setStops(prev => prev.map(s => s.id === id ? { ...s, postcode: newPostcode, lat: lat ?? s.lat, lng: lng ?? s.lng } : s))
-                    // Clear broken flag for this stop — user has fixed it
                     setBrokenIds(prev => { const n = new Set(prev); n.delete(id); return n })
                     setOptimiseError('')
                   }}
@@ -1123,7 +1169,7 @@ function RoutesPageInner() {
                       <span className="text-gray-400 text-[9px]">Stay put</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-[#16205B]/60 font-bold">↑↓</span>
+                      <span className="text-[10px] text-[#16205B]/60 font-bold">⠿</span>
                       <span className="text-gray-400 text-[9px]">Drag to move</span>
                     </div>
                   </div>
@@ -1180,7 +1226,7 @@ function RoutesPageInner() {
                   </div>
                   <div>
                     <p className="font-bold text-[#16205B] mb-0.5">4 · Manual overrides</p>
-                    <p>Use <span className="font-bold">↑↓</span> to drag stops into any order. Hit <span className="font-bold">🔒</span> to lock a stop in place so the optimiser never moves it.</p>
+                    <p>Drag the <span className="font-bold">⠿</span> handle to reorder stops. Hit <span className="font-bold">🔒</span> to lock a stop so the optimiser never moves it.</p>
                   </div>
                   <div>
                     <p className="font-bold text-[#16205B] mb-0.5">5 · Save & assign</p>
