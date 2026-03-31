@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       .from('cheque_records')
       .select(`
         id, date, amount, cheque_number, notes, created_at,
-        banked, banked_at,
+        banked, banked_at, customer_name,
         customer:customers(id, name),
         driver:users!cheque_records_driver_id_fkey(id, name),
         logged_by_user:users!cheque_records_logged_by_fkey(name),
@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
       banked:         Boolean(r.banked),
       banked_at:      r.banked_at ?? null,
       customer:       r.customer as { id: string; name: string } | null,
+      customer_name:  r.customer_name as string | null,
       driver:         r.driver   as { id: string; name: string } | null,
       logged_by_name: (r.logged_by_user as { name: string } | null)?.name ?? 'Unknown',
       banked_by_name: (r.banked_by_user as { name: string } | null)?.name ?? null,
@@ -86,10 +87,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-    const { date, customer_id, amount, driver_id, cheque_number, notes } = body
+    const { date, customer_id, customer_name, amount, driver_id, cheque_number, notes } = body
 
-    if (!date || !customer_id || !amount || !driver_id) {
-      return NextResponse.json({ error: 'date, customer_id, amount, driver_id required' }, { status: 400 })
+    if (!date || (!customer_id && !customer_name) || !amount || !driver_id) {
+      return NextResponse.json({ error: 'date, customer (id or name), amount, driver_id required' }, { status: 400 })
     }
     if (Number(amount) <= 0) {
       return NextResponse.json({ error: 'amount must be positive' }, { status: 400 })
@@ -99,7 +100,8 @@ export async function POST(req: NextRequest) {
       .from('cheque_records')
       .insert({
         date,
-        customer_id,
+        customer_id:   customer_id   || null,
+        customer_name: customer_name || null,
         amount:        Number(amount),
         driver_id,
         cheque_number: cheque_number?.trim() || null,
@@ -108,7 +110,7 @@ export async function POST(req: NextRequest) {
         banked:        false,
       })
       .select(`
-        id, date, amount, cheque_number, notes, created_at, banked, banked_at,
+        id, date, amount, cheque_number, notes, created_at, banked, banked_at, customer_name,
         customer:customers(id, name),
         driver:users!cheque_records_driver_id_fkey(id, name),
         logged_by_user:users!cheque_records_logged_by_fkey(name)
@@ -131,6 +133,7 @@ export async function POST(req: NextRequest) {
       banked:         false,
       banked_at:      null,
       customer:       r.customer,
+      customer_name:  r.customer_name as string | null,
       driver:         r.driver,
       logged_by_name: (r.logged_by_user as { name: string } | null)?.name ?? 'Unknown',
       banked_by_name: null,
