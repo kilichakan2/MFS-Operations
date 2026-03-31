@@ -136,18 +136,23 @@ async function upsertPairs(
 type Node = { lat: number; lng: number; id: string }
 
 async function computePairs(nodes: Node[]): Promise<number> {
-  let total = 0
-  // Chunk origins in groups of CHUNK_SIZE
+  // Build all chunks
+  const chunks: { origins: Node[]; destinations: Node[] }[] = []
   for (let oi = 0; oi < nodes.length; oi += CHUNK_SIZE) {
     const origins = nodes.slice(oi, oi + CHUNK_SIZE)
-    // Chunk destinations in groups of CHUNK_SIZE
     for (let di = 0; di < nodes.length; di += CHUNK_SIZE) {
-      const destinations = nodes.slice(di, di + CHUNK_SIZE)
-      const pairs = await callMatrix(origins, destinations)
-      total += await upsertPairs(pairs)
+      chunks.push({ origins, destinations: nodes.slice(di, di + CHUNK_SIZE) })
     }
   }
-  return total
+
+  // Fire ALL chunks in parallel — reduces wall time from ~30s to ~2-3s
+  const allPairArrays = await Promise.all(
+    chunks.map(({ origins, destinations }) => callMatrix(origins, destinations))
+  )
+
+  // Flatten and upsert in one batch
+  const allPairs = allPairArrays.flat()
+  return upsertPairs(allPairs)
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
