@@ -15,6 +15,7 @@ interface CashEntry {
   attachment_path: string | null; attachment_name: string | null
   signed_url: string | null; created_at: string
   created_by_name: string; edited_by_name: string | null; edited_at: string | null
+  customer_name: string | null
 }
 
 interface CashMonth {
@@ -74,15 +75,17 @@ function Spinner() {
 
 // ─── Add Entry form ───────────────────────────────────────────────────────────
 
-function AddEntryForm({ type, monthId, onSaved, onCancel }: {
+function AddEntryForm({ type, monthId, onSaved, onCancel, customers }: {
   type: 'income' | 'expense'; monthId: string
   onSaved: (entry: CashEntry) => void; onCancel: () => void
+  customers: { id: string; name: string }[]
 }) {
   const [date,        setDate]        = useState(todayISO())
   const [amount,      setAmount]      = useState('')
   const [desc,        setDesc]        = useState('')
   const [category,    setCategory]    = useState(EXPENSE_CATEGORIES[0])
   const [reference,   setReference]   = useState('')
+  const [customerId,  setCustomerId]  = useState('')
   const [file,        setFile]        = useState<File | null>(null)
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState('')
@@ -104,6 +107,7 @@ function AddEntryForm({ type, monthId, onSaved, onCancel }: {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ month_id: monthId, entry_date: date, type,
           category: type === 'expense' ? category : null,
+          customer_id: (type === 'income' && customerId) ? customerId : null,
           amount: parseFloat(amount), description: desc.trim(),
           reference: reference.trim() || null, attachment_path, attachment_name }),
       })
@@ -140,6 +144,16 @@ function AddEntryForm({ type, monthId, onSaved, onCancel }: {
             <select value={category} onChange={e => setCategory(e.target.value)}
               className="w-full h-9 px-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#EB6619] bg-white">
               {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+        )}
+        {type === 'income' && customers.length > 0 && (
+          <div>
+            <label className="text-[10px] text-gray-500 font-semibold uppercase">Customer <span className="font-normal normal-case">(opt)</span></label>
+            <select value={customerId} onChange={e => setCustomerId(e.target.value)}
+              className="w-full h-9 px-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#EB6619] bg-white">
+              <option value="">No specific customer</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
         )}
@@ -282,6 +296,7 @@ function CashTab({ role }: { role: string }) {
   const [creating,  setCreating]  = useState(false)
   const [locking,   setLocking]   = useState(false)
   const [editEntry, setEditEntry] = useState<CashEntry | null>(null)
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
   const isAdmin = role === 'admin'
 
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
@@ -298,6 +313,16 @@ function CashTab({ role }: { role: string }) {
   }, [year, month])
 
   useEffect(() => { loadMonth() }, [loadMonth])
+
+  useEffect(() => {
+    fetch('/api/routes/customers')
+      .then(r => r.json())
+      .then(d => {
+        const list = Array.isArray(d) ? d : (d.customers ?? [])
+        setCustomers(list.map((c: Record<string,unknown>) => ({ id: String(c.id), name: String(c.name) })))
+      })
+      .catch(() => {})
+  }, [])
 
   function navigate(dir: -1 | 1) {
     let m = month + dir, y = year
@@ -506,7 +531,7 @@ function CashTab({ role }: { role: string }) {
           )}
 
           {addType && monthData?.month && (
-            <AddEntryForm type={addType} monthId={monthData.month.id}
+            <AddEntryForm type={addType} monthId={monthData.month.id} customers={customers}
               onSaved={onEntrySaved} onCancel={() => setAddType(null)}/>
           )}
 
@@ -542,6 +567,9 @@ function CashTab({ role }: { role: string }) {
                           <p className="text-sm font-semibold text-gray-900 truncate">{entry.description}</p>
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                             <span className="text-[11px] text-gray-400">{fmtDate(entry.entry_date)}</span>
+                            {entry.customer_name && (
+                              <span className="text-[10px] font-semibold text-[#16205B]/70">{entry.customer_name}</span>
+                            )}
                             {entry.category && (
                               <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-px rounded font-medium">{entry.category}</span>
                             )}

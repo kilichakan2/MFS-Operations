@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-    const { month_id, entry_date, type, category, amount, description, reference, attachment_path, attachment_name } = body
+    const { month_id, entry_date, type, category, amount, description, reference, attachment_path, attachment_name, customer_id } = body
 
     if (!month_id || !entry_date || !type || !amount || !description) {
       return NextResponse.json({ error: 'month_id, entry_date, type, amount, description required' }, { status: 400 })
@@ -71,12 +71,14 @@ export async function POST(req: NextRequest) {
         reference:   reference  ? String(reference).trim() : null,
         attachment_path: attachment_path ?? null,
         attachment_name: attachment_name ?? null,
+        customer_id: (type === 'income' && customer_id) ? customer_id : null,
         created_by: userId,
       })
       .select(`
         id, month_id, entry_date, type, category, amount,
-        description, reference, attachment_path, attachment_name, created_at,
-        created_by_user:users!cash_entries_created_by_fkey(name)
+        description, reference, attachment_path, attachment_name, created_at, customer_id,
+        created_by_user:users!cash_entries_created_by_fkey(name),
+        customer:customers(id, name)
       `)
       .single()
 
@@ -90,6 +92,7 @@ export async function POST(req: NextRequest) {
       entry: {
         ...e,
         created_by_name: (e.created_by_user as { name: string } | null)?.name ?? 'Unknown',
+      customer_name:   (e.customer as { name: string } | null)?.name ?? null,
         signed_url: null,
       }
     }, { status: 201 })

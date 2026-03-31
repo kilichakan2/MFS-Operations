@@ -52,8 +52,9 @@ export async function GET(req: NextRequest) {
       const { data: entries } = await supabase
         .from('cash_entries')
         .select(`
-          entry_date, type, category, amount, description, reference, created_at,
-          created_by_user:users!cash_entries_created_by_fkey(name)
+          entry_date, type, category, amount, description, reference, created_at, customer_id,
+          created_by_user:users!cash_entries_created_by_fkey(name),
+          customer:customers(id, name)
         `)
         .eq('month_id', cashMonth.id)
         .order('entry_date').order('created_at')
@@ -73,11 +74,12 @@ export async function GET(req: NextRequest) {
         csvRow(['Total Expense',   fmt(totalOut)]),
         csvRow(['Closing Balance', fmt(closing)]),
         '',
-        csvRow(['Date', 'Type', 'Category', 'Amount', 'Description', 'Reference', 'Logged By', 'Logged At']),
+        csvRow(['Date', 'Type', 'Category', 'Customer', 'Amount', 'Description', 'Reference', 'Logged By', 'Logged At']),
         ...rows.map(r => csvRow([
           String(r.entry_date),
           String(r.type),
           r.category ? String(r.category) : '',
+          (r.customer as { name: string } | null)?.name ?? '',
           r.type === 'income' ? fmt(Number(r.amount)) : `-${fmt(Number(r.amount))}`,
           String(r.description),
           r.reference ? String(r.reference) : '',

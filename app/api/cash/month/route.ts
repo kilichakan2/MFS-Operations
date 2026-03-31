@@ -84,9 +84,10 @@ export async function GET(req: NextRequest) {
       .select(`
         id, month_id, entry_date, type, category, amount,
         description, reference, attachment_path, attachment_name,
-        created_at, edited_at,
+        created_at, edited_at, customer_id,
         created_by_user:users!cash_entries_created_by_fkey(name),
-        edited_by_user:users!cash_entries_edited_by_fkey(name)
+        edited_by_user:users!cash_entries_edited_by_fkey(name),
+        customer:customers(id, name)
       `)
       .eq('month_id', monthRow.id)
       .order('entry_date', { ascending: true })
@@ -104,6 +105,7 @@ export async function GET(req: NextRequest) {
         signed_url: e.attachment_path ? await getSignedUrl(e.attachment_path as string) : null,
         created_by_name: (e.created_by_user as { name: string } | null)?.name ?? 'Unknown',
         edited_by_name:  (e.edited_by_user  as { name: string } | null)?.name ?? null,
+        customer_name:   (e.customer as { name: string } | null)?.name ?? null,
       }))
     )
 
