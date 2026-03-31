@@ -145,13 +145,20 @@ async function computePairs(nodes: Node[]): Promise<number> {
     }
   }
 
-  // Fire ALL chunks in parallel — reduces wall time from ~30s to ~2-3s
-  const allPairArrays = await Promise.all(
-    chunks.map(({ origins, destinations }) => callMatrix(origins, destinations))
-  )
+  // Process in batches of 4 concurrent chunks — avoids Google rate limiting
+  // while still being ~4x faster than fully sequential
+  const CONCURRENCY = 4
+  const allPairs: { fromId: string; toId: string; duration_s: number; distance_m: number }[] = []
 
-  // Flatten and upsert in one batch
-  const allPairs = allPairArrays.flat()
+  for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+    const batch = chunks.slice(i, i + CONCURRENCY)
+    const batchResults = await Promise.all(
+      batch.map(({ origins, destinations }) => callMatrix(origins, destinations))
+    )
+    allPairs.push(...batchResults.flat())
+  }
+
+  // Single upsert for all pairs
   return upsertPairs(allPairs)
 }
 
