@@ -28,7 +28,7 @@ const supabase = createClient(
 )
 
 const MAPS_KEY      = process.env.GOOGLE_MAPS_API_KEY!
-const MATRIX_URL    = 'https://routes.googleapis.com/distanceMatrix/v2'
+const MATRIX_URL    = 'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix'
 const CRON_SECRET   = process.env.CRON_SECRET ?? ''
 const CHUNK_SIZE    = 25   // Google Distance Matrix max: 25 origins × 25 destinations
 
@@ -45,7 +45,7 @@ interface MatrixEntry {
   destinationIndex?: number
   duration?:         string   // e.g. "1234s"
   distanceMeters?:   number
-  status?:           { code?: number }
+  condition?:        string   // e.g. "ROUTE_EXISTS" or "ROUTE_NOT_FOUND"
 }
 
 async function callMatrix(
@@ -64,7 +64,8 @@ async function callMatrix(
     headers: {
       'Content-Type':        'application/json',
       'X-Goog-Api-Key':      MAPS_KEY,
-      'X-Goog-FieldMask':    'originIndex,destinationIndex,duration,distanceMeters,status',
+      // computeRouteMatrix returns a JSON array of elements
+      'X-Goog-FieldMask':    'originIndex,destinationIndex,duration,distanceMeters,condition',
     },
     body: JSON.stringify(body),
   })
@@ -75,11 +76,20 @@ async function callMatrix(
     return []
   }
 
-  const entries = await res.json() as MatrixEntry[]
+  // computeRouteMatrix returns a JSON array directly (not wrapped in { routes: [] })
+  const raw = await res.json()
+  const entries = Array.isArray(raw) ? raw as MatrixEntry[] : []
+
+  if (!entries.length) {
+    console.warn('[compute-road-times] Matrix API returned empty array — check API key and enabled APIs')
+    return []
+  }
+
   const results: { fromId: string; toId: string; duration_s: number; distance_m: number }[] = []
 
   for (const e of entries) {
-    if (e.status?.code && e.status.code !== 0) continue  // skip failed elements
+    // Skip if route not found
+    if (e.condition && e.condition !== 'ROUTE_EXISTS') continue
     const oi = e.originIndex ?? 0
     const di = e.destinationIndex ?? 0
     if (oi === di) continue  // skip self-pairs
