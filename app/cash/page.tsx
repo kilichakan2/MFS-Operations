@@ -300,7 +300,12 @@ function CashTab({ role }: { role: string }) {
   const isAdmin = role === 'admin'
 
   const isCurrentMonth = year === now.getFullYear() && month === now.getMonth() + 1
-  const isFutureMonth  = year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth() + 1)
+  // Admin can navigate one month ahead (to set up next month)
+  // Office is capped at current month
+  const maxFutureMonths = isAdmin ? 1 : 0
+  const limitDate = new Date(now.getFullYear(), now.getMonth() + maxFutureMonths + 1, 1)
+  const viewDate  = new Date(year, month - 1, 1)
+  const isFutureMonth = viewDate >= limitDate
 
   const loadMonth = useCallback(async () => {
     setLoading(true); setAddType(null)
@@ -328,7 +333,8 @@ function CashTab({ role }: { role: string }) {
     let m = month + dir, y = year
     if (m < 1)  { m = 12; y-- }
     if (m > 12) { m = 1;  y++ }
-    if (y > now.getFullYear() || (y === now.getFullYear() && m > now.getMonth() + 1)) return
+    const _limit = new Date(now.getFullYear(), now.getMonth() + maxFutureMonths + 1, 1)
+    if (new Date(y, m - 1, 1) >= _limit) return
     setMonth(m); setYear(y)
   }
 
