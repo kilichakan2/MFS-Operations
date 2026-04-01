@@ -525,16 +525,24 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{t('offRamps')}</p>
               {PIPELINE_OFF_RAMPS.map(s => {
                 const isCurrent = pipelineStatus === s
+                const hint = s === 'Not Progressing'
+                  ? t('notProgressingHint')
+                  : t('notWonHint')
                 return (
                   <button key={s} type="button" onClick={() => handlePipelineUpdate(s)}
-                    className={['w-full h-11 rounded-xl text-sm font-bold border-2 transition-all',
+                    className={['w-full rounded-xl border-2 transition-all px-4 py-2.5 text-left',
                       isCurrent
                         ? 'bg-[#16205B] text-white border-[#16205B]'
                         : s === 'Not Progressing'
                           ? 'text-red-600 border-red-200 bg-red-50 hover:bg-red-100'
                           : 'text-gray-500 border-gray-200 bg-gray-50 hover:bg-gray-100'
                     ].join(' ')}>
-                    {isCurrent ? `✓ ${t(STAGE_TR_KEY[s] as Parameters<typeof t>[0])}` : t(STAGE_TR_KEY[s] as Parameters<typeof t>[0])}
+                    <p className="text-sm font-bold leading-tight">
+                      {isCurrent ? `✓ ${t(STAGE_TR_KEY[s] as Parameters<typeof t>[0])}` : t(STAGE_TR_KEY[s] as Parameters<typeof t>[0])}
+                    </p>
+                    <p className={['text-[10px] mt-0.5 leading-tight font-normal',
+                      isCurrent ? 'text-white/70' : 'opacity-60'
+                    ].join(' ')}>{hint}</p>
                   </button>
                 )
               })}
@@ -638,25 +646,42 @@ function MyVisitsTab({
   const { t }               = useLanguage()
   const [search,     setSearch]     = useState('')
   const [chip,       setChip]       = useState<TimeChip>('today')
-  const [typeFilter, setTypeFilter] = useState<'all'|'routine'|'prospects'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all'|'routine'|'prospects'|'stalled'>('all')
 
   const range = chipToRange(chip)
 
+  function isStalled(v: TodayVisit): boolean {
+    return v.pipeline_status === 'Not Progressing' || v.pipeline_status === 'Not Won'
+  }
+
   function matchesTypeFilter(vtype: string): boolean {
-    if (typeFilter === 'all')       return true
     if (typeFilter === 'prospects') return vtype === 'new_pitch'
     // routine tab: routine, complaint_followup, delivery_issue
     return vtype !== 'new_pitch'
   }
 
   const allVisits = useMemo(() => {
+    if (typeFilter === 'stalled') {
+      // Stalled tab: Not Progressing first, Not Won at bottom — no pending items
+      const notProgressing = syncedVisits
+        .filter(v => v.pipeline_status === 'Not Progressing')
+        .filter(v => inRange(v.created_at, range))
+        .filter(v => !search || (v.customer_name??v.prospect_name??'').toLowerCase().includes(search.toLowerCase()))
+      const notWon = syncedVisits
+        .filter(v => v.pipeline_status === 'Not Won')
+        .filter(v => inRange(v.created_at, range))
+        .filter(v => !search || (v.customer_name??v.prospect_name??'').toLowerCase().includes(search.toLowerCase()))
+      const synced = [...notProgressing, ...notWon]
+      return { synced, pending: [], total: synced.length }
+    }
     const synced = syncedVisits
       .filter(v => inRange(v.created_at, range))
-      .filter(v => matchesTypeFilter(v.visit_type))
+      .filter(v => !isStalled(v))  // exclude stalled from all other tabs
+      .filter(v => typeFilter === 'all' || matchesTypeFilter(v.visit_type))
       .filter(v => !search || (v.customer_name??v.prospect_name??'').toLowerCase().includes(search.toLowerCase()))
     const pending = pendingItems
       .filter(p => inRange(new Date(p.createdAt).toISOString(), range))
-      .filter(p => matchesTypeFilter(p.visitType))
+      .filter(p => typeFilter === 'all' || matchesTypeFilter(p.visitType))
       .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
     return { synced, pending, total: synced.length + pending.length }
   }, [syncedVisits, pendingItems, range, search, chip, typeFilter]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -669,7 +694,8 @@ function MyVisitsTab({
           ['all',       t('tabAllVisits')],
           ['routine',   t('tabRoutine')],
           ['prospects', t('tabProspects')],
-        ] as ['all'|'routine'|'prospects', string][]).map(([key, label]) => (
+          ['stalled',   t('tabStalled')],
+        ] as ['all'|'routine'|'prospects'|'stalled', string][]).map(([key, label]) => (
           <button key={key} type="button"
             onClick={() => setTypeFilter(key)}
             className={[
@@ -677,7 +703,9 @@ function MyVisitsTab({
               typeFilter === key
                 ? key === 'prospects'
                   ? 'border-[#EB6619] text-[#EB6619]'
-                  : 'border-[#16205B] text-[#16205B]'
+                  : key === 'stalled'
+                    ? 'border-red-500 text-red-600'
+                    : 'border-[#16205B] text-[#16205B]'
                 : 'border-transparent text-gray-400 hover:text-gray-600',
             ].join(' ')}>
             {label}
