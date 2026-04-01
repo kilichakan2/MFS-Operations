@@ -54,6 +54,7 @@ const SHARED_API_PATHS = [
   '/api/screen3/sync',
   '/api/screen3/today',
   '/api/screen3/visit',
+  '/api/screen3/visit/notes',
   '/api/detail/visit',
   '/api/detail/complaint',
   '/api/detail/discrepancy',

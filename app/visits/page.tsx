@@ -100,6 +100,16 @@ interface PendingItem {
 }
 interface ValidationErrors { customer?:string; prospectPostcode?:string; visitType?:string; outcome?:string; commitmentDetail?:string }
 
+interface VisitNote {
+  id:          string
+  visit_id:    string
+  body:        string
+  created_at:  string
+  updated_at:  string | null
+  author_id:   string | null
+  author_name: string
+}
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 function VISIT_TYPES(t:(k:string)=>string) { return [
@@ -152,6 +162,14 @@ function vibrate(pattern:number|number[]) {
 function fmtTime(v:string|number):string {
   const d=typeof v==='number'?new Date(v):new Date(v)
   return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})
+}
+function fmtDateTime(iso:string):string {
+  try {
+    const d = new Date(iso)
+    const date = d.toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Europe/London'})
+    const time = d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'})
+    return `${date} · ${time}`
+  } catch { return '' }
 }
 function fmtDate(iso:string) {
   try { return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'Europe/London'}) } catch { return '' }
@@ -294,6 +312,61 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
 
   const [showSheet,      setShowSheet]      = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [visitNotesList, setVisitNotesList] = useState<VisitNote[]>([])
+  const [notesLoaded,    setNotesLoaded]    = useState(false)
+  const [noteInput,      setNoteInput]      = useState('')
+  const [notePosting,    setNotePosting]    = useState(false)
+  const [editingNoteId,  setEditingNoteId]  = useState<string|null>(null)
+  const [editNoteBody,   setEditNoteBody]   = useState('')
+  const [noteSaving,     setNoteSaving]     = useState(false)
+
+  async function loadNotes() {
+    if (isPending) return
+    try {
+      const res = await fetch(`/api/screen3/visit/notes?visit_id=${(visit as TodayVisit).id}`)
+      if (res.ok) {
+        const d = await res.json()
+        setVisitNotesList(d.notes ?? [])
+        setNotesLoaded(true)
+      }
+    } catch { /* non-fatal */ }
+  }
+
+  async function postNote() {
+    if (!noteInput.trim() || isPending) return
+    setNotePosting(true)
+    try {
+      const res = await fetch('/api/screen3/visit/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visit_id: (visit as TodayVisit).id, body: noteInput.trim() }),
+      })
+      if (res.ok) {
+        const d = await res.json()
+        setVisitNotesList(prev => [...prev, d.note])
+        setNoteInput('')
+      }
+    } catch { /* non-fatal */ }
+    finally { setNotePosting(false) }
+  }
+
+  async function saveNoteEdit(id: string) {
+    if (!editNoteBody.trim()) return
+    setNoteSaving(true)
+    try {
+      const res = await fetch('/api/screen3/visit/notes', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, body: editNoteBody.trim() }),
+      })
+      if (res.ok) {
+        const d = await res.json()
+        setVisitNotesList(prev => prev.map(n => n.id === id ? { ...n, body: d.note.body, updated_at: d.note.updated_at } : n))
+        setEditingNoteId(null)
+      }
+    } catch { /* non-fatal */ }
+    finally { setNoteSaving(false) }
+  }
 
   async function handlePipelineUpdate(newStatus: string) {
     if (isPending || !onStatusUpdate) return
@@ -317,7 +390,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
     <>
       <div className="bg-white rounded-2xl border border-[#EDEAE1] overflow-hidden">
         {/* Tappable body — opens stepper sheet */}
-        <button type="button" onClick={() => !isPending && setShowSheet(true)}
+        <button type="button" onClick={() => { if (!isPending) { setShowSheet(true); if (!notesLoaded) loadNotes() } }}
           className="w-full text-left px-4 pt-3 pb-2 block active:bg-gray-50 transition-colors">
           {/* Top row: name + outcome badge */}
           <div className="flex items-start justify-between gap-2 mb-1">
@@ -329,7 +402,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
             <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{background:typeColour}}/>
             <span className="text-[11px] font-semibold" style={{color:typeColour}}>{TYPE_LABEL[vtype]??vtype}</span>
             <span className="text-gray-300 text-xs">·</span>
-            <span className="text-[11px] text-gray-400">{fmtTime(createdAt)}</span>
+            <span className="text-[11px] text-gray-400">{fmtDate(typeof createdAt === 'number' ? new Date(createdAt).toISOString() : String(createdAt))} · {fmtTime(createdAt)}</span>
             {isPending && (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 ml-1">
                 <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"/>{t('pendingLabel')}
@@ -448,7 +521,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
             </div>
 
             {/* Off-ramp buttons */}
-            <div className="px-4 pb-6 space-y-2 border-t border-[#EDEAE1] pt-4">
+            <div className="px-4 pb-4 space-y-2 border-t border-[#EDEAE1] pt-4">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{t('offRamps')}</p>
               {PIPELINE_OFF_RAMPS.map(s => {
                 const isCurrent = pipelineStatus === s
@@ -466,6 +539,86 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
                 )
               })}
             </div>
+
+            {/* ── Notes thread ─────────────────────────────────────── */}
+            <div className="border-t border-[#EDEAE1] px-4 pt-4 pb-6">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{t('visitNotes')}</p>
+
+              {/* Original note from log — read only */}
+              {(visit as TodayVisit).notes && (
+                <div className="mb-3 bg-gray-50 rounded-xl px-3 py-2.5">
+                  <p className="text-[10px] text-gray-400 font-semibold mb-1">{t('originalNote')}</p>
+                  <p className="text-[12px] text-gray-700 leading-relaxed">{(visit as TodayVisit).notes}</p>
+                </div>
+              )}
+
+              {/* Subsequent notes */}
+              {visitNotesList.length === 0 && notesLoaded && !(visit as TodayVisit).notes && (
+                <p className="text-[12px] text-gray-400 italic mb-3">{t('noNotes')}</p>
+              )}
+              {visitNotesList.map(n => (
+                <div key={n.id} className="mb-2.5 last:mb-3">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 bg-white border border-[#EDEAE1] rounded-xl px-3 py-2">
+                      {editingNoteId === n.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={editNoteBody}
+                            onChange={e => setEditNoteBody(e.target.value)}
+                            rows={3}
+                            className="w-full text-[12px] text-gray-800 leading-relaxed resize-none border-0 focus:outline-none bg-transparent"
+                          />
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => saveNoteEdit(n.id)} disabled={noteSaving}
+                              className="h-7 px-3 rounded-lg bg-[#16205B] text-white text-[10px] font-bold disabled:opacity-40">
+                              {noteSaving ? '…' : t('saveNote')}
+                            </button>
+                            <button type="button" onClick={() => setEditingNoteId(null)}
+                              className="h-7 px-3 rounded-lg bg-gray-100 text-gray-500 text-[10px] font-semibold">
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-[12px] text-gray-800 leading-relaxed whitespace-pre-wrap">{n.body}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-1 px-1">
+                    <p className="text-[10px] text-gray-400">
+                      <span className="font-semibold text-gray-500">{n.author_name}</span>
+                      {' · '}{fmtDateTime(n.created_at)}
+                      {n.updated_at && <span className="italic"> (edited)</span>}
+                    </p>
+                    {/* Edit: author can always edit their own; isManager can edit any */}
+                    {(isManager || n.author_id === (typeof document !== 'undefined' ? document.cookie.match(/mfs_user_id=([^;]+)/)?.[1] : null)) && editingNoteId !== n.id && (
+                      <button type="button"
+                        onClick={() => { setEditingNoteId(n.id); setEditNoteBody(n.body) }}
+                        className="text-[10px] text-gray-400 hover:text-[#16205B] font-semibold">
+                        {t('editNote')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {/* Add note input */}
+              <div className="flex gap-2 mt-1">
+                <input
+                  type="text"
+                  value={noteInput}
+                  onChange={e => setNoteInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && postNote()}
+                  placeholder={t('addNotePlaceholder')}
+                  className="flex-1 h-9 px-3 text-[12px] rounded-xl border border-[#EDEAE1] focus:outline-none focus:border-[#EB6619] bg-white"
+                />
+                <button type="button" onClick={postNote} disabled={notePosting || !noteInput.trim()}
+                  className="h-9 px-4 rounded-xl bg-[#EB6619] text-white text-[11px] font-bold disabled:opacity-40 flex-shrink-0">
+                  {notePosting ? '…' : t('postNote')}
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
@@ -482,24 +635,55 @@ function MyVisitsTab({
   onEdit:(v:TodayVisit|PendingItem)=>void; onDelete:(v:TodayVisit|PendingItem)=>void
   onStatusUpdate:(id:string, status:string)=>void
 }) {
-  const { t }            = useLanguage()
-  const [search, setSearch] = useState('')
-  const [chip,   setChip]   = useState<TimeChip>('today')
+  const { t }               = useLanguage()
+  const [search,     setSearch]     = useState('')
+  const [chip,       setChip]       = useState<TimeChip>('today')
+  const [typeFilter, setTypeFilter] = useState<'all'|'routine'|'prospects'>('all')
 
   const range = chipToRange(chip)
+
+  function matchesTypeFilter(vtype: string): boolean {
+    if (typeFilter === 'all')       return true
+    if (typeFilter === 'prospects') return vtype === 'new_pitch'
+    // routine tab: routine, complaint_followup, delivery_issue
+    return vtype !== 'new_pitch'
+  }
 
   const allVisits = useMemo(() => {
     const synced = syncedVisits
       .filter(v => inRange(v.created_at, range))
+      .filter(v => matchesTypeFilter(v.visit_type))
       .filter(v => !search || (v.customer_name??v.prospect_name??'').toLowerCase().includes(search.toLowerCase()))
     const pending = pendingItems
       .filter(p => inRange(new Date(p.createdAt).toISOString(), range))
+      .filter(p => matchesTypeFilter(p.visitType))
       .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
     return { synced, pending, total: synced.length + pending.length }
-  }, [syncedVisits, pendingItems, range, search, chip]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [syncedVisits, pendingItems, range, search, chip, typeFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="pb-24">
+      {/* Type filter tabs */}
+      <div className="flex border-b border-[#EDEAE1] bg-white sticky top-0 z-10">
+        {([
+          ['all',       t('tabAllVisits')],
+          ['routine',   t('tabRoutine')],
+          ['prospects', t('tabProspects')],
+        ] as ['all'|'routine'|'prospects', string][]).map(([key, label]) => (
+          <button key={key} type="button"
+            onClick={() => setTypeFilter(key)}
+            className={[
+              'flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wide transition-colors border-b-2',
+              typeFilter === key
+                ? key === 'prospects'
+                  ? 'border-[#EB6619] text-[#EB6619]'
+                  : 'border-[#16205B] text-[#16205B]'
+                : 'border-transparent text-gray-400 hover:text-gray-600',
+            ].join(' ')}>
+            {label}
+          </button>
+        ))}
+      </div>
       <SearchBar value={search} onChange={setSearch}/>
       <TimeChips active={chip} onChange={setChip}/>
       {allVisits.total === 0 ? (
