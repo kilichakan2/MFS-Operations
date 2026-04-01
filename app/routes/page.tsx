@@ -10,7 +10,8 @@
  * Right panel: RouteMap live preview (SSR-disabled Leaflet)
  */
 
-import dynamic from 'next/dynamic'
+import dynamic        from 'next/dynamic'
+import dynamicImport  from 'next/dynamic'
 import React, {
   useState, useCallback, useEffect, useRef, useMemo, Suspense
 } from 'react'
@@ -18,6 +19,18 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader           from '@/components/AppHeader'
 import RoleNav          from '@/components/RoleNav'
 import DesktopRouteNav  from '@/components/DesktopRouteNav'
+import RunsContent      from '@/components/RunsContent'
+import DetailModal      from '@/components/DetailModal'
+import type { MapCustomer, MapVisit } from '@/app/api/map/data/route'
+
+const MapView = dynamicImport(() => import('@/components/MapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex-1 flex items-center justify-center bg-[#EDEAE1]">
+      <div className="w-8 h-8 border-[3px] border-[#16205B]/20 border-t-[#16205B] rounded-full animate-spin" />
+    </div>
+  ),
+})
 import type { RouteStop }  from '@/components/RouteMap'
 
 // RouteMap must be client-only (Leaflet uses window)
@@ -460,10 +473,70 @@ function CopyRouteInfoButton(p: CopyRouteInfoProps) {
   )
 }
 
+// ─── Map tab content — embedded from screen6 ────────────────────────────────
+
+function MapTabContent() {
+  const [customers,   setCustomers]   = React.useState<MapCustomer[]>([])
+  const [visits,      setVisits]      = React.useState<MapVisit[]>([])
+  const [loading,     setLoading]     = React.useState(true)
+  const [selectedId,  setSelectedId]  = React.useState<string | null>(null)
+  const [detailId,    setDetailId]    = React.useState<string | null>(null)
+  const [detailType,  setDetailType]  = React.useState<'customer' | 'visit'>('customer')
+  const [mapError,    setMapError]    = React.useState('')
+
+  React.useEffect(() => {
+    fetch('/api/map/data')
+      .then(r => r.json())
+      .then(d => { setCustomers(d.customers ?? []); setVisits(d.visits ?? []) })
+      .catch(() => setMapError('Failed to load map data'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="w-8 h-8 border-[3px] border-[#16205B]/20 border-t-[#16205B] rounded-full animate-spin"/>
+    </div>
+  )
+  if (mapError) return (
+    <div className="flex-1 flex items-center justify-center text-red-500 text-sm">{mapError}</div>
+  )
+
+  return (
+    <div className="flex-1 min-h-0 relative">
+      <MapView
+        customers={customers}
+        visits={visits}
+        selectedId={selectedId}
+        onSelectCustomer={(id) => { setSelectedId(id); setDetailId(id); setDetailType('customer') }}
+        onSelectVisit={(id)    => { setSelectedId(id); setDetailId(id); setDetailType('visit')    }}
+      />
+      {detailId && (
+        <DetailModal
+          id={detailId}
+          type={detailType}
+          onClose={() => { setDetailId(null); setSelectedId(null) }}
+        />
+      )}
+    </div>
+  )
+}
+
 function RoutesPageInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const editId       = searchParams.get('editId')   // set when opening from /runs Edit button
+  const tabParam     = searchParams.get('tab')       // 'map' | 'optimiser' | 'runs'
+
+  // Tab state — admin only sees Map/Optimiser/Runs tabs; others see optimiser only
+  const [activeTab, setActiveTab] = useState<'map'|'optimiser'|'runs'>(
+    tabParam === 'map' ? 'map' : tabParam === 'runs' ? 'runs' : 'optimiser'
+  )
+  const [isAdmin, setIsAdmin]     = useState(false)
+
+  useEffect(() => {
+    const match = document.cookie.match(/(?:^|;\s*)mfs_role=([^;]+)/)
+    setIsAdmin(match?.[1] === 'admin')
+  }, [])
 
   // ── Form state ──────────────────────────────────────────────────────────────
   // Dynamic date/time defaults — evaluated once on mount using browser local time.
@@ -841,8 +914,33 @@ function RoutesPageInner() {
 
   return (
     <div className="bg-[#EDEAE1] h-screen flex flex-col overflow-hidden">
-      <AppHeader title={editRouteId ? 'Edit Route' : 'Route Planner'} />
+      <AppHeader title="Routes" />
 
+      {/* Tab bar — admin only */}
+      {isAdmin && (
+        <div className="flex border-b border-[#EDEAE1] bg-white flex-shrink-0">
+          {([
+            ['map',       '🗺 Map'],
+            ['optimiser', '🚚 Route Optimiser'],
+            ['runs',      '📋 Run History'],
+          ] as ['map'|'optimiser'|'runs', string][]).map(([key, label]) => (
+            <button key={key} type="button"
+              onClick={() => setActiveTab(key)}
+              className={[
+                'flex-1 py-2.5 text-[11px] font-bold uppercase tracking-wide transition-colors border-b-2',
+                activeTab === key
+                  ? 'border-[#EB6619] text-[#EB6619]'
+                  : 'border-transparent text-gray-400 hover:text-gray-600',
+              ].join(' ')}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── OPTIMISER TAB (or non-admin) ──────────────────────────── */}
+      {(!isAdmin || activeTab === 'optimiser') && (
+        <>
       {/* Edit mode loading overlay */}
       {loadingEdit && (
         <div className="flex items-center justify-center gap-2 py-3 bg-[#16205B]/5 border-b border-[#EDEAE1]">
@@ -858,7 +956,7 @@ function RoutesPageInner() {
       {editRouteId && !loadingEdit && (
         <div className="flex items-center justify-between px-4 py-1.5 bg-[#EB6619]/10 border-b border-[#EB6619]/20">
           <span className="text-xs text-[#EB6619] font-semibold">✏ Editing existing route</span>
-          <button type="button" onClick={() => router.push('/runs')}
+          <button type="button" onClick={() => { setActiveTab('runs'); router.replace('/routes?tab=runs') }}
             className="text-[10px] text-[#EB6619]/70 hover:text-[#EB6619] underline">
             ← Back to Runs
           </button>
@@ -1261,6 +1359,20 @@ function RoutesPageInner() {
           </div>
         </div>
       </div>
+        </>
+      )}
+
+      {/* ── MAP TAB ──────────────────────────────────────────────── */}
+      {isAdmin && activeTab === 'map' && (
+        <MapTabContent />
+      )}
+
+      {/* ── RUNS TAB ─────────────────────────────────────────────── */}
+      {isAdmin && activeTab === 'runs' && (
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <RunsContent />
+        </div>
+      )}
 
       {/* Mobile nav — fixed, below content (mobile only) */}
       <div className="lg:hidden">
