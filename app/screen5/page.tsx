@@ -488,6 +488,36 @@ function UsersSection() {
         </div>
       )}
 
+      {/* ── Email notifications key ─────────────────────────────── */}
+      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+        <p className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">📧 Email Notifications</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1.5 gap-x-6">
+          {[
+            { role: 'admin',     gets: true,  label: 'Complaints: new, updated, resolved' },
+            { role: 'office',    gets: true,  label: 'Complaints: new, updated, resolved' },
+            { role: 'sales',     gets: true,  label: 'Complaints: new, updated, resolved' },
+            { role: 'warehouse', gets: true,  label: 'Complaints: new, updated, resolved' },
+            { role: 'driver',    gets: false, label: 'No complaint emails (drivers excluded)' },
+          ].map(({ role, gets, label }) => (
+            <div key={role} className="flex items-start gap-2">
+              <span className={`mt-px text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize flex-shrink-0 ${
+                role === 'admin'     ? 'bg-purple-100 text-purple-700' :
+                role === 'office'    ? 'bg-blue-100 text-blue-700' :
+                role === 'sales'     ? 'bg-green-100 text-green-700' :
+                role === 'warehouse' ? 'bg-amber-100 text-amber-700' :
+                'bg-gray-100 text-gray-500'
+              }`}>{role}</span>
+              <span className={`text-[11px] leading-tight ${gets ? 'text-gray-600' : 'text-gray-400 italic'}`}>
+                {gets ? '✓ ' : '✗ '}{label}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-gray-400 mt-2.5 pt-2.5 border-t border-gray-200">
+          Emails only send if an address is set on the user. Drivers with an email address will <span className="font-semibold">not</span> receive complaint notifications regardless.
+        </p>
+      </div>
+
       {/* ── Reset auth modal ─────────────────────────────────────── */}
       {resetTarget && (
         <div
