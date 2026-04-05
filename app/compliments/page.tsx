@@ -96,13 +96,10 @@ export default function ComplimentsPage() {
 
   useEffect(() => {
     loadCompliments()
-    // Load users for recipient dropdown
-    fetch('/api/routes/users')
+    // Load all active users for recipient dropdown
+    fetch('/api/compliments/users')
       .then(r => r.json())
-      .then(d => {
-        const list = Array.isArray(d) ? d : (d.users ?? [])
-        setUsers(list.filter((u: User & { role?: string }) => u.role !== 'driver' || true))
-      })
+      .then(d => setUsers(d.users ?? []))
       .catch(() => {})
   }, [loadCompliments])
 
