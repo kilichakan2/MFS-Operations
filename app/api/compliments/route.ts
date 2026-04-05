@@ -9,6 +9,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
+import { sendComplimentEmail }        from '@/lib/compliment-email'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -82,6 +83,14 @@ export async function POST(req: NextRequest) {
   }
 
   const c = data
+
+  // Send email notification — await before responding (no fire-and-forget in serverless)
+  await sendComplimentEmail({
+    body:          c.body,
+    postedByName:  (c.poster  as { id: string; name: string } | null)?.name ?? 'Someone',
+    recipientName: (c.recipient as { id: string; name: string } | null)?.name ?? null,
+  }).catch(err => console.error('[compliments POST] email error:', err))
+
   return NextResponse.json({
     compliment: {
       id:             c.id,
