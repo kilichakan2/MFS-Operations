@@ -476,19 +476,20 @@ function CopyRouteInfoButton(p: CopyRouteInfoProps) {
 // ─── Map tab content — embedded from screen6 ────────────────────────────────
 
 function MapTabContent() {
-  const [customers,   setCustomers]   = React.useState<MapCustomer[]>([])
-  const [visits,      setVisits]      = React.useState<MapVisit[]>([])
-  const [loading,     setLoading]     = React.useState(true)
-  const [selectedId,  setSelectedId]  = React.useState<string | null>(null)
-  const [detailId,    setDetailId]    = React.useState<string | null>(null)
-  const [detailType,  setDetailType]  = React.useState<'customer' | 'visit'>('customer')
-  const [mapError,    setMapError]    = React.useState('')
+  const [customers, setCustomers] = React.useState<MapCustomer[]>([])
+  const [visits,    setVisits]    = React.useState<MapVisit[]>([])
+  const [loading,   setLoading]   = React.useState(true)
+  const [modalId,   setModalId]   = React.useState<string | null>(null)
+  const [mapError,  setMapError]  = React.useState('')
 
   React.useEffect(() => {
-    fetch('/api/map/data')
-      .then(r => r.json())
+    fetch('/api/map/data?layer=all')
+      .then(r => {
+        if (!r.ok) throw new Error(`${r.status}`)
+        return r.json()
+      })
       .then(d => { setCustomers(d.customers ?? []); setVisits(d.visits ?? []) })
-      .catch(() => setMapError('Failed to load map data'))
+      .catch(e => setMapError(`Failed to load map data (${e.message})`))
       .finally(() => setLoading(false))
   }, [])
 
@@ -506,15 +507,14 @@ function MapTabContent() {
       <MapView
         customers={customers}
         visits={visits}
-        selectedId={selectedId}
-        onSelectCustomer={(id) => { setSelectedId(id); setDetailId(id); setDetailType('customer') }}
-        onSelectVisit={(id)    => { setSelectedId(id); setDetailId(id); setDetailType('visit')    }}
+        layer="all"
+        onVisitClick={(id) => setModalId(id)}
       />
-      {detailId && (
+      {modalId && (
         <DetailModal
-          id={detailId}
-          type={detailType}
-          onClose={() => { setDetailId(null); setSelectedId(null) }}
+          id={modalId}
+          type="visit"
+          onClose={() => setModalId(null)}
         />
       )}
     </div>
