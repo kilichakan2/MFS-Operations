@@ -531,12 +531,21 @@ function RoutesPageInner() {
   const [activeTab, setActiveTab] = useState<'map'|'optimiser'|'runs'>(
     tabParam === 'map' ? 'map' : tabParam === 'runs' ? 'runs' : 'optimiser'
   )
-  const [isAdmin, setIsAdmin]     = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const match = document.cookie.match(/(?:^|;\s*)mfs_role=([^;]+)/)
     setIsAdmin(match?.[1] === 'admin')
   }, [])
+
+  // Sync tab when URL params change (e.g. clicking Edit from Run History
+  // navigates to ?editId=...&tab=optimiser while already on /routes —
+  // component doesn't remount so useState init doesn't re-run)
+  useEffect(() => {
+    const t = tabParam
+    if (t === 'map' || t === 'optimiser' || t === 'runs') setActiveTab(t)
+    else if (editId) setActiveTab('optimiser')  // editId always implies optimiser
+  }, [tabParam, editId])
 
   // ── Form state ──────────────────────────────────────────────────────────────
   // Dynamic date/time defaults — evaluated once on mount using browser local time.
