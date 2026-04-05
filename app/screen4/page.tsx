@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import RoleNav from '@/components/RoleNav'
+import Link         from 'next/link'
 import AppHeader             from '@/components/AppHeader'
 import DetailModal, { type ModalType } from '@/components/DetailModal'
 
@@ -114,15 +115,15 @@ function BreakdownRow({ label, count, max, colour='navy' }: {
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
-function KpiCard({ value, label, sub, icon, accent }: {
+function KpiCard({ value, label, sub, icon, accent, href }: {
   value: string|number; label: string; sub?: string
-  accent: 'red'|'amber'|'blue'|'green'; icon: React.ReactNode
+  accent: 'red'|'amber'|'blue'|'green'; icon: React.ReactNode; href?: string
 }) {
   const ring   = accent==='red' ? 'bg-red-50' : accent==='amber' ? 'bg-amber-50' : accent==='green' ? 'bg-green-50' : 'bg-blue-50'
   const icClr  = accent==='red' ? 'text-red-500' : accent==='amber' ? 'text-amber-500' : accent==='green' ? 'text-green-600' : 'text-blue-600'
   const valClr = accent==='red' ? 'text-red-700' : accent==='amber' ? 'text-amber-700' : accent==='green' ? 'text-green-700' : 'text-[#16205B]'
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-2">
+  const inner = (
+    <div className={['bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-2 transition-colors', href ? 'hover:border-gray-300 active:bg-gray-50 cursor-pointer' : ''].join(' ')}>
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${ring}`}>
         <span className={`w-4 h-4 ${icClr}`}>{icon}</span>
       </div>
@@ -133,6 +134,7 @@ function KpiCard({ value, label, sub, icon, accent }: {
       </div>
     </div>
   )
+  return href ? <Link href={href}>{inner}</Link> : inner
 }
 
 // ─── Alert row ────────────────────────────────────────────────────────────────
@@ -483,13 +485,13 @@ export default function Screen4Page() {
 
         {/* KPI Row */}
         <div className="grid grid-cols-3 gap-3">
-          <KpiCard value={openAlertsCount} label="Open complaints" sub=">48h unresolved" accent={openAlertsCount > 0 ? 'red' : 'green'}
+          <KpiCard value={openAlertsCount} label="Open complaints" sub=">48h unresolved" accent={openAlertsCount > 0 ? 'red' : 'green'} href="/complaints"
             icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/></svg>}
           />
-          <KpiCard value={totalVisitsToday} label={`Visits — ${range.label}`} sub={`${data.visitsToday.length} rep${data.visitsToday.length !== 1 ? 's' : ''} active`} accent="blue"
+          <KpiCard value={totalVisitsToday} label={`Visits — ${range.label}`} sub={`${data.visitsToday.length} rep${data.visitsToday.length !== 1 ? 's' : ''} active`} accent="blue" href="/visits"
             icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path d="M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM1.49 15.326a.78.78 0 0 1-.358-.442 3 3 0 0 1 4.308-3.516 6.484 6.484 0 0 0-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 0 1-2.07-.655ZM16.44 15.98a4.97 4.97 0 0 0 2.07-.654.78.78 0 0 0 .357-.442 3 3 0 0 0-4.308-3.517 6.484 6.484 0 0 1 1.907 3.96 2.32 2.32 0 0 1-.026.654ZM18 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM5.304 16.19a.844.844 0 0 1-.277-.71 5 5 0 0 1 9.947 0 .843.843 0 0 1-.277.71A6.975 6.975 0 0 1 10 18a6.974 6.974 0 0 1-4.696-1.81Z"/></svg>}
           />
-          <KpiCard value={totalDiscToday} label="Discrepancies" sub={range.label} accent={totalDiscToday > 0 ? 'amber' : 'green'}
+          <KpiCard value={totalDiscToday} label="Discrepancies" sub={range.label} accent={totalDiscToday > 0 ? 'amber' : 'green'} href="/screen1"
             icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/></svg>}
           />
         </div>

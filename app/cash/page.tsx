@@ -480,9 +480,16 @@ function CashTab({ role }: { role: string }) {
 
           {/* Month not started — office view */}
           {!monthData?.exists && !isAdmin && (
-            <div className="bg-white rounded-2xl border border-[#EDEAE1] p-6 text-center">
-              <p className="text-sm font-semibold text-gray-700">Month not yet started</p>
-              <p className="text-xs text-gray-400 mt-1">Waiting for admin to set opening balance</p>
+            <div className="bg-white rounded-2xl border border-[#EDEAE1] p-8 text-center">
+              <div className="w-12 h-12 rounded-full bg-[#16205B]/5 flex items-center justify-center mx-auto mb-3">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#16205B" strokeWidth="1.5" className="w-6 h-6 opacity-30">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+                </svg>
+              </div>
+              <p className="text-sm font-semibold text-gray-700">{MONTH_NAMES[month-1]} {year} not set up yet</p>
+              <p className="text-xs text-gray-400 mt-1.5 max-w-[200px] mx-auto leading-relaxed">
+                Waiting for admin to set the opening balance before entries can be added.
+              </p>
             </div>
           )}
 

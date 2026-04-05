@@ -228,7 +228,7 @@ function SuccessBanner({visible,isUpdate}:{visible:boolean;isUpdate:boolean}) {
 function SearchBar({value,onChange}:{value:string;onChange:(v:string)=>void}) {
   const { t } = useLanguage()
   return (
-    <div className="sticky top-0 z-10 bg-[#EDEAE1] px-4 pt-3 pb-2">
+    <div className="bg-[#EDEAE1] px-4 pt-3 pb-2">
       <div className="relative">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#16205B]/30 pointer-events-none">
@@ -472,7 +472,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
       {showSheet && !isPending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
           onClick={() => setShowSheet(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-2xl" onClick={e=>e.stopPropagation()}>
+          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e=>e.stopPropagation()}>
             {/* Header drag bar */}
             <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-1"/>
             <p className="text-sm font-bold text-[#16205B] px-5 pt-2 pb-0.5">{t('pipelineStatus')}</p>
@@ -549,7 +549,7 @@ function VisitCard({visit, onEdit, onDelete, onStatusUpdate}:{
             </div>
 
             {/* ── Notes thread ─────────────────────────────────────── */}
-            <div className="border-t border-[#EDEAE1] px-4 pt-4 pb-6">
+            <div className="border-t border-[#EDEAE1] px-4 pt-4 pb-8" style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">{t('visitNotes')}</p>
 
               {/* Original note from log — read only */}

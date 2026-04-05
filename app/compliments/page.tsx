@@ -74,6 +74,7 @@ export default function ComplimentsPage() {
   const [compliments,    setCompliments]    = useState<Compliment[]>([])
   const [users,          setUsers]          = useState<User[]>([])
   const [loading,        setLoading]        = useState(true)
+  const [loadError,      setLoadError]      = useState('')
   const [body,           setBody]           = useState('')
   const [recipientId,    setRecipientId]    = useState('')
   const [posting,        setPosting]        = useState(false)
@@ -83,14 +84,20 @@ export default function ComplimentsPage() {
 
   useEffect(() => { setCurrentUserId(getClientUserId()) }, [])
 
+  const feedRef = useRef<HTMLDivElement>(null)
+
   const loadCompliments = useCallback(async () => {
     try {
       const res = await fetch('/api/compliments')
       if (res.ok) {
         const d = await res.json()
         setCompliments(d.compliments ?? [])
+      } else {
+        setLoadError('Failed to load — tap to retry')
       }
-    } catch { /* non-fatal */ }
+    } catch {
+      setLoadError('No connection — tap to retry')
+    }
     finally { setLoading(false) }
   }, [])
 
@@ -117,13 +124,15 @@ export default function ComplimentsPage() {
       setCompliments(prev => [d.compliment, ...prev])
       setBody(''); setRecipientId('')
       textareaRef.current?.blur()
+      // Scroll to feed so they can see their post
+      setTimeout(() => feedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
     } catch { setError('Network error') }
     finally { setPosting(false) }
   }
 
   return (
     <div className="min-h-screen bg-[#EDEAE1]">
-      <AppHeader title="Compliments ⭐" />
+      <AppHeader title="Kudos" />
 
       <div className="max-w-lg mx-auto px-4 py-4 pb-28 space-y-4">
 
@@ -186,14 +195,19 @@ export default function ComplimentsPage() {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
             </svg>
           </div>
+        ) : loadError ? (
+          <button type="button" onClick={() => { setLoadError(''); setLoading(true); loadCompliments() }}
+            className="w-full text-center py-12">
+            <p className="text-sm font-semibold text-red-500">{loadError}</p>
+          </button>
         ) : compliments.length === 0 ? (
-          <div className="text-center py-16">
+          <div ref={feedRef} className="text-center py-16">
             <p className="text-4xl mb-3">⭐</p>
-            <p className="text-sm font-semibold text-gray-700">No compliments yet</p>
+            <p className="text-sm font-semibold text-gray-700">No kudos yet</p>
             <p className="text-xs text-gray-400 mt-1">Be the first to share some positivity</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div ref={feedRef} className="space-y-3">
             {compliments.map(c => (
               <ComplimentCard key={c.id} c={c} currentUserId={currentUserId} />
             ))}
