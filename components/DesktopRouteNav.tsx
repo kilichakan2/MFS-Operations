@@ -40,31 +40,35 @@ export default function DesktopRouteNav() {
       case 'admin':
         setItems([
           { href: '/screen4',    label: t('navDashboard'),  icon: Icons.dashboard },
-          { href: '/routes',     label: t('navRoutes'),     icon: Icons.routes    },
-          { href: '/complaints', label: t('navComplaints'), icon: Icons.complaint },
-          { href: '/cash',       label: t('navCash'),       icon: Icons.cash      },
-          { href: '/screen5',    label: t('navAdmin'),      icon: Icons.admin     },
+          { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes     },
+          { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
+          { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
+          { href: '/cash',        label: t('navCash'),        icon: Icons.cash       },
+          { href: '/screen5',     label: t('navAdmin'),       icon: Icons.admin      },
         ]); break
       case 'sales':
         setItems([
-          { href: '/complaints', label: t('navComplaints'), icon: Icons.complaint },
-          { href: '/visits',     label: t('navVisits'),     icon: Icons.visit     },
-          { href: '/routes',     label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
-          { href: '/runs',       label: t('navRuns'),       icon: Icons.runs     },
+          { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
+          { href: '/visits',      label: t('navVisits'),      icon: Icons.visit      },
+          { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
+          { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },
+          { href: '/runs',        label: t('navRuns'),        icon: Icons.runs       },
         ]); break
       case 'office':
         setItems([
-          { href: '/screen1',    label: t('navDispatch'),   icon: Icons.dispatch  },
-          { href: '/complaints', label: t('navComplaints'), icon: Icons.complaint },
-          { href: '/cash',       label: t('navCash'),       icon: Icons.cash      },
-          { href: '/routes',     label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
-          { href: '/runs',       label: t('navRuns'),       icon: Icons.runs     },
+          { href: '/screen1',     label: t('navDispatch'),    icon: Icons.dispatch   },
+          { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
+          { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
+          { href: '/cash',        label: t('navCash'),        icon: Icons.cash       },
+          { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },
+          { href: '/runs',        label: t('navRuns'),        icon: Icons.runs       },
         ]); break
       case 'warehouse':
         setItems([
-          { href: '/screen1', label: t('navDispatch'),   icon: Icons.dispatch  },
-          { href: '/routes',  label: t('navRoutes'),     icon: Icons.routes,   badge: 'Desktop' },
-          { href: '/runs',    label: t('navRuns'),       icon: Icons.runs     },
+          { href: '/screen1',     label: t('navDispatch'),    icon: Icons.dispatch   },
+          { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
+          { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },
+          { href: '/runs',        label: t('navRuns'),        icon: Icons.runs       },
         ]); break
       
         

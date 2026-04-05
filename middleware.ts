@@ -22,10 +22,10 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   warehouse: ['/screen1', '/routes', '/runs'],
-  office:    ['/screen1', '/complaints', '/routes', '/runs', '/cash'],
-  sales:     ['/complaints', '/visits', '/routes', '/runs'],
-  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/cash', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
-  driver:    ['/driver', '/routes', '/complaints'],  // drivers: route view + complaints
+  office:    ['/screen1', '/complaints', '/routes', '/runs', '/cash', '/compliments'],
+  sales:     ['/complaints', '/visits', '/routes', '/runs', '/compliments'],
+  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/cash', '/compliments', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
+  driver:    ['/driver', '/routes', '/complaints', '/compliments'],  // drivers: route view + complaints
 }
 
 // Default landing page per role
@@ -55,6 +55,7 @@ const SHARED_API_PATHS = [
   '/api/screen3/today',
   '/api/screen3/visit',
   '/api/screen3/visit/notes',
+  '/api/compliments',
   '/api/detail/visit',
   '/api/detail/complaint',
   '/api/detail/discrepancy',
