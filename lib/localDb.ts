@@ -195,6 +195,8 @@ export async function syncReferenceData(
     id:       p.id,
     name:     p.name,
     category: p.category,
+    box_size: p.box_size ?? null,
+    code:     p.code     ?? null,
     syncedAt: now,
   }))
 
