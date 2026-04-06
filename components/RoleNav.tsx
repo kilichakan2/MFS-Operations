@@ -69,6 +69,7 @@ export default function RoleNav() {
       case 'warehouse':
         setItems([
           { href: '/screen1',     label: t('navDispatch'),    icon: Icons.dispatch   },
+          { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
           { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
           { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },
           { href: '/runs',        label: t('navRuns'),        icon: Icons.runs       },
