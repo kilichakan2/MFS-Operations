@@ -882,52 +882,94 @@ async function exportPdf(agreement: Agreement) {
   doc.setTextColor(255, 255, 255)
   doc.text('Contract Price Agreement', 210 - 14, 17, { align: 'right' })
 
-  // ── Document title ──
-  doc.setTextColor(...navy)
-  doc.setFontSize(14)
+  // ── Compact 2-column meta block ──
+  // Left: customer name + rep  |  Right: reference, valid dates, issued
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  const metaTop = 35
+  const metaH   = 27   // block height in mm
+
+  // Light background card
+  doc.setFillColor(249, 250, 251)
+  doc.setDrawColor(229, 231, 235)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(14, metaTop, 182, metaH, 2, 2, 'FD')
+
+  // ── Left column: customer ──────────────────────────────────────────────────
+  doc.setFontSize(7)
   doc.setFont('helvetica', 'bold')
-  doc.text('CONTRACT PRICE AGREEMENT', 14, 44)
+  doc.setTextColor(...gray)
+  doc.text('CUSTOMER', 19, metaTop + 6.5)
 
-  // ── Meta block ──
-  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  // Customer name — truncate if needed to fit column width (~88mm)
+  doc.setFontSize(10.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(17, 24, 39)
+  const custLines = doc.splitTextToSize(agreement.customer_name, 84)
+  doc.text(custLines[0], 19, metaTop + 12.5)
 
-  const meta: [string, string][] = [
-    ['Customer',    agreement.customer_name],
-    ['Reference',   agreement.reference_number],
-    ['Valid from',  fmtDate(agreement.valid_from)],
-    ['Valid until', agreement.valid_until ? fmtDate(agreement.valid_until) : 'Ongoing'],
-    ['Agreed by',   `${agreement.rep_name} (MFS Global Ltd)`],
-    ['Date issued', today],
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...gray)
+  doc.text(`Agreed by ${agreement.rep_name}`, 19, metaTop + 19.5)
+  if (agreement.is_prospect) {
+    doc.setFontSize(7.5)
+    doc.setTextColor(217, 119, 6)
+    doc.text('Prospect', 19, metaTop + 24.5)
+  }
+
+  // ── Vertical divider ──────────────────────────────────────────────────────
+  doc.setDrawColor(229, 231, 235)
+  doc.setLineWidth(0.3)
+  doc.line(108, metaTop + 4, 108, metaTop + metaH - 4)
+
+  // ── Right column: reference + dates ──────────────────────────────────────
+  const rx    = 113  // right column x
+  const rVals: [string, string][] = [
+    ['Ref',     agreement.reference_number],
+    ['Valid',   agreement.valid_until
+                  ? `${fmtDate(agreement.valid_from)} – ${fmtDate(agreement.valid_until)}`
+                  : `${fmtDate(agreement.valid_from)} (ongoing)`],
+    ['Issued',  today],
   ]
 
-  let y = 52
-  doc.setFontSize(10)
-  for (const [label, value] of meta) {
+  let ry = metaTop + 6.5
+  for (const [lbl, val] of rVals) {
+    doc.setFontSize(7.5)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(...gray)
-    doc.text(label, 14, y)
+    doc.text(lbl, rx, ry)
+    doc.setFontSize(8.5)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(17, 24, 39)
-    doc.text(value, 58, y)
-    y += 7
+    doc.text(val, rx + 18, ry)
+    ry += 7
   }
 
+  let y = metaTop + metaH + 5
+
+  // ── Notes (if any) ────────────────────────────────────────────────────────
   if (agreement.notes) {
-    y += 2
+    doc.setFillColor(239, 246, 255)
+    doc.setDrawColor(191, 219, 254)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(14, y, 182, 1, 0, 0, 'F')  // top border accent
+    doc.setFontSize(8.5)
     doc.setFont('helvetica', 'italic')
-    doc.setTextColor(...gray)
-    doc.setFontSize(9)
-    const lines = doc.splitTextToSize(`Note: ${agreement.notes}`, 180)
-    doc.text(lines, 14, y)
-    y += lines.length * 5 + 2
+    doc.setTextColor(30, 58, 138)
+    const noteLines = doc.splitTextToSize(`Note: ${agreement.notes}`, 176)
+    // Light blue background sized to content
+    const noteH = noteLines.length * 4.5 + 6
+    doc.setFillColor(239, 246, 255)
+    doc.rect(14, y, 182, noteH, 'F')
+    doc.text(noteLines, 18, y + 5)
+    y += noteH + 4
   }
 
-  // ── Divider ──
-  y += 4
+  // ── Divider before table ──────────────────────────────────────────────────
   doc.setDrawColor(...navy)
-  doc.setLineWidth(0.5)
+  doc.setLineWidth(0.4)
   doc.line(14, y, 196, y)
-  y += 6
+  y += 5
 
   // ── Products table ──
   autoTable(doc, {
