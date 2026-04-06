@@ -160,9 +160,7 @@ function AlertGroup({ title, sub, tone, count, viewHref, items, onRowClick }: {
   onRowClick:  (type: ModalType, id: string) => void
 }) {
   const [expanded, setExpanded] = useState(false)
-  const CAP = 3
-  const shown = expanded ? items : items.slice(0, CAP)
-  const overflow = items.length - CAP
+  const shown = expanded ? items : []
 
   const headerBg   = tone === 'red' ? 'bg-red-50 border-red-200'    : 'bg-amber-50 border-amber-200'
   const headerText = tone === 'red' ? 'text-red-800'                 : 'text-amber-800'
@@ -186,37 +184,34 @@ function AlertGroup({ title, sub, tone, count, viewHref, items, onRowClick }: {
         </div>
       </div>
 
-      {/* Rows */}
-      <div className="divide-y divide-gray-50">
-        {shown.map(item => (
-          <button key={item.id} type="button"
-            onClick={() => onRowClick(item.type, item.id)}
-            className="w-full text-left px-4 py-3 flex items-start justify-between gap-3 hover:bg-[#EDEAE1] transition-colors min-h-[44px] active:bg-gray-100">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-gray-900 truncate">{item.primary}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">{item.detail}</p>
-              {item.excerpt && (
-                <p className="text-[11px] text-gray-500 italic mt-0.5 line-clamp-1">&ldquo;{item.excerpt}&rdquo;</p>
-              )}
-            </div>
-            {item.badge && <Badge label={item.badge} tone={item.badgeTone ?? 'amber'} />}
-          </button>
-        ))}
-      </div>
+      {/* Rows — only visible when expanded */}
+      {expanded && (
+        <div className="divide-y divide-gray-50">
+          {shown.map(item => (
+            <button key={item.id} type="button"
+              onClick={() => onRowClick(item.type, item.id)}
+              className="w-full text-left px-4 py-3 flex items-start justify-between gap-3 hover:bg-[#EDEAE1] transition-colors min-h-[44px] active:bg-gray-100">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-gray-900 truncate">{item.primary}</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">{item.detail}</p>
+                {item.excerpt && (
+                  <p className="text-[11px] text-gray-500 italic mt-0.5 line-clamp-1">&ldquo;{item.excerpt}&rdquo;</p>
+                )}
+              </div>
+              {item.badge && <Badge label={item.badge} tone={item.badgeTone ?? 'amber'} />}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Expand / collapse */}
-      {overflow > 0 && !expanded && (
-        <button type="button" onClick={() => setExpanded(true)}
-          className="w-full px-4 py-2.5 text-xs font-semibold text-gray-500 hover:bg-[#EDEAE1] transition-colors border-t border-gray-50 text-center">
-          + {overflow} more
-        </button>
-      )}
-      {expanded && overflow > 0 && (
-        <button type="button" onClick={() => setExpanded(false)}
-          className="w-full px-4 py-2.5 text-xs font-semibold text-gray-400 hover:bg-[#EDEAE1] transition-colors border-t border-gray-50 text-center">
-          Show less
-        </button>
-      )}
+      {/* Expand / collapse toggle */}
+      <button type="button" onClick={() => setExpanded(e => !e)}
+        className="w-full px-4 py-2.5 text-xs font-semibold text-gray-500 hover:bg-[#EDEAE1] transition-colors border-t border-gray-50 text-center flex items-center justify-center gap-1.5">
+        {expanded
+          ? <><svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M3.47 9.53a.75.75 0 0 0 1.06 1.06L8 7.12l3.47 3.47a.75.75 0 1 0 1.06-1.06l-4-4a.75.75 0 0 0-1.06 0l-4 4Z"/></svg> Show less</>
+          : <><svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M12.53 6.47a.75.75 0 0 0-1.06-1.06L8 8.88 4.53 5.41a.75.75 0 0 0-1.06 1.06l4 4a.75.75 0 0 0 1.06 0l4-4Z"/></svg> Show {items.length}</>
+        }
+      </button>
     </div>
   )
 }
