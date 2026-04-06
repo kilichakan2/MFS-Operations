@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
       weekComplaintsRes,
       weekVisitsRes,
       prospectsRes,
+      pricingRes,
     ] = await Promise.all([
 
       // ── Zone 1: Open complaints > 48h ──────────────────────────────────────
@@ -137,6 +138,11 @@ export async function GET(req: NextRequest) {
         .gte('created_at', zoneFrom)
         .lte('created_at', zoneTo)
         .order('created_at', { ascending: false }),
+
+      // ── Zone 1: Pricing agreements snapshot ────────────────────────────────
+      supabase
+        .from('price_agreements')
+        .select('id, status, valid_until'),
     ])
 
     // ── Shape Zone 1 ──────────────────────────────────────────────────────────
@@ -317,6 +323,13 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    // ── Pricing snapshot ─────────────────────────────────────────────────────
+    const todayStr = now.toISOString().split('T')[0]
+    const pricingRows = (pricingRes.data ?? []) as { id: string; status: string; valid_until: string | null }[]
+    const activePricing  = pricingRows.filter(p => p.status === 'active' && !(p.valid_until && p.valid_until < todayStr)).length
+    const draftPricing   = pricingRows.filter(p => p.status === 'draft').length
+    const expiredPricing = pricingRows.filter(p => p.status === 'active' && p.valid_until != null && p.valid_until < todayStr).length
+
     return NextResponse.json({
       // Zone 1
       openComplaints48h,
@@ -333,6 +346,10 @@ export async function GET(req: NextRequest) {
       weekVisitsByRep,
       prospectsThisWeek,
       hunterFarmer,
+      // Pricing
+      activePricing,
+      draftPricing,
+      expiredPricing,
       // Extras
       avgResolutionHours,
       totalComplaintsWeek: Array.from(catMap.values()).reduce((s, n) => s + n, 0),

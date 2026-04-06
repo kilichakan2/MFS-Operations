@@ -56,6 +56,7 @@ const EMPTY: DashboardData = {
   discrepanciesToday: [], complaintsTodayList: [], visitsToday: [],
   weekDiscrepancyReasons: [], weekDiscrepancyProducts: [], weekComplaintCategories: [],
   weekVisitsByRep: [], prospectsThisWeek: [], hunterFarmer: { existing: 0, prospects: 0 },
+  activePricing: 0, draftPricing: 0, expiredPricing: 0,
   avgResolutionHours: null, totalComplaintsWeek: 0, openComplaintsWeek: 0,
 }
 
@@ -483,8 +484,8 @@ export default function Screen4Page() {
       {loading && !lastFetch ? <Spinner /> : (
       <main className="max-w-5xl mx-auto px-4 py-5 pb-24 space-y-8">
 
-        {/* KPI Row */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* KPI Row — 2×2 on mobile, 4-col on md+ */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiCard value={openAlertsCount} label="Open complaints" sub=">48h unresolved" accent={openAlertsCount > 0 ? 'red' : 'green'} href="/complaints"
             icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/></svg>}
           />
@@ -493,6 +494,9 @@ export default function Screen4Page() {
           />
           <KpiCard value={totalDiscToday} label="Discrepancies" sub={range.label} accent={totalDiscToday > 0 ? 'amber' : 'green'} href="/screen1"
             icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/></svg>}
+          />
+          <KpiCard value={data.activePricing} label="Active pricing" sub={data.draftPricing > 0 ? `${data.draftPricing} draft` : 'agreements'} accent={data.expiredPricing > 0 ? 'amber' : 'green'} href="/pricing"
+            icon={<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-full h-full"><path d="M17.25 11.25 11.25 17.25M17.25 11.25 10.5 4.5 3 4.5 3 12l6.75 6.75" strokeLinecap="round" strokeLinejoin="round"/><circle cx="7" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg>}
           />
         </div>
 
@@ -544,23 +548,6 @@ export default function Screen4Page() {
           <SectionLabel>{range.label} — Breakdown</SectionLabel>
 
           <div className="space-y-4">
-
-          {/* Week KPI mini-row */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <span className={`text-2xl font-bold leading-none block ${totalDiscWeek > 5 ? 'text-amber-700' : 'text-[#16205B]'}`}>{totalDiscWeek}</span>
-              <p className="text-xs font-semibold text-gray-700 mt-1">Discrepancies</p>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <span className={`text-2xl font-bold leading-none block ${data.openComplaintsWeek > 0 ? 'text-amber-700' : 'text-[#16205B]'}`}>{data.totalComplaintsWeek}</span>
-              <p className="text-xs font-semibold text-gray-700 mt-1">Complaints</p>
-              {data.openComplaintsWeek > 0 && <p className="text-[10px] text-amber-600">{data.openComplaintsWeek} open</p>}
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <span className="text-2xl font-bold leading-none block text-[#16205B]">{data.avgResolutionHours !== null ? `${data.avgResolutionHours}h` : '—'}</span>
-              <p className="text-xs font-semibold text-gray-700 mt-1">Avg resolve</p>
-            </div>
-          </div>
 
           {/* Discrepancy breakdown */}
           {totalDiscWeek > 0 && (
