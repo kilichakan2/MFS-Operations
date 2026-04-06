@@ -138,7 +138,90 @@ function KpiCard({ value, label, sub, icon, accent, href }: {
   return href ? <Link href={href}>{inner}</Link> : inner
 }
 
-// ─── Alert row ────────────────────────────────────────────────────────────────
+// ─── Alert group — grouped, capped, expandable ───────────────────────────────
+
+interface AlertItem {
+  id: string
+  primary: string
+  detail: string
+  excerpt?: string
+  badge?: string
+  badgeTone?: 'red'|'amber'|'green'|'gray'|'navy'
+  type: ModalType
+}
+
+function AlertGroup({ title, sub, tone, count, viewHref, items, onRowClick }: {
+  title:       string
+  sub:         string
+  tone:        'red'|'amber'
+  count:       number
+  viewHref:    string
+  items:       AlertItem[]
+  onRowClick:  (type: ModalType, id: string) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const CAP = 3
+  const shown = expanded ? items : items.slice(0, CAP)
+  const overflow = items.length - CAP
+
+  const headerBg   = tone === 'red' ? 'bg-red-50 border-red-200'    : 'bg-amber-50 border-amber-200'
+  const headerText = tone === 'red' ? 'text-red-800'                 : 'text-amber-800'
+  const dotClr     = tone === 'red' ? 'bg-red-500'                   : 'bg-amber-500'
+  const countBg    = tone === 'red' ? 'bg-red-100 text-red-700'      : 'bg-amber-100 text-amber-700'
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Group header */}
+      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${headerBg}`}>
+        <div className="flex items-center gap-2">
+          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClr}`} />
+          <span className={`text-xs font-bold ${headerText}`}>{title}</span>
+          <span className={`text-[10px] ${headerText} opacity-60`}>{sub}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${countBg}`}>{count}</span>
+          <Link href={viewHref} className={`text-[10px] font-bold ${headerText} underline underline-offset-2 opacity-70 hover:opacity-100`}>
+            View all →
+          </Link>
+        </div>
+      </div>
+
+      {/* Rows */}
+      <div className="divide-y divide-gray-50">
+        {shown.map(item => (
+          <button key={item.id} type="button"
+            onClick={() => onRowClick(item.type, item.id)}
+            className="w-full text-left px-4 py-3 flex items-start justify-between gap-3 hover:bg-[#EDEAE1] transition-colors min-h-[44px] active:bg-gray-100">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-900 truncate">{item.primary}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{item.detail}</p>
+              {item.excerpt && (
+                <p className="text-[11px] text-gray-500 italic mt-0.5 line-clamp-1">&ldquo;{item.excerpt}&rdquo;</p>
+              )}
+            </div>
+            {item.badge && <Badge label={item.badge} tone={item.badgeTone ?? 'amber'} />}
+          </button>
+        ))}
+      </div>
+
+      {/* Expand / collapse */}
+      {overflow > 0 && !expanded && (
+        <button type="button" onClick={() => setExpanded(true)}
+          className="w-full px-4 py-2.5 text-xs font-semibold text-gray-500 hover:bg-[#EDEAE1] transition-colors border-t border-gray-50 text-center">
+          + {overflow} more
+        </button>
+      )}
+      {expanded && overflow > 0 && (
+        <button type="button" onClick={() => setExpanded(false)}
+          className="w-full px-4 py-2.5 text-xs font-semibold text-gray-400 hover:bg-[#EDEAE1] transition-colors border-t border-gray-50 text-center">
+          Show less
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─── Alert row (kept for legacy use) ─────────────────────────────────────────
 
 function AlertRow({ tone, children }: { tone: 'red'|'amber'; children: React.ReactNode }) {
   const dot  = tone==='red' ? 'bg-red-500' : 'bg-amber-500'
@@ -500,39 +583,71 @@ export default function Screen4Page() {
           />
         </div>
 
-        {/* Alerts */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-4 pt-4 pb-1 flex items-center justify-between">
-            <SectionLabel>Alerts</SectionLabel>
-            {!hasAlerts && <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full -mt-3">All clear</span>}
+        {/* Alerts — grouped, capped, tappable */}
+        {!hasAlerts ? (
+          <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+            <span className="text-green-600 text-sm">✅</span>
+            <p className="text-sm font-semibold text-green-700">All clear — no open complaints, at-risk accounts, or unreviewed commitments</p>
           </div>
-          {!hasAlerts ? (
-            <p className="px-4 pb-4 text-xs text-gray-400">No open complaints &gt;48h · No at-risk accounts · No unreviewed commitments</p>
-          ) : (
-            <div className="px-4 pb-2">
-              {data.openComplaints48h.map(c => (
-                <AlertRow key={c.id} tone="amber">
-                  <span className="text-sm font-bold">{c.customer}<span className="font-normal"> — {c.category} open {c.hoursAgo}h</span></span>
-                  {c.description && <span className="text-xs opacity-80">&ldquo;{c.description}&rdquo;</span>}
-                  <span className="text-xs opacity-60">By {c.loggedBy}</span>
-                </AlertRow>
-              ))}
-              {data.atRiskAccounts.map(a => (
-                <AlertRow key={a.id} tone={a.outcome === 'lost' ? 'red' : 'amber'}>
-                  <span className="text-sm font-bold flex items-center gap-2">{a.customer} <Badge label={a.outcome === 'lost' ? 'LOST' : 'AT RISK'} tone={a.outcome === 'lost' ? 'red' : 'amber'} /></span>
-                  <span className="text-xs opacity-60">{a.rep} · {a.hoursAgo}h ago</span>
-                </AlertRow>
-              ))}
-              {data.unreviewedCommitments.map(u => (
-                <AlertRow key={u.id} tone="amber">
-                  <span className="text-sm font-bold">{u.customer}<span className="font-normal"> — unreviewed commitment</span></span>
-                  <span className="text-xs opacity-80">&ldquo;{u.detail}&rdquo;</span>
-                  <span className="text-xs opacity-60">{u.rep} · {u.hoursAgo}h ago</span>
-                </AlertRow>
-              ))}
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Group 1: Open complaints >48h */}
+            {data.openComplaints48h.length > 0 && (
+              <AlertGroup
+                title="Open Complaints"
+                sub=">48h unresolved"
+                tone="amber"
+                count={data.openComplaints48h.length}
+                viewHref="/complaints"
+                items={data.openComplaints48h.map(c => ({
+                  id:       c.id,
+                  primary:  c.customer,
+                  detail:   `${c.category} · ${c.hoursAgo}h · ${c.loggedBy}`,
+                  excerpt:  c.description,
+                  type:     'complaint' as const,
+                }))}
+                onRowClick={(type, id) => setModal({ type, id })}
+              />
+            )}
+            {/* Group 2: At-risk accounts */}
+            {data.atRiskAccounts.length > 0 && (
+              <AlertGroup
+                title="At-Risk Accounts"
+                sub="recent visits flagged"
+                tone={data.atRiskAccounts.some(a => a.outcome === 'lost') ? 'red' : 'amber'}
+                count={data.atRiskAccounts.length}
+                viewHref="/visits"
+                items={data.atRiskAccounts.map(a => ({
+                  id:      a.id,
+                  primary: a.customer,
+                  detail:  `${a.rep} · ${a.hoursAgo}h ago`,
+                  badge:   a.outcome === 'lost' ? 'LOST' : 'AT RISK',
+                  badgeTone: a.outcome === 'lost' ? 'red' as const : 'amber' as const,
+                  type:    'visit' as const,
+                }))}
+                onRowClick={(type, id) => setModal({ type, id })}
+              />
+            )}
+            {/* Group 3: Unreviewed commitments */}
+            {data.unreviewedCommitments.length > 0 && (
+              <AlertGroup
+                title="Unreviewed Commitments"
+                sub=">24h without follow-up"
+                tone="amber"
+                count={data.unreviewedCommitments.length}
+                viewHref="/visits"
+                items={data.unreviewedCommitments.map(u => ({
+                  id:      u.id,
+                  primary: u.customer,
+                  detail:  `${u.rep} · ${u.hoursAgo}h ago`,
+                  excerpt: u.detail,
+                  type:    'visit' as const,
+                }))}
+                onRowClick={(type, id) => setModal({ type, id })}
+              />
+            )}
+          </div>
+        )}
 
         {/* Two-column layout on desktop: Today (left) | This Week (right) */}
         <div className="md:grid md:grid-cols-2 md:gap-6 md:items-start space-y-5 md:space-y-0">
@@ -548,6 +663,23 @@ export default function Screen4Page() {
           <SectionLabel>{range.label} — Breakdown</SectionLabel>
 
           <div className="space-y-4">
+
+          {/* Summary strip — always visible */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
+              <span className={`text-2xl font-bold leading-none block ${totalDiscWeek > 5 ? 'text-amber-700' : 'text-[#16205B]'}`}>{totalDiscWeek}</span>
+              <p className="text-[10px] font-semibold text-gray-500 mt-1">Discrepancies</p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
+              <span className={`text-2xl font-bold leading-none block ${data.openComplaintsWeek > 0 ? 'text-amber-700' : 'text-[#16205B]'}`}>{data.totalComplaintsWeek}</span>
+              <p className="text-[10px] font-semibold text-gray-500 mt-1">Complaints</p>
+              {data.openComplaintsWeek > 0 && <p className="text-[9px] text-amber-600 font-semibold">{data.openComplaintsWeek} open</p>}
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
+              <span className="text-2xl font-bold leading-none block text-[#16205B]">{data.avgResolutionHours !== null ? `${data.avgResolutionHours}h` : '—'}</span>
+              <p className="text-[10px] font-semibold text-gray-500 mt-1">Avg resolve</p>
+            </div>
+          </div>
 
           {/* Discrepancy breakdown */}
           {totalDiscWeek > 0 && (
