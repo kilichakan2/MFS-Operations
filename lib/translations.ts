@@ -40,6 +40,7 @@ const t = {
   navRuns:        { en: 'Runs',         tr: 'Seferler' },
   navCash:        { en: 'Cash',         tr: 'Kasa'     },
   navCompliments: { en: 'Kudos',        tr: 'Tebrikler' },
+  navPricing:     { en: 'Pricing',       tr: 'Fiyatlar'  },
 
   // ── Login screen ─────────────────────────────────────────────────────────
   teamLogin:      { en: 'Team Login',          tr: 'Ekip Girişi' },

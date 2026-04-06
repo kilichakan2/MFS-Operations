@@ -30,7 +30,7 @@ export async function GET() {
 
       supabase
         .from('products')
-        .select('id, name, category')
+        .select('id, name, category, box_size, code')
         .eq('active', true)
         .order('name', { ascending: true }),
     ])

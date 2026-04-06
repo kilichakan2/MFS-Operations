@@ -42,6 +42,7 @@ export default function DesktopRouteNav() {
           { href: '/screen4',    label: t('navDashboard'),  icon: Icons.dashboard },
           { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes     },
           { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
+          { href: '/pricing',     label: t('navPricing'),     icon: Icons.pricing    },
           { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
           { href: '/cash',        label: t('navCash'),        icon: Icons.cash       },
           { href: '/screen5',     label: t('navAdmin'),       icon: Icons.admin      },
@@ -50,6 +51,7 @@ export default function DesktopRouteNav() {
         setItems([
           { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
           { href: '/visits',      label: t('navVisits'),      icon: Icons.visit      },
+          { href: '/pricing',     label: t('navPricing'),     icon: Icons.pricing    },
           { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
           { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },
           { href: '/runs',        label: t('navRuns'),        icon: Icons.runs       },
@@ -58,6 +60,7 @@ export default function DesktopRouteNav() {
         setItems([
           { href: '/screen1',     label: t('navDispatch'),    icon: Icons.dispatch   },
           { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
+          { href: '/pricing',     label: t('navPricing'),     icon: Icons.pricing    },
           { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
           { href: '/cash',        label: t('navCash'),        icon: Icons.cash       },
           { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },

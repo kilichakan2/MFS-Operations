@@ -29,6 +29,29 @@ export function useProducts(): SelectableItem[] {
   return rows.map((r) => ({
     id:       r.id,
     label:    r.name,
-    sublabel: r.category ?? undefined,
+    sublabel: r.box_size ? `${r.box_size}${r.category ? ` · ${r.category}` : ''}` : (r.category ?? undefined),
+  }))
+}
+
+export interface ProductDetail {
+  id:       string
+  name:     string
+  category: string | null
+  box_size: string | null
+  code:     string | null
+}
+
+export function useProductsWithDetail(): ProductDetail[] {
+  const rows = useLiveQuery(
+    () => localDb.products.orderBy('name').toArray(),
+    [],
+    []
+  )
+  return rows.map((r) => ({
+    id:       r.id,
+    name:     r.name,
+    category: r.category,
+    box_size: r.box_size,
+    code:     r.code,
   }))
 }

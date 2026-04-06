@@ -47,6 +47,8 @@ export interface LocalProduct {
   id:        string   // matches Supabase uuid
   name:      string
   category:  string | null
+  box_size:  string | null
+  code:      string | null
   syncedAt:  number
 }
 
@@ -106,7 +108,7 @@ const BACKGROUND_REFRESH_INTERVAL_MS = 30 * 60 * 1000
  */
 interface ReferenceDataResponse {
   customers: Array<{ id: string; name: string }>
-  products:  Array<{ id: string; name: string; category: string | null }>
+  products:  Array<{ id: string; name: string; category: string | null; box_size: string | null; code: string | null }>
 }
 
 /**
