@@ -1037,7 +1037,7 @@ export default function PricingPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    syncReferenceData().catch(console.error)
+    syncReferenceData({ force: true }).catch(console.error)
     const m = document.cookie.match(/(?:^|;\s*)mfs_user_id=([^;]+)/)
     setCurrentUserId(m?.[1] ?? null)
   }, [])
