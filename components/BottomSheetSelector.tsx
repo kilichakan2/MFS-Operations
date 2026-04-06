@@ -235,10 +235,11 @@ export default function BottomSheetSelector({
       <div
         ref={sheetRef}
         className={[
-          // Layout — fills up to 85vh, no more
+          // Layout — at least 50vh so few results don't collapse the sheet,
+          // at most 85vh so it doesn't fill the whole screen
           'relative flex flex-col w-full bg-white',
           'rounded-t-2xl overflow-hidden',
-          'max-h-[85vh]',
+          'min-h-[50vh] max-h-[85vh]',
           // Slide transition
           'transition-transform',
           visible ? 'translate-y-0' : 'translate-y-full',
