@@ -12,6 +12,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
+import { sendPricingEmail }           from '@/lib/pricing-email'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -131,7 +132,63 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   console.log(`[pricing PATCH] ${data.reference_number} → ${data.status}`)
+
+  // Fire email when agreement is activated — await before returning (no fire-and-forget in serverless)
+  if (data.status === 'active') {
+    try {
+      // Fetch full agreement with lines for email content
+      const { data: full } = await supabase
+        .from('price_agreements')
+        .select(`
+          id, reference_number, valid_from, valid_until, notes,
+          customer_id, prospect_name,
+          customer:customers!price_agreements_customer_id_fkey(name),
+          rep:users!price_agreements_agreed_by_fkey(name),
+          price_agreement_lines(
+            product_name_override, price, unit, notes,
+            product:products!price_agreement_lines_product_id_fkey(name, box_size)
+          )
+        `)
+        .eq('id', id)
+        .single()
+
+      if (full) {
+        const lines = ((full.price_agreement_lines ?? []) as EmailLine[])
+          .map(l => ({
+            product_name: (l.product as {name:string}|null)?.name ?? l.product_name_override ?? 'Unknown',
+            box_size:     (l.product as {name:string;box_size:string|null}|null)?.box_size ?? null,
+            price:        Number(l.price),
+            unit:         l.unit,
+            notes:        l.notes ?? null,
+            is_freetext:  !((l.product as {name:string}|null)?.name),
+          }))
+
+        await sendPricingEmail({
+          id:               full.id,
+          reference_number: full.reference_number,
+          customer_name:    (full.customer as {name:string}|null)?.name ?? full.prospect_name ?? 'Unknown',
+          is_prospect:      !full.customer_id,
+          rep_name:         (full.rep as {name:string}|null)?.name ?? 'Unknown',
+          valid_from:       full.valid_from,
+          valid_until:      full.valid_until ?? null,
+          notes:            full.notes ?? null,
+          lines,
+        }).catch(err => console.error('[pricing PATCH] email error:', err))
+      }
+    } catch (err) {
+      console.error('[pricing PATCH] failed to fetch full agreement for email:', err)
+    }
+  }
+
   return NextResponse.json(data)
+}
+
+interface EmailLine {
+  product_name_override: string | null
+  price: number
+  unit: string
+  notes: string | null
+  product: { name: string; box_size: string | null } | null
 }
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
