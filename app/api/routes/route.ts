@@ -12,12 +12,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient }              from '@supabase/supabase-js'
+import { supabaseService }           from '@/lib/supabase'
 
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-const supabase = createClient(SUPA_URL, SUPA_KEY)
+const supabase = supabaseService
 
 // ─── POST /api/routes ─────────────────────────────────────────────────────────
 

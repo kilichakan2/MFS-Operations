@@ -22,7 +22,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient }              from '@supabase/supabase-js'
 
 const SUPA_URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SUPA_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -37,6 +36,7 @@ const SNIFFER_FIELD_MASK = 'routes.legs,routes.distanceMeters,routes.duration'
 // Hub coordinates — imported from shared constants (lib/hubs.ts)
 import { MFS_COORDS, OZMEN_COORDS }                 from '@/lib/hubs'
 import { loadRoadTimes, MFS_HUB_ID, OZMEN_HUB_ID, type RoadTimeMatrix } from '@/lib/road-times'
+import { supabaseService }           from '@/lib/supabase'
 
 // Postcode strings for deep-link builder and log messages only
 const ORIGIN_PC = MFS_COORDS.postcode
@@ -183,7 +183,7 @@ function exactTSP(
   return bestOrder
 }
 
-const supabase = createClient(SUPA_URL, SUPA_KEY)
+const supabase = supabaseService
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

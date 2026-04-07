@@ -18,14 +18,11 @@ export const maxDuration = 60  // Vercel max for hobby/pro — large matrix may 
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient }              from '@supabase/supabase-js'
 import { MFS_COORDS, OZMEN_COORDS }  from '@/lib/hubs'
 import { MFS_HUB_ID, OZMEN_HUB_ID } from '@/lib/road-times'
+import { supabaseService }           from '@/lib/supabase'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
+const supabase = supabaseService
 
 const MAPS_KEY      = process.env.GOOGLE_MAPS_API_KEY!
 const MATRIX_URL    = 'https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix'

@@ -5,16 +5,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient }              from '@supabase/supabase-js'
+import { supabaseService as supabase } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
-  // Initialise client inside the handler — avoids any module-level
-  // env-var timing issues on cold starts.
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL  ?? '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-  )
-
   try {
     // ── Auth ─────────────────────────────────────────────────────────────────
     const userId   = req.headers.get('x-mfs-user-id')

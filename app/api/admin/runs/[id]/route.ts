@@ -6,12 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient }              from '@supabase/supabase-js'
+import { supabaseService }           from '@/lib/supabase'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+const supabase = supabaseService
 
 const VALID_STATUSES = ['draft', 'active', 'completed'] as const
 type RouteStatus = typeof VALID_STATUSES[number]
