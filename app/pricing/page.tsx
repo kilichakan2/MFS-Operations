@@ -1015,7 +1015,7 @@ async function exportPdf(agreement: Agreement) {
   doc.setTextColor(...gray)
   doc.text('MFS Global Ltd  ·  mfsglobal.co.uk', 14, footerY)
   doc.text(
-    'Prices subject to change with 30 days written notice. This agreement is between MFS Global Ltd and the above customer.',
+    'Prices are subject to change on notice. Whilst MFS Global Ltd will do its utmost to honour agreed pricing, we reserve the right to adjust prices in circumstances beyond our reasonable control, including supplier cost increases, market fluctuations, or significant changes in input costs. We will always endeavour to communicate any changes promptly and work with you to minimise disruption.',
     14, footerY + 4,
     { maxWidth: 182 }
   )
