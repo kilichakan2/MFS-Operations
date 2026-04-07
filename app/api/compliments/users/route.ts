@@ -12,19 +12,25 @@ import { supabaseService }           from '@/lib/supabase'
 const supabase = supabaseService
 
 export async function GET(req: NextRequest) {
-  const userId = req.headers.get('x-mfs-user-id')
-  if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+  try {
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, name, role')
-    .eq('active', true)
-    .order('name', { ascending: true })
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, role')
+      .eq('active', true)
+      .order('name', { ascending: true })
 
-  if (error) {
-    console.error('[compliments/users GET]', error.message)
-    return NextResponse.json({ error: 'Failed to load users' }, { status: 500 })
+    if (error) {
+      console.error('[compliments/users GET]', error.message)
+      return NextResponse.json({ error: 'Failed to load users' }, { status: 500 })
+    }
+
+    return NextResponse.json({ users: data ?? [] })
+
+  } catch (err) {
+    console.error(`[compliments/users GET] Unhandled error:`, err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
-
-  return NextResponse.json({ users: data ?? [] })
 }

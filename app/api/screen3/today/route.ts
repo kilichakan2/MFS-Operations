@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
   const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
+  try {
   // Admin and office see all reps' visits; sales sees only their own
   const isManager = role === 'admin' || role === 'office'
 
@@ -102,4 +103,8 @@ export async function GET(req: NextRequest) {
   }))
 
   return NextResponse.json({ visits })
+  } catch (err) {
+    console.error('[screen3/today GET] Unhandled error:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
 }

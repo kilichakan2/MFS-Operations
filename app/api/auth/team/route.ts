@@ -10,17 +10,23 @@ import { supabaseService }           from '@/lib/supabase'
 const supabase = supabaseService
 
 export async function GET() {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, name, role')
-    .in('role', ['warehouse', 'office', 'sales', 'driver'])
-    .eq('active', true)
-    .order('name', { ascending: true })
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, name, role')
+      .in('role', ['warehouse', 'office', 'sales', 'driver'])
+      .eq('active', true)
+      .order('name', { ascending: true })
 
-  if (error) {
-    console.error('[GET /api/auth/team]', error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      console.error('[GET /api/auth/team]', error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json(data ?? [])
+
+  } catch (err) {
+    console.error(`[auth/team GET] Unhandled error:`, err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
-
-  return NextResponse.json(data ?? [])
 }

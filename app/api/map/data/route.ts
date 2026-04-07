@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
 
+  try {
   const { searchParams } = req.nextUrl
   const layer = searchParams.get('layer') ?? 'all'
   const from  = searchParams.get('from')  ?? null
@@ -148,4 +149,8 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ customers, visits })
+  } catch (err) {
+    console.error('[map/data GET] Unhandled error:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
 }

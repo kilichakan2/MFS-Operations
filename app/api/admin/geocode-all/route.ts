@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing Supabase env vars' }, { status: 500 })
   }
 
+  try {
   // 1. Fetch un-geocoded customers
   const custRes = await fetch(
     `${SUPA_URL}/rest/v1/customers?select=id,name,postcode&postcode=not.is.null&lat=is.null&limit=500`,
@@ -127,4 +128,8 @@ export async function GET(req: NextRequest) {
     failed:      failedList.length,
     failed_list: failedList,
   })
+  } catch (err) {
+    console.error('[geocode-all GET] Unhandled error:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
 }
