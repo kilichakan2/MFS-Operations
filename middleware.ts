@@ -5,12 +5,12 @@
  * Unauthenticated users are redirected to /login.
  * Authenticated users are blocked from screens outside their role.
  *
- * Role → permitted paths:
- *   warehouse → /screen1
- *   office    → /screen1, /complaints
- *   sales     → /complaints, /visits
- *   admin     → /screen4, /screen5
- *   driver    → /driver (route view only)
+ * Role → permitted paths (keep in sync with ROLE_PERMISSIONS below):
+ *   warehouse → /screen1, /routes, /runs, /complaints, /compliments
+ *   office    → /screen1, /complaints, /routes, /runs, /cash, /compliments, /pricing
+ *   sales     → /complaints, /visits, /routes, /runs, /compliments, /pricing
+ *   admin     → all paths + /api/admin, /api/dashboard, /api/map
+ *   driver    → /driver, /routes, /complaints, /compliments
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
