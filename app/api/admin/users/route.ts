@@ -13,7 +13,7 @@ import { supabaseService }           from '@/lib/supabase'
 
 const supabase = supabaseService
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from('users')
     .select('id, name, role, active, last_login_at, created_at, email')
@@ -29,6 +29,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const callerRole = req.headers.get('x-mfs-user-role')
+    if (callerRole !== 'admin') {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
+
     const body = await req.json().catch(() => null)
 
     const name       = String(body?.name       ?? '').trim()

@@ -18,6 +18,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const role = req.headers.get('x-mfs-user-role')
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  }
+
+
     const { id }  = await params
     const body    = await req.json() as { status?: string }
     const status  = body.status as RouteStatus | undefined
@@ -48,10 +54,16 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const role = req.headers.get('x-mfs-user-role')
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  }
+
+
     const { id } = await params
 
     // route_stops has ON DELETE CASCADE — single delete removes all stops too

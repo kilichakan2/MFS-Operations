@@ -15,6 +15,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const role = req.headers.get('x-mfs-user-role')
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  }
+
+
     const { id }  = await params
     const body    = await req.json() as {
       active?:     boolean
@@ -62,10 +68,16 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+  const role = req.headers.get('x-mfs-user-role')
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  }
+
+
     const { id } = await params
 
     const { error } = await supabase

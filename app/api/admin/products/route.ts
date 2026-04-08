@@ -3,13 +3,18 @@
  * GET — list all products
  */
 
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabaseService }           from '@/lib/supabase'
 
 const supabase = supabaseService
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const role = req.headers.get('x-mfs-user-role')
+  if (role !== 'admin') {
+    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  }
+
     const { data, error } = await supabase
       .from('products')
       .select('id, name, category, code, box_size, active, created_at')
