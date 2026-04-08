@@ -15,6 +15,56 @@ import { supabaseService }           from '@/lib/supabase'
 // Service role key — bypasses RLS. Never expose to the client.
 const supabase = supabaseService
 
+
+// ── In-memory rate limiter ────────────────────────────────────────────────────
+// Limits login attempts per username. Per-instance only — on Vercel each
+// serverless invocation may be a fresh instance so this is a best-effort
+// defence against low-volume targeted attacks, not a distributed rate limit.
+// For a fully distributed rate limit, use Vercel KV or Upstash Redis.
+
+interface AttemptRecord { count: number; lockedUntil: number }
+const loginAttempts = new Map<string, AttemptRecord>()
+
+const MAX_ATTEMPTS    = 5          // attempts before lockout
+const LOCKOUT_MS      = 15 * 60 * 1000   // 15 minutes
+
+function checkRateLimit(name: string): { allowed: boolean; retryAfterSec?: number } {
+  const now    = Date.now()
+  const record = loginAttempts.get(name.toLowerCase())
+
+  if (!record) return { allowed: true }
+
+  if (record.lockedUntil > now) {
+    const retryAfterSec = Math.ceil((record.lockedUntil - now) / 1000)
+    return { allowed: false, retryAfterSec }
+  }
+
+  // Lock expired — reset
+  if (record.lockedUntil > 0 && record.lockedUntil <= now) {
+    loginAttempts.delete(name.toLowerCase())
+    return { allowed: true }
+  }
+
+  return { allowed: true }
+}
+
+function recordFailure(name: string): void {
+  const now    = Date.now()
+  const key    = name.toLowerCase()
+  const record = loginAttempts.get(key) ?? { count: 0, lockedUntil: 0 }
+
+  record.count++
+  if (record.count >= MAX_ATTEMPTS) {
+    record.lockedUntil = now + LOCKOUT_MS
+    console.log(`[login] Rate limit: '${name}' locked for ${LOCKOUT_MS / 60000}m after ${record.count} failures`)
+  }
+  loginAttempts.set(key, record)
+}
+
+function recordSuccess(name: string): void {
+  loginAttempts.delete(name.toLowerCase())
+}
+
 const ROLE_ROUTES: Record<string, string> = {
   warehouse: '/screen1',
   office:    '/screen1',
@@ -45,6 +95,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // ── Rate limit check ──────────────────────────────────────────────────────
+    const rl = checkRateLimit(name)
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: `Too many failed attempts. Try again in ${Math.ceil((rl.retryAfterSec ?? 900) / 60)} minutes.` },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(rl.retryAfterSec ?? 900) },
+        }
+      )
+    }
+
     // ── Fetch user by name (service role — RLS bypassed) ─────────────────────
     const { data: user, error: dbError } = await supabase
       .from('users')
@@ -55,6 +117,7 @@ export async function POST(req: NextRequest) {
     if (dbError) {
       // PGRST116 = no rows returned by .single() — treat as wrong credentials
       if (dbError.code === 'PGRST116') {
+        recordFailure(name)
         return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
       }
       console.error('[login] DB error:', dbError.code, dbError.message)
@@ -91,8 +154,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (!valid) {
+      recordFailure(name)
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
+
+    // ── Clear rate limit on success ───────────────────────────────────────────
+    recordSuccess(name)
 
     // ── Update last_login_at (non-blocking, fire and forget) ──────────────────
     supabase
