@@ -351,7 +351,7 @@ function AgreementForm({
       validFrom:    initial.valid_from,
       validUntil:   initial.valid_until ?? '',
       notes:        initial.notes ?? '',
-      lines:        initial.lines.map(l => ({ ...l })),
+      lines:        initial.lines.map(l => ({ ...l, notes: l.notes ?? '' })),
     }
   })
   const [showCustomerPicker, setShowCustomerPicker] = useState(false)
@@ -409,7 +409,7 @@ function AgreementForm({
           product_name_override: l.is_freetext ? l.product_name : null,
           price:                 Number(l.price),
           unit:                  l.unit,
-          notes:                 l.notes.trim() || null,
+          notes:                 (l.notes ?? '').trim() || null,
           position:              i,
         })),
       }
