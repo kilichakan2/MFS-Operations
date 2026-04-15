@@ -434,16 +434,33 @@ function AgreementForm({
         const d = await res.json()
         if (!res.ok) { setError(d.error ?? 'Update failed'); return }
 
-        // Delete all existing lines and re-insert (simplest approach for edit)
-        for (const line of initial.lines) {
-          if (line.id) await fetch(`/api/pricing/lines/${line.id}`, { method: 'DELETE' })
+        // Delete all existing lines in parallel, then re-insert all in parallel.
+        // Sequential awaits here were causing O(N) cold-start delays on Vercel
+        // (5 lines = ~8s). Promise.all collapses this to 2 round trips total.
+        const deleteResults = await Promise.all(
+          initial.lines
+            .filter(line => line.id)
+            .map(line => fetch(`/api/pricing/lines/${line.id}`, { method: 'DELETE' }))
+        )
+        const failedDelete = deleteResults.find(r => !r.ok)
+        if (failedDelete) {
+          setError('Failed to remove existing lines — please try again')
+          return
         }
-        for (let i = 0; i < body.lines.length; i++) {
-          await fetch(`/api/pricing/${initial.id}/lines`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...body.lines[i], position: i }),
-          })
+
+        const insertResults = await Promise.all(
+          body.lines.map((line, i) =>
+            fetch(`/api/pricing/${initial.id}/lines`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...line, position: i }),
+            })
+          )
+        )
+        const failedInsert = insertResults.find(r => !r.ok)
+        if (failedInsert) {
+          setError('Failed to save product lines — please try again')
+          return
         }
         id     = initial.id
         refNum = initial.reference_number
