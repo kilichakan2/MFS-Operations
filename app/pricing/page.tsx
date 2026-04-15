@@ -434,32 +434,17 @@ function AgreementForm({
         const d = await res.json()
         if (!res.ok) { setError(d.error ?? 'Update failed'); return }
 
-        // Delete all existing lines in parallel, then re-insert all in parallel.
-        // Sequential awaits here were causing O(N) cold-start delays on Vercel
-        // (5 lines = ~8s). Promise.all collapses this to 2 round trips total.
-        const deleteResults = await Promise.all(
-          initial.lines
-            .filter(line => line.id)
-            .map(line => fetch(`/api/pricing/lines/${line.id}`, { method: 'DELETE' }))
-        )
-        const failedDelete = deleteResults.find(r => !r.ok)
-        if (failedDelete) {
-          setError('Failed to remove existing lines — please try again')
-          return
-        }
-
-        const insertResults = await Promise.all(
-          body.lines.map((line, i) =>
-            fetch(`/api/pricing/${initial.id}/lines`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...line, position: i }),
-            })
-          )
-        )
-        const failedInsert = insertResults.find(r => !r.ok)
-        if (failedInsert) {
-          setError('Failed to save product lines — please try again')
+        // Atomic line replacement — single server-side Postgres transaction.
+        // Deletes old lines and inserts new ones in one call. If anything
+        // fails, Postgres rolls back — no partial state, no data loss.
+        const replaceRes = await fetch(`/api/pricing/${initial.id}/lines/replace`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ lines: body.lines }),
+        })
+        if (!replaceRes.ok) {
+          const e = await replaceRes.json().catch(() => ({}))
+          setError(e.error ?? 'Failed to save product lines — please try again')
           return
         }
         id     = initial.id
