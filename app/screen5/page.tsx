@@ -8,7 +8,7 @@ import AppHeader             from '@/components/AppHeader'
 
 type Tab        = 'users' | 'customers' | 'products' | 'export' | 'permissions' | 'audit'
 type ImportState = 'input' | 'mapping' | 'preview' | 'list'
-type UserRole   = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver'
+type UserRole   = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver' | 'butcher'
 
 interface AppUser {
   id:            string
@@ -58,6 +58,7 @@ const ROLE_COLOURS: Record<UserRole, string> = {
   sales:     'bg-emerald-100 text-emerald-700',
   warehouse: 'bg-amber-100 text-amber-700',
   driver:    'bg-sky-100 text-sky-700',
+  butcher:   'bg-[#590129]/10 text-[#590129]',
 }
 
 function RoleBadge({ role }: { role: UserRole }) {
@@ -428,6 +429,7 @@ function UsersSection() {
                 <option value="sales">Sales</option>
                 <option value="admin">Admin</option>
                 <option value="driver">Driver</option>
+                <option value="butcher">Butcher</option>
               </select>
             </div>
             <div className="col-span-2">

@@ -11,6 +11,7 @@
  *   sales     → /complaints, /visits, /routes, /runs, /compliments, /pricing
  *   admin     → all paths + /api/admin, /api/dashboard, /api/map
  *   driver    → /driver, /routes, /complaints, /compliments
+ *   butcher   → /haccp
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -21,11 +22,12 @@ const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-  warehouse: ['/screen1', '/routes', '/runs', '/compliments', '/complaints'],
+  warehouse: ['/screen1', '/routes', '/runs', '/compliments', '/complaints', '/haccp'],
   office:    ['/screen1', '/complaints', '/routes', '/runs', '/cash', '/compliments', '/pricing'],
   sales:     ['/complaints', '/visits', '/routes', '/runs', '/compliments', '/pricing'],
-  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/cash', '/compliments', '/pricing', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
+  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/cash', '/compliments', '/pricing', '/haccp', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
   driver:    ['/driver', '/routes', '/complaints', '/compliments'],  // drivers: route view + complaints
+  butcher:   ['/haccp'],  // butchers: HACCP tablet only
 }
 
 // Default landing page per role
@@ -35,6 +37,7 @@ const ROLE_HOME: Record<string, string> = {
   sales:     '/complaints',
   admin:     '/screen4',
   driver:    '/driver',
+  butcher:   '/haccp',
 }
 
 // Paths that any authenticated user can access (APIs used by multiple roles)
