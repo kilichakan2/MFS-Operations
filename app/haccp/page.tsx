@@ -172,7 +172,7 @@ export default function HaccpDoor() {
 
       {/* Header */}
       <div className="flex flex-col items-center pt-10 pb-6 px-6">
-        <MfsLogo className="h-8 mb-4" />
+        <MfsLogo className="h-8 mb-4 text-white" />
         <p className="text-[#EB6619] text-xs font-bold tracking-[0.35em] uppercase">
           Process Room
         </p>

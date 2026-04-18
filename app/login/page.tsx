@@ -139,6 +139,27 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
         </button>
 
 
+        {/* HACCP Process Room */}
+        <a
+          href="/haccp"
+          className="w-full flex rounded-2xl border border-white/10 hover:border-white/20 active:scale-[0.98] transition-all p-5 text-left bg-white/5 hover:bg-white/10"
+        >
+          <div className="flex items-center gap-4 w-full">
+            <div className="w-11 h-11 rounded-xl bg-[#590129]/40 flex items-center justify-center flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-white font-bold text-base leading-tight">Process Room</p>
+              <p className="text-white/40 text-xs mt-0.5">HACCP compliance — butchery tablet</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="white" className="w-5 h-5 ml-auto opacity-30">
+              <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd"/>
+            </svg>
+          </div>
+        </a>
+
         </div>{/* /space-y-4 */}
 
         {/* Divider */}
