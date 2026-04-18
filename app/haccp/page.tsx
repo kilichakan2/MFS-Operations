@@ -450,7 +450,7 @@ function HomeScreen({ userName }: { userName: string }) {
           <div className="flex gap-3">
             <LargeTile id="cold_storage" icon={Icon.cold} label="Cold Storage" state={coldState} badge={coldBadge}
               sub={s ? `CCP 2 · 5 units${s.cold_storage.am_done ? ' · AM done' : ''}` : 'CCP 2 · 5 units'}
-              onTap={() => {}} onHelp={() => setHelp('cold_storage')} />
+              onTap={() => { window.location.href = '/haccp/cold-storage' }} onHelp={() => setHelp('cold_storage')} />
             <LargeTile id="processing_room" icon={Icon.room} label="Process Room" state={roomState} badge={roomBadge}
               sub={s ? `CCP 3 · Daily Diary${s.daily_diary.opening ? ' · Opening ✓' : ''}` : 'CCP 3 · Daily Diary'}
               onTap={() => {}} onHelp={() => setHelp('processing_room')} />
