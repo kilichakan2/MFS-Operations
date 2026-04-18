@@ -240,10 +240,9 @@ export default function ColdStoragePage() {
   const [date,      setDate]      = useState(todayISO())
   const [temps,     setTemps]     = useState<Record<string, string>>({})
   const [comments,  setComments]  = useState('')
-  const [pin,       setPin]       = useState('')
-  const [pinError,  setPinError]  = useState('')
   const [loading,   setLoading]   = useState(true)
   const [submitting,setSubmitting] = useState(false)
+  const [submitError,setSubmitError] = useState('')
   const [numpadUnit,setNumpadUnit] = useState<StorageUnit | null>(null)
   const [showCCA,   setShowCCA]   = useState(false)
   const [submitted, setSubmitted] = useState(false)
@@ -284,17 +283,10 @@ export default function ColdStoragePage() {
       unitType: u.unit_type,
     }))
 
-  const handlePinChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = e.target.value.replace(/\D/g, '').slice(0, 4)
-    setPin(v)
-    setPinError('')
-  }
-
   const handleSubmitAttempt = useCallback(() => {
-    if (pin.length !== 4) { setPinError('Enter your 4-digit PIN'); return }
     if (deviations.length > 0) { setShowCCA(true); return }
     doSubmit('', '', '')
-  }, [pin, deviations])
+  }, [deviations])
 
   const doSubmit = useCallback(async (action: string, disposition: string, notes: string) => {
     setSubmitting(true)
@@ -315,9 +307,9 @@ export default function ColdStoragePage() {
         setTimeout(() => { window.location.href = '/haccp' }, 2000)
       } else {
         const d = await res.json()
-        setPinError(d.error ?? 'Submission failed')
+        setSubmitError(d.error ?? 'Submission failed')
       }
-    } catch { setPinError('Connection error — try again') }
+    } catch { setSubmitError('Connection error — try again') }
     finally { setSubmitting(false) }
   }, [units, temps, session, date, comments])
 
@@ -422,24 +414,17 @@ export default function ColdStoragePage() {
           placeholder="Comments (optional)…"
           className="w-full bg-white/8 border border-white/12 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
 
-        <div className="flex items-center gap-3">
-          <div className="relative flex-1">
-            <input type="password" inputMode="numeric" value={pin} onChange={handlePinChange}
-              placeholder="4-digit PIN" maxLength={4}
-              className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-white text-center text-xl tracking-[.5em] focus:outline-none focus:border-[#EB6619]" />
-            {pinError && <p className="text-[#F09595] text-xs mt-1">{pinError}</p>}
-          </div>
-          <button onClick={handleSubmitAttempt}
-            disabled={!allFilled || pin.length < 4 || submitting}
-            className="bg-[#EB6619] text-white font-bold px-6 py-3 rounded-xl text-sm disabled:opacity-40 transition-opacity flex items-center gap-2 flex-shrink-0">
-            {submitting ? (
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-            )}
-            {submitting ? 'Submitting…' : `Submit ${session}`}
-          </button>
-        </div>
+        {submitError && <p className="text-[#F09595] text-xs">{submitError}</p>}
+        <button onClick={handleSubmitAttempt}
+          disabled={!allFilled || submitting}
+          className="w-full bg-[#EB6619] text-white font-bold py-4 rounded-2xl text-base disabled:opacity-40 transition-opacity flex items-center justify-center gap-2">
+          {submitting ? (
+            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          )}
+          {submitting ? 'Submitting…' : `Submit ${session} check`}
+        </button>
       </div>
 
       {/* Numpad overlay */}
