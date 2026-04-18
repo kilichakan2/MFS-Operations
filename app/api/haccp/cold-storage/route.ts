@@ -20,6 +20,13 @@ function tempStatus(temp: number, unitType: string): 'pass' | 'amber' | 'critica
     if (temp <= -15) return 'amber'
     return 'critical'
   }
+  if (unitType === 'room') {
+    // Room ambient — CCP 3 limit ≤12°C applied here for twice-daily cold check
+    if (temp <= 12) return 'pass'
+    if (temp <= 15) return 'amber'
+    return 'critical'
+  }
+  // chiller: ≤5 pass, 5-8 amber, >8 critical (CA-001)
   if (temp <= 5)  return 'pass'
   if (temp <= 8)  return 'amber'
   return 'critical'
