@@ -15,7 +15,7 @@ import { useState, useEffect, useCallback } from 'react'
 interface StorageUnit {
   id:            string
   name:          string
-  unit_type:     'chiller' | 'freezer'
+  unit_type:     'chiller' | 'freezer' | 'room'
   target_temp_c: number
   max_temp_c:    number
 }
@@ -254,9 +254,18 @@ export default function ColdStoragePage() {
         return r.json()
       })
       .then((d) => {
-        setUnits(d.units ?? [])
-        setExisting(d.readings ?? [])
+        const units     = d.units    ?? []
+        const readings  = d.readings ?? []
+        setUnits(units)
+        setExisting(readings)
         setDate(d.date ?? todayISO())
+        // Default to first unsubmitted session — not time-based
+        const amDone = units.length > 0 &&
+          units.every((u: StorageUnit) => readings.some((r: ExistingReading) => r.unit_id === u.id && r.session === 'AM'))
+        const pmDone = units.length > 0 &&
+          units.every((u: StorageUnit) => readings.some((r: ExistingReading) => r.unit_id === u.id && r.session === 'PM'))
+        if (amDone && !pmDone) setSession('PM')
+        else setSession('AM')
       })
       .catch((err) => {
         console.error('[cold-storage] fetch failed:', err)
@@ -276,6 +285,10 @@ export default function ColdStoragePage() {
   }, [existing, session])
 
   const allFilled = units.length > 0 && units.every((u) => temps[u.id] !== undefined && temps[u.id] !== '')
+
+  // True when all units already have a reading for the current session (read-only mode)
+  const sessionAlreadyDone = units.length > 0 &&
+    units.every((u) => existing.some((r) => r.unit_id === u.id && r.session === session))
 
   const deviations = units
     .filter((u) => {
@@ -348,12 +361,19 @@ export default function ColdStoragePage() {
       {/* Session + date selectors */}
       <div className="px-5 py-4 flex items-center gap-4 border-b border-white/8">
         <div className="flex gap-2">
-          {(['AM', 'PM'] as const).map((s) => (
-            <button key={s} onClick={() => setSession(s)}
-              className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${session === s ? 'bg-[#EB6619] text-white' : 'bg-white/10 text-white/50'}`}>
-              {s}
-            </button>
-          ))}
+          {(['AM', 'PM'] as const).map((s) => {
+            const isDone = units.length > 0 &&
+              units.every((u) => existing.some((r) => r.unit_id === u.id && r.session === s))
+            return (
+              <button key={s} onClick={() => setSession(s)}
+                className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-1.5 ${
+                  session === s ? 'bg-[#EB6619] text-white' : 'bg-white/10 text-white/50'
+                }`}>
+                {isDone && <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
+                {s}
+              </button>
+            )
+          })}
         </div>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
           className="bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#EB6619]" />
@@ -386,7 +406,9 @@ export default function ColdStoragePage() {
                 <div>
                   <p className="text-white font-semibold text-base">{unit.name}</p>
                   <p className="text-white/40 text-xs mt-0.5">
-                    {unit.unit_type === 'freezer' ? 'Target ≤-18°C' : 'Target ≤5°C · Max 8°C'}
+                    {unit.unit_type === 'freezer' ? 'Target ≤-18°C' :
+                     unit.unit_type === 'room'    ? 'Room ambient · Max 12°C' :
+                                                   'Target ≤5°C · Max 8°C'}
                     {existing_session ? ' · Already recorded' : ''}
                   </p>
                 </div>
@@ -414,23 +436,36 @@ export default function ColdStoragePage() {
         })}
       </div>
 
-      {/* Comments + submit */}
-      <div className="px-5 pb-6 space-y-3 border-t border-white/8 pt-4">
-        <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2}
-          placeholder="Comments (optional)…"
-          className="w-full bg-white/8 border border-white/12 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
-
-        {submitError && <p className="text-[#F09595] text-xs">{submitError}</p>}
-        <button onClick={handleSubmitAttempt}
-          disabled={!allFilled || submitting}
-          className="w-full bg-[#EB6619] text-white font-bold py-4 rounded-2xl text-base disabled:opacity-40 transition-opacity flex items-center justify-center gap-2">
-          {submitting ? (
-            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          )}
-          {submitting ? 'Submitting…' : `Submit ${session} check`}
-        </button>
+      {/* Comments + submit — hidden when session already done */}
+      <div className="px-5 pb-6 border-t border-white/8 pt-4">
+        {sessionAlreadyDone ? (
+          <div className="flex items-center gap-3 bg-[#639922]/20 border border-[#639922]/40 rounded-2xl px-5 py-4">
+            <div className="w-9 h-9 rounded-full bg-[#639922]/30 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-[#97C459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <p className="text-[#97C459] font-bold text-sm">{session} check already submitted</p>
+              <p className="text-white/40 text-xs mt-0.5">Readings recorded above are read-only</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2}
+              placeholder="Comments (optional)…"
+              className="w-full bg-white/8 border border-white/12 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
+            {submitError && <p className="text-[#F09595] text-xs">{submitError}</p>}
+            <button onClick={handleSubmitAttempt}
+              disabled={!allFilled || submitting}
+              className="w-full bg-[#EB6619] text-white font-bold py-4 rounded-2xl text-base disabled:opacity-40 transition-opacity flex items-center justify-center gap-2">
+              {submitting ? (
+                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              )}
+              {submitting ? 'Submitting…' : `Submit ${session} check`}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Numpad overlay */}
