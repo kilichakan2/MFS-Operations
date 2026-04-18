@@ -13,6 +13,7 @@ export async function POST() {
   response.cookies.set('mfs_session', '', { ...shared, httpOnly: true  })
   response.cookies.set('mfs_role',    '', { ...shared, httpOnly: false })
   response.cookies.set('mfs_user_id', '', { ...shared, httpOnly: false })
+  response.cookies.set('mfs_name',    '', { ...shared, httpOnly: false })
 
   return response
 }

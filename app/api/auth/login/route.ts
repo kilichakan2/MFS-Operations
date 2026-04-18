@@ -215,6 +215,15 @@ export async function POST(req: NextRequest) {
       path:     '/',
     })
 
+    // mfs_name is NOT httpOnly — first name for display only (HACCP welcome screen etc.)
+    response.cookies.set('mfs_name', user.name, {
+      httpOnly: false,
+      secure:   process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge:   60 * 60 * 24 * 30,
+      path:     '/',
+    })
+
     return response
 
   } catch (err) {

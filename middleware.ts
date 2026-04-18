@@ -18,7 +18,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Paths that are public (no auth required)
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team']
+const PUBLIC_PATHS = ['/login', '/haccp', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team', '/api/auth/haccp-team']
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
