@@ -67,6 +67,7 @@ const SHARED_API_PATHS = [
   '/api/admin/geocode-all',
   '/api/admin/runs',
   '/api/routes',
+  '/api/haccp',
 ]
 
 export function middleware(req: NextRequest) {

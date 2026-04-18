@@ -249,13 +249,19 @@ export default function ColdStoragePage() {
 
   useEffect(() => {
     fetch('/api/haccp/cold-storage')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`API error ${r.status}`)
+        return r.json()
+      })
       .then((d) => {
         setUnits(d.units ?? [])
         setExisting(d.readings ?? [])
         setDate(d.date ?? todayISO())
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[cold-storage] fetch failed:', err)
+        setSubmitError('Could not load units — check connection')
+      })
       .finally(() => setLoading(false))
   }, [])
 
