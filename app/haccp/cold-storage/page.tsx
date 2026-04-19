@@ -242,18 +242,33 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ColdStoragePage() {
-  const [units,     setUnits]     = useState<StorageUnit[]>([])
-  const [existing,  setExisting]  = useState<ExistingReading[]>([])
-  const [session,   setSession]   = useState<'AM' | 'PM'>(currentSession())
-  const [date,      setDate]      = useState(todayISO())
-  const [temps,     setTemps]     = useState<Record<string, string>>({})
-  const [comments,  setComments]  = useState('')
-  const [loading,   setLoading]   = useState(true)
-  const [submitting,setSubmitting] = useState(false)
-  const [submitError,setSubmitError] = useState('')
-  const [numpadUnit,setNumpadUnit] = useState<StorageUnit | null>(null)
-  const [showCCA,   setShowCCA]   = useState(false)
-  const [submitted, setSubmitted] = useState(false)
+  const [units,      setUnits]      = useState<StorageUnit[]>([])
+  const [existing,   setExisting]   = useState<ExistingReading[]>([])
+  const [session,    setSession]    = useState<'AM' | 'PM'>(currentSession())
+  const [date,       setDate]       = useState(todayISO())
+  const [temps,      setTemps]      = useState<Record<string, string>>({})
+  const [comments,   setComments]   = useState('')
+  const [loading,    setLoading]    = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError,setSubmitError]= useState('')
+  const [numpadUnit, setNumpadUnit] = useState<StorageUnit | null>(null)
+  const [showCCA,    setShowCCA]    = useState(false)
+  const [submitted,  setSubmitted]  = useState(false)
+  // Handbook panel state
+  const [showQuick,    setShowQuick]    = useState(false)
+  const [showHandbook, setShowHandbook] = useState(false)
+  const [hbEntries,    setHbEntries]    = useState<{sop_ref:string;title:string;content_md:string;version:string;source_doc:string}[]>([])
+  const [hbLoading,    setHbLoading]    = useState(false)
+
+  const openHandbook = useCallback(() => {
+    if (hbEntries.length > 0) { setShowHandbook(true); return }
+    setHbLoading(true)
+    fetch('/api/haccp/handbook?section=cold_storage')
+      .then((r) => r.json())
+      .then((d) => { setHbEntries(d.entries ?? []); setShowHandbook(true) })
+      .catch(() => {})
+      .finally(() => setHbLoading(false))
+  }, [hbEntries])
 
   useEffect(() => {
     fetch('/api/haccp/cold-storage')
@@ -358,14 +373,30 @@ export default function ColdStoragePage() {
     <div className="min-h-screen bg-[#16205B] flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center gap-4 px-5 py-4 border-b border-white/10">
-        <button onClick={() => { window.location.href = '/haccp' }} className="text-white/50 hover:text-white/80 transition-colors">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
+        <button onClick={() => { window.location.href = '/haccp' }} className="text-white/50 hover:text-white/80 transition-colors flex-shrink-0">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
         </button>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
           <h1 className="text-white text-lg font-bold leading-tight">Temperature Check</h1>
         </div>
+        {/* ? quick-tip button */}
+        <button onClick={() => setShowQuick(true)}
+          className="flex items-center gap-1.5 bg-white/9 hover:bg-white/14 border border-white/12 rounded-xl px-3 py-2 text-white/60 hover:text-white transition-all text-xs font-bold flex-shrink-0">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Quick ref
+        </button>
+        {/* Handbook button */}
+        <button onClick={openHandbook} disabled={hbLoading}
+          className="flex items-center gap-1.5 bg-[#EB6619]/15 hover:bg-[#EB6619]/25 border border-[#EB6619]/35 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0 disabled:opacity-50">
+          {hbLoading ? (
+            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          )}
+          Handbook
+        </button>
       </div>
 
       {/* Session + date selectors */}
@@ -496,6 +527,79 @@ export default function ColdStoragePage() {
           onSubmit={doSubmit}
           onBack={() => setShowCCA(false)}
         />
+      )}
+
+      {/* Quick reference panel */}
+      {showQuick && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-end" style={{position:'fixed'}}>
+          <div className="bg-[#0f1840] rounded-t-3xl w-full p-6 max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold text-lg">CCP 2 — Quick Reference</h3>
+              <button onClick={() => setShowQuick(false)} className="text-white/40 hover:text-white/70">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="bg-white/6 rounded-xl p-4">
+                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Chillers (Lamb, Dispatch, Dairy)</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#639922] flex-shrink-0"/><span className="text-white/70">≤5°C — Pass</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-white/70">5–8°C — Amber: check seals, recheck in 30 min</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E24B4A] flex-shrink-0"/><span className="text-white/70">&gt;8°C — Critical: transfer all product, call engineer</span></div>
+                </div>
+              </div>
+              <div className="bg-white/6 rounded-xl p-4">
+                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Process Room (ambient)</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#639922] flex-shrink-0"/><span className="text-white/70">≤12°C — Pass</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-white/70">12–15°C — Amber: investigate cooling</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E24B4A] flex-shrink-0"/><span className="text-white/70">&gt;15°C — Critical: stop loading, return product to storage</span></div>
+                </div>
+              </div>
+              <div className="bg-white/6 rounded-xl p-4">
+                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Freezer</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#639922] flex-shrink-0"/><span className="text-white/70">≤-18°C — Pass</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-white/70">-15 to -18°C — Amber: keep door closed, check coils</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E24B4A] flex-shrink-0"/><span className="text-white/70">&gt;-15°C — Critical: assess for thawing, do NOT refreeze</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Handbook slideout — full SOP text from DB */}
+      {showHandbook && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-end" style={{position:'fixed'}}>
+          <div className="bg-[#0f1840] rounded-t-3xl w-full max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-white/10 flex-shrink-0">
+              <div>
+                <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">HB-001 + CA-001</p>
+                <h3 className="text-white font-bold text-lg mt-0.5">Cold Storage Handbook</h3>
+              </div>
+              <button onClick={() => setShowHandbook(false)} className="text-white/40 hover:text-white/70">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto p-6 pt-4 space-y-6">
+              {hbEntries.length === 0 ? (
+                <p className="text-white/40 text-sm">No handbook content found.</p>
+              ) : hbEntries.map((entry) => (
+                <div key={entry.sop_ref}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">{entry.sop_ref}</span>
+                    <span className="text-white/20 text-[10px]">·</span>
+                    <span className="text-white/30 text-[10px]">{entry.source_doc} {entry.version}</span>
+                  </div>
+                  <h4 className="text-white font-semibold text-sm mb-2">{entry.title}</h4>
+                  <div className="text-white/65 text-sm leading-relaxed whitespace-pre-line">{entry.content_md}</div>
+                  <div className="mt-4 h-px bg-white/8"/>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
