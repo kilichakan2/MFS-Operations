@@ -535,7 +535,7 @@ export default function ColdStoragePage() {
           <div className="bg-[#0f1840] rounded-t-3xl w-full p-6 max-h-[70vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white font-bold text-lg">CCP 2 — Quick Reference</h3>
-              <button onClick={() => setShowQuick(false)} className="text-white/40 hover:text-white/70">
+              <button onClick={() => setShowQuick(false)} className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 flex-shrink-0">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
@@ -578,7 +578,7 @@ export default function ColdStoragePage() {
                 <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">HB-001 + CA-001</p>
                 <h3 className="text-white font-bold text-lg mt-0.5">Cold Storage Handbook</h3>
               </div>
-              <button onClick={() => setShowHandbook(false)} className="text-white/40 hover:text-white/70">
+              <button onClick={() => setShowHandbook(false)} className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 flex-shrink-0">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
