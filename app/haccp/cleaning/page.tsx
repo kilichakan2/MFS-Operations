@@ -170,7 +170,7 @@ export default function CleaningPage() {
           <svg className="w-4 h-4 text-[#EB6619] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
           <div>
             <p className="text-[#EB6619] text-[10px] font-bold uppercase tracking-widest mb-1">Time separation required</p>
-            <p className="text-white/65 text-xs leading-relaxed">Meat and mince require a FULL 4-step clean between categories. Process one category at a time. Log each changeover here.</p>
+            <p className="text-white/65 text-xs leading-relaxed">Meat and mince require a FULL 4-step clean between categories. Process one category at a time. Log each changeover here. Meat preparations containing allergens (marinades, coatings, seasonings) require the same strict separation — allergen products AFTER plain, with a verified clean in between.</p>
           </div>
         </div>
 
@@ -368,7 +368,9 @@ export default function CleaningPage() {
 
               <div className="bg-[#EB6619]/10 border border-[#EB6619]/35 rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-1.5">Time separation rule</p>
-                <p className="text-white/65 text-xs leading-relaxed">Meat and mince require a full 4-step clean between categories. Process one at a time. Log each changeover in this diary.</p>
+                <p className="text-white/65 text-xs leading-relaxed">Meat and mince require a full 4-step clean between categories. Process one at a time. Log each changeover in this diary.
+
+Meat preparations containing allergens (marinades, coatings, seasonings) require the same strict separation — allergen products must always come AFTER plain products with a full verified clean in between.</p>
               </div>
 
             </div>
