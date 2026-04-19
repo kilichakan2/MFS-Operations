@@ -254,21 +254,12 @@ export default function ColdStoragePage() {
   const [numpadUnit, setNumpadUnit] = useState<StorageUnit | null>(null)
   const [showCCA,    setShowCCA]    = useState(false)
   const [submitted,  setSubmitted]  = useState(false)
-  // Handbook panel state
-  const [showQuick,    setShowQuick]    = useState(false)
-  const [showHandbook, setShowHandbook] = useState(false)
-  const [hbEntries,    setHbEntries]    = useState<{sop_ref:string;title:string;content_md:string;version:string;source_doc:string}[]>([])
-  const [hbLoading,    setHbLoading]    = useState(false)
+  // Quick reference panel state
+  const [showQuick, setShowQuick] = useState(false)
 
-  const openHandbook = useCallback(() => {
-    if (hbEntries.length > 0) { setShowHandbook(true); return }
-    setHbLoading(true)
-    fetch('/api/haccp/handbook?section=cold_storage')
-      .then((r) => r.json())
-      .then((d) => { setHbEntries(d.entries ?? []); setShowHandbook(true) })
-      .catch(() => {})
-      .finally(() => setHbLoading(false))
-  }, [hbEntries])
+  function openHandbook() {
+    window.location.href = '/haccp/documents/hb-001?from=/haccp/cold-storage'
+  }
 
   useEffect(() => {
     fetch('/api/haccp/cold-storage')
@@ -387,14 +378,10 @@ export default function ColdStoragePage() {
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Quick ref
         </button>
-        {/* Handbook button */}
-        <button onClick={openHandbook} disabled={hbLoading}
-          className="flex items-center gap-1.5 bg-[#EB6619]/15 hover:bg-[#EB6619]/25 border border-[#EB6619]/35 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0 disabled:opacity-50">
-          {hbLoading ? (
-            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          )}
+        {/* Handbook button — navigates to dedicated document page */}
+        <button onClick={openHandbook}
+          className="flex items-center gap-1.5 bg-[#EB6619]/15 hover:bg-[#EB6619]/25 border border-[#EB6619]/35 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           Handbook
         </button>
       </div>
@@ -569,38 +556,7 @@ export default function ColdStoragePage() {
         </div>
       )}
 
-      {/* Handbook slideout — full SOP text from DB */}
-      {showHandbook && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-end" style={{position:'fixed'}}>
-          <div className="bg-[#0f1840] rounded-t-3xl w-full max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between p-6 pb-4 border-b border-white/10 flex-shrink-0">
-              <div>
-                <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">HB-001 + CA-001</p>
-                <h3 className="text-white font-bold text-lg mt-0.5">Cold Storage Handbook</h3>
-              </div>
-              <button onClick={() => setShowHandbook(false)} className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 flex-shrink-0">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div className="overflow-y-auto p-6 pt-4 space-y-6">
-              {hbEntries.length === 0 ? (
-                <p className="text-white/40 text-sm">No handbook content found.</p>
-              ) : hbEntries.map((entry) => (
-                <div key={entry.sop_ref}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">{entry.sop_ref}</span>
-                    <span className="text-white/20 text-[10px]">·</span>
-                    <span className="text-white/30 text-[10px]">{entry.source_doc} {entry.version}</span>
-                  </div>
-                  <h4 className="text-white font-semibold text-sm mb-2">{entry.title}</h4>
-                  <div className="text-white/65 text-sm leading-relaxed whitespace-pre-line">{entry.content_md}</div>
-                  <div className="mt-4 h-px bg-white/8"/>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   )
 }

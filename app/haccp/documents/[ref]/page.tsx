@@ -185,6 +185,13 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
   const { ref } = use(params)
   const docRef  = decodeURIComponent(ref).toUpperCase()
 
+  // Read ?from= query param for smart back navigation
+  const [backHref, setBackHref] = useState('/haccp/documents')
+  useEffect(() => {
+    const from = new URLSearchParams(window.location.search).get('from')
+    if (from && from.startsWith('/haccp')) setBackHref(from)
+  }, [])
+
   const [entries, setEntries]   = useState<SopEntry[]>([])
   const [loading, setLoading]   = useState(true)
   const [error,   setError]     = useState('')
@@ -217,7 +224,7 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
 
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10 flex-shrink-0">
-        <button onClick={() => { window.location.href = '/haccp/documents' }}
+        <button onClick={() => { window.location.href = backHref }}
           className="w-10 h-10 rounded-xl bg-white/9 hover:bg-white/14 flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
