@@ -59,22 +59,25 @@ export default function DocumentRegisterPage() {
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState('')
   const [expanded,   setExpanded]   = useState<string | null>(null)
-  // Document reader
-  const [reading,    setReading]    = useState<HaccpDoc | null>(null)
-  const [readEntries,setReadEntries]= useState<{sop_ref:string;title:string;content_md:string;version:string;source_doc:string}[]>([])
-  const [readLoading,setReadLoading]= useState(false)
-  const [readError,  setReadError]  = useState('')
+  // Search
+  const [searchQ,    setSearchQ]    = useState('')
+  const [searching,  setSearching]  = useState(false)
+  const [results,    setResults]    = useState<{sop_ref:string;title:string;source_doc:string;section_key:string|null;snippet:string}[]>([])
+  const searchTimer = useState<ReturnType<typeof setTimeout> | null>(null)
 
-  function openReader(doc: HaccpDoc) {
-    setReading(doc)
-    setReadEntries([])
-    setReadError('')
-    setReadLoading(true)
-    fetch(`/api/haccp/handbook?doc=${doc.doc_ref}`)
-      .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
-      .then((d) => setReadEntries(d.entries ?? []))
-      .catch((e) => setReadError(`Could not load content — ${e.message}`))
-      .finally(() => setReadLoading(false))
+  function runSearch(q: string) {
+    setSearchQ(q)
+    if (searchTimer[0]) clearTimeout(searchTimer[0])
+    if (q.trim().length < 2) { setResults([]); setSearching(false); return }
+    setSearching(true)
+    const t = setTimeout(() => {
+      fetch(`/api/haccp/search?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => setResults(d.results ?? []))
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false))
+    }, 300)
+    searchTimer[0] = t
   }
 
   useEffect(() => {
@@ -121,6 +124,52 @@ export default function DocumentRegisterPage() {
         <p className="text-[#F09595] text-sm text-center mt-12 px-6">{error}</p>
       ) : (
         <div className="flex-1 px-5 py-4 space-y-3 overflow-y-auto">
+
+          {/* Search bar */}
+          <div className="relative mb-2">
+            <div className="flex items-center gap-3 bg-white/8 border border-white/12 rounded-2xl px-4 py-3">
+              {searching ? (
+                <svg className="animate-spin w-4 h-4 text-white/40 flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+              ) : (
+                <svg className="w-4 h-4 text-white/40 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              )}
+              <input
+                type="text"
+                value={searchQ}
+                onChange={(e) => runSearch(e.target.value)}
+                placeholder="Search all documents…"
+                className="flex-1 bg-transparent text-white text-sm placeholder-white/30 focus:outline-none"
+              />
+              {searchQ && (
+                <button onClick={() => { setSearchQ(''); setResults([]) }}
+                  className="text-white/30 hover:text-white/60 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              )}
+            </div>
+            {/* Search results dropdown */}
+            {results.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-[#0f1840] border border-white/15 rounded-2xl overflow-hidden z-20 shadow-xl">
+                {results.map((r) => (
+                  <button key={r.sop_ref}
+                    onClick={() => { window.location.href = `/haccp/documents/${r.source_doc.split('/')[0].toLowerCase()}` }}
+                    className="w-full text-left px-4 py-3 hover:bg-white/8 transition-all border-b border-white/8 last:border-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[#EB6619] text-[10px] font-bold">{r.source_doc}</span>
+                      {r.section_key && <span className="text-white/25 text-[10px]">· {r.section_key.replace(/_/g,' ')}</span>}
+                    </div>
+                    <p className="text-white/70 text-xs leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: r.snippet.replace(/<mark>/g,'<mark class="bg-[#EB6619]/30 text-[#EB6619] rounded px-0.5">') }} />
+                  </button>
+                ))}
+              </div>
+            )}
+            {searchQ.trim().length >= 2 && !searching && results.length === 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-[#0f1840] border border-white/15 rounded-2xl px-4 py-3 z-20">
+                <p className="text-white/40 text-sm">No results for "{searchQ}"</p>
+              </div>
+            )}
+          </div>
 
           {/* Review alerts */}
           {(overdue.length > 0 || soon.length > 0) && (
@@ -180,7 +229,7 @@ export default function DocumentRegisterPage() {
 
                   <div className="flex items-center gap-2">
                     <button
-                      onPointerDown={(e) => { e.stopPropagation(); openReader(doc) }}
+                      onPointerDown={(e) => { e.stopPropagation(); window.location.href = `/haccp/documents/${doc.doc_ref.toLowerCase()}` }}
                       className="px-3 py-1.5 bg-[#EB6619]/15 hover:bg-[#EB6619]/28 border border-[#EB6619]/35 rounded-xl text-[#EB6619] text-[11px] font-bold transition-all active:scale-95 flex-shrink-0">
                       Read
                     </button>
@@ -238,58 +287,6 @@ export default function DocumentRegisterPage() {
         </div>
       )}
 
-      {/* Document reader panel */}
-      {reading && (
-        <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
-          <div className="bg-[#0f1840] rounded-t-3xl w-full max-h-[90vh] flex flex-col">
-
-            {/* Reader header */}
-            <div className="flex items-start justify-between p-6 pb-4 border-b border-white/10 flex-shrink-0">
-              <div className="flex-1 min-w-0 pr-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">{reading.doc_ref}</span>
-                  <span className="text-white/25 text-[10px]">·</span>
-                  <span className="text-white/35 text-[10px]">{reading.version}</span>
-                </div>
-                <h3 className="text-white font-bold text-base leading-tight">{reading.title}</h3>
-              </div>
-              <button onClick={() => setReading(null)}
-                className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 flex-shrink-0">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-
-            {/* Reader content */}
-            <div className="overflow-y-auto p-6 pt-4 space-y-6">
-              {readLoading && (
-                <div className="flex items-center gap-3 text-white/40 text-sm py-8 justify-center">
-                  <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-                  Loading document…
-                </div>
-              )}
-              {readError && <p className="text-[#F09595] text-sm">{readError}</p>}
-              {!readLoading && !readError && readEntries.length === 0 && (
-                <div className="py-8 text-center">
-                  <p className="text-white/40 text-sm">Full document content not yet added to the system.</p>
-                  <p className="text-white/25 text-xs mt-2">Key SOP sections for this document will be added in a future update.</p>
-                </div>
-              )}
-              {readEntries.map((entry, i) => (
-                <div key={entry.sop_ref}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">{entry.sop_ref}</span>
-                    <span className="text-white/20 text-[10px]">·</span>
-                    <span className="text-white/30 text-[10px]">{entry.source_doc} {entry.version}</span>
-                  </div>
-                  <h4 className="text-white font-semibold text-sm mb-3">{entry.title}</h4>
-                  <div className="text-white/65 text-sm leading-relaxed whitespace-pre-line">{entry.content_md}</div>
-                  {i < readEntries.length - 1 && <div className="mt-6 h-px bg-white/8"/>}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
