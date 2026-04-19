@@ -490,7 +490,7 @@ function HomeScreen({ userName }: { userName: string }) {
           <div className="flex gap-3">
             <SmallTile id="calibration" icon={Icon.cal} label="Calibration" sub="Monthly · SOP 3"
               badge={s?.calibration_due ? 'Due this month' : 'Not due'} due={s?.calibration_due ?? false}
-              onTap={() => {}} onHelp={() => setHelp('calibration')} />
+              onTap={() => { window.location.href = '/haccp/calibration' }} onHelp={() => setHelp('calibration')} />
             <SmallTile id="reviews" icon={Icon.review} label="Reviews" sub="Weekly + Monthly"
               badge={s?.weekly_review_due ? 'Weekly due' : s?.monthly_review_due ? 'Monthly due' : 'Up to date'} due={s?.weekly_review_due || s?.monthly_review_due ? true : false}
               onTap={() => {}} onHelp={() => setHelp('reviews')} />
