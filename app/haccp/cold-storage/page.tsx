@@ -261,23 +261,23 @@ export default function ColdStoragePage() {
     window.location.href = '/haccp/documents/hb-001?from=/haccp/cold-storage'
   }
 
-  useEffect(() => {
-    fetch('/api/haccp/cold-storage')
+  // Separate function so we can call it on date change too
+  const loadReadings = useCallback((forDate: string) => {
+    fetch(`/api/haccp/cold-storage?date=${forDate}`)
       .then((r) => {
         if (!r.ok) throw new Error(`API error ${r.status}`)
         return r.json()
       })
       .then((d) => {
-        const units     = d.units    ?? []
-        const readings  = d.readings ?? []
-        setUnits(units)
-        setExisting(readings)
-        setDate(d.date ?? todayISO())
-        // Default to first unsubmitted session — not time-based
-        const amDone = units.length > 0 &&
-          units.every((u: StorageUnit) => readings.some((r: ExistingReading) => r.unit_id === u.id && r.session === 'AM'))
-        const pmDone = units.length > 0 &&
-          units.every((u: StorageUnit) => readings.some((r: ExistingReading) => r.unit_id === u.id && r.session === 'PM'))
+        const loadedUnits    = d.units    ?? []
+        const loadedReadings = d.readings ?? []
+        setUnits(loadedUnits)
+        setExisting(loadedReadings)
+        // Default to first unsubmitted session
+        const amDone = loadedUnits.length > 0 &&
+          loadedUnits.every((u: StorageUnit) => loadedReadings.some((r: ExistingReading) => r.unit_id === u.id && r.session === 'AM'))
+        const pmDone = loadedUnits.length > 0 &&
+          loadedUnits.every((u: StorageUnit) => loadedReadings.some((r: ExistingReading) => r.unit_id === u.id && r.session === 'PM'))
         if (amDone && !pmDone) setSession('PM')
         else setSession('AM')
       })
@@ -287,6 +287,18 @@ export default function ColdStoragePage() {
       })
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    loadReadings(date)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reload when date changes
+  function handleDateChange(newDate: string) {
+    setDate(newDate)
+    setLoading(true)
+    setTemps({})
+    loadReadings(newDate)
+  }
 
   // Pre-fill if readings already exist for this session
   useEffect(() => {
@@ -403,7 +415,8 @@ export default function ColdStoragePage() {
             )
           })}
         </div>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+        <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)}
+          max={todayISO()}
           className="bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#EB6619]" />
         <span className="text-white/30 text-xs ml-auto">SOP 3 — check twice daily</span>
       </div>

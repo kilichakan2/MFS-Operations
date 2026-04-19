@@ -21,18 +21,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const today = todayUK()
+    const today       = todayUK()
+    const requested   = req.nextUrl.searchParams.get('date')
+    const queryDate   = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today
 
     const [temps, diary] = await Promise.all([
       supabase
         .from('haccp_processing_temps')
         .select('session, product_temp_c, room_temp_c, product_within_limit, room_within_limit, within_limits, submitted_at')
-        .eq('date', today)
+        .eq('date', queryDate)
         .order('submitted_at'),
       supabase
         .from('haccp_daily_diary')
         .select('phase, check_results, issues, what_did_you_do, submitted_at')
-        .eq('date', today)
+        .eq('date', queryDate)
         .order('submitted_at'),
     ])
 
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest) {
     if (diary.error) return NextResponse.json({ error: diary.error.message }, { status: 500 })
 
     return NextResponse.json({
-      date:  today,
+      date:  queryDate,
       temps: temps.data ?? [],
       diary: diary.data ?? [],
     })

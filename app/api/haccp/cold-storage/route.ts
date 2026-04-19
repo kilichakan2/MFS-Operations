@@ -39,7 +39,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const today = todayUK()
+    // Accept ?date= param for historical date viewing, default to today
+    const requestedDate = req.nextUrl.searchParams.get('date')
+    const today         = todayUK()
+    const queryDate     = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : today
 
     const [units, readings] = await Promise.all([
       supabase.from('haccp_cold_storage_units')
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest) {
         .order('position'),
       supabase.from('haccp_cold_storage_temps')
         .select('unit_id, session, temperature_c, temp_status, comments')
-        .eq('date', today),
+        .eq('date', queryDate),
     ])
 
     if (units.error) return NextResponse.json({ error: units.error.message }, { status: 500 })
@@ -56,7 +59,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       units:    units.data ?? [],
       readings: readings.data ?? [],
-      date:     today,
+      date:     queryDate,
     })
   } catch (err) {
     console.error('[GET /api/haccp/cold-storage]', err)

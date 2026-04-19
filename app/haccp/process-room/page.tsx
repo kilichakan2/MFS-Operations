@@ -464,15 +464,15 @@ export default function ProcessRoomPage() {
   const [showQuick, setShowQuick] = useState(false)
 
   // Load today's data
-  const loadData = useCallback(() => {
-    fetch('/api/haccp/process-room')
+  const loadData = useCallback((forDate: string) => {
+    setLoading(true)
+    fetch(`/api/haccp/process-room?date=${forDate}`)
       .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
       .then((d) => {
         const allTemps: TempReading[] = d.temps ?? []
         const allDiary: DiaryEntry[]  = d.diary ?? []
         setTemps(allTemps)
         setDiary(allDiary)
-        setDate(d.date ?? todayISO())
         // Smart session default — first unsubmitted
         const amDone = allTemps.some((t) => t.session === 'AM')
         const pmDone = allTemps.some((t) => t.session === 'PM')
@@ -483,7 +483,14 @@ export default function ProcessRoomPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  useEffect(() => { loadData(date) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleDateChange(newDate: string) {
+    setDate(newDate)
+    setProductVal('')
+    setRoomVal('')
+    loadData(newDate)
+  }
 
   // Clear temp inputs when session switches
   useEffect(() => {
@@ -523,7 +530,7 @@ export default function ProcessRoomPage() {
       })
       if (res.ok) {
         setSubmitted(true)
-        loadData()
+        loadData(date)
         setTimeout(() => setSubmitted(false), 2000)
       } else {
         const d = await res.json()
@@ -540,7 +547,7 @@ export default function ProcessRoomPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type: 'diary', phase, date, check_results: results, issues, what_did_you_do: note }),
       })
-      if (res.ok) { loadData() }
+      if (res.ok) { loadData(date) }
       else { const d = await res.json(); setSubmitErr(d.error ?? 'Submission failed') }
     } catch { setSubmitErr('Connection error — try again') }
   }, [date, loadData])
@@ -590,11 +597,14 @@ export default function ProcessRoomPage() {
 
           {/* ── Card 1: Temperature check ── */}
           <div className="bg-white/6 border border-white/10 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
-              <div>
+            <div className="px-4 py-3 border-b border-white/8 flex items-center gap-3 flex-wrap">
+              <div className="flex-1 min-w-0">
                 <p className="text-white font-semibold text-sm">Temperature check</p>
                 <p className="text-white/38 text-xs mt-0.5">CCP 3 · tap to enter reading</p>
               </div>
+              <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)}
+                max={todayISO()}
+                className="bg-white/10 border border-white/15 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#EB6619]" />
               <div className="flex gap-2">
                 {(['AM','PM'] as Session[]).map((s) => {
                   const done = temps.some((t) => t.session === s)
