@@ -479,7 +479,7 @@ function HomeScreen({ userName }: { userName: string }) {
               onTap={() => {}} onHelp={() => setHelp('mince')} />
             <LargeTile id="product_return" icon={Icon.ret} label="Product Return" state="neutral" badge={s ? (s.product_returns.count_today > 0 ? `${s.product_returns.count_today} logged` : 'None') : '—'}
               sub="SOP 12 · RC01–RC08"
-              onTap={() => {}} onHelp={() => setHelp('product_return')} />
+              onTap={() => { window.location.href = '/haccp/product-return' }} onHelp={() => setHelp('product_return')} />
             <CCATile open={ccaOpen} onTap={() => setPopup('cca')} />
           </div>
 
