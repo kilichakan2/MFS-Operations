@@ -431,12 +431,22 @@ function HomeScreen({ userName }: { userName: string }) {
           <div className="w-px h-6 bg-white/15" />
           <span className="text-white/60 text-sm font-medium">HACCP — Process Room</span>
         </div>
-        <div className="flex items-center gap-2 bg-white/9 rounded-full px-3 py-1.5">
-          <div className="w-6 h-6 rounded-full bg-[#EB6619] flex items-center justify-center text-white text-[9px] font-bold">
-            {initials(userName)}
+        <div className="flex items-center gap-3">
+          {/* Documents register link */}
+          <button onClick={() => { window.location.href = '/haccp/documents' }}
+            className="flex items-center gap-1.5 bg-white/8 hover:bg-white/13 border border-white/12 rounded-xl px-3 py-2 text-white/55 hover:text-white transition-all text-xs font-bold">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            Documents
+          </button>
+          <div className="flex items-center gap-2 bg-white/9 rounded-full px-3 py-1.5">
+            <div className="w-6 h-6 rounded-full bg-[#EB6619] flex items-center justify-center text-white text-[9px] font-bold">
+              {initials(userName)}
+            </div>
+            <span className="text-white text-xs font-medium">{userName}</span>
+            <button onClick={signOut} className="text-white/35 hover:text-white/60 text-[10px] ml-1 transition-colors">Sign out</button>
           </div>
-          <span className="text-white text-xs font-medium">{userName}</span>
-          <button onClick={signOut} className="text-white/35 hover:text-white/60 text-[10px] ml-1 transition-colors">Sign out</button>
         </div>
       </div>
 
