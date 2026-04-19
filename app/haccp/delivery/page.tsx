@@ -33,10 +33,10 @@ interface Delivery  {
 // ─── Product categories ───────────────────────────────────────────────────────
 
 const CATEGORIES: { key: string; label: string; limit: string; detail: string }[] = [
-  { key: 'red_meat',   label: 'Red meat (beef / lamb)', limit: '≤7°C',  detail: '≤7.0 pass · 7.0–7.2 urgent · >7.2 fail' },
-  { key: 'offal',      label: 'Offal',                  limit: '≤3°C',  detail: '≤3.0 pass · >3.0 fail' },
-  { key: 'mince_prep', label: 'Mince / meat prep',      limit: '≤4°C',  detail: '≤4.0 pass · >4.0 fail' },
-  { key: 'frozen',     label: 'Frozen',                 limit: '≤-12°C',detail: '≤-12.0 pass · >-12.0 fail' },
+  { key: 'red_meat',   label: 'Red meat (beef / lamb)', limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
+  { key: 'offal',      label: 'Offal',                  limit: '≤3°C',               detail: '≤3°C pass · >3°C reject' },
+  { key: 'mince_prep', label: 'Mince / meat prep',      limit: '≤4°C',               detail: '≤4°C pass · >4°C reject' },
+  { key: 'frozen',     label: 'Frozen',                 limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional (refreeze immediately) · >-15°C reject' },
 ]
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -48,10 +48,13 @@ const CATEGORY_LABELS: Record<string, string> = {
 function calcStatus(temp: number, category: string): TempStatus {
   if (isNaN(temp)) return null
   switch (category) {
-    case 'red_meat':   return temp <= 7.0 ? 'pass' : temp <= 7.2 ? 'urgent' : 'fail'
+    // CA-001: chilled meat ≤8°C legal max, target ≤5°C
+    // 5–8°C = conditional accept (NOT reject), >8°C = reject
+    case 'red_meat':   return temp <= 5.0 ? 'pass' : temp <= 8.0 ? 'urgent' : 'fail'
     case 'offal':      return temp <= 3.0 ? 'pass' : 'fail'
     case 'mince_prep': return temp <= 4.0 ? 'pass' : 'fail'
-    case 'frozen':     return temp <= -12.0 ? 'pass' : 'fail'
+    // CA-001: frozen ≤-18°C target, acceptable to -15°C if re-frozen immediately
+    case 'frozen':     return temp <= -18.0 ? 'pass' : temp <= -15.0 ? 'urgent' : 'fail'
     default:           return null
   }
 }
@@ -77,7 +80,7 @@ const STATUS_BORDER: Record<string, string> = {
   empty:  'border-white/12 bg-white/6',
 }
 const STATUS_LABEL: Record<string, string> = {
-  pass: 'Pass', urgent: 'Urgent', fail: 'Fail',
+  pass: 'Pass', urgent: 'Conditional accept', fail: 'Reject',
 }
 
 // ─── Numpad ───────────────────────────────────────────────────────────────────
@@ -126,8 +129,11 @@ function Numpad({ value, onChange, onClose, category }: {
           )}
           {stat === 'urgent' && (
             <div className="mt-4 mx-2 bg-[#EB6619]/12 border border-[#EB6619]/40 rounded-xl px-4 py-3 text-left">
-              <p className="text-[#EB6619] text-xs font-bold uppercase tracking-widest mb-1.5">Conditional accept</p>
-              <p className="text-white/65 text-xs leading-relaxed">Place into coldest chiller immediately. Halve remaining shelf life. Notify supplier. Document corrective action.</p>
+              <p className="text-[#EB6619] text-xs font-bold uppercase tracking-widest mb-1.5">Conditional accept — do NOT reject (CA-001)</p>
+              {category === 'frozen'
+                ? <p className="text-white/65 text-xs leading-relaxed">Acceptable short-term if product is re-frozen immediately. Document decision.</p>
+                : <p className="text-white/65 text-xs leading-relaxed">Place immediately into coldest chiller area. Halve remaining shelf life. Document assessment. Review supplier performance.</p>
+              }
             </div>
           )}
           {stat === 'fail' && (
@@ -171,22 +177,29 @@ function CCAPopup({ tempStatus, contaminated, onConfirm, onBack }: {
   onConfirm:    () => void
   onBack:       () => void
 }) {
-  const tempActions = {
-    urgent: ['Place into coldest chiller immediately', 'Halve remaining shelf life', 'Notify supplier in writing', 'Document this corrective action'],
-    fail:   ['Reject delivery — do NOT accept product', 'Photograph product and temperature reading', 'Complete non-conformance report', 'Notify supplier within 24 hours'],
-  }
-  const contamActions = ['Trim contaminated area with clean knife', 'Sterilise knife ≥82°C immediately after', 'Dispose trimmings as Category 3 ABP', 'Document trim area and quantity']
+  // CA-001 verbatim corrective actions per deviation type
+  // tempStatus 'urgent' = conditional accept (5-8°C chilled, or -15 to -18°C frozen)
+  const conditionalAcceptActions = ['Accept conditionally — do NOT reject the delivery', 'Place immediately into coldest chiller area (or refreeze immediately if frozen)', 'Use within reduced shelf life — halve remaining use-by', 'Document assessment and accelerated use decision', 'Review supplier performance']
+
+  const rejectActions = ['REJECT delivery immediately — do NOT accept product', 'Photograph product and temperature reading', 'Complete Non-Conformance Report', 'Notify supplier in writing within 24 hours', 'Segregate and return or dispose as required', 'Do not accept for human consumption']
+
+  const contamActions = ['Trim contaminated area using clean knife', 'Dispose of trimmings as Category 2/3 ABP', 'Sterilise knife immediately after trimming (≥82°C)', 'Document trimming action and disposal', 'If contamination excessive: REJECT entire carcase']
 
   const showTemp   = tempStatus === 'urgent' || tempStatus === 'fail'
   const showContam = contaminated === 'yes' || contaminated === 'yes_actioned'
+  const isConditional = tempStatus === 'urgent'
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
       <div className="bg-[#0f1840] rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
         <div className="flex items-start justify-between p-6 pb-4">
           <div>
-            <p className="text-[#F09595] text-xs font-bold tracking-widest uppercase">CCP 1 deviation</p>
-            <h2 className="text-white text-xl font-bold mt-0.5">Corrective Action Required</h2>
+            <p className={`text-xs font-bold tracking-widest uppercase ${isConditional ? 'text-[#EB6619]' : 'text-[#F09595]'}`}>
+              {isConditional ? 'CCP 1 — Conditional accept' : 'CCP 1 — Reject required'}
+            </p>
+            <h2 className="text-white text-xl font-bold mt-0.5">
+              {isConditional ? 'Do NOT reject — take action below' : 'Corrective Action Required'}
+            </h2>
           </div>
           <button onClick={onBack} className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 mt-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -196,12 +209,14 @@ function CCAPopup({ tempStatus, contaminated, onConfirm, onBack }: {
           {showTemp && (
             <div>
               <p className="text-white/45 text-xs font-bold uppercase tracking-widest mb-2">
-                Temperature {tempStatus === 'fail' ? 'fail' : 'urgent'} — required actions (CA-001)
+                {isConditional ? 'Required actions — conditional accept (CA-001)' : 'Required actions — reject (CA-001)'}
               </p>
               <div className="space-y-2">
-                {tempActions[tempStatus as 'urgent' | 'fail'].map((a) => (
-                  <div key={a} className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${tempStatus === 'fail' ? 'bg-[#E24B4A]/10 border-[#E24B4A]/30' : 'bg-[#EB6619]/10 border-[#EB6619]/30'}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${tempStatus === 'fail' ? 'bg-[#F09595]' : 'bg-[#EB6619]'}`}/>
+                {(isConditional ? conditionalAcceptActions : rejectActions).map((a) => (
+                  <div key={a} className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
+                    isConditional ? 'bg-[#EB6619]/10 border-[#EB6619]/30' : 'bg-[#E24B4A]/10 border-[#E24B4A]/30'
+                  }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${isConditional ? 'bg-[#EB6619]' : 'bg-[#F09595]'}`}/>
                     <p className="text-white/75 text-sm">{a}</p>
                   </div>
                 ))}
@@ -223,7 +238,7 @@ function CCAPopup({ tempStatus, contaminated, onConfirm, onBack }: {
           )}
           <p className="text-white/35 text-xs">By confirming, you acknowledge these actions have been taken or are in progress. This record is immutable once submitted.</p>
           <button onClick={onConfirm}
-            className="w-full bg-[#E24B4A] text-white font-bold py-4 rounded-xl text-base">
+            className={`w-full text-white font-bold py-4 rounded-xl text-base ${isConditional ? 'bg-[#EB6619]' : 'bg-[#E24B4A]'}`}>
             Confirm &amp; submit
           </button>
         </div>
@@ -462,8 +477,12 @@ export default function DeliveryPage() {
               {/* Inline urgent note */}
               {tempStat === 'urgent' && (
                 <div className="mt-2 bg-[#EB6619]/10 border border-[#EB6619]/35 rounded-xl px-4 py-3">
-                  <p className="text-[#EB6619] text-xs font-bold uppercase tracking-widest mb-1">Conditional accept</p>
-                  <p className="text-white/60 text-xs leading-relaxed">Place into coldest chiller immediately. Halve remaining shelf life. Notify supplier. Corrective action required on submit.</p>
+                  <p className="text-[#EB6619] text-xs font-bold uppercase tracking-widest mb-1.5">Conditional accept — do NOT reject (CA-001)</p>
+                  {category === 'frozen' ? (
+                    <p className="text-white/60 text-xs leading-relaxed">Acceptable short-term only if product is re-frozen immediately. Document decision. Monitor closely.</p>
+                  ) : (
+                    <p className="text-white/60 text-xs leading-relaxed">Place into coldest chiller area immediately. Use within reduced shelf life — halve remaining use-by. Document assessment. Review supplier performance.</p>
+                  )}
                 </div>
               )}
               {tempStat === 'fail' && (
@@ -656,16 +675,20 @@ export default function DeliveryPage() {
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-3">Temperature limits (CA-001)</p>
                 <div className="space-y-2">
                   {CATEGORIES.map((c) => (
-                    <div key={c.key} className="flex gap-3">
-                      <span className="text-white/55 text-xs w-32 flex-shrink-0">{c.label}</span>
-                      <span className="text-white/40 text-xs">{c.detail}</span>
+                    <div key={c.key} className="flex gap-3 items-start">
+                      <span className="text-white/55 text-xs w-32 flex-shrink-0 pt-0.5">{c.label}</span>
+                      <span className="text-white/40 text-xs leading-relaxed">{c.detail}</span>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="bg-white/6 rounded-xl p-4">
-                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Red meat special rule</p>
-                <p className="text-white/60 text-xs leading-relaxed">7.0–7.2°C is NOT an automatic reject. Conditional accept: urgent placement in coldest chiller, halve shelf life, notify supplier, document corrective action.</p>
+              <div className="bg-[#EB6619]/10 border border-[#EB6619]/30 rounded-xl p-4">
+                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Key rule — do NOT auto-reject (CA-001)</p>
+                <p className="text-white/65 text-xs leading-relaxed">5–8°C for chilled meat is <span className="text-white font-semibold">NOT a reject</span> — it is a conditional accept. Place into coldest chiller immediately, halve shelf life, document, review supplier. Only {">"}8°C is a hard reject.</p>
+              </div>
+              <div className="bg-[#EB6619]/10 border border-[#EB6619]/30 rounded-xl p-4">
+                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Frozen special rule</p>
+                <p className="text-white/65 text-xs leading-relaxed">-15 to -18°C is acceptable short-term <span className="text-white font-semibold">only if product is re-frozen immediately</span>. Do NOT refreeze if product has thawed. {">-15°C"} = reject.</p>
               </div>
               <div className="bg-white/6 rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Contamination (CA-001)</p>

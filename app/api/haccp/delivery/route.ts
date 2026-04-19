@@ -21,13 +21,15 @@ function nowTimeUK(): string {
   })
 }
 
-// Temperature pass/fail logic per product category (CA-001)
+// Temperature pass/fail logic per product category (CA-001 V1.1)
+// Red meat: ≤5°C pass · 5–8°C conditional accept (urgent) · >8°C reject
+// Frozen:   ≤-18°C pass · -15 to -18°C conditional (refreeze immediately) · >-15°C reject
 function tempStatus(temp: number, category: string): 'pass' | 'urgent' | 'fail' {
   switch (category) {
-    case 'red_meat':    return temp <= 7.0 ? 'pass' : temp <= 7.2 ? 'urgent' : 'fail'
+    case 'red_meat':    return temp <= 5.0 ? 'pass' : temp <= 8.0 ? 'urgent' : 'fail'
     case 'offal':       return temp <= 3.0 ? 'pass' : 'fail'
     case 'mince_prep':  return temp <= 4.0 ? 'pass' : 'fail'
-    case 'frozen':      return temp <= -12.0 ? 'pass' : 'fail'
+    case 'frozen':      return temp <= -18.0 ? 'pass' : temp <= -15.0 ? 'urgent' : 'fail'
     default:            return 'fail'
   }
 }
