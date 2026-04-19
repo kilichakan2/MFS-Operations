@@ -71,9 +71,9 @@ function todayISO(): string {
 // ─── Status colours ───────────────────────────────────────────────────────────
 
 const STATUS_BG: Record<string, string> = {
-  pass:     'bg-[#639922]/20 border-[#639922]/50 text-[#97C459]',
-  amber:    'bg-[#EB6619]/20 border-[#EB6619]/55 text-[#EB6619]',
-  critical: 'bg-[#E24B4A]/20 border-[#E24B4A]/60 text-[#F09595]',
+  pass:     'bg-green-50 border-green-300 text-green-600',
+  amber:    'bg-amber-50 border-amber-400 text-[#EB6619]',
+  critical: 'bg-red-50 border-red-400 text-red-600',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -104,13 +104,13 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
   const keys = ['1','2','3','4','5','6','7','8','9', isNeg ? '-' : '.', '0', 'back']
 
   return (
-    <div className="fixed inset-0 bg-[#16205B] z-50 flex flex-col" style={{ position: 'fixed' }}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/10">
+    <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{ position: 'fixed' }}>
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200">
         <div>
           <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
-          <h2 className="text-white text-xl font-bold mt-0.5">{unitName}</h2>
+          <h2 className="text-slate-900 text-xl font-bold mt-0.5">{unitName}</h2>
         </div>
-        <button onClick={onClose} className="text-white/40 hover:text-white/70 p-2">
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2">
           <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -118,7 +118,7 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
         <div className="text-center">
           <div className={`text-6xl font-bold tracking-tight transition-colors ${
-            status === 'pass' ? 'text-[#97C459]' : status === 'amber' ? 'text-[#EB6619]' : status === 'critical' ? 'text-[#F09595]' : 'text-white'
+            status === 'pass' ? 'text-green-600' : status === 'amber' ? 'text-[#EB6619]' : status === 'critical' ? 'text-red-600' : 'text-white'
           }`}>
             {value || '—'}
             <span className="text-2xl ml-2 opacity-60">°C</span>
@@ -130,7 +130,7 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
             </div>
           )}
           {status && status !== 'pass' && (
-            <p className="text-white/50 text-xs mt-3 max-w-xs mx-auto leading-relaxed">{getCorrectiveAction(status, unitType)}</p>
+            <p className="text-slate-400 text-xs mt-3 max-w-xs mx-auto leading-relaxed">{getCorrectiveAction(status, unitType)}</p>
           )}
         </div>
 
@@ -138,7 +138,7 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
           {keys.map((k) => (
             <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
               className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${
-                k === 'back' ? 'bg-white/10 text-white/60' : 'bg-white/10 text-white active:bg-[#EB6619]'
+                k === 'back' ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-white active:bg-[#EB6619]'
               }`}>
               {k === 'back' ? (
                 <svg className="w-6 h-6 mx-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
@@ -175,13 +175,13 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-end justify-center" style={{ position: 'fixed' }}>
-      <div className="bg-[#0f1840] rounded-t-3xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto">
+      <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto">
         <div className="flex items-start justify-between mb-5">
           <div>
-            <p className="text-[#F09595] text-xs font-bold tracking-widest uppercase">CCP 2 deviation</p>
-            <h2 className="text-white text-xl font-bold mt-0.5">Corrective Action Required</h2>
+            <p className="text-red-600 text-xs font-bold tracking-widest uppercase">CCP 2 deviation</p>
+            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action Required</h2>
           </div>
-          <button onClick={onBack} className="text-white/40 hover:text-white/70">
+          <button onClick={onBack} className="text-slate-400 hover:text-slate-600">
             <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -198,39 +198,39 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Action taken</label>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Action taken</label>
             <div className="space-y-2">
               {actions.map((a) => (
                 <button key={a} onClick={() => setAction(a)}
                   className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ${
-                    action === a ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white/8 border-white/10 text-white/70'
+                    action === a ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-600'
                   }`}>{a}</button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
             <div className="grid grid-cols-3 gap-2">
               {['Accept', 'Conditional accept', 'Assess', 'Reject', 'Dispose'].map((d) => (
                 <button key={d} onClick={() => setDisposition(d)}
                   className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                    disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white/8 border-white/10 text-white/50'
+                    disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-400'
                   }`}>{d}</button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</label>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="Any additional details…"
-              className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
           <button onClick={() => onSubmit(action, disposition, notes)}
             disabled={!action || !disposition}
-            className="w-full bg-[#E24B4A] text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
+            className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
             Confirm corrective action &amp; submit
           </button>
         </div>
@@ -362,44 +362,44 @@ export default function ColdStoragePage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center gap-4">
-        <div className="w-20 h-20 rounded-full bg-[#639922]/25 flex items-center justify-center">
-          <svg className="w-10 h-10 text-[#97C459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
+        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+          <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
-        <p className="text-white text-xl font-bold">Session submitted</p>
-        <p className="text-white/40 text-sm">CCP 2 · {session} · {date}</p>
+        <p className="text-slate-900 text-xl font-bold">Session submitted</p>
+        <p className="text-slate-400 text-sm">CCP 2 · {session} · {date}</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#16205B] flex flex-col select-none">
+    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
-        <button onClick={() => { window.location.href = '/haccp' }} className="text-white/50 hover:text-white/80 transition-colors flex-shrink-0">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B]">
+        <button onClick={() => { window.location.href = '/haccp' }} className="text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
-          <h1 className="text-white text-lg font-bold leading-tight">Temperature Check</h1>
+          <h1 className="text-slate-900 text-lg font-bold leading-tight">Temperature Check</h1>
         </div>
         {/* ? quick-tip button */}
         <button onClick={() => setShowQuick(true)}
-          className="flex items-center gap-1.5 bg-white/9 hover:bg-white/14 border border-white/12 rounded-xl px-3 py-2 text-white/60 hover:text-white transition-all text-xs font-bold flex-shrink-0">
+          className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 hover:text-white transition-all text-xs font-bold flex-shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Quick ref
         </button>
         {/* Handbook button — navigates to dedicated document page */}
         <button onClick={openHandbook}
-          className="flex items-center gap-1.5 bg-[#EB6619]/15 hover:bg-[#EB6619]/25 border border-[#EB6619]/35 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0">
+          className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           Handbook
         </button>
       </div>
 
       {/* Session + date selectors */}
-      <div className="px-5 py-4 flex items-center gap-4 border-b border-white/8">
+      <div className="px-5 py-4 flex items-center gap-4 border-b border-slate-200">
         <div className="flex gap-2">
           {(['AM', 'PM'] as const).map((s) => {
             const isDone = units.length > 0 &&
@@ -407,7 +407,7 @@ export default function ColdStoragePage() {
             return (
               <button key={s} onClick={() => setSession(s)}
                 className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-1.5 ${
-                  session === s ? 'bg-[#EB6619] text-white' : 'bg-white/10 text-white/50'
+                  session === s ? 'bg-[#EB6619] text-white' : 'bg-slate-100 text-slate-400'
                 }`}>
                 {isDone && <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
                 {s}
@@ -417,14 +417,14 @@ export default function ColdStoragePage() {
         </div>
         <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)}
           max={todayISO()}
-          className="bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-[#EB6619]" />
-        <span className="text-white/30 text-xs ml-auto">SOP 3 — check twice daily</span>
+          className="bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]" />
+        <span className="text-slate-400 text-xs ml-auto">SOP 3 — check twice daily</span>
       </div>
 
       {/* Unit list */}
       <div className="flex-1 px-5 py-4 space-y-3">
         {loading ? (
-          <div className="flex items-center gap-3 text-white/40 text-sm mt-8">
+          <div className="flex items-center gap-3 text-slate-400 text-sm mt-8">
             <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
             Loading units…
           </div>
@@ -438,15 +438,15 @@ export default function ColdStoragePage() {
             <button key={unit.id}
               onClick={() => setNumpadUnit(unit)}
               className={`w-full text-left rounded-2xl p-4 border transition-all active:scale-[0.98] ${
-                status === 'critical' ? 'bg-[#E24B4A]/12 border-[#E24B4A]/55' :
-                status === 'amber'    ? 'bg-[#EB6619]/10 border-[#EB6619]/45' :
-                status === 'pass'     ? 'bg-[#639922]/10 border-[#639922]/40' :
-                'bg-white/6 border-white/10'
+                status === 'critical' ? 'bg-red-50 border-red-400' :
+                status === 'amber'    ? 'bg-amber-50 border-amber-300' :
+                status === 'pass'     ? 'bg-green-50 border-green-200' :
+                'bg-white border-slate-200'
               }`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-white font-semibold text-base">{unit.name}</p>
-                  <p className="text-white/40 text-xs mt-0.5">
+                  <p className="text-slate-900 font-semibold text-base">{unit.name}</p>
+                  <p className="text-slate-400 text-xs mt-0.5">
                     {unit.unit_type === 'freezer' ? 'Target ≤-18°C' :
                      unit.unit_type === 'room'    ? 'Room ambient · Max 12°C' :
                                                    'Target ≤5°C · Max 8°C'}
@@ -456,7 +456,7 @@ export default function ColdStoragePage() {
                 <div className="text-right">
                   {raw !== '' && !isNaN(numVal) ? (
                     <>
-                      <p className={`text-2xl font-bold ${status === 'pass' ? 'text-[#97C459]' : status === 'amber' ? 'text-[#EB6619]' : 'text-[#F09595]'}`}>
+                      <p className={`text-2xl font-bold ${status === 'pass' ? 'text-green-600' : status === 'amber' ? 'text-[#EB6619]' : 'text-red-600'}`}>
                         {numVal}°C
                       </p>
                       {status && (
@@ -466,7 +466,7 @@ export default function ColdStoragePage() {
                       )}
                     </>
                   ) : (
-                    <div className="w-20 h-12 rounded-xl bg-white/8 border border-white/12 flex items-center justify-center text-white/30 text-sm">
+                    <div className="w-20 h-12 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 text-sm">
                       Tap
                     </div>
                   )}
@@ -478,23 +478,23 @@ export default function ColdStoragePage() {
       </div>
 
       {/* Comments + submit — hidden when session already done */}
-      <div className="px-5 pb-6 border-t border-white/8 pt-4">
+      <div className="px-5 pb-6 border-t border-slate-200 pt-4">
         {sessionAlreadyDone ? (
-          <div className="flex items-center gap-3 bg-[#639922]/20 border border-[#639922]/40 rounded-2xl px-5 py-4">
-            <div className="w-9 h-9 rounded-full bg-[#639922]/30 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-[#97C459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-5 py-4">
+            <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
             <div>
-              <p className="text-[#97C459] font-bold text-sm">{session} check already submitted</p>
-              <p className="text-white/40 text-xs mt-0.5">Readings recorded above are read-only</p>
+              <p className="text-green-600 font-bold text-sm">{session} check already submitted</p>
+              <p className="text-slate-400 text-xs mt-0.5">Readings recorded above are read-only</p>
             </div>
           </div>
         ) : (
           <div className="space-y-3">
             <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2}
               placeholder="Comments (optional)…"
-              className="w-full bg-white/8 border border-white/12 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
-            {submitError && <p className="text-[#F09595] text-xs">{submitError}</p>}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
+            {submitError && <p className="text-red-600 text-xs">{submitError}</p>}
             <button onClick={handleSubmitAttempt}
               disabled={!allFilled || submitting}
               className="w-full bg-[#EB6619] text-white font-bold py-4 rounded-2xl text-base disabled:opacity-40 transition-opacity flex items-center justify-center gap-2">
@@ -531,37 +531,37 @@ export default function ColdStoragePage() {
 
       {/* Quick reference panel */}
       {showQuick && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-end" style={{position:'fixed'}}>
-          <div className="bg-[#0f1840] rounded-t-3xl w-full p-6 max-h-[70vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end" style={{position:'fixed'}}>
+          <div className="bg-white rounded-t-3xl w-full p-6 max-h-[70vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-bold text-lg">CCP 2 — Quick Reference</h3>
-              <button onClick={() => setShowQuick(false)} className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 flex-shrink-0">
+              <h3 className="text-slate-900 font-bold text-lg">CCP 2 — Quick Reference</h3>
+              <button onClick={() => setShowQuick(false)} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95 flex-shrink-0">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
             <div className="space-y-3 text-sm">
-              <div className="bg-white/6 rounded-xl p-4">
+              <div className="bg-white rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Chillers (Lamb, Dispatch, Dairy)</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#639922] flex-shrink-0"/><span className="text-white/70">≤5°C — Pass</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-white/70">5–8°C — Amber: check seals, recheck in 30 min</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E24B4A] flex-shrink-0"/><span className="text-white/70">&gt;8°C — Critical: transfer all product, call engineer</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤5°C — Pass</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-slate-600">5–8°C — Amber: check seals, recheck in 30 min</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;8°C — Critical: transfer all product, call engineer</span></div>
                 </div>
               </div>
-              <div className="bg-white/6 rounded-xl p-4">
+              <div className="bg-white rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Process Room (ambient)</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#639922] flex-shrink-0"/><span className="text-white/70">≤12°C — Pass</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-white/70">12–15°C — Amber: investigate cooling</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E24B4A] flex-shrink-0"/><span className="text-white/70">&gt;15°C — Critical: stop loading, return product to storage</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤12°C — Pass</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-slate-600">12–15°C — Amber: investigate cooling</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;15°C — Critical: stop loading, return product to storage</span></div>
                 </div>
               </div>
-              <div className="bg-white/6 rounded-xl p-4">
+              <div className="bg-white rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Freezer</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#639922] flex-shrink-0"/><span className="text-white/70">≤-18°C — Pass</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-white/70">-15 to -18°C — Amber: keep door closed, check coils</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E24B4A] flex-shrink-0"/><span className="text-white/70">&gt;-15°C — Critical: assess for thawing, do NOT refreeze</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤-18°C — Pass</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-slate-600">-15 to -18°C — Amber: keep door closed, check coils</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;-15°C — Critical: assess for thawing, do NOT refreeze</span></div>
                 </div>
               </div>
             </div>

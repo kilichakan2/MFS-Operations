@@ -139,25 +139,25 @@ export default function CleaningPage() {
   const anyCatSelected = selected.size > 0
 
   return (
-    <div className="min-h-screen bg-[#16205B] flex flex-col select-none">
+    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B]">
         <button onClick={() => { window.location.href = '/haccp' }}
-          className="w-10 h-10 rounded-xl bg-white/9 hover:bg-white/14 flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
+          className="w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all flex-shrink-0">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">SOP 2 + SOP 2B — Cleaning</p>
-          <h1 className="text-white text-lg font-bold leading-tight">Cleaning Diary</h1>
+          <h1 className="text-slate-900 text-lg font-bold leading-tight">Cleaning Diary</h1>
         </div>
         <button onClick={() => setShowQuick(true)}
-          className="flex items-center gap-1.5 bg-white/9 hover:bg-white/14 border border-white/12 rounded-xl px-3 py-2 text-white/55 hover:text-white transition-all text-xs font-bold flex-shrink-0">
+          className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 hover:text-white transition-all text-xs font-bold flex-shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Quick ref
         </button>
         <button onClick={() => { window.location.href = '/haccp/documents/hb-001?from=/haccp/cleaning' }}
-          className="flex items-center gap-1.5 bg-[#EB6619]/15 hover:bg-[#EB6619]/25 border border-[#EB6619]/35 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0">
+          className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           Handbook
         </button>
@@ -166,29 +166,29 @@ export default function CleaningPage() {
       <div className="flex-1 px-5 py-4 space-y-4 overflow-y-auto">
 
         {/* Time separation banner */}
-        <div className="bg-[#EB6619]/10 border border-[#EB6619]/38 rounded-xl px-4 py-3 flex items-start gap-3">
+        <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-start gap-3">
           <svg className="w-4 h-4 text-[#EB6619] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
           <div>
-            <p className="text-[#EB6619] text-[10px] font-bold uppercase tracking-widest mb-1">Time separation required</p>
-            <p className="text-white/65 text-xs leading-relaxed">Meat and mince require a FULL 4-step clean between categories. Process one category at a time. Log each changeover here. Meat preparations containing allergens (marinades, coatings, seasonings) require the same strict separation — allergen products AFTER plain, with a verified clean in between.</p>
+            <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Time separation required</p>
+            <p className="text-slate-600 text-xs leading-relaxed">Meat and mince require a FULL 4-step clean between categories. Process one category at a time. Log each changeover here. Meat preparations containing allergens (marinades, coatings, seasonings) require the same strict separation — allergen products AFTER plain, with a verified clean in between.</p>
           </div>
         </div>
 
         {/* Success flash */}
         {flash && (
-          <div className="bg-[#639922]/20 border border-[#639922]/45 rounded-xl px-4 py-3 flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full bg-[#639922]/30 flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 text-[#97C459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          <div className="bg-green-50 border border-green-300 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
-            <p className="text-[#97C459] font-bold text-sm">Clean logged — ready for next entry</p>
+            <p className="text-green-600 font-bold text-sm">Clean logged — ready for next entry</p>
           </div>
         )}
 
         {/* Log a clean form */}
-        <div className="bg-white/6 border border-white/10 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-white/8">
-            <p className="text-white font-semibold text-sm">Log a clean</p>
-            <p className="text-white/38 text-xs mt-0.5">Select everything that was cleaned</p>
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200">
+            <p className="text-slate-900 font-semibold text-sm">Log a clean</p>
+            <p className="text-slate-400 text-xs mt-0.5">Select everything that was cleaned</p>
           </div>
 
           {/* Category chips */}
@@ -199,7 +199,7 @@ export default function CleaningPage() {
                 <button key={cat}
                   onPointerDown={(e) => { e.preventDefault(); toggleCategory(cat) }}
                   className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                    on ? 'border-[#EB6619] bg-[#EB6619]/18 text-[#EB6619]' : 'border-white/15 bg-white/6 text-white/50'
+                    on ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
                   }`}>
                   {cat}
                 </button>
@@ -215,16 +215,16 @@ export default function CleaningPage() {
                 value={otherText}
                 onChange={(e) => setOtherText(e.target.value)}
                 placeholder="Describe what else was cleaned…"
-                className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#EB6619]"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500"
               />
             </div>
           )}
 
-          <div className="h-px bg-white/8 mx-4" />
+          <div className="h-px bg-slate-50 mx-4" />
 
           {/* Issues toggle */}
           <div className="px-4 py-3 flex items-center justify-between">
-            <p className="text-white/65 text-sm">Any issues?</p>
+            <p className="text-slate-600 text-sm">Any issues?</p>
             <div className="flex gap-2">
               {[true, false].map((v) => (
                 <button key={String(v)} onClick={() => setIssues(v)}
@@ -232,8 +232,8 @@ export default function CleaningPage() {
                     issues === v
                       ? v
                         ? 'bg-[#EB6619] border-[#EB6619] text-white'
-                        : 'bg-[#639922]/25 border-[#639922]/50 text-[#97C459]'
-                      : 'bg-white/8 border-white/10 text-white/45'
+                        : 'bg-green-100 border-green-300 text-green-600'
+                      : 'bg-slate-50 border-slate-200 text-slate-400'
                   }`}>
                   {v ? 'Yes' : 'No'}
                 </button>
@@ -248,18 +248,18 @@ export default function CleaningPage() {
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
                 placeholder="What did you do to resolve the issue…"
-                className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none"
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"
               />
             </div>
           )}
 
           {/* Date / time meta */}
           <div className="px-4 pb-3 flex items-center justify-between">
-            <p className="text-white/28 text-xs">{todayDisplay()}</p>
-            <p className="text-white/28 text-xs">Auto-time: {timeNow}</p>
+            <p className="text-slate-300 text-xs">{todayDisplay()}</p>
+            <p className="text-slate-300 text-xs">Auto-time: {timeNow}</p>
           </div>
 
-          {submitErr && <p className="px-4 pb-2 text-[#F09595] text-xs">{submitErr}</p>}
+          {submitErr && <p className="px-4 pb-2 text-red-600 text-xs">{submitErr}</p>}
 
           <button onClick={handleSubmit}
             disabled={!anyCatSelected || submitting}
@@ -274,40 +274,40 @@ export default function CleaningPage() {
         {/* Today's log */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-white/40 text-xs font-bold uppercase tracking-widest">Today's log</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Today's log</p>
             {entries.length > 0 && (
-              <span className="bg-[#639922]/20 border border-[#639922]/35 rounded-full px-3 py-1 text-xs font-bold text-[#97C459]">
+              <span className="bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs font-bold text-green-600">
                 {entries.length} {entries.length === 1 ? 'clean' : 'cleans'} logged
               </span>
             )}
           </div>
 
           {loading ? (
-            <div className="flex items-center gap-3 text-white/40 text-sm py-4">
+            <div className="flex items-center gap-3 text-slate-400 text-sm py-4">
               <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
               Loading log…
             </div>
           ) : entries.length === 0 ? (
-            <div className="bg-white/4 border border-white/8 rounded-xl px-4 py-5 text-center">
-              <p className="text-white/30 text-sm">No cleans logged today yet</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-5 text-center">
+              <p className="text-slate-400 text-sm">No cleans logged today yet</p>
             </div>
           ) : (
             <div className="space-y-2">
               {entries.map((e) => (
                 <div key={e.id}
-                  className="bg-white/5 border border-white/9 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                  className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium leading-snug">{e.what_was_cleaned}</p>
-                    <p className="text-white/35 text-xs mt-0.5">{e.users?.name ?? 'Unknown'}</p>
+                    <p className="text-slate-400 text-xs mt-0.5">{e.users?.name ?? 'Unknown'}</p>
                     {e.issues && e.what_did_you_do && (
                       <p className="text-[#EB6619] text-xs mt-1 italic leading-snug">{e.what_did_you_do}</p>
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                    <p className="text-white/35 text-xs">{entryTime(e.time_of_clean)}</p>
+                    <p className="text-slate-400 text-xs">{entryTime(e.time_of_clean)}</p>
                     {e.issues
-                      ? <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#EB6619]/22 text-[#EB6619]">Issue noted</span>
-                      : <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#639922]/22 text-[#97C459]">No issues</span>
+                      ? <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-[#EB6619]">Issue noted</span>
+                      : <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-600">No issues</span>
                     }
                   </div>
                 </div>
@@ -320,18 +320,18 @@ export default function CleaningPage() {
 
       {/* Quick reference */}
       {showQuick && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-end" style={{position:'fixed'}}>
-          <div className="bg-[#0f1840] rounded-t-3xl w-full p-6 max-h-[75vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end" style={{position:'fixed'}}>
+          <div className="bg-white rounded-t-3xl w-full p-6 max-h-[75vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-bold text-lg">SOP 2 — Quick Reference</h3>
+              <h3 className="text-slate-900 font-bold text-lg">SOP 2 — Quick Reference</h3>
               <button onClick={() => setShowQuick(false)}
-                className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95">
+                className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
             <div className="space-y-4">
 
-              <div className="bg-white/6 rounded-xl p-4">
+              <div className="bg-white rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-3">4-step cleaning process</p>
                 <div className="space-y-2.5">
                   {[
@@ -342,13 +342,13 @@ export default function CleaningPage() {
                   ].map(([step, desc]) => (
                     <div key={step} className="flex gap-3">
                       <span className="text-[#EB6619] text-xs font-bold w-20 flex-shrink-0 pt-0.5">{step}</span>
-                      <span className="text-white/65 text-xs leading-relaxed">{desc}</span>
+                      <span className="text-slate-600 text-xs leading-relaxed">{desc}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="bg-white/6 rounded-xl p-4">
+              <div className="bg-white rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-3">Minimum frequencies (SOP 2B)</p>
                 <div className="space-y-2">
                   {[
@@ -359,16 +359,16 @@ export default function CleaningPage() {
                     ['Production area floor',   'End of each shift'],
                   ].map(([item, freq]) => (
                     <div key={item} className="flex gap-3">
-                      <span className="text-white/55 text-xs w-36 flex-shrink-0">{item}</span>
-                      <span className="text-white/40 text-xs">{freq}</span>
+                      <span className="text-slate-500 text-xs w-36 flex-shrink-0">{item}</span>
+                      <span className="text-slate-400 text-xs">{freq}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="bg-[#EB6619]/10 border border-[#EB6619]/35 rounded-xl p-4">
-                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-1.5">Time separation rule</p>
-                <p className="text-white/65 text-xs leading-relaxed">Meat and mince require a full 4-step clean between categories. Process one at a time. Log each changeover in this diary.
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+                <p className="text-amber-700 font-bold text-xs uppercase tracking-widest mb-1.5">Time separation rule</p>
+                <p className="text-slate-600 text-xs leading-relaxed">Meat and mince require a full 4-step clean between categories. Process one at a time. Log each changeover in this diary.
 
 Meat preparations containing allergens (marinades, coatings, seasonings) require the same strict separation — allergen products must always come AFTER plain products with a full verified clean in between.</p>
               </div>

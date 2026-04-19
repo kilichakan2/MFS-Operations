@@ -80,21 +80,21 @@ type TileState = 'complete' | 'overdue' | 'due' | 'deviation' | 'neutral'
 function tileClasses(state: TileState): string {
   const base = 'rounded-2xl p-4 flex flex-col gap-2.5 cursor-pointer relative select-none transition-all duration-150 active:scale-[0.97]'
   switch (state) {
-    case 'complete':  return `${base} bg-white/7 border border-[#639922]/50`
-    case 'overdue':   return `${base} bg-[#E24B4A]/10 border border-[#E24B4A]/60`
-    case 'due':       return `${base} bg-white/7 border border-[#EB6619]/55`
-    case 'deviation': return `${base} bg-[#E24B4A]/12 border border-[#E24B4A]/70`
-    default:          return `${base} bg-white/6 border border-white/8`
+    case 'complete':  return `${base} bg-white border border-green-300`
+    case 'overdue':   return `${base} bg-red-50 border border-red-400`
+    case 'due':       return `${base} bg-white border border-amber-400`
+    case 'deviation': return `${base} bg-red-50 border border-red-400`
+    default:          return `${base} bg-white border border-slate-200`
   }
 }
 
 function Badge({ state, label }: { state: TileState; label: string }) {
   const cls = {
-    complete:  'bg-[#639922]/25 text-[#97C459]',
-    overdue:   'bg-[#E24B4A]/30 text-[#F09595]',
-    due:       'bg-[#EB6619]/28 text-[#EB6619]',
-    deviation: 'bg-[#E24B4A]/35 text-[#F09595]',
-    neutral:   'bg-white/9 text-white/38',
+    complete:  'bg-green-100 text-green-600',
+    overdue:   'bg-red-100 text-red-600',
+    due:       'bg-amber-100 text-[#EB6619]',
+    deviation: 'bg-red-100 text-red-600',
+    neutral:   'bg-slate-50 text-slate-400',
   }[state]
   return <span className={`absolute top-3 right-3 text-[9px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
 }
@@ -118,10 +118,10 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
   if (submitted) {
     return (
       <div style={{minHeight:400,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <div className="bg-[#16205B] rounded-3xl p-8 w-full max-w-sm text-center">
-          <div className="w-16 h-16 rounded-full bg-[#639922]/30 flex items-center justify-center mx-auto mb-4 text-[#97C459]">{Icon.tick}</div>
-          <p className="text-white font-bold text-lg">Logged</p>
-          <p className="text-white/50 text-sm mt-1">Corrective action recorded</p>
+        <div className="bg-slate-100 rounded-3xl p-8 w-full max-w-sm text-center">
+          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4 text-green-600">{Icon.tick}</div>
+          <p className="text-slate-900 font-bold text-lg">Logged</p>
+          <p className="text-slate-400 text-sm mt-1">Corrective action recorded</p>
           <button onClick={onClose} className="mt-6 w-full bg-[#EB6619] text-white font-bold py-3 rounded-xl">Done</button>
         </div>
       </div>
@@ -130,20 +130,20 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
 
   return (
     <div style={{minHeight:500,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:0}}>
-      <div className="bg-[#0f1840] rounded-t-3xl w-full max-w-2xl p-6">
+      <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <p className="text-[#F09595] text-xs font-bold tracking-widest uppercase">CCP deviation</p>
-            <h2 className="text-white text-xl font-bold mt-0.5">Corrective Action</h2>
+            <p className="text-red-600 text-xs font-bold tracking-widest uppercase">CCP deviation</p>
+            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action</h2>
           </div>
-          <button onClick={onClose} className="text-white/40 hover:text-white/70 transition-colors">{Icon.close}</button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">{Icon.close}</button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</label>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</label>
             <select value={actionTaken} onChange={(e) => setActionTaken(e.target.value)}
-              className="w-full bg-white/10 border border-white/15 rounded-xl px-4 h-12 text-white text-sm focus:outline-none focus:border-[#EB6619]">
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 h-12 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]">
               <option value="">Select action…</option>
               <option value="urgent_chill">Placed immediately in coldest chiller (temp 5–8°C)</option>
               <option value="rejected">Rejected — returned to supplier</option>
@@ -157,11 +157,11 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
             <div className="grid grid-cols-3 gap-2">
               {['Accept', 'Conditional accept', 'Reject', 'Dispose', 'Assess'].map((d) => (
                 <button key={d} onClick={() => setDisposition(d)}
-                  className={`py-2.5 rounded-xl text-xs font-bold transition-all ${disposition === d ? 'bg-[#EB6619] text-white' : 'bg-white/8 text-white/50 border border-white/10'}`}>
+                  className={`py-2.5 rounded-xl text-xs font-bold transition-all ${disposition === d ? 'bg-[#EB6619] text-white' : 'bg-slate-50 text-slate-400 border border-slate-200'}`}>
                   {d}
                 </button>
               ))}
@@ -169,26 +169,26 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Notes</label>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="Additional details…"
-              className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
           <div>
-            <label className="block text-white/50 text-xs font-bold uppercase tracking-widest mb-2">PIN to confirm</label>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">PIN to confirm</label>
             <div className="flex gap-2">
               {[0,1,2,3].map((i) => (
-                <div key={i} className={`w-10 h-10 rounded-full border-2 ${pin.length > i ? 'bg-[#EB6619] border-[#EB6619]' : 'border-white/25 bg-transparent'}`} />
+                <div key={i} className={`w-10 h-10 rounded-full border-2 ${pin.length > i ? 'bg-[#EB6619] border-[#EB6619]' : 'border-slate-300 bg-transparent'}`} />
               ))}
               <input type="number" value={pin} onChange={(e) => setPin(e.target.value.slice(0,4))}
-                className="flex-1 bg-white/10 border border-white/15 rounded-xl px-4 text-white text-center text-xl tracking-[.5em] focus:outline-none focus:border-[#EB6619]"
+                className="flex-1 bg-white border border-slate-200 rounded-xl px-4 text-slate-900 text-center text-xl tracking-[.5em] focus:outline-none focus:border-[#EB6619]"
                 placeholder="····" inputMode="numeric" />
             </div>
           </div>
 
           <button onClick={handleSubmit} disabled={!actionTaken || !disposition || pin.length < 4 || submitting}
-            className="w-full bg-[#E24B4A] text-white font-bold py-4 rounded-xl text-base disabled:opacity-40 transition-opacity">
+            className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40 transition-opacity">
             {submitting ? 'Submitting…' : 'Submit corrective action'}
           </button>
         </div>
@@ -257,15 +257,15 @@ function HelpPanel({ section, onClose }: { section: string; onClose: () => void 
   if (!content) return null
   return (
     <div style={{minHeight:400,background:'rgba(0,0,0,0.65)',display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
-      <div className="bg-[#0f1840] rounded-t-3xl w-full max-w-2xl p-6 max-h-96 overflow-y-auto">
+      <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 max-h-96 overflow-y-auto">
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">{content.ref}</p>
-            <h3 className="text-white font-bold text-lg mt-0.5">{content.title}</h3>
+            <h3 className="text-slate-900 font-bold text-lg mt-0.5">{content.title}</h3>
           </div>
-          <button onClick={onClose} className="text-white/40 hover:text-white/70 flex-shrink-0 mt-1">{Icon.close}</button>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 flex-shrink-0 mt-1">{Icon.close}</button>
         </div>
-        <div className="text-white/70 text-sm leading-relaxed whitespace-pre-line">{content.text}</div>
+        <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{content.text}</div>
       </div>
     </div>
   )
@@ -283,23 +283,23 @@ function LargeTile({
   return (
     <div className={`${tileClasses(state)} flex-1`} onPointerDown={(e) => { e.preventDefault(); onTap() }}>
       <div className="flex items-start justify-between">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white/80 ${
-          state === 'overdue' || state === 'deviation' ? 'bg-[#E24B4A]/25' :
-          state === 'complete' ? 'bg-[#639922]/20' :
-          state === 'due' ? 'bg-[#EB6619]/20' : 'bg-white/10'
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-slate-700 ${
+          state === 'overdue' || state === 'deviation' ? 'bg-red-100' :
+          state === 'complete' ? 'bg-green-50' :
+          state === 'due' ? 'bg-amber-50' : 'bg-slate-100'
         }`}>
           {icon}
         </div>
         <button
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); onHelp() }}
-          className="text-white/25 hover:text-white/55 transition-colors p-1 -mt-0.5 -mr-0.5"
+          className="text-slate-300 hover:text-slate-500 transition-colors p-1 -mt-0.5 -mr-0.5"
           aria-label={`Help for ${label}`}>
           {Icon.help}
         </button>
       </div>
       <div>
-        <p className="text-white font-semibold text-sm leading-tight">{label}</p>
-        <p className="text-white/42 text-[11px] mt-0.5 leading-snug">{sub}</p>
+        <p className="text-slate-900 font-semibold text-sm leading-tight">{label}</p>
+        <p className="text-slate-400 text-[11px] mt-0.5 leading-snug">{sub}</p>
       </div>
       <Badge state={state} label={badge} />
     </div>
@@ -317,19 +317,19 @@ function SmallTile({
   return (
     <div
       className={`flex-1 rounded-xl px-3 py-2.5 flex items-center gap-3 cursor-pointer border transition-all active:scale-[0.97] ${
-        due ? 'bg-[#EB6619]/8 border-[#EB6619]/40' : 'bg-white/5 border-white/7'
+        due ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'
       }`}
       onPointerDown={(e) => { e.preventDefault(); onTap() }}>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/9 text-white/60 flex-shrink-0">{icon}</div>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-50 text-slate-500 flex-shrink-0">{icon}</div>
       <div className="flex-1 min-w-0">
-        <p className="text-white text-[12px] font-semibold leading-tight">{label}</p>
-        <p className="text-white/38 text-[10px] mt-0.5">{sub}</p>
+        <p className="text-slate-900 text-[12px] font-semibold leading-tight">{label}</p>
+        <p className="text-slate-400 text-[10px] mt-0.5">{sub}</p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${due ? 'bg-[#EB6619]/28 text-[#EB6619]' : 'bg-white/8 text-white/35'}`}>{badge}</span>
+        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${due ? 'bg-amber-100 text-[#EB6619]' : 'bg-slate-50 text-slate-400'}`}>{badge}</span>
         <button
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); onHelp() }}
-          className="text-white/22 hover:text-white/50 transition-colors"
+          className="text-slate-300 hover:text-slate-400 transition-colors"
           aria-label={`Help for ${label}`}>
           {Icon.help}
         </button>
@@ -343,17 +343,17 @@ function SmallTile({
 function CCATile({ open, onTap }: { open: number; onTap: () => void }) {
   return (
     <div
-      className="flex-[2] rounded-2xl p-4 flex items-center gap-4 cursor-pointer border border-[#E24B4A]/55 bg-[#E24B4A]/10 transition-all active:scale-[0.97]"
+      className="flex-[2] rounded-2xl p-4 flex items-center gap-4 cursor-pointer border border-red-400 bg-red-50 transition-all active:scale-[0.97]"
       onPointerDown={(e) => { e.preventDefault(); onTap() }}>
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-[#E24B4A]/25 text-[#F09595] flex-shrink-0">{Icon.warn}</div>
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-100 text-red-600 flex-shrink-0">{Icon.warn}</div>
       <div className="flex-1">
-        <p className="text-[#F09595] font-semibold text-sm">Corrective Action</p>
-        <p className="text-white/40 text-[11px] mt-0.5">
+        <p className="text-red-600 font-semibold text-sm">Corrective Action</p>
+        <p className="text-slate-400 text-[11px] mt-0.5">
           {open > 0 ? `${open} open — requires resolution` : 'Manual CCP deviation log · CA-001'}
         </p>
       </div>
       {open > 0 && (
-        <span className="bg-[#E24B4A]/35 text-[#F09595] text-[11px] font-bold px-3 py-1 rounded-full flex-shrink-0">
+        <span className="bg-red-100 text-red-600 text-[11px] font-bold px-3 py-1 rounded-full flex-shrink-0">
           {open} open
         </span>
       )}
@@ -422,30 +422,30 @@ function HomeScreen({ userName }: { userName: string }) {
   if (s?.processing_room.pm_overdue) overdue.push('Process Room PM')
 
   return (
-    <div className="min-h-screen bg-[#16205B] flex flex-col select-none">
+    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-white/8 flex-shrink-0">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-[#1E293B] flex-shrink-0">
         <div className="flex items-center gap-3">
           <MfsLogo className="h-6 w-auto text-white" />
-          <div className="w-px h-6 bg-white/15" />
-          <span className="text-white/60 text-sm font-medium">HACCP — Process Room</span>
+          <div className="w-px h-6 bg-slate-200" />
+          <span className="text-slate-500 text-sm font-medium">HACCP — Process Room</span>
         </div>
         <div className="flex items-center gap-3">
           {/* Documents register link */}
           <button onClick={() => { window.location.href = '/haccp/documents' }}
-            className="flex items-center gap-1.5 bg-white/8 hover:bg-white/13 border border-white/12 rounded-xl px-3 py-2 text-white/55 hover:text-white transition-all text-xs font-bold">
+            className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 hover:text-white transition-all text-xs font-bold">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
             Documents
           </button>
-          <div className="flex items-center gap-2 bg-white/9 rounded-full px-3 py-1.5">
+          <div className="flex items-center gap-2 bg-slate-50 rounded-full px-3 py-1.5">
             <div className="w-6 h-6 rounded-full bg-[#EB6619] flex items-center justify-center text-white text-[9px] font-bold">
               {initials(userName)}
             </div>
             <span className="text-white text-xs font-medium">{userName}</span>
-            <button onClick={signOut} className="text-white/35 hover:text-white/60 text-[10px] ml-1 transition-colors">Sign out</button>
+            <button onClick={signOut} className="text-slate-400 hover:text-slate-500 text-[10px] ml-1 transition-colors">Sign out</button>
           </div>
         </div>
       </div>
@@ -484,7 +484,7 @@ function HomeScreen({ userName }: { userName: string }) {
           </div>
 
           {/* Divider */}
-          <div className="h-px bg-white/7 mx-1" />
+          <div className="h-px bg-white mx-1" />
 
           {/* Small tile row */}
           <div className="flex gap-3">
@@ -502,51 +502,51 @@ function HomeScreen({ userName }: { userName: string }) {
         </div>
 
         {/* Status panel */}
-        <div className="w-44 flex-shrink-0 border-l border-white/7 bg-black/25 p-4 flex flex-col gap-4">
+        <div className="w-44 flex-shrink-0 border-l border-slate-200 bg-black/25 p-4 flex flex-col gap-4">
 
           <div>
-            <div className="text-white text-2xl font-bold tracking-wide">
+            <div className="text-slate-900 text-2xl font-bold tracking-wide">
               {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div className="text-white/38 text-[11px] mt-0.5">
+            <div className="text-slate-400 text-[11px] mt-0.5">
               {now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
             </div>
           </div>
 
-          <div className="h-px bg-white/6" />
+          <div className="h-px bg-white" />
 
           <div>
-            <p className="text-white/32 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Today</p>
-            <div className="bg-white/10 rounded-full h-1.5 overflow-hidden">
+            <p className="text-slate-300 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Today</p>
+            <div className="bg-slate-100 rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#EB6619] h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
             <div className="flex justify-between mt-1.5">
-              <span className="text-white/42 text-[10px]">{s ? `${s.completed_checks} of ${s.total_checks}` : '—'}</span>
-              <span className="text-white text-[10px] font-bold">{pct}%</span>
+              <span className="text-slate-400 text-[10px]">{s ? `${s.completed_checks} of ${s.total_checks}` : '—'}</span>
+              <span className="text-slate-700 text-[10px] font-bold">{pct}%</span>
             </div>
           </div>
 
           {overdue.length > 0 && (
             <div>
-              <p className="text-white/32 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Overdue</p>
+              <p className="text-slate-300 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Overdue</p>
               <div className="space-y-1.5">
                 {overdue.map((item) => (
-                  <div key={item} className="border-l-2 border-[#E24B4A] pl-2">
-                    <p className="text-[#F09595] text-[11px] font-medium">{item}</p>
-                    <p className="text-white/35 text-[9px]">PM check due</p>
+                  <div key={item} className="border-l-2 border-red-500 pl-2">
+                    <p className="text-red-600 text-[11px] font-medium">{item}</p>
+                    <p className="text-slate-400 text-[9px]">PM check due</p>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="h-px bg-white/6" />
+          <div className="h-px bg-white" />
 
           <div>
-            <p className="text-white/32 text-[9px] font-bold tracking-[.1em] uppercase mb-1.5">Sync</p>
+            <p className="text-slate-300 text-[9px] font-bold tracking-[.1em] uppercase mb-1.5">Sync</p>
             <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-[#97C459]" />
-              <span className="text-white/40 text-[10px]">Online</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              <span className="text-slate-400 text-[10px]">Online</span>
             </div>
           </div>
 
@@ -577,12 +577,12 @@ function StaffCard({ member, onSelect }: { member: StaffMember; onSelect: (m: St
   return (
     <button type="button" aria-label={`Select ${member.name}`}
       onPointerDown={(e) => { e.preventDefault(); if ('vibrate' in navigator) navigator.vibrate(8); onSelect(member) }}
-      className="flex flex-col items-center gap-3 rounded-2xl p-5 ring-1 ring-white/20 bg-white/10 active:bg-white/20 active:ring-[#EB6619]/60 transition-all select-none">
-      <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold ${isWh ? 'bg-[#EB6619]' : 'bg-[#590129]'}`}>
+      className="flex flex-col items-center gap-3 rounded-2xl p-5 ring-1 ring-white/20 bg-slate-100 active:bg-slate-200 active:ring-[#EB6619]/60 transition-all select-none">
+      <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold ${isWh ? 'bg-[#EB6619]' : 'bg-pink-900'}`}>
         {initials(member.name)}
       </div>
-      <p className="text-white font-semibold text-sm">{member.name}</p>
-      <span className={`text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full ${isWh ? 'bg-[#EB6619]/20 text-[#EB6619]' : 'bg-[#590129]/40 text-white/80'}`}>
+      <p className="text-slate-900 font-semibold text-sm">{member.name}</p>
+      <span className={`text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full ${isWh ? 'bg-amber-50 text-[#EB6619]' : 'bg-pink-100 text-slate-700'}`}>
         {isWh ? 'Warehouse' : 'Butcher'}
       </span>
     </button>
@@ -619,9 +619,9 @@ function LoginDoor() {
 
   if (selected) {
     return (
-      <div className="min-h-screen bg-[#16205B] flex flex-col">
+      <div className="min-h-screen bg-slate-100 flex flex-col">
         <button type="button" onPointerDown={() => { setSelected(null); setPinError(undefined); setReset((n) => n + 1) }}
-          className="absolute top-5 left-5 flex items-center gap-2 text-white/50 hover:text-white/80 transition-colors z-10 select-none">
+          className="absolute top-5 left-5 flex items-center gap-2 text-slate-400 hover:text-slate-700 transition-colors z-10 select-none">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
           <span className="text-sm">Back</span>
         </button>
@@ -631,29 +631,29 @@ function LoginDoor() {
   }
 
   return (
-    <div className="min-h-screen bg-[#16205B] flex flex-col select-none">
+    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
       <div className="flex flex-col items-center pt-10 pb-6 px-6">
         <MfsLogo className="h-8 mb-4 text-white" />
         <p className="text-[#EB6619] text-xs font-bold tracking-[.35em] uppercase">Process Room</p>
         <h1 className="text-white text-2xl font-bold tracking-wide mt-1">HACCP Compliance</h1>
-        <p className="text-white/40 text-sm mt-2">Tap your name to continue</p>
+        <p className="text-slate-400 text-sm mt-2">Tap your name to continue</p>
       </div>
-      <div className="mx-8 h-px bg-white/10" />
+      <div className="mx-8 h-px bg-slate-100" />
       <div className="flex-1 flex items-start justify-center px-6 pt-8 pb-10">
         {loading ? (
-          <div className="flex items-center gap-3 text-white/40 text-sm mt-12">
+          <div className="flex items-center gap-3 text-slate-400 text-sm mt-12">
             <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
             Loading…
           </div>
         ) : staff.length === 0 ? (
-          <p className="text-white/40 text-sm mt-12 text-center px-8">No staff found. Add butcher or warehouse users via the admin panel.</p>
+          <p className="text-slate-400 text-sm mt-12 text-center px-8">No staff found. Add butcher or warehouse users via the admin panel.</p>
         ) : (
           <div className="w-full max-w-sm grid grid-cols-2 gap-4">
             {staff.map((m) => <StaffCard key={m.id} member={m} onSelect={setSelected} />)}
           </div>
         )}
       </div>
-      <div className="text-center pb-8 text-white/20 text-xs tracking-widest uppercase">MFS Global Ltd · Sheffield</div>
+      <div className="text-center pb-8 text-slate-300 text-xs tracking-widest uppercase">MFS Global Ltd · Sheffield</div>
     </div>
   )
 }
@@ -679,7 +679,7 @@ export default function HaccpRoot() {
 
   if (authState === 'checking') {
     return (
-      <div className="min-h-screen bg-[#16205B] flex items-center justify-center">
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
         <MfsLogo className="h-10 text-white opacity-40" />
       </div>
     )

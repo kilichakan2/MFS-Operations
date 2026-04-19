@@ -114,7 +114,7 @@ function DocMarkdown({ content }: { content: string }) {
           const count  = seen.current.get(base) ?? 0
           const id     = count === 0 ? base : `${base}-${count}`
           seen.current.set(base, count + 1)
-          return <h2 id={id} className="text-white text-lg font-bold mt-8 mb-3 pb-2 border-b border-white/10">{children}</h2>
+          return <h2 id={id} className="text-slate-900 text-lg font-bold mt-8 mb-3 pb-2 border-b border-slate-200">{children}</h2>
         },
         h3: ({ children }) => {
           const text   = String(children)
@@ -124,26 +124,26 @@ function DocMarkdown({ content }: { content: string }) {
           seen.current.set(base, count + 1)
           return <h3 id={id} className="text-[#EB6619] text-base font-bold mt-6 mb-2">{children}</h3>
         },
-        h4: ({ children }) => <h4 className="text-white/80 text-sm font-bold mt-4 mb-1">{children}</h4>,
-        p:  ({ children }) => <p className="text-white/70 text-sm leading-relaxed mb-3">{children}</p>,
-        ul: ({ children }) => <ul className="text-white/70 text-sm leading-relaxed mb-3 space-y-1 ml-4">{children}</ul>,
-        ol: ({ children }) => <ol className="text-white/70 text-sm leading-relaxed mb-3 space-y-1 ml-4 list-decimal">{children}</ol>,
-        li: ({ children }) => <li className="text-white/70 text-sm before:content-['•'] before:text-[#EB6619] before:mr-2">{children}</li>,
-        strong: ({ children }) => <strong className="text-white font-semibold">{children}</strong>,
-        hr: () => <hr className="border-white/10 my-6" />,
+        h4: ({ children }) => <h4 className="text-slate-700 text-sm font-bold mt-4 mb-1">{children}</h4>,
+        p:  ({ children }) => <p className="text-slate-600 text-sm leading-relaxed mb-3">{children}</p>,
+        ul: ({ children }) => <ul className="text-slate-600 text-sm leading-relaxed mb-3 space-y-1 ml-4">{children}</ul>,
+        ol: ({ children }) => <ol className="text-slate-600 text-sm leading-relaxed mb-3 space-y-1 ml-4 list-decimal">{children}</ol>,
+        li: ({ children }) => <li className="text-slate-600 text-sm before:content-['•'] before:text-[#EB6619] before:mr-2">{children}</li>,
+        strong: ({ children }) => <strong className="text-slate-900 font-semibold">{children}</strong>,
+        hr: () => <hr className="border-slate-200 my-6" />,
         blockquote: ({ children }) => (
-          <blockquote className="border-l-2 border-[#EB6619] pl-4 my-3 text-white/60 text-sm italic">{children}</blockquote>
+          <blockquote className="border-l-2 border-[#EB6619] pl-4 my-3 text-slate-500 text-sm italic">{children}</blockquote>
         ),
         code: ({ children }) => (
-          <code className="bg-white/10 text-[#EB6619] text-xs px-1.5 py-0.5 rounded">{children}</code>
+          <code className="bg-slate-100 text-[#EB6619] text-xs px-1.5 py-0.5 rounded">{children}</code>
         ),
         table: ({ children }) => (
           <div className="overflow-x-auto mb-4">
             <table className="w-full text-sm border-collapse">{children}</table>
           </div>
         ),
-        th: ({ children }) => <th className="text-left text-white/50 text-xs uppercase tracking-widest font-bold px-3 py-2 border-b border-white/15">{children}</th>,
-        td: ({ children }) => <td className="text-white/70 text-sm px-3 py-2 border-b border-white/8">{children}</td>,
+        th: ({ children }) => <th className="text-left text-slate-400 text-xs uppercase tracking-widest font-bold px-3 py-2 border-b border-slate-300">{children}</th>,
+        td: ({ children }) => <td className="text-slate-600 text-sm px-3 py-2 border-b border-slate-200">{children}</td>,
       }}
     >
       {content}
@@ -159,15 +159,15 @@ function FormDocView({ docRef }: { docRef: string }) {
 
   return (
     <div className="space-y-4 px-5 py-6">
-      <p className="text-white/50 text-sm leading-relaxed">{def.description}</p>
+      <p className="text-slate-400 text-sm leading-relaxed">{def.description}</p>
       <div className="space-y-3">
         {def.links.map((link) => (
           <button key={link.href + link.label}
             onClick={() => { window.location.href = link.href }}
-            className="w-full text-left bg-white/6 hover:bg-white/10 border border-white/10 hover:border-[#EB6619]/40 rounded-2xl px-5 py-4 transition-all active:scale-[0.98] flex items-center justify-between gap-4">
+            className="w-full text-left bg-white hover:bg-slate-100 border border-slate-200 hover:border-amber-300 rounded-2xl px-5 py-4 transition-all active:scale-[0.98] flex items-center justify-between gap-4">
             <div>
-              <p className="text-white font-semibold text-sm">{link.label}</p>
-              <p className="text-white/40 text-xs mt-0.5">{link.desc}</p>
+              <p className="text-slate-900 font-semibold text-sm">{link.label}</p>
+              <p className="text-slate-400 text-xs mt-0.5">{link.desc}</p>
             </div>
             <svg className="w-5 h-5 text-[#EB6619] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
@@ -220,12 +220,12 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
   const versionLabel = entries[0]?.version ?? ''
 
   return (
-    <div className="min-h-screen bg-[#16205B] flex flex-col">
+    <div className="min-h-screen bg-slate-100 flex flex-col">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10 flex-shrink-0">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B] flex-shrink-0">
         <button onClick={() => { window.location.href = backHref }}
-          className="w-10 h-10 rounded-xl bg-white/9 hover:bg-white/14 flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
+          className="w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all flex-shrink-0">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
           </svg>
@@ -234,8 +234,8 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
           <div className="flex items-center gap-2">
             <span className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">{sourceLabel}</span>
             {versionLabel && <>
-              <span className="text-white/20 text-[10px]">·</span>
-              <span className="text-white/30 text-[10px]">{versionLabel}</span>
+              <span className="text-slate-300 text-[10px]">·</span>
+              <span className="text-slate-400 text-[10px]">{versionLabel}</span>
             </>}
           </div>
           <h1 className="text-white font-bold text-base leading-tight mt-0.5 truncate">{docTitle}</h1>
@@ -243,7 +243,7 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
         {/* Contents button — only for text docs with headings */}
         {!isFormDoc && toc.length > 0 && (
           <button onClick={() => setShowToc(true)}
-            className="flex items-center gap-1.5 bg-white/9 hover:bg-white/14 border border-white/12 rounded-xl px-3 py-2 text-white/55 hover:text-white transition-all text-xs font-bold flex-shrink-0">
+            className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 hover:text-white transition-all text-xs font-bold flex-shrink-0">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/>
             </svg>
@@ -255,7 +255,7 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="flex items-center justify-center gap-3 text-white/40 text-sm mt-20">
+          <div className="flex items-center justify-center gap-3 text-slate-400 text-sm mt-20">
             <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
@@ -263,11 +263,11 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
             Loading…
           </div>
         ) : error ? (
-          <p className="text-[#F09595] text-sm text-center mt-12 px-6">{error}</p>
+          <p className="text-red-600 text-sm text-center mt-12 px-6">{error}</p>
         ) : isFormDoc ? (
           <FormDocView docRef={docRef} />
         ) : entries.length === 0 ? (
-          <p className="text-white/40 text-sm text-center mt-12 px-6">No content found for {docRef}.</p>
+          <p className="text-slate-400 text-sm text-center mt-12 px-6">No content found for {docRef}.</p>
         ) : (
           <div className="px-5 py-6 max-w-3xl">
             {entries.map((entry, i) => (
@@ -275,13 +275,13 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
                 {/* Part divider for multi-part docs */}
                 {entries.length > 1 && (
                   <div className="flex items-center gap-3 mb-6 mt-2">
-                    <div className="flex-1 h-px bg-white/8"/>
-                    <span className="text-white/20 text-[10px] uppercase tracking-widest">{entry.title}</span>
-                    <div className="flex-1 h-px bg-white/8"/>
+                    <div className="flex-1 h-px bg-slate-50"/>
+                    <span className="text-slate-300 text-[10px] uppercase tracking-widest">{entry.title}</span>
+                    <div className="flex-1 h-px bg-slate-50"/>
                   </div>
                 )}
                 <DocMarkdown content={entry.content_md} />
-                {i < entries.length - 1 && <div className="my-8 h-px bg-white/8"/>}
+                {i < entries.length - 1 && <div className="my-8 h-px bg-slate-50"/>}
               </div>
             ))}
           </div>
@@ -291,11 +291,11 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
       {/* Table of contents overlay */}
       {showToc && (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
-          <div className="bg-[#0f1840] rounded-t-3xl w-full max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-6 pb-4 border-b border-white/10 flex-shrink-0">
-              <h3 className="text-white font-bold text-lg">Contents</h3>
+          <div className="bg-white rounded-t-3xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-200 flex-shrink-0">
+              <h3 className="text-slate-900 font-bold text-lg">Contents</h3>
               <button onClick={() => setShowToc(false)}
-                className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95">
+                className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -310,8 +310,8 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
                       document.getElementById(item.anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                     }, 150)
                   }}
-                  className={`w-full text-left px-4 py-3 rounded-xl hover:bg-white/8 transition-all ${
-                    item.level === 2 ? 'text-white font-semibold text-sm' : 'text-white/60 text-sm pl-8'
+                  className={`w-full text-left px-4 py-3 rounded-xl hover:bg-slate-50 transition-all ${
+                    item.level === 2 ? 'text-slate-900 font-semibold text-sm' : 'text-slate-500 text-sm pl-8'
                   }`}>
                   {item.level === 3 && <span className="text-[#EB6619] mr-2">›</span>}
                   {item.text}

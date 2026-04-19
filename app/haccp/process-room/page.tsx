@@ -102,24 +102,24 @@ function roomStatus(t: number): TempStat {
 // ─── Status colours ───────────────────────────────────────────────────────────
 
 const STATUS_BORDER: Record<string, string> = {
-  pass:     'border-[#639922]/50 bg-[#639922]/10',
-  amber:    'border-[#EB6619]/55 bg-[#EB6619]/10',
-  critical: 'border-[#E24B4A]/55 bg-[#E24B4A]/10',
-  empty:    'border-white/12 bg-white/6',
+  pass:     'border-green-300 bg-green-50',
+  amber:    'border-amber-400 bg-amber-50',
+  critical: 'border-red-400 bg-red-50',
+  empty:    'border-slate-200 bg-white',
 }
 const STATUS_VAL: Record<string, string> = {
-  pass:     'text-[#97C459]',
+  pass:     'text-green-600',
   amber:    'text-[#EB6619]',
-  critical: 'text-[#F09595]',
-  empty:    'text-white/25',
+  critical: 'text-red-600',
+  empty:    'text-slate-300',
 }
 const STATUS_LABEL: Record<string, string> = {
   pass: 'Pass', amber: 'Amber', critical: 'Critical',
 }
 const STATUS_BADGE: Record<string, string> = {
-  pass:     'bg-[#639922]/25 text-[#97C459]',
-  amber:    'bg-[#EB6619]/28 text-[#EB6619]',
-  critical: 'bg-[#E24B4A]/28 text-[#F09595]',
+  pass:     'bg-green-100 text-green-600',
+  amber:    'bg-amber-100 text-[#EB6619]',
+  critical: 'bg-red-100 text-red-600',
 }
 
 // ─── Numpad ───────────────────────────────────────────────────────────────────
@@ -146,20 +146,20 @@ function Numpad({ value, onChange, onClose, label, limit }: {
   const keys = ['1','2','3','4','5','6','7','8','9','.','0','back']
 
   return (
-    <div className="fixed inset-0 bg-[#16205B] z-50 flex flex-col" style={{position:'fixed'}}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/10">
+    <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{position:'fixed'}}>
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200">
         <div>
           <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">CCP 3 — Process Room</p>
-          <h2 className="text-white text-xl font-bold mt-0.5">{label}</h2>
-          <p className="text-white/35 text-sm mt-0.5">Limit: {limit}</p>
+          <h2 className="text-slate-900 text-xl font-bold mt-0.5">{label}</h2>
+          <p className="text-slate-400 text-sm mt-0.5">Limit: {limit}</p>
         </div>
-        <button onClick={onClose} className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95">
+        <button onClick={onClose} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
         <div className="text-center">
-          <div className={`text-6xl font-bold tracking-tight transition-colors ${stat ? STATUS_VAL[stat] : 'text-white'}`}>
+          <div className={`text-6xl font-bold tracking-tight transition-colors ${stat ? STATUS_VAL[stat] : 'text-slate-300'}`}>
             {value || '—'}
             <span className="text-2xl ml-2 opacity-60">°C</span>
           </div>
@@ -170,19 +170,19 @@ function Numpad({ value, onChange, onClose, label, limit }: {
           )}
           {/* Verbatim warning for room >12°C */}
           {stat === 'amber' && label.toLowerCase().includes('room') && (
-            <div className="mt-4 mx-4 bg-[#EB6619]/12 border border-[#EB6619]/40 rounded-xl px-4 py-3 text-left">
-              <p className="text-[#EB6619] text-xs font-bold uppercase tracking-widest mb-1.5">CCP 3 — Required action</p>
-              <p className="text-white/65 text-xs leading-relaxed">Do NOT stop cutting. Bring product progressively in small quantities. Monitor product core temperature — must stay ≤4°C. Investigate cause.</p>
+            <div className="mt-4 mx-4 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-left">
+              <p className="text-amber-700 text-xs font-bold uppercase tracking-widest mb-1.5">CCP 3 — Required action</p>
+              <p className="text-slate-600 text-xs leading-relaxed">Do NOT stop cutting. Bring product progressively in small quantities. Monitor product core temperature — must stay ≤4°C. Investigate cause.</p>
             </div>
           )}
           {stat === 'critical' && label.toLowerCase().includes('product') && (
-            <p className="text-white/50 text-xs mt-3 max-w-xs mx-auto">Return product to chilled storage immediately. Record time above limit.</p>
+            <p className="text-slate-400 text-xs mt-3 max-w-xs mx-auto">Return product to chilled storage immediately. Record time above limit.</p>
           )}
         </div>
         <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
           {keys.map((k) => (
             <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
-              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-white/10 text-white/60' : 'bg-white/10 text-white active:bg-[#EB6619]'}`}>
+              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-white active:bg-[#EB6619]'}`}>
               {k === 'back' ? (
                 <svg className="w-6 h-6 mx-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
               ) : k}
@@ -228,13 +228,13 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
-      <div className="bg-[#0f1840] rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
+      <div className="bg-white rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
         <div className="flex items-start justify-between p-6 pb-4">
           <div>
-            <p className="text-[#F09595] text-xs font-bold tracking-widest uppercase">CCP 3 deviation</p>
-            <h2 className="text-white text-xl font-bold mt-0.5">Corrective Action Required</h2>
+            <p className="text-red-600 text-xs font-bold tracking-widest uppercase">CCP 3 deviation</p>
+            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action Required</h2>
           </div>
-          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95 mt-1">
+          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95 mt-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -243,25 +243,25 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
           {/* Deviation summary */}
           <div className="space-y-2">
             {productBreached && (
-              <div className="bg-[#E24B4A]/12 border border-[#E24B4A]/40 rounded-xl px-4 py-3">
-                <p className="text-[#F09595] font-semibold text-sm">Product temp: {productTemp}°C — limit ≤4°C</p>
-                <p className="text-white/50 text-xs mt-0.5">Return to chilled storage. Apply time-based decision tree.</p>
+              <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3">
+                <p className="text-red-600 font-semibold text-sm">Product temp: {productTemp}°C — limit ≤4°C</p>
+                <p className="text-slate-400 text-xs mt-0.5">Return to chilled storage. Apply time-based decision tree.</p>
               </div>
             )}
             {roomBreached && (
-              <div className={`border rounded-xl px-4 py-3 ${roomTemp > 15 ? 'bg-[#E24B4A]/12 border-[#E24B4A]/40' : 'bg-[#EB6619]/10 border-[#EB6619]/40'}`}>
-                <p className={`font-semibold text-sm ${roomTemp > 15 ? 'text-[#F09595]' : 'text-[#EB6619]'}`}>Room temp: {roomTemp}°C — limit ≤12°C</p>
-                {roomTemp <= 15 && <p className="text-white/60 text-xs mt-0.5 font-medium">Do NOT stop cutting — bring product progressively.</p>}
+              <div className={`border rounded-xl px-4 py-3 ${roomTemp > 15 ? 'bg-red-50 border-red-300' : 'bg-amber-50 border-amber-300'}`}>
+                <p className={`font-semibold text-sm ${roomTemp > 15 ? 'text-red-600' : 'text-[#EB6619]'}`}>Room temp: {roomTemp}°C — limit ≤12°C</p>
+                {roomTemp <= 15 && <p className="text-slate-500 text-xs mt-0.5 font-medium">Do NOT stop cutting — bring product progressively.</p>}
               </div>
             )}
           </div>
 
           <div>
-            <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</p>
             <div className="space-y-2">
               {actions.map((a) => (
                 <button key={a} onClick={() => setAction(a)}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ${action === a ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white/8 border-white/10 text-white/70'}`}>
+                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ${action === a ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
                   {a}
                 </button>
               ))}
@@ -269,11 +269,11 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
           </div>
 
           <div>
-            <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</p>
             <div className="grid grid-cols-3 gap-2">
               {['Accept','Conditional accept','Assess','Reject','Dispose'].map((d) => (
                 <button key={d} onClick={() => setDisposition(d)}
-                  className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white/8 border-white/10 text-white/50'}`}>
+                  className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
                   {d}
                 </button>
               ))}
@@ -281,15 +281,15 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
           </div>
 
           <div>
-            <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</p>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="Additional details…"
-              className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none"/>
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
           </div>
 
           <button onClick={() => onSubmit(action, disposition, notes)}
             disabled={!action || !disposition}
-            className="w-full bg-[#E24B4A] text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
+            className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
             Confirm &amp; submit
           </button>
         </div>
@@ -335,40 +335,40 @@ function DiaryPhaseCard({
   if (isDone) {
     const anyFail = Object.values(existing.check_results).some((v) => v === false)
     return (
-      <div className="bg-[#639922]/10 border border-[#639922]/40 rounded-2xl overflow-hidden">
+      <div className="bg-green-50 border border-green-200 rounded-2xl overflow-hidden">
         <button onClick={() => setOpen(!open)} className="w-full px-4 py-3 flex items-center justify-between">
           <div>
-            <p className="text-white font-semibold text-sm">{PHASE_LABELS[phase]}</p>
-            <p className="text-[#97C459] text-xs mt-0.5">
+            <p className="text-slate-900 font-semibold text-sm">{PHASE_LABELS[phase]}</p>
+            <p className="text-green-600 text-xs mt-0.5">
               Done · {new Date(existing.submitted_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
               {anyFail ? ' · issues noted' : ' · all pass'}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {existing.issues && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EB6619]/25 text-[#EB6619]">Issue noted</span>}
-            <div className="w-6 h-6 rounded-full bg-[#639922]/30 flex items-center justify-center">
-              <svg className="w-3.5 h-3.5 text-[#97C459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            {existing.issues && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-[#EB6619]">Issue noted</span>}
+            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
-            <svg className={`w-4 h-4 text-white/30 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M19 9l-7 7-7-7"/></svg>
+            <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M19 9l-7 7-7-7"/></svg>
           </div>
         </button>
         {open && (
-          <div className="px-4 pb-4 border-t border-white/8 pt-3 space-y-1.5">
+          <div className="px-4 pb-4 border-t border-slate-200 pt-3 space-y-1.5">
             {checks.map((c) => (
               <div key={c.key} className="flex items-center gap-3">
-                <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${existing.check_results[c.key] ? 'bg-[#639922]/25' : 'bg-[#E24B4A]/20'}`}>
+                <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${existing.check_results[c.key] ? 'bg-green-100' : 'bg-red-50'}`}>
                   {existing.check_results[c.key]
-                    ? <svg className="w-3 h-3 text-[#97C459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                    : <svg className="w-3 h-3 text-[#F09595]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    ? <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                    : <svg className="w-3 h-3 text-red-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   }
                 </div>
-                <p className="text-white/60 text-xs">{c.label}</p>
+                <p className="text-slate-500 text-xs">{c.label}</p>
               </div>
             ))}
             {existing.issues && existing.what_did_you_do && (
-              <div className="mt-3 bg-[#EB6619]/10 border-l-2 border-[#EB6619]/50 pl-3 py-2 border-radius-0">
-                <p className="text-[#EB6619] text-[10px] font-bold uppercase tracking-widest mb-0.5">Action taken</p>
-                <p className="text-white/60 text-xs italic">{existing.what_did_you_do}</p>
+              <div className="mt-3 bg-amber-50 border-l-2 border-amber-400 pl-3 py-2 border-radius-0">
+                <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-0.5">Action taken</p>
+                <p className="text-slate-500 text-xs italic">{existing.what_did_you_do}</p>
               </div>
             )}
           </div>
@@ -378,40 +378,40 @@ function DiaryPhaseCard({
   }
 
   return (
-    <div className={`border rounded-2xl overflow-hidden ${open ? 'border-[#EB6619]/45 bg-[#EB6619]/7' : 'border-white/10 bg-white/5'}`}>
+    <div className={`border rounded-2xl overflow-hidden ${open ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
       <button onClick={() => setOpen(!open)} className="w-full px-4 py-3 flex items-center justify-between">
         <div>
-          <p className="text-white font-semibold text-sm">{PHASE_LABELS[phase]}</p>
-          <p className="text-white/40 text-xs mt-0.5">{PHASE_SUBS[phase]}</p>
+          <p className="text-slate-900 font-semibold text-sm">{PHASE_LABELS[phase]}</p>
+          <p className="text-slate-400 text-xs mt-0.5">{PHASE_SUBS[phase]}</p>
         </div>
-        <svg className={`w-4 h-4 text-white/30 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M19 9l-7 7-7-7"/></svg>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M19 9l-7 7-7-7"/></svg>
       </button>
 
       {open && (
-        <div className="border-t border-white/8">
+        <div className="border-t border-slate-200">
           <div className="px-4 py-3 space-y-2">
             {checks.map((c) => (
               <div key={c.key} className="flex items-center gap-3">
                 <button onPointerDown={(e) => { e.preventDefault(); toggle(c.key, true) }}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2 transition-all active:scale-95 ${results[c.key] === true ? 'bg-[#639922]/25 border-[#639922]/60' : 'bg-white/5 border-white/15'}`}>
-                  <svg className={`w-5 h-5 ${results[c.key] === true ? 'text-[#97C459]' : 'text-white/25'}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2 transition-all active:scale-95 ${results[c.key] === true ? 'bg-green-100 border-green-300' : 'bg-white border-slate-300'}`}>
+                  <svg className={`w-5 h-5 ${results[c.key] === true ? 'text-green-600' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                 </button>
                 <button onPointerDown={(e) => { e.preventDefault(); toggle(c.key, false) }}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2 transition-all active:scale-95 ${results[c.key] === false ? 'bg-[#E24B4A]/20 border-[#E24B4A]/55' : 'bg-white/5 border-white/15'}`}>
-                  <svg className={`w-5 h-5 ${results[c.key] === false ? 'text-[#F09595]' : 'text-white/25'}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2 transition-all active:scale-95 ${results[c.key] === false ? 'bg-red-50 border-red-400' : 'bg-white border-slate-300'}`}>
+                  <svg className={`w-5 h-5 ${results[c.key] === false ? 'text-red-600' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
-                <p className="text-white/75 text-sm flex-1">{c.label}</p>
+                <p className="text-slate-700 text-sm flex-1">{c.label}</p>
               </div>
             ))}
           </div>
 
-          <div className="px-4 pb-4 space-y-3 border-t border-white/8 pt-3">
+          <div className="px-4 pb-4 space-y-3 border-t border-slate-200 pt-3">
             <div className="flex items-center gap-3">
-              <p className="text-white/60 text-sm">Any issues?</p>
+              <p className="text-slate-500 text-sm">Any issues?</p>
               <div className="flex gap-2 ml-auto">
                 {[true, false].map((v) => (
                   <button key={String(v)} onClick={() => setIssues(v)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${issues === v ? (v ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-[#639922]/25 border-[#639922]/50 text-[#97C459]') : 'bg-white/8 border-white/10 text-white/45'}`}>
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${issues === v ? (v ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-green-100 border-green-300 text-green-600') : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
                     {v ? 'Yes' : 'No'}
                   </button>
                 ))}
@@ -421,10 +421,10 @@ function DiaryPhaseCard({
             {issues && (
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
                 placeholder="What did you do? Describe the action taken…"
-                className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none"/>
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
             )}
 
-            {err && <p className="text-[#F09595] text-xs">{err}</p>}
+            {err && <p className="text-red-600 text-xs">{err}</p>}
 
             <button onClick={handleSubmit} disabled={!allAnswered || saving}
               className="w-full bg-[#EB6619] text-white font-bold py-3.5 rounded-xl text-sm disabled:opacity-40 flex items-center justify-center gap-2">
@@ -561,56 +561,56 @@ export default function ProcessRoomPage() {
     }`
 
   return (
-    <div className="min-h-screen bg-[#16205B] flex flex-col select-none">
+    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B]">
         <button onClick={() => { window.location.href = '/haccp' }}
-          className="w-10 h-10 rounded-xl bg-white/9 hover:bg-white/14 flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
+          className="w-10 h-10 rounded-xl bg-slate-50 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all flex-shrink-0">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">CCP 3 + SOP 1 — Process Room</p>
-          <h1 className="text-white text-lg font-bold leading-tight">Process Room Check</h1>
+          <h1 className="text-slate-900 text-lg font-bold leading-tight">Process Room Check</h1>
         </div>
         <button onClick={() => setShowQuick(true)}
-          className="flex items-center gap-1.5 bg-white/9 hover:bg-white/14 border border-white/12 rounded-xl px-3 py-2 text-white/55 hover:text-white transition-all text-xs font-bold flex-shrink-0">
+          className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 hover:text-white transition-all text-xs font-bold flex-shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Quick ref
         </button>
         <button onClick={() => { window.location.href = '/haccp/documents/hb-001?from=/haccp/process-room' }}
-          className="flex items-center gap-1.5 bg-[#EB6619]/15 hover:bg-[#EB6619]/25 border border-[#EB6619]/35 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0">
+          className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           Handbook
         </button>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center gap-3 text-white/40 text-sm mt-16">
+        <div className="flex items-center justify-center gap-3 text-slate-400 text-sm mt-16">
           <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
           Loading…
         </div>
       ) : (
         <div className="flex-1 px-5 py-4 space-y-4 overflow-y-auto">
 
-          {submitErr && <p className="text-[#F09595] text-sm">{submitErr}</p>}
+          {submitErr && <p className="text-red-600 text-sm">{submitErr}</p>}
 
           {/* ── Card 1: Temperature check ── */}
-          <div className="bg-white/6 border border-white/10 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-white/8 flex items-center gap-3 flex-wrap">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-3 flex-wrap">
               <div className="flex-1 min-w-0">
-                <p className="text-white font-semibold text-sm">Temperature check</p>
-                <p className="text-white/38 text-xs mt-0.5">CCP 3 · tap to enter reading</p>
+                <p className="text-slate-900 font-semibold text-sm">Temperature check</p>
+                <p className="text-slate-400 text-xs mt-0.5">CCP 3 · tap to enter reading</p>
               </div>
               <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)}
                 max={todayISO()}
-                className="bg-white/10 border border-white/15 rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-[#EB6619]" />
+                className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-slate-900 text-xs focus:outline-none focus:border-orange-500" />
               <div className="flex gap-2">
                 {(['AM','PM'] as Session[]).map((s) => {
                   const done = temps.some((t) => t.session === s)
                   return (
                     <button key={s} onClick={() => setSession(s)}
-                      className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${session === s ? 'bg-[#EB6619] text-white' : 'bg-white/10 text-white/50'}`}>
+                      className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${session === s ? 'bg-[#EB6619] text-white' : 'bg-slate-100 text-slate-400'}`}>
                       {done && <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
                       {s}
                     </button>
@@ -624,33 +624,33 @@ export default function ProcessRoomPage() {
                 {/* Product temp */}
                 <div className={tileClass(pStat, productVal === '')}
                   onPointerDown={() => !sessionAlreadyDone && setNumpadField('product')}>
-                  <p className="text-white/40 text-xs mb-1.5">Product core</p>
-                  <p className={`text-2xl font-bold ${pStat ? STATUS_VAL[pStat] : 'text-white/25'}`}>
+                  <p className="text-slate-400 text-xs mb-1.5">Product core</p>
+                  <p className={`text-2xl font-bold ${pStat ? STATUS_VAL[pStat] : 'text-slate-300'}`}>
                     {productVal !== '' && !isNaN(productNum) ? `${productNum}°C` : 'Tap'}
                   </p>
-                  <p className="text-white/28 text-[10px] mt-1">Limit ≤4°C</p>
+                  <p className="text-slate-300 text-[10px] mt-1">Limit ≤4°C</p>
                   {pStat && productVal !== '' && <p className={`text-[10px] font-bold mt-1 ${STATUS_VAL[pStat]}`}>{STATUS_LABEL[pStat]}</p>}
                 </div>
 
                 {/* Room temp */}
                 <div className={tileClass(rStat, roomVal === '')}
                   onPointerDown={() => !sessionAlreadyDone && setNumpadField('room')}>
-                  <p className="text-white/40 text-xs mb-1.5">Room ambient</p>
-                  <p className={`text-2xl font-bold ${rStat ? STATUS_VAL[rStat] : 'text-white/25'}`}>
+                  <p className="text-slate-400 text-xs mb-1.5">Room ambient</p>
+                  <p className={`text-2xl font-bold ${rStat ? STATUS_VAL[rStat] : 'text-slate-300'}`}>
                     {roomVal !== '' && !isNaN(roomNum) ? `${roomNum}°C` : 'Tap'}
                   </p>
-                  <p className="text-white/28 text-[10px] mt-1">Limit ≤12°C</p>
+                  <p className="text-slate-300 text-[10px] mt-1">Limit ≤12°C</p>
                   {rStat && roomVal !== '' && <p className={`text-[10px] font-bold mt-1 ${STATUS_VAL[rStat]}`}>{STATUS_LABEL[rStat]}</p>}
                 </div>
               </div>
 
               {/* Room >12°C verbatim warning */}
               {rStat && rStat !== 'pass' && roomVal !== '' && (
-                <div className={`rounded-xl px-4 py-3 border ${rStat === 'critical' ? 'bg-[#E24B4A]/10 border-[#E24B4A]/40' : 'bg-[#EB6619]/10 border-[#EB6619]/38'}`}>
-                  <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${rStat === 'critical' ? 'text-[#F09595]' : 'text-[#EB6619]'}`}>
+                <div className={`rounded-xl px-4 py-3 border ${rStat === 'critical' ? 'bg-red-50 border-red-300' : 'bg-amber-50 border-amber-300'}`}>
+                  <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${rStat === 'critical' ? 'text-red-600' : 'text-[#EB6619]'}`}>
                     {rStat === 'critical' ? 'Critical — room temp action required' : 'Room temp above 12°C — CCP 3 guidance'}
                   </p>
-                  <p className="text-white/60 text-xs leading-relaxed">
+                  <p className="text-slate-500 text-xs leading-relaxed">
                     {rStat === 'critical'
                       ? 'Stop loading product into the room. Return all product to chilled storage immediately. Investigate cooling failure.'
                       : 'Do NOT stop cutting. Bring product to production area progressively in small quantities to ensure core temperature does not exceed 4°C. Monitor product core temperature more frequently. Investigate cause.'}
@@ -660,21 +660,21 @@ export default function ProcessRoomPage() {
 
               {/* Submit / already done */}
               {sessionAlreadyDone ? (
-                <div className="flex items-center gap-3 bg-[#639922]/20 border border-[#639922]/40 rounded-2xl px-4 py-3">
-                  <div className="w-8 h-8 rounded-full bg-[#639922]/30 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-4 h-4 text-[#97C459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-4 py-3">
+                  <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                   <div>
-                    <p className="text-[#97C459] font-bold text-sm">{session} check submitted</p>
-                    <p className="text-white/40 text-xs mt-0.5">
+                    <p className="text-green-600 font-bold text-sm">{session} check submitted</p>
+                    <p className="text-slate-400 text-xs mt-0.5">
                       Product: {sessionReading?.product_temp_c}°C · Room: {sessionReading?.room_temp_c}°C
                     </p>
                   </div>
                 </div>
               ) : submitted ? (
                 <div className="flex items-center justify-center gap-2 py-3">
-                  <svg className="w-5 h-5 text-[#97C459]" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                  <p className="text-[#97C459] font-bold text-sm">Submitted</p>
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                  <p className="text-green-600 font-bold text-sm">Submitted</p>
                 </div>
               ) : (
                 <button onClick={handleTempSubmit} disabled={!bothFilled}
@@ -688,16 +688,16 @@ export default function ProcessRoomPage() {
           </div>
 
           {/* ── Card 2: Daily diary ── */}
-          <div className="bg-white/6 border border-white/10 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <p className="text-white font-semibold text-sm">Shift diary</p>
-                <p className="text-white/38 text-xs mt-0.5">SOP 1 · three phases</p>
+                <p className="text-slate-900 font-semibold text-sm">Shift diary</p>
+                <p className="text-slate-400 text-xs mt-0.5">SOP 1 · three phases</p>
               </div>
               <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                diary.length === 3 ? 'bg-[#639922]/25 text-[#97C459]' :
-                diary.length > 0   ? 'bg-[#EB6619]/25 text-[#EB6619]' :
-                                     'bg-white/9 text-white/35'
+                diary.length === 3 ? 'bg-green-100 text-green-600' :
+                diary.length > 0   ? 'bg-amber-100 text-[#EB6619]' :
+                                     'bg-slate-50 text-slate-400'
               }`}>
                 {diary.length} of 3 done
               </span>
@@ -714,8 +714,8 @@ export default function ProcessRoomPage() {
               ))}
             </div>
 
-            <div className="mx-4 mb-4 border-l-2 border-[#EB6619]/40 pl-3 py-1" style={{borderRadius:0}}>
-              <p className="text-white/35 text-xs italic leading-relaxed">
+            <div className="mx-4 mb-4 border-l-2 border-amber-300 pl-3 py-1" style={{borderRadius:0}}>
+              <p className="text-slate-400 text-xs italic leading-relaxed">
                 "Problems are always happening — the important thing is to show what is being done to put things right."
               </p>
             </div>
@@ -747,34 +747,34 @@ export default function ProcessRoomPage() {
 
       {/* Quick reference */}
       {showQuick && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-end" style={{position:'fixed'}}>
-          <div className="bg-[#0f1840] rounded-t-3xl w-full p-6 max-h-[70vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end" style={{position:'fixed'}}>
+          <div className="bg-white rounded-t-3xl w-full p-6 max-h-[70vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-bold text-lg">CCP 3 — Quick Reference</h3>
+              <h3 className="text-slate-900 font-bold text-lg">CCP 3 — Quick Reference</h3>
               <button onClick={() => setShowQuick(false)}
-                className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all active:scale-95">
+                className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
             <div className="space-y-3 text-sm">
-              <div className="bg-white/6 rounded-xl p-4">
+              <div className="bg-white rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Product core temperature</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#639922] flex-shrink-0"/><span className="text-white/70">≤4°C — Pass</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E24B4A] flex-shrink-0"/><span className="text-white/70">&gt;4°C — Critical: return to chilled storage immediately</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤4°C — Pass</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;4°C — Critical: return to chilled storage immediately</span></div>
                 </div>
               </div>
-              <div className="bg-white/6 rounded-xl p-4">
+              <div className="bg-white rounded-xl p-4">
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Room ambient temperature</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#639922] flex-shrink-0"/><span className="text-white/70">≤12°C — Pass</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-white/70">12–15°C — Amber: do NOT stop cutting, bring product in small batches</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#E24B4A] flex-shrink-0"/><span className="text-white/70">&gt;15°C — Critical: stop loading, return all product</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤12°C — Pass</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-slate-600">12–15°C — Amber: do NOT stop cutting, bring product in small batches</span></div>
+                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;15°C — Critical: stop loading, return all product</span></div>
                 </div>
               </div>
-              <div className="bg-[#EB6619]/10 border border-[#EB6619]/35 rounded-xl p-4">
-                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-1.5">Key rule (verbatim — HB-001)</p>
-                <p className="text-white/65 text-xs leading-relaxed italic">"Do NOT stop cutting. Bring product to production area progressively in small quantities to ensure core temperature does not exceed 4°C."</p>
+              <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+                <p className="text-amber-700 font-bold text-xs uppercase tracking-widest mb-1.5">Key rule (verbatim — HB-001)</p>
+                <p className="text-slate-600 text-xs leading-relaxed italic">"Do NOT stop cutting. Bring product to production area progressively in small quantities to ensure core temperature does not exceed 4°C."</p>
               </div>
             </div>
           </div>
