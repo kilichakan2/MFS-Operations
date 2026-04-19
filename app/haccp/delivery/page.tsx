@@ -246,6 +246,7 @@ export default function DeliveryPage() {
   const [category,   setCategory]   = useState('')
   const [tempVal,    setTempVal]    = useState('')
   const [contam,     setContam]     = useState('')
+  const [contamType, setcontamType] = useState('')   // sub-type when yes_actioned
   const [contamNote, setContamNote] = useState('')
   const [notes,      setNotes]      = useState('')
 
@@ -289,7 +290,7 @@ export default function DeliveryPage() {
   function resetForm() {
     setSupplierSel(''); setSupplierOther(''); setProduct('')
     setCategory(''); setTempVal(''); setContam('')
-    setContamNote(''); setNotes(''); setSubmitErr('')
+    setcontamType(''); setContamNote(''); setNotes(''); setSubmitErr('')
   }
 
   async function doSubmit() {
@@ -482,7 +483,7 @@ export default function DeliveryPage() {
                   { val: 'yes',          label: 'Yes — rejected' },
                   { val: 'yes_actioned', label: 'Yes — actioned' },
                 ].map((o) => (
-                  <button key={o.val} onClick={() => setContam(o.val)}
+                  <button key={o.val} onClick={() => { setContam(o.val); setcontamType(''); setContamNote('') }}
                     className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
                       contam === o.val
                         ? o.val === 'no'
@@ -494,9 +495,62 @@ export default function DeliveryPage() {
                   </button>
                 ))}
               </div>
-              {(contam === 'yes' || contam === 'yes_actioned') && (
+              {contam === 'yes_actioned' && (
+                <div className="mt-3 space-y-3">
+                  <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest">Type of contamination (CA-001)</p>
+                  <div className="space-y-2">
+                    {[
+                      {
+                        key: 'uncovered',
+                        label: 'Product uncovered / exposed',
+                        actions: ['REJECT if visible contamination or cross-contamination risk','If minor exposure only: assess quality, re-cover immediately, use for immediate processing only','Document incident and notify supplier'],
+                      },
+                      {
+                        key: 'faecal_wool_hide',
+                        label: 'Contamination — faecal, wool, or hide',
+                        actions: ['TRIM contaminated area using clean knife','Dispose of trimmings as Category 2/3 ABP','Sterilise knife immediately after trimming (≥82°C)','Document trimming action and disposal','If contamination excessive: REJECT entire carcase'],
+                      },
+                      {
+                        key: 'packaging',
+                        label: 'Packaging damaged',
+                        actions: ['If seal broken on vacuum pack or visible ingress: REJECT and dispose','Minor outer damage with intact inner seal: re-pack and use immediately','Document and notify supplier'],
+                      },
+                      {
+                        key: 'missing_docs',
+                        label: 'Missing documentation',
+                        actions: ['Hold product in segregated area','Request traceability documents from supplier within 2 hours','If not received: reject delivery'],
+                      },
+                    ].map((t) => (
+                      <div key={t.key}>
+                        <button onClick={() => { setcontamType(t.key); setContamNote(t.actions.join(' | ')) }}
+                          className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                            contamType === t.key ? 'border-[#EB6619] bg-[#EB6619]/15 text-white' : 'border-white/12 bg-white/6 text-white/60'
+                          }`}>
+                          {t.label}
+                        </button>
+                        {contamType === t.key && (
+                          <div className="mt-2 bg-[#EB6619]/10 border border-[#EB6619]/30 rounded-xl px-4 py-3 space-y-1.5">
+                            {t.actions.map((a, i) => (
+                              <div key={i} className="flex items-start gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#EB6619] flex-shrink-0 mt-1.5"/>
+                                <p className="text-white/70 text-xs leading-relaxed">{a}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {contamType && (
+                    <textarea value={contamNote} onChange={(e) => setContamNote(e.target.value)} rows={2}
+                      placeholder="Additional details (optional)…"
+                      className="w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
+                  )}
+                </div>
+              )}
+              {contam === 'yes' && (
                 <textarea value={contamNote} onChange={(e) => setContamNote(e.target.value)} rows={2}
-                  placeholder="Describe contamination and action taken…"
+                  placeholder="Describe reason for rejection…"
                   className="mt-2 w-full bg-white/10 border border-white/15 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
               )}
             </div>
