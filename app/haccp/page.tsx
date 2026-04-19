@@ -463,7 +463,7 @@ function HomeScreen({ userName }: { userName: string }) {
               onTap={() => { window.location.href = '/haccp/cold-storage' }} onHelp={() => setHelp('cold_storage')} />
             <LargeTile id="processing_room" icon={Icon.room} label="Process Room" state={roomState} badge={roomBadge}
               sub={s ? `CCP 3 · Daily Diary${s.daily_diary.opening ? ' · Opening ✓' : ''}` : 'CCP 3 · Daily Diary'}
-              onTap={() => {}} onHelp={() => setHelp('processing_room')} />
+              onTap={() => { window.location.href = '/haccp/process-room' }} onHelp={() => setHelp('processing_room')} />
             <LargeTile id="cleaning" icon={Icon.clean} label="Cleaning" state={diaryState} badge={s ? `${s.cleaning.count_today} logged` : '—'}
               sub={s?.cleaning.last_logged_at ? `Last: ${fmtTime(s.cleaning.last_logged_at)}` : 'SOP 2 — log each clean'}
               onTap={() => {}} onHelp={() => setHelp('cleaning')} />
