@@ -213,7 +213,7 @@ const SOP_CONTENT: Record<string, { title: string; ref: string; text: string }> 
   cleaning: {
     title: 'Cleaning Diary — SOP 2',
     ref: 'SOP 2, 2B | HB-001 V4.1',
-    text: '4-step cleaning process:\n1. Pre-cleaning — remove all visible soil, rinse with cold water\n2. Cleaning — apply alkaline detergent at correct concentration, scrub all surfaces\n3. Sanitisation — hot water ≥82°C for 30 seconds OR approved chemical sanitiser\n4. Verification — visual inspection, check temperature/concentration\n\nFrequencies:\nKnives & small tools: start and end of shift (82°C)\nCutting boards: between products and EOD\nWork surfaces: every 2 hours and EOD\n\nMeat Prep, Poultry, and Mince require TIME SEPARATION — full 4-step clean between categories.',
+    text: '4-step cleaning process:\n1. Pre-cleaning — remove all visible soil, rinse with cold water\n2. Cleaning — apply alkaline detergent at correct concentration, scrub all surfaces\n3. Sanitisation — hot water ≥82°C for 30 seconds OR approved chemical sanitiser\n4. Verification — visual inspection, check temperature/concentration\n\nFrequencies:\nKnives & small tools: start and end of shift (82°C)\nCutting boards: between products and EOD\nWork surfaces: every 2 hours and EOD\n\nMeat and mince require TIME SEPARATION — full 4-step clean between categories.',
   },
   delivery: {
     title: 'Delivery Intake — CCP 1',
@@ -466,7 +466,7 @@ function HomeScreen({ userName }: { userName: string }) {
               onTap={() => { window.location.href = '/haccp/process-room' }} onHelp={() => setHelp('processing_room')} />
             <LargeTile id="cleaning" icon={Icon.clean} label="Cleaning" state={diaryState} badge={s ? `${s.cleaning.count_today} logged` : '—'}
               sub={s?.cleaning.last_logged_at ? `Last: ${fmtTime(s.cleaning.last_logged_at)}` : 'SOP 2 — log each clean'}
-              onTap={() => {}} onHelp={() => setHelp('cleaning')} />
+              onTap={() => { window.location.href = '/haccp/cleaning' }} onHelp={() => setHelp('cleaning')} />
             <LargeTile id="delivery" icon={Icon.delivery} label="Delivery" state={delivState} badge={delivBadge}
               sub={`CCP 1 · SOP 5B${s?.deliveries.deviations ? ` · ${s.deliveries.deviations} CCA` : ''}`}
               onTap={() => {}} onHelp={() => setHelp('delivery')} />
