@@ -502,33 +502,33 @@ function HomeScreen({ userName }: { userName: string }) {
         </div>
 
         {/* Status panel */}
-        <div className="w-44 flex-shrink-0 border-l border-slate-200 bg-black/25 p-4 flex flex-col gap-4">
+        <div className="w-44 flex-shrink-0 border-l border-slate-200 bg-white p-4 flex flex-col gap-4">
 
           <div>
             <div className="text-slate-900 text-2xl font-bold tracking-wide">
               {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
             </div>
-            <div className="text-slate-400 text-[11px] mt-0.5">
+            <div className="text-slate-500 text-[11px] mt-0.5">
               {now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
             </div>
           </div>
 
-          <div className="h-px bg-white" />
+          <div className="h-px bg-slate-200" />
 
           <div>
-            <p className="text-slate-300 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Today</p>
+            <p className="text-slate-400 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Today</p>
             <div className="bg-slate-100 rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#EB6619] h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
             <div className="flex justify-between mt-1.5">
-              <span className="text-slate-400 text-[10px]">{s ? `${s.completed_checks} of ${s.total_checks}` : '—'}</span>
+              <span className="text-slate-500 text-[10px]">{s ? `${s.completed_checks} of ${s.total_checks}` : '—'}</span>
               <span className="text-slate-700 text-[10px] font-bold">{pct}%</span>
             </div>
           </div>
 
           {overdue.length > 0 && (
             <div>
-              <p className="text-slate-300 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Overdue</p>
+              <p className="text-slate-400 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Overdue</p>
               <div className="space-y-1.5">
                 {overdue.map((item) => (
                   <div key={item} className="border-l-2 border-red-500 pl-2">
@@ -540,13 +540,13 @@ function HomeScreen({ userName }: { userName: string }) {
             </div>
           )}
 
-          <div className="h-px bg-white" />
+          <div className="h-px bg-slate-200" />
 
           <div>
-            <p className="text-slate-300 text-[9px] font-bold tracking-[.1em] uppercase mb-1.5">Sync</p>
+            <p className="text-slate-400 text-[9px] font-bold tracking-[.1em] uppercase mb-1.5">Sync</p>
             <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              <span className="text-slate-400 text-[10px]">Online</span>
+              <span className="text-slate-500 text-[10px]">Online</span>
             </div>
           </div>
 
