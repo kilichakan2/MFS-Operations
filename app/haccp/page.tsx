@@ -469,7 +469,7 @@ function HomeScreen({ userName }: { userName: string }) {
               onTap={() => { window.location.href = '/haccp/cleaning' }} onHelp={() => setHelp('cleaning')} />
             <LargeTile id="delivery" icon={Icon.delivery} label="Delivery" state={delivState} badge={delivBadge}
               sub={`CCP 1 · SOP 5B${s?.deliveries.deviations ? ` · ${s.deliveries.deviations} CCA` : ''}`}
-              onTap={() => {}} onHelp={() => setHelp('delivery')} />
+              onTap={() => { window.location.href = '/haccp/delivery' }} onHelp={() => setHelp('delivery')} />
           </div>
 
           {/* Row 2 — 2 standard + wide CCA */}
