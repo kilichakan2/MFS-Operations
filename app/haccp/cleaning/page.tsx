@@ -233,7 +233,7 @@ export default function CleaningPage() {
                       ? v
                         ? 'bg-[#EB6619] border-[#EB6619] text-white'
                         : 'bg-green-100 border-green-300 text-green-600'
-                      : 'bg-slate-50 border-slate-200 text-slate-400'
+                      : 'bg-white border-slate-300 text-slate-600'
                   }`}>
                   {v ? 'Yes' : 'No'}
                 </button>

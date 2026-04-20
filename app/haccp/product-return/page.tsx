@@ -140,7 +140,7 @@ const DISP_STYLE: Record<string, { active: string; badge: string }> = {
   red:    { active: 'border-red-500 bg-red-50 text-red-800',         badge: 'bg-red-100 text-red-700'     },
 }
 
-const DISP_INACTIVE = 'border-slate-200 bg-white text-slate-500'
+const DISP_INACTIVE = 'border-slate-300 bg-white text-slate-600'
 
 // ─── Acceptable return temps (HB-001 Table 11) ───────────────────────────────
 
@@ -200,7 +200,7 @@ function Numpad({ value, onChange, onClose }: {
         <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
           {keys.map((k) => (
             <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
-              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-slate-900 active:bg-orange-500 active:text-white'}`}>
+              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-white active:bg-orange-500'}`}>
               {k === 'back'
                 ? <svg className="w-6 h-6 mx-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
                 : k}
@@ -242,6 +242,12 @@ export default function ProductReturnPage() {
   const [caText,        setCaText]        = useState('')
   const [notes,         setNotes]         = useState('')
 
+  // Checklist state (5 assessment items from SOP 12)
+  const [checked, setChecked] = useState<boolean[]>([false, false, false, false, false])
+  function toggleCheck(i: number) {
+    setChecked((prev) => prev.map((v, idx) => idx === i ? !v : v))
+  }
+
   // UI
   const [showNumpad,   setShowNumpad]   = useState(false)
   const [showQuick,    setShowQuick]    = useState(false)
@@ -274,6 +280,7 @@ export default function ProductReturnPage() {
   function resetForm() {
     setReturnCode(''); setRcNotes(''); setCustomer(''); setProduct('')
     setTempVal(''); setDisposition(''); setCaText(''); setNotes(''); setSubmitErr('')
+    setChecked([false, false, false, false, false])
   }
 
   const rc       = RETURN_CODES.find((r) => r.code === returnCode)
@@ -438,8 +445,10 @@ export default function ProductReturnPage() {
             {/* Assessment checklist */}
             {returnCode && (
               <div>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Assessment checklist (SOP 12)</p>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+                  Assessment checklist (SOP 12) — tap each to confirm
+                </p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
                   {[
                     'Visual inspection — no discolouration, damage, swelling, leakage, or off-odours',
                     'Packaging integrity — seals intact, no tears or punctures, labelling legible',
@@ -447,12 +456,28 @@ export default function ProductReturnPage() {
                     'Batch / lot traceability — batch code matches original delivery documentation',
                     returnCode === 'RC01' ? 'Temperature — core temperature recorded above' : 'Temperature — record if uncertain about cold chain',
                   ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2.5">
-                      <div className="w-4 h-4 rounded border-2 border-slate-300 bg-white flex-shrink-0 mt-0.5" />
-                      <p className="text-slate-600 text-xs leading-relaxed">{item}</p>
-                    </div>
+                    <button key={i} onClick={() => toggleCheck(i)}
+                      className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-all border-b border-slate-100 last:border-b-0 ${
+                        checked[i] ? 'bg-green-50' : 'bg-white hover:bg-slate-50'
+                      }`}>
+                      <div className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all ${
+                        checked[i] ? 'border-green-500 bg-green-500' : 'border-slate-300 bg-white'
+                      }`}>
+                        {checked[i] && (
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        )}
+                      </div>
+                      <p className={`text-xs leading-relaxed ${checked[i] ? 'text-green-700 line-through decoration-green-400' : 'text-slate-600'}`}>
+                        {item}
+                      </p>
+                    </button>
                   ))}
                 </div>
+                {checked.every(Boolean) && (
+                  <p className="text-green-600 text-xs font-bold mt-1.5 px-1">✓ All checks completed</p>
+                )}
               </div>
             )}
 

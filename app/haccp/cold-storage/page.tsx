@@ -138,7 +138,7 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
           {keys.map((k) => (
             <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
               className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${
-                k === 'back' ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-white active:bg-[#EB6619]'
+                k === 'back' ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-white active:bg-orange-500'
               }`}>
               {k === 'back' ? (
                 <svg className="w-6 h-6 mx-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
@@ -215,7 +215,7 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
               {['Accept', 'Conditional accept', 'Assess', 'Reject', 'Dispose'].map((d) => (
                 <button key={d} onClick={() => setDisposition(d)}
                   className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                    disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-400'
+                    disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
                   }`}>{d}</button>
               ))}
             </div>

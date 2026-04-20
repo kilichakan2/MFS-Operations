@@ -182,7 +182,7 @@ function Numpad({ value, onChange, onClose, label, limit }: {
         <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
           {keys.map((k) => (
             <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
-              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-white active:bg-[#EB6619]'}`}>
+              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-white active:bg-orange-500'}`}>
               {k === 'back' ? (
                 <svg className="w-6 h-6 mx-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
               ) : k}
@@ -273,7 +273,7 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
             <div className="grid grid-cols-3 gap-2">
               {['Accept','Conditional accept','Assess','Reject','Dispose'].map((d) => (
                 <button key={d} onClick={() => setDisposition(d)}
-                  className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                  className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'}`}>
                   {d}
                 </button>
               ))}
@@ -411,7 +411,7 @@ function DiaryPhaseCard({
               <div className="flex gap-2 ml-auto">
                 {[true, false].map((v) => (
                   <button key={String(v)} onClick={() => setIssues(v)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${issues === v ? (v ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-green-100 border-green-300 text-green-600') : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${issues === v ? (v ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-green-100 border-green-300 text-green-600') : 'bg-white border-slate-300 text-slate-600'}`}>
                     {v ? 'Yes' : 'No'}
                   </button>
                 ))}

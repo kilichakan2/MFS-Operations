@@ -105,7 +105,7 @@ function Numpad({ value, onChange, onClose, label, expected }: {
         <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
           {keys.map((k) => (
             <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
-              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-slate-100 text-slate-500' : 'bg-slate-100 text-white active:bg-[#EB6619]'}`}>
+              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-white active:bg-orange-500'}`}>
               {k === 'back' ? (
                 <svg className="w-6 h-6 mx-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
               ) : k}
@@ -279,14 +279,14 @@ export default function CalibrationPage() {
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => switchMode('manual')}
                 className={`py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all text-left ${
-                  mode === 'manual' ? 'border-orange-500 bg-orange-600 text-white' : 'border-slate-200 bg-white text-slate-400'
+                  mode === 'manual' ? 'border-orange-500 bg-orange-600 text-white' : 'border-slate-300 bg-white text-slate-600'
                 }`}>
                 <p className={mode === 'manual' ? 'text-[#EB6619]' : 'text-slate-400'} style={{fontSize:'10px', fontWeight:700, letterSpacing:'0.08em', marginBottom:'2px'}}>MONTHLY TEST</p>
                 Manual calibration
               </button>
               <button onClick={() => switchMode('certified_probe')}
                 className={`py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all text-left ${
-                  mode === 'certified_probe' ? 'border-orange-500 bg-orange-600 text-white' : 'border-slate-200 bg-white text-slate-400'
+                  mode === 'certified_probe' ? 'border-orange-500 bg-orange-600 text-white' : 'border-slate-300 bg-white text-slate-600'
                 }`}>
                 <p className={mode === 'certified_probe' ? 'text-[#EB6619]' : 'text-slate-400'} style={{fontSize:'10px', fontWeight:700, letterSpacing:'0.08em', marginBottom:'2px'}}>ANNUAL PURCHASE</p>
                 Certified probe in use
