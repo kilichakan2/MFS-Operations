@@ -493,7 +493,7 @@ function HomeScreen({ userName }: { userName: string }) {
               onTap={() => { window.location.href = '/haccp/calibration' }} onHelp={() => setHelp('calibration')} />
             <SmallTile id="reviews" icon={Icon.review} label="Reviews" sub="Weekly + Monthly"
               badge={s?.weekly_review_due ? 'Weekly due' : s?.monthly_review_due ? 'Monthly due' : 'Up to date'} due={s?.weekly_review_due || s?.monthly_review_due ? true : false}
-              onTap={() => {}} onHelp={() => setHelp('reviews')} />
+              onTap={() => { window.location.href = '/haccp/reviews' }} onHelp={() => setHelp('reviews')} />
             <SmallTile id="people" icon={Icon.people} label="People" sub="Health · Visitor · Training"
               badge="Event only" due={false}
               onTap={() => {}} onHelp={() => setHelp('people')} />
