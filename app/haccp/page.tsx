@@ -476,7 +476,7 @@ function HomeScreen({ userName }: { userName: string }) {
           <div className="flex gap-3">
             <LargeTile id="mince" icon={Icon.mince} label="Mince / Prep" state="neutral" badge={s ? (s.mince_runs.count_today > 0 ? `${s.mince_runs.count_today} runs` : 'None today') : '—'}
               sub="CCP-M1 M2 · Kill date"
-              onTap={() => {}} onHelp={() => setHelp('mince')} />
+              onTap={() => { window.location.href = '/haccp/mince' }} onHelp={() => setHelp('mince')} />
             <LargeTile id="product_return" icon={Icon.ret} label="Product Return" state="neutral" badge={s ? (s.product_returns.count_today > 0 ? `${s.product_returns.count_today} logged` : 'None') : '—'}
               sub="SOP 12 · RC01–RC08"
               onTap={() => { window.location.href = '/haccp/product-return' }} onHelp={() => setHelp('product_return')} />
