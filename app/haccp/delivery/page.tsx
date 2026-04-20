@@ -26,7 +26,8 @@ interface Delivery  {
   covered_contaminated: string
   contamination_notes:  string | null
   notes:                string | null
-  country_of_origin:    string | null
+  born_in:              string | null
+  reared_in:            string | null
   slaughter_site:       string | null
   cut_site:             string | null
   batch_number:         string | null
@@ -287,7 +288,9 @@ export default function DeliveryPage() {
   const [contam,     setContam]     = useState('')
   const [contamType, setcontamType] = useState('')   // sub-type when yes_actioned
   const [contamNote, setContamNote] = useState('')
-  const [country,    setCountry]    = useState('')
+  const [bornIn,     setBornIn]     = useState('')
+  const [rearedIn,   setRearedIn]   = useState('')
+  const [rearedSame, setRearedSame] = useState(false)
   const [slaughter,  setSlaughter]  = useState('')
   const [cutSite,    setCutSite]    = useState('')     // '' = not set, 'same' = same as slaughter, else numeric code
   const [cutSameAs,  setCutSameAs]  = useState(false)
@@ -335,7 +338,7 @@ export default function DeliveryPage() {
     setSupplierSel(''); setSupplierOther(''); setProduct('')
     setCategory(''); setTempVal(''); setContam('')
     setcontamType(''); setContamNote(''); setNotes(''); setSubmitErr('')
-    setCountry(''); setSlaughter(''); setCutSite(''); setCutSameAs(false)
+    setBornIn(''); setRearedIn(''); setRearedSame(false); setSlaughter(''); setCutSite(''); setCutSameAs(false)
   }
 
   async function doSubmit() {
@@ -349,7 +352,8 @@ export default function DeliveryPage() {
           covered_contaminated: contam,
           contamination_notes: contamNote || undefined,
           notes: notes || undefined,
-          country_of_origin: country || undefined,
+          born_in:           bornIn || undefined,
+          reared_in:         rearedIn || undefined,
           slaughter_site:    slaughter || undefined,
           cut_site:          cutSite || undefined,
         }),
@@ -457,15 +461,20 @@ export default function DeliveryPage() {
               )}
             </div>
 
-            {/* Country of origin */}
+            {/* Born in */}
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Country of origin</p>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Born in</p>
               <div className="flex flex-wrap gap-2">
                 {COUNTRIES.map((c) => (
                   <button key={c.code}
-                    onPointerDown={(e) => { e.preventDefault(); setCountry(c.code) }}
+                    onPointerDown={(e) => {
+                      e.preventDefault()
+                      setBornIn(c.code)
+                      // If reared was set to same, keep it in sync
+                      if (rearedSame) setRearedIn(c.code)
+                    }}
                     className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      country === c.code
+                      bornIn === c.code
                         ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
                         : 'border-slate-300 bg-white text-slate-600'
                     }`}>
@@ -474,6 +483,48 @@ export default function DeliveryPage() {
                 ))}
               </div>
             </div>
+
+            {/* Reared in */}
+            {bornIn && (
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Reared in</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <button
+                    onPointerDown={(e) => { e.preventDefault(); setRearedSame(true); setRearedIn(bornIn) }}
+                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      rearedSame
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-slate-300 bg-white text-slate-600'
+                    }`}>
+                    ✓ Same as born in ({COUNTRIES.find((c) => c.code === bornIn)?.label})
+                  </button>
+                  <button
+                    onPointerDown={(e) => { e.preventDefault(); setRearedSame(false); setRearedIn('') }}
+                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      !rearedSame && rearedIn !== ''
+                        ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
+                        : 'border-slate-300 bg-white text-slate-600'
+                    }`}>
+                    Different country
+                  </button>
+                </div>
+                {!rearedSame && (
+                  <div className="flex flex-wrap gap-2">
+                    {COUNTRIES.map((c) => (
+                      <button key={c.code}
+                        onPointerDown={(e) => { e.preventDefault(); setRearedIn(c.code) }}
+                        className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                          rearedIn === c.code
+                            ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
+                            : 'border-slate-300 bg-white text-slate-600'
+                        }`}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Slaughter site */}
             <div>
@@ -525,18 +576,25 @@ export default function DeliveryPage() {
               </div>
             )}
 
-            {/* Batch number — auto-generated, shown as soon as country + slaughter filled */}
-            {country && slaughter && (
+            {/* Batch number — auto-generated once born in + slaughter set */}
+            {bornIn && rearedIn && slaughter && (
               <div className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3">
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">Batch reference (auto-generated)</p>
                 <p className="text-white text-lg font-bold font-mono tracking-widest">
                   {buildBatchNumber(
                     new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }),
-                    country,
+                    bornIn,
                     slaughter
                   )}-{nextNumber}
                 </p>
-                <p className="text-slate-500 text-[10px] mt-1">DDMM · country · slaughter site · delivery #{nextNumber} today</p>
+                <div className="flex gap-3 mt-1.5">
+                  <p className="text-slate-500 text-[10px]">DDMM · born-in · slaughter · delivery #{nextNumber}</p>
+                </div>
+                {bornIn !== rearedIn && (
+                  <p className="text-amber-400 text-[10px] mt-1">
+                    Born: {COUNTRIES.find((c) => c.code === bornIn)?.label} · Reared: {COUNTRIES.find((c) => c.code === rearedIn)?.label}
+                  </p>
+                )}
               </div>
             )}
 
@@ -755,11 +813,11 @@ export default function DeliveryPage() {
                       {d.batch_number && (
                         <p className="text-slate-800 text-xs mt-0.5 font-mono font-bold tracking-wider">{d.batch_number}</p>
                       )}
-                      {(d.country_of_origin || d.cut_site) && (
+                      {(d.born_in || d.cut_site) && (
                         <p className="text-slate-400 text-[10px] mt-0.5">
-                          {COUNTRIES.find((c) => c.code === d.country_of_origin)?.label ?? d.country_of_origin}
+                          {d.born_in && <>Born: {COUNTRIES.find((c) => c.code === d.born_in)?.label ?? d.born_in}</>}
+                          {d.reared_in && d.reared_in !== d.born_in && <> · Reared: {COUNTRIES.find((c) => c.code === d.reared_in)?.label ?? d.reared_in}</>}
                           {d.cut_site && d.cut_site !== d.slaughter_site && ` · Cut: ${d.cut_site}`}
-                          {d.cut_site && d.cut_site === d.slaughter_site && ' · Cut = Slaughter'}
                         </p>
                       )}
                       {d.covered_contaminated !== 'no' && (

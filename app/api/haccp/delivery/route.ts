@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
         .select(`
           id, date, time_of_delivery, supplier, product, product_category,
           temperature_c, temp_status, covered_contaminated, contamination_notes, notes,
-          country_of_origin, slaughter_site, cut_site, batch_number, delivery_number,
+          born_in, reared_in, slaughter_site, cut_site, batch_number, delivery_number,
           submitted_at, users!inner(name)
         `)
         .eq('date', today)
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     const {
       supplier, product, product_category, temperature_c,
       covered_contaminated, contamination_notes, notes,
-      country_of_origin, slaughter_site, cut_site,
+      born_in, reared_in, slaughter_site, cut_site,
     } = body as {
       supplier:             string
       product:              string
@@ -114,7 +114,8 @@ export async function POST(req: NextRequest) {
       covered_contaminated: string
       contamination_notes?: string
       notes?:               string
-      country_of_origin?:   string
+      born_in?:             string
+      reared_in?:           string
       slaughter_site?:      string
       cut_site?:            string
     }
@@ -143,8 +144,8 @@ export async function POST(req: NextRequest) {
 
     // Compute batch number server-side — includes delivery number
     const batchNumber =
-      country_of_origin && slaughter_site?.trim()
-        ? buildBatchNumber(today, country_of_origin.trim(), slaughter_site.trim(), deliveryNumber)
+      born_in && slaughter_site?.trim()
+        ? buildBatchNumber(today, born_in.trim(), slaughter_site.trim(), deliveryNumber)
         : null
 
     const { error } = await supabase.from('haccp_deliveries').insert({
@@ -160,7 +161,8 @@ export async function POST(req: NextRequest) {
       contamination_notes:      contamination_notes?.trim() || null,
       corrective_action_required,
       notes:                    notes?.trim() || null,
-      country_of_origin:        country_of_origin?.trim() || null,
+      born_in:                  born_in?.trim() || null,
+      reared_in:                reared_in?.trim() || null,
       slaughter_site:           slaughter_site?.trim() || null,
       cut_site:                 cut_site?.trim() || null,
       delivery_number:          deliveryNumber,
