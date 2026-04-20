@@ -127,7 +127,7 @@ export default function DocumentRegisterPage() {
 
           {/* Search bar */}
           <div className="relative mb-2">
-            <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
+            <div className="flex items-center gap-3 bg-slate-50 border border-blue-100 rounded-2xl px-4 py-3">
               {searching ? (
                 <svg className="animate-spin w-4 h-4 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
               ) : (
@@ -153,7 +153,7 @@ export default function DocumentRegisterPage() {
                 {results.map((r) => (
                   <button key={r.sop_ref}
                     onClick={() => { window.location.href = `/haccp/documents/${r.source_doc.split('/')[0].toLowerCase()}` }}
-                    className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-slate-200 last:border-0">
+                    className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-all border-b border-blue-100 last:border-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[#EB6619] text-[10px] font-bold">{r.source_doc}</span>
                       {r.section_key && <span className="text-slate-300 text-[10px]">· {r.section_key.replace(/_/g,' ')}</span>}
@@ -199,7 +199,7 @@ export default function DocumentRegisterPage() {
                 className={`rounded-2xl border transition-all overflow-hidden ${
                   rs === 'overdue' ? 'border-red-300 bg-red-50' :
                   rs === 'soon'    ? 'border-amber-300 bg-white' :
-                                     'border-slate-200 bg-white'
+                                     'border-blue-200 bg-white'
                 }`}>
 
                 {/* Row — always visible */}
@@ -242,7 +242,7 @@ export default function DocumentRegisterPage() {
 
                 {/* Expanded detail */}
                 {isOpen && (
-                  <div className="px-4 pb-4 pt-0 border-t border-slate-200 space-y-3">
+                  <div className="px-4 pb-4 pt-0 border-t border-blue-100 space-y-3">
                     <div className="grid grid-cols-2 gap-3 pt-3">
                       <div>
                         <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Last updated</p>

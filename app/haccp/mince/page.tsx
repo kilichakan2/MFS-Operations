@@ -127,7 +127,7 @@ function Numpad({ value, onChange, onClose, label, hint }: {
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{ position: 'fixed' }}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
         <div>
           <p className="text-orange-600 text-xs font-bold tracking-widest uppercase">Temperature</p>
           <h2 className="text-slate-900 text-xl font-bold mt-0.5">{label}</h2>
@@ -438,7 +438,7 @@ export default function MincePage() {
         {/* ── MINCE TAB ────────────────────────────────────────────────────── */}
         {tab === 'mince' && (
           <>
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
                 <p className="text-slate-900 font-semibold text-sm">Mincing Production Log</p>
                 <p className="text-slate-500 text-xs mt-0.5">CCP-M1 (Temp) · CCP-M2 (Kill date) · MMP-MF-001 Form 1</p>
@@ -482,7 +482,7 @@ export default function MincePage() {
                   <input type="date" value={mKillDate}
                     onChange={(e) => setMKillDate(e.target.value)}
                     max={new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                   {mDays !== null && mSpecies && (
                     <div className={`mt-2 rounded-xl px-4 py-3 border ${
                       mKillPass ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
@@ -509,7 +509,7 @@ export default function MincePage() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Input temperature — CCP-M1</p>
                   <button onClick={() => setNumpad('m_input')} disabled={!mSpecies}
                     className={`w-full rounded-2xl px-4 py-3 border-2 flex items-center justify-between transition-all disabled:opacity-40 ${
-                      !mInputVal ? 'border-slate-200 bg-white' :
+                      !mInputVal ? 'border-blue-200 bg-white' :
                       mInPass    ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                     }`}>
                     <div>
@@ -541,7 +541,7 @@ export default function MincePage() {
                   </div>
                   <button onClick={() => setNumpad('m_output')}
                     className={`w-full rounded-2xl px-4 py-3 border-2 flex items-center justify-between transition-all ${
-                      !mOutputVal ? 'border-slate-200 bg-white' :
+                      !mOutputVal ? 'border-blue-200 bg-white' :
                       mOutPass    ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                     }`}>
                     <div>
@@ -576,7 +576,7 @@ export default function MincePage() {
                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Action taken (required)</p>
                     <textarea value={mCA} onChange={(e) => setMCA(e.target.value)} rows={2}
                       placeholder="Describe action taken…"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                      className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
                   </div>
                 )}
 
@@ -595,11 +595,11 @@ export default function MincePage() {
               <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Today's mince runs</p>
               {loading ? <p className="text-slate-400 text-sm">Loading…</p>
               : minceRecs.length === 0
-              ? <div className="bg-white border border-slate-200 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No mince runs logged today</p></div>
+              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No mince runs logged today</p></div>
               : (
                 <div className="space-y-2">
                   {minceRecs.map((r) => (
-                    <div key={r.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                    <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-slate-900 font-semibold text-sm font-mono">{r.batch_code}</p>
@@ -629,7 +629,7 @@ export default function MincePage() {
         {/* ── MEATPREP TAB ────────────────────────────────────────────────────── */}
         {tab === 'meatprep' && (
           <>
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
                 <p className="text-slate-900 font-semibold text-sm">Meat Preparations Production Log</p>
                 <p className="text-slate-500 text-xs mt-0.5">CCP-MP1 (Temp) · CCP-MP2 (Allergens) · MMP-MF-001 Form 2</p>
@@ -642,7 +642,7 @@ export default function MincePage() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product name</p>
                   <input type="text" value={pProductName} onChange={(e) => setPProductName(e.target.value)}
                     placeholder="e.g. Marinated lamb leg, Burger patties, Seasoned mince"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                 </div>
 
                 {/* Species (optional for prep) */}
@@ -672,7 +672,7 @@ export default function MincePage() {
                   <input type="date" value={pKillDate}
                     onChange={(e) => setPKillDate(e.target.value)}
                     max={new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                   {pDays !== null && pKillDate && (
                     <p className="text-slate-500 text-xs mt-1.5 ml-1">{pDays} days from kill date</p>
                   )}
@@ -683,7 +683,7 @@ export default function MincePage() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Input temperature — CCP-MP1 (≤7°C)</p>
                   <button onClick={() => setNumpad('p_input')}
                     className={`w-full rounded-2xl px-4 py-3 border-2 flex items-center justify-between transition-all ${
-                      !pInputVal ? 'border-slate-200 bg-white' :
+                      !pInputVal ? 'border-blue-200 bg-white' :
                       pInPass    ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                     }`}>
                     <p className={`text-2xl font-bold font-mono ${!pInputVal ? 'text-slate-300' : pInPass ? 'text-green-700' : 'text-red-600'}`}>
@@ -712,7 +712,7 @@ export default function MincePage() {
                   </div>
                   <button onClick={() => setNumpad('p_output')}
                     className={`w-full rounded-2xl px-4 py-3 border-2 flex items-center justify-between transition-all ${
-                      !pOutputVal ? 'border-slate-200 bg-white' :
+                      !pOutputVal ? 'border-blue-200 bg-white' :
                       pOutPass    ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                     }`}>
                     <p className={`text-2xl font-bold font-mono ${!pOutputVal ? 'text-slate-300' : pOutPass ? 'text-green-700' : 'text-red-600'}`}>
@@ -771,7 +771,7 @@ export default function MincePage() {
                     </div>
                     <textarea value={pCA} onChange={(e) => setPCA(e.target.value)} rows={2}
                       placeholder="Describe action taken…"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                      className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
                   </div>
                 )}
 
@@ -789,11 +789,11 @@ export default function MincePage() {
             <div>
               <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Today's prep runs</p>
               {prepRecs.length === 0
-              ? <div className="bg-white border border-slate-200 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No prep runs logged today</p></div>
+              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No prep runs logged today</p></div>
               : (
                 <div className="space-y-2">
                   {prepRecs.map((r) => (
-                    <div key={r.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                    <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <p className="text-slate-900 font-semibold text-sm font-mono">{r.batch_code}</p>
@@ -841,7 +841,7 @@ export default function MincePage() {
               ))}
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
                 <p className="text-slate-900 font-semibold text-sm">Time Separation Log</p>
                 <p className="text-slate-500 text-xs mt-0.5">MMP-MF-001 Form 3 · Allergen cross-contamination prevention</p>
@@ -852,17 +852,17 @@ export default function MincePage() {
                   <div>
                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Plain products ended</p>
                     <input type="time" value={tPlainEnd} onChange={(e) => setTPlainEnd(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                      className="w-full bg-white border border-blue-100 rounded-xl px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div>
                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Clean completed ✱</p>
                     <input type="time" value={tCleanDone} onChange={(e) => setTCleanDone(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                      className="w-full bg-white border border-blue-100 rounded-xl px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                   <div className="col-span-2">
                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Allergen products started</p>
                     <input type="time" value={tAllergenStart} onChange={(e) => setTAllergenStart(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                      className="w-full bg-white border border-blue-100 rounded-xl px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                   </div>
                 </div>
 
@@ -870,21 +870,21 @@ export default function MincePage() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Clean verified by ✱</p>
                   <input type="text" value={tVerifiedBy} onChange={(e) => setTVerifiedBy(e.target.value)}
                     placeholder="Name of person who visually verified the clean"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                 </div>
 
                 <div>
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Allergens in production ✱</p>
                   <input type="text" value={tAllergens} onChange={(e) => setTAllergens(e.target.value)}
                     placeholder="e.g. Mustard, Gluten, Soya"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                 </div>
 
                 <div>
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Corrective action (if any issue found)</p>
                   <textarea value={tCA} onChange={(e) => setTCA(e.target.value)} rows={2}
                     placeholder="Any issues or actions taken…"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
                 </div>
 
                 <p className="text-slate-300 text-xs">{todayStr()}</p>
@@ -901,11 +901,11 @@ export default function MincePage() {
             <div>
               <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Today's time separation records</p>
               {tsRecs.length === 0
-              ? <div className="bg-white border border-slate-200 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No time separation logs today</p></div>
+              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No time separation logs today</p></div>
               : (
                 <div className="space-y-2">
                   {tsRecs.map((r) => (
-                    <div key={r.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                    <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
                       <p className="text-slate-900 font-semibold text-sm">Clean completed: {fmtTime(r.clean_completed_time)}</p>
                       <p className="text-slate-500 text-xs mt-0.5">Verified by: {r.clean_verified_by}</p>
                       <p className="text-red-600 text-xs mt-0.5">Allergens: {r.allergens_in_production}</p>

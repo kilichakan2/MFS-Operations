@@ -105,7 +105,7 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{ position: 'fixed' }}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
         <div>
           <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
           <h2 className="text-slate-900 text-xl font-bold mt-0.5">{unitName}</h2>
@@ -225,7 +225,7 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
             <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="Any additional details…"
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
           <button onClick={() => onSubmit(action, disposition, notes)}
@@ -399,7 +399,7 @@ export default function ColdStoragePage() {
       </div>
 
       {/* Session + date selectors */}
-      <div className="px-5 py-4 flex items-center gap-4 border-b border-slate-200">
+      <div className="px-5 py-4 flex items-center gap-4 border-b border-blue-100">
         <div className="flex gap-2">
           {(['AM', 'PM'] as const).map((s) => {
             const isDone = units.length > 0 &&
@@ -441,7 +441,7 @@ export default function ColdStoragePage() {
                 status === 'critical' ? 'bg-red-50 border-red-400' :
                 status === 'amber'    ? 'bg-amber-50 border-amber-300' :
                 status === 'pass'     ? 'bg-green-50 border-green-200' :
-                'bg-white border-slate-200'
+                'bg-white border-blue-100'
               }`}>
               <div className="flex items-center justify-between">
                 <div>
@@ -478,7 +478,7 @@ export default function ColdStoragePage() {
       </div>
 
       {/* Comments + submit — hidden when session already done */}
-      <div className="px-5 pb-6 border-t border-slate-200 pt-4">
+      <div className="px-5 pb-6 border-t border-blue-100 pt-4">
         {sessionAlreadyDone ? (
           <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-5 py-4">
             <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
@@ -493,7 +493,7 @@ export default function ColdStoragePage() {
           <div className="space-y-3">
             <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2}
               placeholder="Comments (optional)…"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
+              className="w-full bg-slate-50 border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
             {submitError && <p className="text-red-600 text-xs">{submitError}</p>}
             <button onClick={handleSubmitAttempt}
               disabled={!allFilled || submitting}

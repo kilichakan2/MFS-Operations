@@ -362,7 +362,7 @@ export default function ReviewsPage() {
     const sectionItems = items.filter((i) => i.section === title)
     const allDone = sectionItems.every((i) => checks[i.id])
     return (
-      <div key={title} className="bg-white border border-slate-200 rounded-xl overflow-hidden mb-3">
+      <div key={title} className="bg-white border border-blue-100 rounded-xl overflow-hidden mb-3">
         <div className={`px-4 py-2.5 border-b border-slate-100 flex items-center justify-between ${allDone ? 'bg-green-50' : 'bg-slate-50'}`}>
           <p className="text-slate-700 text-xs font-bold uppercase tracking-widest">{title}</p>
           {allDone && <span className="text-green-600 text-[10px] font-bold">✓ Complete</span>}
@@ -384,7 +384,7 @@ export default function ReviewsPage() {
           <div><p className="text-orange-400 text-[10px] font-bold tracking-widest uppercase">Reviews</p><h1 className="text-white text-lg font-bold">Weekly &amp; Monthly Reviews</h1></div>
         </div>
         <div className="flex-1 flex items-center justify-center">
-          <div className="bg-white border border-slate-200 rounded-2xl px-8 py-10 text-center max-w-xs">
+          <div className="bg-white border border-blue-100 rounded-2xl px-8 py-10 text-center max-w-xs">
             <div className="w-14 h-14 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-amber-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             </div>
@@ -443,7 +443,7 @@ export default function ReviewsPage() {
         {/* ── WEEKLY TAB ─────────────────────────────────────────────────── */}
         {tab === 'weekly' && (
           <>
-            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
                 <div>
                   <p className="text-slate-900 font-semibold text-sm">Weekly Office Review</p>
@@ -452,7 +452,7 @@ export default function ReviewsPage() {
                 <div className="text-right">
                   <p className="text-slate-400 text-[10px] mb-1">Week ending</p>
                   <input type="date" value={weekEnding} onChange={(e) => setWeekEnding(e.target.value)}
-                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-slate-900 text-xs focus:outline-none focus:border-orange-500" />
+                    className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-900 text-xs focus:outline-none focus:border-orange-500" />
                 </div>
               </div>
               <div>
@@ -484,14 +484,14 @@ export default function ReviewsPage() {
               {loading ? (
                 <p className="text-slate-400 text-sm">Loading…</p>
               ) : weeklyRecs.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No previous reviews</p></div>
+                <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No previous reviews</p></div>
               ) : (
                 <div className="space-y-2">
                   {weeklyRecs.map((r) => {
                     const items = r.assessments as AssessmentItem[]
                     const probs = items?.filter((i) => i.state === 'problem').length ?? 0
                     return (
-                      <div key={r.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                      <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
                         <div>
                           <p className="text-slate-900 font-semibold text-sm">Week ending {fmtDate(r.week_ending)}</p>
                           <p className="text-slate-500 text-xs mt-0.5">{r.users?.name} · {new Date(r.submitted_at).toLocaleDateString('en-GB')}</p>
@@ -517,7 +517,7 @@ export default function ReviewsPage() {
             </div>
 
             {/* Month selector */}
-            <div className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between">
+            <div className="bg-white border border-blue-100 rounded-xl px-4 py-3 flex items-center justify-between">
               <p className="text-slate-700 text-sm font-medium">Review month</p>
               <input type="month" value={monthYear.slice(0, 7)}
                 onChange={(e) => setMonthYear(e.target.value + '-01')}
@@ -543,7 +543,7 @@ export default function ReviewsPage() {
             {/* HACCP system review */}
             <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">HACCP system review (MF-001 p.15)</p>
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+              <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
                 {sysReview.map((item) => (
                   <SystemItem key={item.id} item={item} onChange={updateSysItem} />
                 ))}
@@ -555,10 +555,10 @@ export default function ReviewsPage() {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Further details &amp; notes (optional)</p>
               <textarea value={furtherNotes} onChange={(e) => setFurtherNotes(e.target.value)} rows={3}
                 placeholder="Any additional notes for this month's review…"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
             </div>
 
-            <div className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+            <div className="bg-white border border-blue-100 rounded-xl px-4 py-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-slate-500 text-xs">
                   Equipment: {Object.values(equipChecks).filter(Boolean).length}/{EQUIPMENT_ITEMS.length} ·
@@ -583,13 +583,13 @@ export default function ReviewsPage() {
               {loading ? (
                 <p className="text-slate-400 text-sm">Loading…</p>
               ) : monthlyRecs.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No previous reviews</p></div>
+                <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No previous reviews</p></div>
               ) : (
                 <div className="space-y-2">
                   {monthlyRecs.map((r) => {
                     const probs = (r.haccp_system_review as { result: string }[])?.filter((i) => i.result === 'NO').length ?? 0
                     return (
-                      <div key={r.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                      <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
                         <div>
                           <p className="text-slate-900 font-semibold text-sm">{new Date(r.month_year + 'T00:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}</p>
                           <p className="text-slate-500 text-xs mt-0.5">{r.users?.name} · {new Date(r.submitted_at).toLocaleDateString('en-GB')}</p>

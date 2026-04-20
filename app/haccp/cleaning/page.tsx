@@ -185,8 +185,8 @@ export default function CleaningPage() {
         )}
 
         {/* Log a clean form */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200">
+        <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-blue-100">
             <p className="text-slate-900 font-semibold text-sm">Log a clean</p>
             <p className="text-slate-400 text-xs mt-0.5">Select everything that was cleaned</p>
           </div>
@@ -215,7 +215,7 @@ export default function CleaningPage() {
                 value={otherText}
                 onChange={(e) => setOtherText(e.target.value)}
                 placeholder="Describe what else was cleaned…"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500"
               />
             </div>
           )}
@@ -248,7 +248,7 @@ export default function CleaningPage() {
                 onChange={(e) => setNote(e.target.value)}
                 rows={2}
                 placeholder="What did you do to resolve the issue…"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"
               />
             </div>
           )}
@@ -288,14 +288,14 @@ export default function CleaningPage() {
               Loading log…
             </div>
           ) : entries.length === 0 ? (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-5 text-center">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-5 text-center">
               <p className="text-slate-400 text-sm">No cleans logged today yet</p>
             </div>
           ) : (
             <div className="space-y-2">
               {entries.map((e) => (
                 <div key={e.id}
-                  className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                  className="bg-white border border-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium leading-snug">{e.what_was_cleaned}</p>
                     <p className="text-slate-400 text-xs mt-0.5">{e.users?.name ?? 'Unknown'}</p>

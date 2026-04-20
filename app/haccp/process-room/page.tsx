@@ -105,7 +105,7 @@ const STATUS_BORDER: Record<string, string> = {
   pass:     'border-green-300 bg-green-50',
   amber:    'border-amber-400 bg-amber-50',
   critical: 'border-red-400 bg-red-50',
-  empty:    'border-slate-200 bg-white',
+  empty:    'border-blue-200 bg-white',
 }
 const STATUS_VAL: Record<string, string> = {
   pass:     'text-green-600',
@@ -147,7 +147,7 @@ function Numpad({ value, onChange, onClose, label, limit }: {
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{position:'fixed'}}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
         <div>
           <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">CCP 3 — Process Room</p>
           <h2 className="text-slate-900 text-xl font-bold mt-0.5">{label}</h2>
@@ -284,7 +284,7 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</p>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="Additional details…"
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
           </div>
 
           <button onClick={() => onSubmit(action, disposition, notes)}
@@ -353,7 +353,7 @@ function DiaryPhaseCard({
           </div>
         </button>
         {open && (
-          <div className="px-4 pb-4 border-t border-slate-200 pt-3 space-y-1.5">
+          <div className="px-4 pb-4 border-t border-blue-100 pt-3 space-y-1.5">
             {checks.map((c) => (
               <div key={c.key} className="flex items-center gap-3">
                 <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${existing.check_results[c.key] ? 'bg-green-100' : 'bg-red-50'}`}>
@@ -378,7 +378,7 @@ function DiaryPhaseCard({
   }
 
   return (
-    <div className={`border rounded-2xl overflow-hidden ${open ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-white'}`}>
+    <div className={`border rounded-2xl overflow-hidden ${open ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-white'}`}>
       <button onClick={() => setOpen(!open)} className="w-full px-4 py-3 flex items-center justify-between">
         <div>
           <p className="text-slate-900 font-semibold text-sm">{PHASE_LABELS[phase]}</p>
@@ -388,7 +388,7 @@ function DiaryPhaseCard({
       </button>
 
       {open && (
-        <div className="border-t border-slate-200">
+        <div className="border-t border-blue-100">
           <div className="px-4 py-3 space-y-2">
             {checks.map((c) => (
               <div key={c.key} className="flex items-center gap-3">
@@ -405,7 +405,7 @@ function DiaryPhaseCard({
             ))}
           </div>
 
-          <div className="px-4 pb-4 space-y-3 border-t border-slate-200 pt-3">
+          <div className="px-4 pb-4 space-y-3 border-t border-blue-100 pt-3">
             <div className="flex items-center gap-3">
               <p className="text-slate-500 text-sm">Any issues?</p>
               <div className="flex gap-2 ml-auto">
@@ -421,7 +421,7 @@ function DiaryPhaseCard({
             {issues && (
               <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
                 placeholder="What did you do? Describe the action taken…"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
             )}
 
             {err && <p className="text-red-600 text-xs">{err}</p>}
@@ -596,15 +596,15 @@ export default function ProcessRoomPage() {
           {submitErr && <p className="text-red-600 text-sm">{submitErr}</p>}
 
           {/* ── Card 1: Temperature check ── */}
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-3 flex-wrap">
+          <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-blue-100 flex items-center gap-3 flex-wrap">
               <div className="flex-1 min-w-0">
                 <p className="text-slate-900 font-semibold text-sm">Temperature check</p>
                 <p className="text-slate-400 text-xs mt-0.5">CCP 3 · tap to enter reading</p>
               </div>
               <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)}
                 max={todayISO()}
-                className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-slate-900 text-xs focus:outline-none focus:border-orange-500" />
+                className="bg-white border border-blue-100 rounded-xl px-3 py-1.5 text-slate-900 text-xs focus:outline-none focus:border-orange-500" />
               <div className="flex gap-2">
                 {(['AM','PM'] as Session[]).map((s) => {
                   const done = temps.some((t) => t.session === s)
@@ -688,8 +688,8 @@ export default function ProcessRoomPage() {
           </div>
 
           {/* ── Card 2: Daily diary ── */}
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+          <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-blue-100 flex items-center justify-between">
               <div>
                 <p className="text-slate-900 font-semibold text-sm">Shift diary</p>
                 <p className="text-slate-400 text-xs mt-0.5">SOP 1 · three phases</p>

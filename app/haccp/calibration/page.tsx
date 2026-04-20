@@ -75,7 +75,7 @@ function Numpad({ value, onChange, onClose, label, expected }: {
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{position:'fixed'}}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
         <div>
           <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">SOP 3 — Calibration</p>
           <h2 className="text-slate-900 text-xl font-bold mt-0.5">{label}</h2>
@@ -267,8 +267,8 @@ export default function CalibrationPage() {
         )}
 
         {/* Form */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200">
+        <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-blue-100">
             <p className="text-slate-900 font-semibold text-sm">Log calibration</p>
             <p className="text-slate-400 text-xs mt-0.5">Calibrate monthly before shift — SOP 3</p>
           </div>
@@ -303,7 +303,7 @@ export default function CalibrationPage() {
               </p>
               <input type="text" value={probeId} onChange={(e) => setProbeId(e.target.value)}
                 placeholder={mode === 'certified_probe' ? 'e.g. New Probe Apr 2026' : 'e.g. Probe 1, Backup Probe'}
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
             </div>
 
             {mode === 'manual' ? (
@@ -313,7 +313,7 @@ export default function CalibrationPage() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Ice water test — pass: -1°C to +1°C</p>
                   <button onClick={() => setNumpad('ice')}
                     className={`w-full rounded-2xl p-4 border-2 flex items-center justify-between transition-all ${
-                      iceVal === '' ? 'border-slate-200 bg-white' :
+                      iceVal === '' ? 'border-blue-200 bg-white' :
                       icePass(iceNum) ? 'border-green-300 bg-green-50' : 'border-red-400 bg-red-50'
                     }`}>
                     <div>
@@ -335,7 +335,7 @@ export default function CalibrationPage() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Boiling water test — pass: 99°C to 101°C</p>
                   <button onClick={() => setNumpad('boil')}
                     className={`w-full rounded-2xl p-4 border-2 flex items-center justify-between transition-all ${
-                      boilVal === '' ? 'border-slate-200 bg-white' :
+                      boilVal === '' ? 'border-blue-200 bg-white' :
                       boilPass(boilNum) ? 'border-green-300 bg-green-50' : 'border-red-400 bg-red-50'
                     }`}>
                     <div>
@@ -374,7 +374,7 @@ export default function CalibrationPage() {
                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Action taken (required)</p>
                     <textarea value={actionTaken} onChange={(e) => setActionTaken(e.target.value)} rows={2}
                       placeholder="Describe what was done — e.g. probe removed from service, backup probe used, sent for calibration…"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                      className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
                   </div>
                 )}
               </>
@@ -389,19 +389,19 @@ export default function CalibrationPage() {
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Certificate reference</p>
                   <input type="text" value={certRef} onChange={(e) => setCertRef(e.target.value)}
                     placeholder="e.g. UKAS-2026-04-1234 or supplier cert number"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                 </div>
                 <div>
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Probe purchase date</p>
                   <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)}
                     max={new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                 </div>
                 <div>
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes (optional)</p>
                   <textarea value={certNotes} onChange={(e) => setCertNotes(e.target.value)} rows={2}
                     placeholder="Any additional notes…"
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
                 </div>
               </>
             )}
@@ -431,7 +431,7 @@ export default function CalibrationPage() {
               Loading…
             </div>
           ) : records.length === 0 ? (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-5 text-center">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-5 text-center">
               <p className="text-slate-400 text-sm">No calibration records yet</p>
             </div>
           ) : (
@@ -444,7 +444,7 @@ export default function CalibrationPage() {
                   <div key={r.id} className={`rounded-xl px-4 py-3 border ${
                     isCert    ? 'bg-green-50 border-green-200' :
                     anyFailed ? 'bg-red-50 border-red-200' :
-                                'bg-white border-slate-200'
+                                'bg-white border-blue-100'
                   }`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">

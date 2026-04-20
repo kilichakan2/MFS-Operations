@@ -114,7 +114,7 @@ function DocMarkdown({ content }: { content: string }) {
           const count  = seen.current.get(base) ?? 0
           const id     = count === 0 ? base : `${base}-${count}`
           seen.current.set(base, count + 1)
-          return <h2 id={id} className="text-slate-900 text-lg font-bold mt-8 mb-3 pb-2 border-b border-slate-200">{children}</h2>
+          return <h2 id={id} className="text-slate-900 text-lg font-bold mt-8 mb-3 pb-2 border-b border-blue-100">{children}</h2>
         },
         h3: ({ children }) => {
           const text   = String(children)
@@ -143,7 +143,7 @@ function DocMarkdown({ content }: { content: string }) {
           </div>
         ),
         th: ({ children }) => <th className="text-left text-slate-400 text-xs uppercase tracking-widest font-bold px-3 py-2 border-b border-slate-300">{children}</th>,
-        td: ({ children }) => <td className="text-slate-600 text-sm px-3 py-2 border-b border-slate-200">{children}</td>,
+        td: ({ children }) => <td className="text-slate-600 text-sm px-3 py-2 border-b border-blue-100">{children}</td>,
       }}
     >
       {content}
@@ -164,7 +164,7 @@ function FormDocView({ docRef }: { docRef: string }) {
         {def.links.map((link) => (
           <button key={link.href + link.label}
             onClick={() => { window.location.href = link.href }}
-            className="w-full text-left bg-white hover:bg-slate-100 border border-slate-200 hover:border-amber-300 rounded-2xl px-5 py-4 transition-all active:scale-[0.98] flex items-center justify-between gap-4">
+            className="w-full text-left bg-white hover:bg-slate-50 border border-blue-100 hover:border-amber-300 rounded-2xl px-5 py-4 transition-all active:scale-[0.98] flex items-center justify-between gap-4">
             <div>
               <p className="text-slate-900 font-semibold text-sm">{link.label}</p>
               <p className="text-slate-400 text-xs mt-0.5">{link.desc}</p>
@@ -292,7 +292,7 @@ export default function DocumentPage({ params }: { params: Promise<{ ref: string
       {showToc && (
         <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
           <div className="bg-white rounded-t-3xl w-full max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-200 flex-shrink-0">
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-blue-100 flex-shrink-0">
               <h3 className="text-slate-900 font-bold text-lg">Contents</h3>
               <button onClick={() => setShowToc(false)}
                 className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95">

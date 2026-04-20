@@ -78,25 +78,25 @@ const Icon = {
 type TileState = 'complete' | 'overdue' | 'due' | 'deviation' | 'neutral'
 
 function tileClasses(state: TileState): string {
-  const base = 'rounded-2xl p-4 flex flex-col gap-2.5 cursor-pointer relative select-none transition-all duration-150 active:scale-[0.97]'
+  const base = 'rounded-2xl p-4 flex flex-col gap-2.5 cursor-pointer select-none transition-all duration-150 active:scale-[0.97]'
   switch (state) {
-    case 'complete':  return `${base} bg-white border border-green-300`
-    case 'overdue':   return `${base} bg-red-50 border border-red-400`
-    case 'due':       return `${base} bg-white border border-amber-400`
-    case 'deviation': return `${base} bg-red-50 border border-red-400`
-    default:          return `${base} bg-white border border-slate-200`
+    case 'complete':  return `${base} bg-white border-2 border-green-400`
+    case 'overdue':   return `${base} bg-red-50 border-2 border-red-500`
+    case 'due':       return `${base} bg-amber-50 border-2 border-amber-400`
+    case 'deviation': return `${base} bg-red-50 border-2 border-red-500`
+    default:          return `${base} bg-white border-2 border-blue-200`
   }
 }
 
 function Badge({ state, label }: { state: TileState; label: string }) {
   const cls = {
-    complete:  'bg-green-100 text-green-600',
-    overdue:   'bg-red-100 text-red-600',
-    due:       'bg-amber-100 text-[#EB6619]',
-    deviation: 'bg-red-100 text-red-600',
-    neutral:   'bg-slate-100 text-slate-600',
+    complete:  'bg-green-100 text-green-700',
+    overdue:   'bg-red-100 text-red-700',
+    due:       'bg-amber-100 text-amber-700',
+    deviation: 'bg-red-100 text-red-700',
+    neutral:   'bg-blue-50 text-blue-600',
   }[state]
-  return <span className={`absolute top-3 right-3 text-[9px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
+  return <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
 }
 
 // ─── Corrective Action Popup ──────────────────────────────────────────────────
@@ -143,7 +143,7 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
           <div>
             <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</label>
             <select value={actionTaken} onChange={(e) => setActionTaken(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 h-12 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]">
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 h-12 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]">
               <option value="">Select action…</option>
               <option value="urgent_chill">Placed immediately in coldest chiller (temp 5–8°C)</option>
               <option value="rejected">Rejected — returned to supplier</option>
@@ -172,7 +172,7 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
             <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="Additional details…"
-              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
           <div>
@@ -182,7 +182,7 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
                 <div key={i} className={`w-10 h-10 rounded-full border-2 ${pin.length > i ? 'bg-[#EB6619] border-[#EB6619]' : 'border-slate-300 bg-transparent'}`} />
               ))}
               <input type="number" value={pin} onChange={(e) => setPin(e.target.value.slice(0,4))}
-                className="flex-1 bg-white border border-slate-200 rounded-xl px-4 text-slate-900 text-center text-xl tracking-[.5em] focus:outline-none focus:border-[#EB6619]"
+                className="flex-1 bg-white border border-blue-100 rounded-xl px-4 text-slate-900 text-center text-xl tracking-[.5em] focus:outline-none focus:border-[#EB6619]"
                 placeholder="····" inputMode="numeric" />
             </div>
           </div>
@@ -282,11 +282,12 @@ function LargeTile({
 }) {
   return (
     <div className={`${tileClasses(state)} flex-1`} onPointerDown={(e) => { e.preventDefault(); onTap() }}>
+      {/* Top row: icon + help — no badge here, no overlap */}
       <div className="flex items-start justify-between">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-slate-700 ${
-          state === 'overdue' || state === 'deviation' ? 'bg-red-100' :
-          state === 'complete' ? 'bg-green-50' :
-          state === 'due' ? 'bg-amber-50' : 'bg-slate-100'
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+          state === 'overdue' || state === 'deviation' ? 'bg-red-100 text-red-600' :
+          state === 'complete' ? 'bg-green-100 text-green-700' :
+          state === 'due' ? 'bg-amber-100 text-amber-700' : 'bg-blue-50 text-blue-600'
         }`}>
           {icon}
         </div>
@@ -297,11 +298,15 @@ function LargeTile({
           {Icon.help}
         </button>
       </div>
-      <div>
+      {/* Label + sub */}
+      <div className="flex-1">
         <p className="text-slate-900 font-semibold text-sm leading-tight">{label}</p>
         <p className="text-slate-600 text-[11px] mt-0.5 leading-snug">{sub}</p>
       </div>
-      <Badge state={state} label={badge} />
+      {/* Badge at bottom — no longer absolute, no overlap */}
+      <div className="mt-1">
+        <Badge state={state} label={badge} />
+      </div>
     </div>
   )
 }
@@ -317,7 +322,7 @@ function SmallTile({
   return (
     <div
       className={`flex-1 rounded-xl px-3 py-2.5 flex items-center gap-3 cursor-pointer border transition-all active:scale-[0.97] ${
-        due ? 'bg-amber-50 border-amber-300' : 'bg-white border-slate-200'
+        due ? 'bg-amber-50 border-2 border-amber-400' : 'bg-white border-2 border-blue-200'
       }`}
       onPointerDown={(e) => { e.preventDefault(); onTap() }}>
       <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-50 text-slate-500 flex-shrink-0">{icon}</div>
@@ -343,7 +348,7 @@ function SmallTile({
 function CCATile({ open, onTap }: { open: number; onTap: () => void }) {
   return (
     <div
-      className="flex-[2] rounded-2xl p-4 flex items-center gap-4 cursor-pointer border border-red-400 bg-red-50 transition-all active:scale-[0.97]"
+      className="flex-[2] rounded-2xl p-4 flex items-center gap-4 cursor-pointer border-2 border-red-500 bg-red-50 transition-all active:scale-[0.97]"
       onPointerDown={(e) => { e.preventDefault(); onTap() }}>
       <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-100 text-red-600 flex-shrink-0">{Icon.warn}</div>
       <div className="flex-1">
@@ -502,7 +507,7 @@ function HomeScreen({ userName }: { userName: string }) {
         </div>
 
         {/* Status panel */}
-        <div className="w-44 flex-shrink-0 border-l border-slate-200 bg-white p-4 flex flex-col gap-4">
+        <div className="w-44 flex-shrink-0 border-l border-blue-100 bg-white p-4 flex flex-col gap-4">
 
           <div>
             <div className="text-slate-900 text-2xl font-bold tracking-wide">

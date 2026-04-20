@@ -102,7 +102,7 @@ const STATUS_BORDER: Record<string, string> = {
   pass:   'border-green-300 bg-green-50',
   urgent: 'border-amber-400 bg-amber-50',
   fail:   'border-red-400 bg-red-50',
-  empty:  'border-slate-200 bg-white',
+  empty:  'border-blue-200 bg-white',
 }
 const STATUS_LABEL: Record<string, string> = {
   pass: 'Pass', urgent: 'Conditional accept', fail: 'Reject',
@@ -132,7 +132,7 @@ function Numpad({ value, onChange, onClose, category }: {
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{position:'fixed'}}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
         <div>
           <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">CCP 1 — Delivery Intake</p>
           <h2 className="text-slate-900 text-xl font-bold mt-0.5">Probe temperature</h2>
@@ -329,12 +329,12 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
           {/* Two-column grid */}
           <div className="grid grid-cols-2 gap-3">
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Slaughter site</p>
               <p className="text-slate-900 font-mono font-bold text-sm">{d.slaughter_site ?? '—'}</p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Cut site</p>
               <p className="text-slate-900 font-mono font-bold text-sm">
                 {d.cut_site
@@ -343,12 +343,12 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
               </p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Born in</p>
               <p className="text-slate-900 font-semibold text-sm">{bornLabel ?? '—'}</p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Reared in</p>
               <p className="text-slate-900 font-semibold text-sm">
                 {d.reared_in
@@ -357,12 +357,12 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
               </p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Time</p>
               <p className="text-slate-900 font-semibold text-sm">{deliveryTime(d.time_of_delivery)}</p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Logged by</p>
               <p className="text-slate-900 font-semibold text-sm truncate">{d.users?.name ?? '—'}</p>
             </div>
@@ -370,7 +370,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
           </div>
 
           {/* Product */}
-          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+          <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-3">
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Product</p>
             <p className="text-slate-900 text-sm font-medium">{d.product}</p>
             <p className="text-slate-500 text-xs mt-0.5">{catLabel?.label ?? d.product_category}</p>
@@ -398,7 +398,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
 
           {/* Notes */}
           {d.notes && (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-3">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Notes</p>
               <p className="text-slate-700 text-xs leading-relaxed">{d.notes}</p>
             </div>
@@ -563,8 +563,8 @@ export default function DeliveryPage() {
         )}
 
         {/* Form */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200">
+        <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-blue-100">
             <p className="text-slate-900 font-semibold text-sm">Log a delivery</p>
             <p className="text-slate-400 text-xs mt-0.5">CCP 1 · one record per delivery</p>
           </div>
@@ -681,7 +681,7 @@ export default function DeliveryPage() {
                 }}
                 placeholder="e.g. GB1234 or 1234"
                 maxLength={8}
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
             </div>
 
             {/* Cut site */}
@@ -713,7 +713,7 @@ export default function DeliveryPage() {
                     onChange={(e) => setCutSite(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
                     placeholder="e.g. AU1234 or 5678"
                     maxLength={8}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
                 )}
               </div>
             )}
@@ -745,7 +745,7 @@ export default function DeliveryPage() {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product description</p>
               <input type="text" value={product} onChange={(e) => setProduct(e.target.value)}
                 placeholder="e.g. Whole lamb carcasses — 24 units"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
             </div>
 
             {/* Product category */}
@@ -879,14 +879,14 @@ export default function DeliveryPage() {
                   {contamType && (
                     <textarea value={contamNote} onChange={(e) => setContamNote(e.target.value)} rows={2}
                       placeholder="Additional details (optional)…"
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                      className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
                   )}
                 </div>
               )}
               {contam === 'yes' && (
                 <textarea value={contamNote} onChange={(e) => setContamNote(e.target.value)} rows={2}
                   placeholder="Describe reason for rejection…"
-                  className="mt-2 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                  className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
               )}
             </div>
 
@@ -895,7 +895,7 @@ export default function DeliveryPage() {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes (optional)</p>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
                 placeholder="Any additional notes…"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
             </div>
 
             {/* Meta */}
@@ -936,7 +936,7 @@ export default function DeliveryPage() {
               Loading…
             </div>
           ) : deliveries.length === 0 ? (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-5 text-center">
+            <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-5 text-center">
               <p className="text-slate-400 text-sm">No deliveries logged today</p>
             </div>
           ) : (
@@ -944,7 +944,7 @@ export default function DeliveryPage() {
               {deliveries.map((d) => (
                 <button key={d.id}
                   onClick={() => setSelectedDelivery(d)}
-                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-left transition-all hover:border-slate-300 hover:shadow-sm active:scale-[0.99]">
+                  className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-left transition-all hover:border-slate-300 hover:shadow-sm active:scale-[0.99]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">

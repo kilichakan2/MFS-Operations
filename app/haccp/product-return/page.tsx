@@ -169,7 +169,7 @@ function Numpad({ value, onChange, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{ position: 'fixed' }}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-200">
+      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
         <div>
           <p className="text-orange-600 text-xs font-bold tracking-widest uppercase">RC01 — Temperature</p>
           <h2 className="text-slate-900 text-xl font-bold mt-0.5">Return probe reading</h2>
@@ -364,7 +364,7 @@ export default function ProductReturnPage() {
         )}
 
         {/* Form */}
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
             <p className="text-slate-900 font-semibold text-sm">Log a return</p>
             <p className="text-slate-400 text-xs mt-0.5">SOP 12 · one record per return</p>
@@ -392,7 +392,7 @@ export default function ProductReturnPage() {
               {returnCode === 'RC08' && (
                 <textarea value={rcNotes} onChange={(e) => setRcNotes(e.target.value)} rows={2}
                   placeholder="Specify the reason…"
-                  className="mt-2 w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                  className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
               )}
             </div>
 
@@ -401,7 +401,7 @@ export default function ProductReturnPage() {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Customer</p>
               <input type="text" value={customer} onChange={(e) => setCustomer(e.target.value)}
                 placeholder="Customer / account name"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
             </div>
 
             {/* Product */}
@@ -409,7 +409,7 @@ export default function ProductReturnPage() {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product description</p>
               <input type="text" value={product} onChange={(e) => setProduct(e.target.value)}
                 placeholder="e.g. Lamb leg — 4 units, batch MFS-2026-04"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
             </div>
 
             {/* Temperature — RC01 only */}
@@ -418,7 +418,7 @@ export default function ProductReturnPage() {
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Return temperature (required for RC01)</p>
                 <button onClick={() => setShowNumpad(true)}
                   className={`w-full rounded-2xl p-4 border-2 flex items-center justify-between transition-all ${
-                    !tempVal    ? 'border-slate-200 bg-white' :
+                    !tempVal    ? 'border-blue-200 bg-white' :
                     tempOk?.pass ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                   }`}>
                   <div>
@@ -448,7 +448,7 @@ export default function ProductReturnPage() {
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
                   Assessment checklist (SOP 12) — tap each to confirm
                 </p>
-                <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                <div className="bg-slate-50 border border-blue-100 rounded-xl overflow-hidden">
                   {[
                     'Visual inspection — no discolouration, damage, swelling, leakage, or off-odours',
                     'Packaging integrity — seals intact, no tears or punctures, labelling legible',
@@ -514,7 +514,7 @@ export default function ProductReturnPage() {
                 </div>
                 <textarea value={caText} onChange={(e) => setCaText(e.target.value)} rows={3}
                   placeholder="Edit or add detail to the corrective action taken…"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                  className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
               </div>
             )}
 
@@ -523,7 +523,7 @@ export default function ProductReturnPage() {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Additional notes (optional)</p>
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
                 placeholder="Any additional information…"
-                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
             </div>
 
             <p className="text-slate-300 text-xs">
@@ -556,7 +556,7 @@ export default function ProductReturnPage() {
               Loading…
             </div>
           ) : records.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl px-4 py-5 text-center">
+            <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center">
               <p className="text-slate-400 text-sm">No returns logged today</p>
             </div>
           ) : (
@@ -565,7 +565,7 @@ export default function ProductReturnPage() {
                 const disp = DISPOSITIONS.find((d) => d.val === r.disposition)
                 const badge = disp ? DISP_STYLE[disp.colour].badge : 'bg-slate-100 text-slate-600'
                 return (
-                  <div key={r.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                  <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
@@ -614,7 +614,7 @@ export default function ProductReturnPage() {
               </button>
             </div>
             <div className="space-y-3">
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <div className="bg-slate-50 border border-blue-100 rounded-xl p-4">
                 <p className="text-orange-600 font-bold text-xs uppercase tracking-widest mb-3">Return codes (HB-001 SOP 12)</p>
                 <div className="space-y-1.5">
                   {RETURN_CODES.map((rc) => (
@@ -625,7 +625,7 @@ export default function ProductReturnPage() {
                   ))}
                 </div>
               </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <div className="bg-slate-50 border border-blue-100 rounded-xl p-4">
                 <p className="text-orange-600 font-bold text-xs uppercase tracking-widest mb-2">Acceptable return temps (Table 11)</p>
                 <div className="space-y-1">
                   <div className="flex gap-3"><span className="text-slate-600 text-xs w-20 flex-shrink-0">Red meat</span><span className="text-slate-500 text-xs">≤7°C — Assess or BIN if exceeded</span></div>
