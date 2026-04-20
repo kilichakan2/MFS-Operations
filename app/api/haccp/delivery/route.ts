@@ -1,8 +1,10 @@
 /**
  * app/api/haccp/delivery/route.ts
  *
- * GET  — today's deliveries + supplier list
+ * GET  — today's deliveries + supplier list + next delivery number
  * POST — submit a new delivery record
+ *        delivery_number assigned server-side (COUNT today + 1)
+ *        batch_number recomputed server-side with delivery_number appended
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -21,17 +23,28 @@ function nowTimeUK(): string {
   })
 }
 
-// Temperature pass/fail logic per product category (CA-001 V1.1)
-// Red meat: ≤5°C pass · 5–8°C conditional accept (urgent) · >8°C reject
-// Frozen:   ≤-18°C pass · -15 to -18°C conditional (refreeze immediately) · >-15°C reject
 function tempStatus(temp: number, category: string): 'pass' | 'urgent' | 'fail' {
   switch (category) {
-    case 'red_meat':    return temp <= 5.0 ? 'pass' : temp <= 8.0 ? 'urgent' : 'fail'
-    case 'offal':       return temp <= 3.0 ? 'pass' : 'fail'
-    case 'mince_prep':  return temp <= 4.0 ? 'pass' : 'fail'
-    case 'frozen':      return temp <= -18.0 ? 'pass' : temp <= -15.0 ? 'urgent' : 'fail'
-    default:            return 'fail'
+    case 'red_meat':   return temp <= 5.0  ? 'pass' : temp <= 8.0   ? 'urgent' : 'fail'
+    case 'offal':      return temp <= 3.0  ? 'pass' : 'fail'
+    case 'mince_prep': return temp <= 4.0  ? 'pass' : 'fail'
+    case 'frozen':     return temp <= -18.0 ? 'pass' : temp <= -15.0 ? 'urgent' : 'fail'
+    default:           return 'fail'
   }
+}
+
+// Build batch number — same logic as client side
+// Format: DDMM-COUNTRYCODE-SLAUGHTERSITE-N
+function buildBatchNumber(
+  date: string,
+  countryCode: string,
+  slaughterSite: string,
+  deliveryNumber: number,
+): string {
+  const d   = new Date(date + 'T00:00:00')
+  const dd  = String(d.getDate()).padStart(2, '0')
+  const mm  = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}${mm}-${countryCode}-${slaughterSite}-${deliveryNumber}`
 }
 
 export async function GET(req: NextRequest) {
@@ -46,9 +59,14 @@ export async function GET(req: NextRequest) {
     const [deliveries, suppliers] = await Promise.all([
       supabase
         .from('haccp_deliveries')
-        .select('id, date, time_of_delivery, supplier, product, product_category, temperature_c, temp_status, covered_contaminated, contamination_notes, notes, country_of_origin, slaughter_site, batch_number, submitted_at, users!inner(name)')
+        .select(`
+          id, date, time_of_delivery, supplier, product, product_category,
+          temperature_c, temp_status, covered_contaminated, contamination_notes, notes,
+          country_of_origin, slaughter_site, cut_site, batch_number, delivery_number,
+          submitted_at, users!inner(name)
+        `)
         .eq('date', today)
-        .order('submitted_at', { ascending: false }),
+        .order('delivery_number', { ascending: true }),
       supabase
         .from('haccp_suppliers')
         .select('id, name')
@@ -59,10 +77,14 @@ export async function GET(req: NextRequest) {
     if (deliveries.error) return NextResponse.json({ error: deliveries.error.message }, { status: 500 })
     if (suppliers.error)  return NextResponse.json({ error: suppliers.error.message  }, { status: 500 })
 
+    const todayDeliveries = deliveries.data ?? []
+    const nextNumber      = todayDeliveries.length + 1
+
     return NextResponse.json({
-      date:       today,
-      deliveries: deliveries.data ?? [],
-      suppliers:  suppliers.data  ?? [],
+      date:         today,
+      deliveries:   todayDeliveries,
+      suppliers:    suppliers.data ?? [],
+      next_number:  nextNumber,  // preview for the form
     })
 
   } catch (err) {
@@ -83,7 +105,7 @@ export async function POST(req: NextRequest) {
     const {
       supplier, product, product_category, temperature_c,
       covered_contaminated, contamination_notes, notes,
-      country_of_origin, slaughter_site, batch_number,
+      country_of_origin, slaughter_site, cut_site,
     } = body as {
       supplier:             string
       product:              string
@@ -94,34 +116,55 @@ export async function POST(req: NextRequest) {
       notes?:               string
       country_of_origin?:   string
       slaughter_site?:      string
-      batch_number?:        string
+      cut_site?:            string
     }
 
-    if (!supplier?.trim())          return NextResponse.json({ error: 'Supplier is required' },          { status: 400 })
-    if (!product?.trim())           return NextResponse.json({ error: 'Product description is required' },{ status: 400 })
-    if (!product_category)          return NextResponse.json({ error: 'Select a product category' },      { status: 400 })
-    if (temperature_c == null || isNaN(temperature_c)) return NextResponse.json({ error: 'Temperature is required' }, { status: 400 })
-    if (!covered_contaminated)      return NextResponse.json({ error: 'Covered / contaminated field is required' }, { status: 400 })
+    if (!supplier?.trim())       return NextResponse.json({ error: 'Supplier is required' },           { status: 400 })
+    if (!product?.trim())        return NextResponse.json({ error: 'Product description is required' }, { status: 400 })
+    if (!product_category)       return NextResponse.json({ error: 'Select a product category' },       { status: 400 })
+    if (temperature_c == null || isNaN(temperature_c))
+      return NextResponse.json({ error: 'Temperature is required' }, { status: 400 })
+    if (!covered_contaminated)
+      return NextResponse.json({ error: 'Covered / contaminated field is required' }, { status: 400 })
 
+    const today  = todayUK()
     const status = tempStatus(temperature_c, product_category)
     const corrective_action_required = status !== 'pass' || covered_contaminated !== 'no'
 
+    // Count today's deliveries to assign sequential delivery_number
+    const { count, error: countErr } = await supabase
+      .from('haccp_deliveries')
+      .select('*', { count: 'exact', head: true })
+      .eq('date', today)
+
+    if (countErr) return NextResponse.json({ error: countErr.message }, { status: 500 })
+
+    const deliveryNumber = (count ?? 0) + 1
+
+    // Compute batch number server-side — includes delivery number
+    const batchNumber =
+      country_of_origin && slaughter_site?.trim()
+        ? buildBatchNumber(today, country_of_origin.trim(), slaughter_site.trim(), deliveryNumber)
+        : null
+
     const { error } = await supabase.from('haccp_deliveries').insert({
-      submitted_by:           userId,
-      date:                   todayUK(),
-      time_of_delivery:       nowTimeUK(),
-      supplier:               supplier.trim(),
-      product:                product.trim(),
+      submitted_by:             userId,
+      date:                     today,
+      time_of_delivery:         nowTimeUK(),
+      supplier:                 supplier.trim(),
+      product:                  product.trim(),
       product_category,
       temperature_c,
-      temp_status:            status,
+      temp_status:              status,
       covered_contaminated,
-      contamination_notes:    contamination_notes?.trim() || null,
+      contamination_notes:      contamination_notes?.trim() || null,
       corrective_action_required,
-      notes:                  notes?.trim() || null,
-      country_of_origin:      country_of_origin?.trim() || null,
-      slaughter_site:         slaughter_site?.trim() || null,
-      batch_number:           batch_number?.trim() || null,
+      notes:                    notes?.trim() || null,
+      country_of_origin:        country_of_origin?.trim() || null,
+      slaughter_site:           slaughter_site?.trim() || null,
+      cut_site:                 cut_site?.trim() || null,
+      delivery_number:          deliveryNumber,
+      batch_number:             batchNumber,
     })
 
     if (error) {
@@ -129,7 +172,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, temp_status: status, corrective_action_required })
+    return NextResponse.json({
+      ok: true,
+      temp_status: status,
+      corrective_action_required,
+      delivery_number: deliveryNumber,
+      batch_number:    batchNumber,
+    })
 
   } catch (err) {
     console.error('[POST /api/haccp/delivery] Unhandled:', err)

@@ -28,7 +28,9 @@ interface Delivery  {
   notes:                string | null
   country_of_origin:    string | null
   slaughter_site:       string | null
+  cut_site:             string | null
   batch_number:         string | null
+  delivery_number:      number | null
   submitted_at:         string
   users:                { name: string }
 }
@@ -274,6 +276,7 @@ export default function DeliveryPage() {
   const [suppliers,  setSuppliers]  = useState<Supplier[]>([])
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading,    setLoading]    = useState(true)
+  const [nextNumber, setNextNumber] = useState(1)
 
   // Form state
   const [supplierSel, setSupplierSel] = useState('')    // selected preset or 'other'
@@ -286,6 +289,8 @@ export default function DeliveryPage() {
   const [contamNote, setContamNote] = useState('')
   const [country,    setCountry]    = useState('')
   const [slaughter,  setSlaughter]  = useState('')
+  const [cutSite,    setCutSite]    = useState('')     // '' = not set, 'same' = same as slaughter, else numeric code
+  const [cutSameAs,  setCutSameAs]  = useState(false)
   const [notes,      setNotes]      = useState('')
 
   // UI state
@@ -308,6 +313,7 @@ export default function DeliveryPage() {
       .then((d) => {
         setSuppliers(d.suppliers ?? [])
         setDeliveries(d.deliveries ?? [])
+        setNextNumber(d.next_number ?? 1)
       })
       .catch((e) => setSubmitErr(`Could not load data — ${e.message}`))
       .finally(() => setLoading(false))
@@ -329,7 +335,7 @@ export default function DeliveryPage() {
     setSupplierSel(''); setSupplierOther(''); setProduct('')
     setCategory(''); setTempVal(''); setContam('')
     setcontamType(''); setContamNote(''); setNotes(''); setSubmitErr('')
-    setCountry(''); setSlaughter('')
+    setCountry(''); setSlaughter(''); setCutSite(''); setCutSameAs(false)
   }
 
   async function doSubmit() {
@@ -345,12 +351,7 @@ export default function DeliveryPage() {
           notes: notes || undefined,
           country_of_origin: country || undefined,
           slaughter_site:    slaughter || undefined,
-          batch_number:      country && slaughter
-            ? buildBatchNumber(
-                new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }),
-                country, slaughter
-              )
-            : undefined,
+          cut_site:          cutSite || undefined,
         }),
       })
       if (res.ok) {
@@ -481,11 +482,48 @@ export default function DeliveryPage() {
                 type="text"
                 inputMode="numeric"
                 value={slaughter}
-                onChange={(e) => setSlaughter(e.target.value.replace(/[^0-9]/g, ''))}
+                onChange={(e) => {
+                  setSlaughter(e.target.value.replace(/[^0-9]/g, ''))
+                  // If "same" was selected, keep cut in sync
+                  if (cutSameAs) setCutSite(e.target.value.replace(/[^0-9]/g, ''))
+                }}
                 placeholder="e.g. 1234"
                 maxLength={8}
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
             </div>
+
+            {/* Cut site */}
+            {slaughter.length > 0 && (
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Cut site code</p>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    onPointerDown={(e) => { e.preventDefault(); setCutSameAs(true); setCutSite(slaughter) }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      cutSameAs ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-300 bg-white text-slate-600'
+                    }`}>
+                    ✓ Same as slaughter ({slaughter})
+                  </button>
+                  <button
+                    onPointerDown={(e) => { e.preventDefault(); setCutSameAs(false); setCutSite('') }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      !cutSameAs && cutSite !== '' ? 'border-[#EB6619] bg-[#EB6619]/10 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-600'
+                    }`}>
+                    Different site
+                  </button>
+                </div>
+                {!cutSameAs && (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={cutSite}
+                    onChange={(e) => setCutSite(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="Enter cut site code"
+                    maxLength={8}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
+                )}
+              </div>
+            )}
 
             {/* Batch number — auto-generated, shown as soon as country + slaughter filled */}
             {country && slaughter && (
@@ -496,9 +534,9 @@ export default function DeliveryPage() {
                     new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }),
                     country,
                     slaughter
-                  )}
+                  )}-{nextNumber}
                 </p>
-                <p className="text-slate-500 text-[10px] mt-1">DDMM · country code · slaughter site</p>
+                <p className="text-slate-500 text-[10px] mt-1">DDMM · country · slaughter site · delivery #{nextNumber} today</p>
               </div>
             )}
 
@@ -707,13 +745,22 @@ export default function DeliveryPage() {
                 <div key={d.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="text-slate-900 font-semibold text-sm">{d.supplier}</p>
+                      <div className="flex items-center gap-2">
+                        {d.delivery_number && (
+                          <span className="text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono">#{d.delivery_number}</span>
+                        )}
+                        <p className="text-slate-900 font-semibold text-sm">{d.supplier}</p>
+                      </div>
                       <p className="text-slate-500 text-xs mt-0.5">{d.product} · {CATEGORY_LABELS[d.product_category] ?? d.product_category}</p>
                       {d.batch_number && (
                         <p className="text-slate-800 text-xs mt-0.5 font-mono font-bold tracking-wider">{d.batch_number}</p>
                       )}
-                      {d.country_of_origin && (
-                        <p className="text-slate-400 text-[10px] mt-0.5">{COUNTRIES.find((c) => c.code === d.country_of_origin)?.label ?? d.country_of_origin}</p>
+                      {(d.country_of_origin || d.cut_site) && (
+                        <p className="text-slate-400 text-[10px] mt-0.5">
+                          {COUNTRIES.find((c) => c.code === d.country_of_origin)?.label ?? d.country_of_origin}
+                          {d.cut_site && d.cut_site !== d.slaughter_site && ` · Cut: ${d.cut_site}`}
+                          {d.cut_site && d.cut_site === d.slaughter_site && ' · Cut = Slaughter'}
+                        </p>
                       )}
                       {d.covered_contaminated !== 'no' && (
                         <p className="text-amber-600 text-xs mt-1">Contamination {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}</p>
