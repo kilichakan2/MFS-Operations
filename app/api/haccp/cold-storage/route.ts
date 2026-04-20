@@ -2,13 +2,23 @@
  * app/api/haccp/cold-storage/route.ts
  *
  * GET  — returns all active cold storage units + today's readings
- * POST — submits readings for a session (AM or PM)
+ * POST — submits readings for a session (AM or PM), plus writes a corrective
+ *        action row (one per deviating reading) when any reading fails.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseService }           from '@/lib/supabase'
 
 const supabase = supabaseService
+
+/** UI-label -> DB enum value. DB CHECK constraint limits these five. */
+const DISPOSITION_MAP: Record<string, string> = {
+  'Accept':             'accept',
+  'Conditional accept': 'conditional_accept',
+  'Assess':             'assess',
+  'Reject':             'reject',
+  'Dispose':            'dispose',
+}
 
 function todayUK(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
@@ -76,33 +86,114 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { session, date, readings, comments } = body as {
+    const { session, date, readings, comments, corrective_action } = body as {
       session:  'AM' | 'PM'
       date:     string
       readings: { unit_id: string; temperature_c: number; unit_type: string }[]
       comments: string
+      corrective_action?: {
+        cause:       string
+        action:      string
+        disposition: string
+        recurrence:  string
+        notes:       string
+      }
     }
 
     if (!session || !date || !Array.isArray(readings) || readings.length === 0) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    const rows = readings.map((r) => ({
-      submitted_by:              userId,
+    // Pre-compute statuses so we can validate CA requirement before any insert
+    const readingsWithStatus = readings.map((r) => ({
+      ...r,
+      status: tempStatus(r.temperature_c, r.unit_type),
+    }))
+    const hasDeviation = readingsWithStatus.some((r) => r.status !== 'pass')
+
+    if (hasDeviation) {
+      if (!corrective_action) {
+        return NextResponse.json({ error: 'Corrective action required for deviation' }, { status: 400 })
+      }
+      const { cause, action, disposition, recurrence } = corrective_action
+      if (!cause || !action || !disposition || !recurrence) {
+        return NextResponse.json({ error: 'Incomplete corrective action' }, { status: 400 })
+      }
+      if (!DISPOSITION_MAP[disposition]) {
+        return NextResponse.json({ error: `Invalid disposition: ${disposition}` }, { status: 400 })
+      }
+    }
+
+    // ── 1. Insert readings, select IDs back so we can link CA rows to them ──
+    const rows = readingsWithStatus.map((r) => ({
+      submitted_by:               userId,
       date,
       session,
-      unit_id:                   r.unit_id,
-      temperature_c:             r.temperature_c,
-      temp_status:               tempStatus(r.temperature_c, r.unit_type),
-      comments:                  comments || null,
-      corrective_action_required: tempStatus(r.temperature_c, r.unit_type) !== 'pass',
+      unit_id:                    r.unit_id,
+      temperature_c:              r.temperature_c,
+      temp_status:                r.status,
+      comments:                   comments || null,
+      corrective_action_required: r.status !== 'pass',
     }))
 
-    const { error } = await supabase.from('haccp_cold_storage_temps').insert(rows)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const { data: inserted, error: insertErr } = await supabase
+      .from('haccp_cold_storage_temps')
+      .insert(rows)
+      .select('id, unit_id, temperature_c, temp_status')
 
-    const hasDeviation = rows.some((r) => r.temp_status !== 'pass')
-    return NextResponse.json({ ok: true, has_deviation: hasDeviation })
+    if (insertErr || !inserted) {
+      return NextResponse.json({ error: insertErr?.message ?? 'Insert failed' }, { status: 500 })
+    }
+
+    // ── 2. For every deviating reading, write one CA row ───────────────────
+    const deviations = inserted.filter((r) => r.temp_status !== 'pass')
+    let caWriteFailed = false
+
+    if (deviations.length > 0 && corrective_action) {
+      // Fetch unit names for deviation_description
+      const unitIds = [...new Set(deviations.map((d) => d.unit_id))]
+      const { data: units } = await supabase
+        .from('haccp_cold_storage_units')
+        .select('id, name')
+        .in('id', unitIds)
+      const unitNameById = new Map((units ?? []).map((u) => [u.id, u.name]))
+
+      const dispositionEnum =
+        DISPOSITION_MAP[corrective_action.disposition] ?? null
+
+      // Build recurrence text — append operator notes if present
+      const recurrence = corrective_action.notes
+        ? `${corrective_action.recurrence} | Notes: ${corrective_action.notes}`
+        : corrective_action.recurrence
+
+      const caRows = deviations.map((r) => ({
+        actioned_by:   userId,
+        source_table:  'haccp_cold_storage_temps',
+        source_id:     r.id,
+        ccp_ref:       'CCP2',
+        deviation_description:
+          `${unitNameById.get(r.unit_id) ?? 'Unknown unit'}: ${r.temperature_c}°C (${r.temp_status}). Cause: ${corrective_action.cause}`,
+        action_taken:             corrective_action.action,
+        product_disposition:      dispositionEnum,
+        recurrence_prevention:    recurrence,
+        management_verification_required: r.temp_status === 'critical',
+      }))
+
+      const { error: caErr } = await supabase
+        .from('haccp_corrective_actions')
+        .insert(caRows)
+
+      if (caErr) {
+        console.error('[POST /api/haccp/cold-storage] CA insert failed:', caErr)
+        caWriteFailed = true
+      }
+    }
+
+    return NextResponse.json({
+      ok:              true,
+      has_deviation:   deviations.length > 0,
+      ca_write_failed: caWriteFailed,
+    })
 
   } catch (err) {
     console.error('[POST /api/haccp/cold-storage]', err)
