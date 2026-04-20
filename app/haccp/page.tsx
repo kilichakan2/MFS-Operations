@@ -593,30 +593,38 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
 // ─── Admin Password Keypad ────────────────────────────────────────────────────
 
 function AdminKeypad({ onBack }: { onBack: () => void }) {
-  const [digits,  setDigits]  = useState('')
-  const [error,   setError]   = useState('')
-  const [shake,   setShake]   = useState(false)
-  const ADMIN_PASS = '0505'
+  const [digits,     setDigits]     = useState('')
+  const [error,      setError]      = useState('')
+  const [shake,      setShake]      = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
-  function press(k: string) {
-    if (digits.length >= 4) return
-    const next = digits + k
-    setDigits(next)
-    setError('')
-    if (next.length === 4) {
-      if (next === ADMIN_PASS) {
-        // Set admin cookies and reload
-        const exp = new Date(Date.now() + 8 * 3600 * 1000).toUTCString()
-        document.cookie = `mfs_role=admin; path=/; expires=${exp}; SameSite=Lax`
-        document.cookie = `mfs_user_id=00000000-0000-0000-0000-000000000000; path=/; expires=${exp}; SameSite=Lax`
-        document.cookie = `mfs_name=${encodeURIComponent('Admin')}; path=/; expires=${exp}; SameSite=Lax`
+  async function submit(pwd: string) {
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/auth/haccp-admin', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwd }),
+      })
+      if (res.ok) {
         window.location.reload()
       } else {
         setShake(true)
         setError('Incorrect password')
-        setTimeout(() => { setDigits(''); setShake(false) }, 700)
+        setTimeout(() => { setDigits(''); setShake(false); setSubmitting(false) }, 700)
       }
+    } catch {
+      setShake(true)
+      setError('Connection error — try again')
+      setTimeout(() => { setDigits(''); setShake(false); setSubmitting(false) }, 700)
     }
+  }
+
+  function press(k: string) {
+    if (submitting || digits.length >= 4) return
+    const next = digits + k
+    setDigits(next)
+    setError('')
+    if (next.length === 4) submit(next)
   }
 
   function del() { setDigits((d) => d.slice(0, -1)); setError('') }
@@ -652,7 +660,7 @@ function AdminKeypad({ onBack }: { onBack: () => void }) {
           {[0,1,2,3].map((i) => (
             <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${
               digits.length > i
-                ? error ? 'border-red-400 bg-red-400' : 'border-orange-400 bg-orange-400'
+                ? error ? 'border-red-400 bg-red-400' : submitting ? 'border-orange-300 bg-orange-300 animate-pulse' : 'border-orange-400 bg-orange-400'
                 : 'border-white/30 bg-transparent'
             }`} />
           ))}
