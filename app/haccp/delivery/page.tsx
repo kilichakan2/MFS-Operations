@@ -531,14 +531,15 @@ export default function DeliveryPage() {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Slaughter site code</p>
               <input
                 type="text"
-                inputMode="numeric"
+                inputMode="text"
+                autoCapitalize="characters"
                 value={slaughter}
                 onChange={(e) => {
-                  setSlaughter(e.target.value.replace(/[^0-9]/g, ''))
+                  setSlaughter(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())
                   // If "same" was selected, keep cut in sync
-                  if (cutSameAs) setCutSite(e.target.value.replace(/[^0-9]/g, ''))
+                  if (cutSameAs) setCutSite(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())
                 }}
-                placeholder="e.g. 1234"
+                placeholder="e.g. GB1234 or 1234"
                 maxLength={8}
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
             </div>
@@ -566,10 +567,11 @@ export default function DeliveryPage() {
                 {!cutSameAs && (
                   <input
                     type="text"
-                    inputMode="numeric"
+                    inputMode="text"
+                    autoCapitalize="characters"
                     value={cutSite}
-                    onChange={(e) => setCutSite(e.target.value.replace(/[^0-9]/g, ''))}
-                    placeholder="Enter cut site code"
+                    onChange={(e) => setCutSite(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                    placeholder="e.g. AU1234 or 5678"
                     maxLength={8}
                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
                 )}
