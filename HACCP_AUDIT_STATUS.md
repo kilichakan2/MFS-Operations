@@ -23,11 +23,17 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
   API converts Postgres `23505` into a clean 409 "session already submitted".
   _Merged 2026-04-20._
 
-- [ ] **A3. Server re-derives `unit_type` from DB by `unit_id`**
-  Currently trusts client body. Hardening only — low probability of abuse.
+- [x] **A3. Server re-derives `unit_type` from DB by `unit_id`**
+  Server fetches active units and uses the stored `unit_type` in `tempStatus()`;
+  client-supplied value is ignored. Readings for unknown/inactive units are
+  rejected with 400. Also removed a duplicate units fetch in the CA block.
+  _Merged 2026-04-20._
 
-- [ ] **A4. Reject POSTs where `date != today UK`**
-  HACCP records must be immutable after-the-fact.
+- [x] **A4. Reject POSTs where `date != today UK`**
+  Server guard returns 400 "Readings may only be submitted for today's date"
+  if the submitted date isn't today in Europe/London. Past dates can still
+  be viewed via the date picker (GET), just not submitted to.
+  _Merged 2026-04-20._
 
 - [x] **A5. Retire Process Room from `haccp_cold_storage_units`**
   Process Room deactivated in CCP 2; stays in CCP 3 where it belongs.
@@ -90,4 +96,4 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 
 ## Session log
 
-- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units.
+- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units. A3 (server-derived unit_type) + A4 (today-only date guard) complete.

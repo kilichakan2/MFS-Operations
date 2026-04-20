@@ -98,10 +98,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // Pre-compute statuses so we can validate CA requirement before any insert
+    // ── A4: reject past/future dates — HACCP records must be immutable after-the-fact ──
+    if (date !== todayUK()) {
+      return NextResponse.json(
+        { error: "Readings may only be submitted for today's date." },
+        { status: 400 },
+      )
+    }
+
+    // ── A3: derive unit_type from DB, do not trust client ────────────────────
+    const { data: units, error: unitsErr } = await supabase
+      .from('haccp_cold_storage_units')
+      .select('id, name, unit_type')
+      .eq('active', true)
+
+    if (unitsErr || !units || units.length === 0) {
+      return NextResponse.json({ error: 'Could not load active units' }, { status: 500 })
+    }
+    const unitTypeById = new Map<string, string>(units.map((u) => [u.id, u.unit_type]))
+    const unitNameById = new Map<string, string>(units.map((u) => [u.id, u.name]))
+
+    // Every submitted reading must correspond to an active unit
+    for (const r of readings) {
+      if (!unitTypeById.has(r.unit_id)) {
+        return NextResponse.json(
+          { error: `Unknown or inactive unit: ${r.unit_id}` },
+          { status: 400 },
+        )
+      }
+    }
+
+    // Pre-compute statuses using the SERVER-derived unit_type, so a malformed
+    // client body cannot mis-classify a reading.
     const readingsWithStatus = readings.map((r) => ({
       ...r,
-      status: tempStatus(r.temperature_c, r.unit_type),
+      unit_type: unitTypeById.get(r.unit_id)!,
+      status:    tempStatus(r.temperature_c, unitTypeById.get(r.unit_id)!),
     }))
     const hasDeviation = readingsWithStatus.some((r) => r.status !== 'pass')
 
@@ -153,14 +185,6 @@ export async function POST(req: NextRequest) {
     let caWriteFailed = false
 
     if (deviations.length > 0 && corrective_action) {
-      // Fetch unit names for deviation_description
-      const unitIds = [...new Set(deviations.map((d) => d.unit_id))]
-      const { data: units } = await supabase
-        .from('haccp_cold_storage_units')
-        .select('id, name')
-        .in('id', unitIds)
-      const unitNameById = new Map((units ?? []).map((u) => [u.id, u.name]))
-
       const dispositionEnum =
         DISPOSITION_MAP[corrective_action.disposition] ?? null
 
