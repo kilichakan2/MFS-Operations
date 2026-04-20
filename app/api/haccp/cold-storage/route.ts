@@ -142,6 +142,15 @@ export async function POST(req: NextRequest) {
       .select('id, unit_id, temperature_c, temp_status')
 
     if (insertErr || !inserted) {
+      // 23505 = Postgres unique_violation — surface a clear message instead
+      // of leaking the Postgres error. Triggered by idx_haccp_cst_unique if
+      // any (date, session, unit_id) already exists for this submission.
+      if (insertErr && (insertErr as { code?: string }).code === '23505') {
+        return NextResponse.json(
+          { error: 'This session has already been submitted for one or more units.' },
+          { status: 409 },
+        )
+      }
       return NextResponse.json({ error: insertErr?.message ?? 'Insert failed' }, { status: 500 })
     }
 

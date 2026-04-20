@@ -18,8 +18,10 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
   on critical. Server pre-validates CA is supplied and complete before any insert.
   _Merged 2026-04-20 (commits f67056e, 8650da6)._
 
-- [ ] **A1. Restore unique index `(date, session, unit_id)` on `haccp_cold_storage_temps`**
-  Dropped for testing, never put back. Stops duplicate submissions.
+- [x] **A1. Restore unique index `(date, session, unit_id)` on `haccp_cold_storage_temps`**
+  Re-applied as `idx_haccp_cst_unique`. Stops duplicate submissions at the DB level.
+  API converts Postgres `23505` into a clean 409 "session already submitted".
+  _Merged 2026-04-20._
 
 - [ ] **A3. Server re-derives `unit_type` from DB by `unit_id`**
   Currently trusts client body. Hardening only — low probability of abuse.
@@ -68,7 +70,7 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 ## Pre go-live checklist
 
 - [ ] Restore unique constraints dropped for testing:
-  - `haccp_cold_storage_temps` (covered by A1)
+  - ~~`haccp_cold_storage_temps`~~ (done — A1)
   - `haccp_processing_temps (date, session)`
   - `haccp_daily_diary (date, phase, submitted_by)`
 - [ ] Add species constraint to `haccp_mince_log` (first delete `TEST-BATCH-001`)
@@ -86,4 +88,4 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 
 ## Session log
 
-- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 complete and merged.
+- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete.
