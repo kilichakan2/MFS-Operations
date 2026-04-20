@@ -466,12 +466,15 @@ export default function DeliveryPage() {
 
   const tempNum    = parseFloat(tempVal)
   const tempStat   = category ? calcStatus(tempNum, category) : null
-  const supplierFinal = supplierSel === 'other' ? supplierOther.trim() : supplierSel
+  // supplierSel holds a supplier UUID (chip) or 'other' (free text) or '' (none)
+  const supplierIdSel  = supplierSel && supplierSel !== 'other' ? supplierSel : ''
+  const supplierOtherTrim = supplierOther.trim()
+  const supplierChosen = Boolean(supplierIdSel || (supplierSel === 'other' && supplierOtherTrim))
 
   const needsCCA = (tempStat === 'urgent' || tempStat === 'fail') ||
                    (contam === 'yes' || contam === 'yes_actioned')
 
-  const isValid = supplierFinal && product.trim() && category &&
+  const isValid = supplierChosen && product.trim() && category &&
                   tempVal !== '' && !isNaN(tempNum) && contam
 
   function resetForm() {
@@ -487,7 +490,10 @@ export default function DeliveryPage() {
       const res = await fetch('/api/haccp/delivery', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          supplier: supplierFinal, product: product.trim(),
+          // Send supplier_id for approved-list chip, or supplier_name for "Other"
+          supplier_id:   supplierIdSel || undefined,
+          supplier_name: supplierSel === 'other' ? supplierOtherTrim : undefined,
+          product: product.trim(),
           product_category: category, temperature_c: tempNum,
           covered_contaminated: contam,
           contamination_notes: contamNote || undefined,
@@ -578,9 +584,9 @@ export default function DeliveryPage() {
               <div className="flex flex-wrap gap-2 mb-2">
                 {suppliers.map((s) => (
                   <button key={s.id}
-                    onPointerDown={(e) => { e.preventDefault(); setSupplierSel(s.name); setSupplierOther('') }}
+                    onPointerDown={(e) => { e.preventDefault(); setSupplierSel(s.id); setSupplierOther('') }}
                     className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      supplierSel === s.name ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                      supplierSel === s.id ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
                     }`}>
                     {s.name}
                   </button>

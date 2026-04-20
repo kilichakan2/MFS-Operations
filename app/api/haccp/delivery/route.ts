@@ -103,11 +103,13 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const {
-      supplier, product, product_category, temperature_c,
+      supplier_id, supplier_name,
+      product, product_category, temperature_c,
       covered_contaminated, contamination_notes, notes,
       born_in, reared_in, slaughter_site, cut_site,
     } = body as {
-      supplier:             string
+      supplier_id?:         string
+      supplier_name?:       string
       product:              string
       product_category:     string
       temperature_c:        number
@@ -120,7 +122,36 @@ export async function POST(req: NextRequest) {
       cut_site?:            string
     }
 
-    if (!supplier?.trim())       return NextResponse.json({ error: 'Supplier is required' },           { status: 400 })
+    // C2: supplier must be an approved supplier OR an explicit "Other" text name
+    if (!supplier_id && !supplier_name?.trim()) {
+      return NextResponse.json({ error: 'Supplier is required' }, { status: 400 })
+    }
+
+    let resolvedSupplierId: string | null = null
+    let resolvedSupplierName: string
+
+    if (supplier_id) {
+      // Approved-supplier path — resolve id → canonical name from DB, confirm active
+      const { data: sup, error: supErr } = await supabase
+        .from('haccp_suppliers')
+        .select('id, name, active')
+        .eq('id', supplier_id)
+        .single()
+
+      if (supErr || !sup) {
+        return NextResponse.json({ error: 'Unknown supplier' }, { status: 400 })
+      }
+      if (!sup.active) {
+        return NextResponse.json({ error: 'Supplier is no longer approved' }, { status: 400 })
+      }
+      resolvedSupplierId   = sup.id
+      resolvedSupplierName = sup.name
+    } else {
+      // "Other" path — free-text supplier not in approved list.
+      // supplier_id stays NULL so these rows are identifiable for later review.
+      resolvedSupplierName = supplier_name!.trim()
+    }
+
     if (!product?.trim())        return NextResponse.json({ error: 'Product description is required' }, { status: 400 })
     if (!product_category)       return NextResponse.json({ error: 'Select a product category' },       { status: 400 })
     if (temperature_c == null || isNaN(temperature_c))
@@ -152,7 +183,8 @@ export async function POST(req: NextRequest) {
       submitted_by:             userId,
       date:                     today,
       time_of_delivery:         nowTimeUK(),
-      supplier:                 supplier.trim(),
+      supplier:                 resolvedSupplierName,
+      supplier_id:              resolvedSupplierId,
       product:                  product.trim(),
       product_category,
       temperature_c,
@@ -170,6 +202,15 @@ export async function POST(req: NextRequest) {
     })
 
     if (error) {
+      // 23505 = unique_violation on uq_haccp_deliveries_date_num.
+      // Two concurrent submissions both computed the same delivery_number.
+      // Ask the user to retry — client will re-fetch and get a fresh number.
+      if ((error as { code?: string }).code === '23505') {
+        return NextResponse.json(
+          { error: 'Another delivery was logged at the same moment. Please retry.' },
+          { status: 409 },
+        )
+      }
       console.error('[POST /api/haccp/delivery]', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
