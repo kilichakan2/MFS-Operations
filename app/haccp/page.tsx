@@ -94,7 +94,7 @@ function Badge({ state, label }: { state: TileState; label: string }) {
     overdue:   'bg-red-100 text-red-600',
     due:       'bg-amber-100 text-[#EB6619]',
     deviation: 'bg-red-100 text-red-600',
-    neutral:   'bg-slate-50 text-slate-400',
+    neutral:   'bg-slate-100 text-slate-600',
   }[state]
   return <span className={`absolute top-3 right-3 text-[9px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
 }
@@ -121,7 +121,7 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
         <div className="bg-slate-100 rounded-3xl p-8 w-full max-w-sm text-center">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4 text-green-600">{Icon.tick}</div>
           <p className="text-slate-900 font-bold text-lg">Logged</p>
-          <p className="text-slate-400 text-sm mt-1">Corrective action recorded</p>
+          <p className="text-slate-600 text-sm mt-1">Corrective action recorded</p>
           <button onClick={onClose} className="mt-6 w-full bg-[#EB6619] text-white font-bold py-3 rounded-xl">Done</button>
         </div>
       </div>
@@ -141,7 +141,7 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</label>
+            <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</label>
             <select value={actionTaken} onChange={(e) => setActionTaken(e.target.value)}
               className="w-full bg-white border border-slate-200 rounded-xl px-4 h-12 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]">
               <option value="">Select action…</option>
@@ -157,11 +157,11 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
+            <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
             <div className="grid grid-cols-3 gap-2">
               {['Accept', 'Conditional accept', 'Reject', 'Dispose', 'Assess'].map((d) => (
                 <button key={d} onClick={() => setDisposition(d)}
-                  className={`py-2.5 rounded-xl text-xs font-bold transition-all ${disposition === d ? 'bg-[#EB6619] text-white' : 'bg-slate-50 text-slate-400 border border-slate-200'}`}>
+                  className={`py-2.5 rounded-xl text-xs font-bold transition-all ${disposition === d ? 'bg-[#EB6619] text-white' : 'bg-white text-slate-600 border border-slate-300'}`}>
                   {d}
                 </button>
               ))}
@@ -169,14 +169,14 @@ function CorrPopup({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes</label>
+            <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">Notes</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
               placeholder="Additional details…"
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
           <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">PIN to confirm</label>
+            <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">PIN to confirm</label>
             <div className="flex gap-2">
               {[0,1,2,3].map((i) => (
                 <div key={i} className={`w-10 h-10 rounded-full border-2 ${pin.length > i ? 'bg-[#EB6619] border-[#EB6619]' : 'border-slate-300 bg-transparent'}`} />
@@ -292,14 +292,14 @@ function LargeTile({
         </div>
         <button
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); onHelp() }}
-          className="text-slate-300 hover:text-slate-500 transition-colors p-1 -mt-0.5 -mr-0.5"
+          className="text-slate-400 hover:text-slate-600 transition-colors p-1 -mt-0.5 -mr-0.5"
           aria-label={`Help for ${label}`}>
           {Icon.help}
         </button>
       </div>
       <div>
         <p className="text-slate-900 font-semibold text-sm leading-tight">{label}</p>
-        <p className="text-slate-400 text-[11px] mt-0.5 leading-snug">{sub}</p>
+        <p className="text-slate-600 text-[11px] mt-0.5 leading-snug">{sub}</p>
       </div>
       <Badge state={state} label={badge} />
     </div>
@@ -323,13 +323,13 @@ function SmallTile({
       <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-50 text-slate-500 flex-shrink-0">{icon}</div>
       <div className="flex-1 min-w-0">
         <p className="text-slate-900 text-[12px] font-semibold leading-tight">{label}</p>
-        <p className="text-slate-400 text-[10px] mt-0.5">{sub}</p>
+        <p className="text-slate-600 text-[10px] mt-0.5">{sub}</p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${due ? 'bg-amber-100 text-[#EB6619]' : 'bg-slate-50 text-slate-400'}`}>{badge}</span>
+        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${due ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{badge}</span>
         <button
           onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); onHelp() }}
-          className="text-slate-300 hover:text-slate-400 transition-colors"
+          className="text-slate-400 hover:text-slate-600 transition-colors"
           aria-label={`Help for ${label}`}>
           {Icon.help}
         </button>
@@ -348,7 +348,7 @@ function CCATile({ open, onTap }: { open: number; onTap: () => void }) {
       <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-100 text-red-600 flex-shrink-0">{Icon.warn}</div>
       <div className="flex-1">
         <p className="text-red-600 font-semibold text-sm">Corrective Action</p>
-        <p className="text-slate-400 text-[11px] mt-0.5">
+        <p className="text-slate-600 text-[11px] mt-0.5">
           {open > 0 ? `${open} open — requires resolution` : 'Manual CCP deviation log · CA-001'}
         </p>
       </div>
@@ -428,24 +428,24 @@ function HomeScreen({ userName }: { userName: string }) {
       <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-[#1E293B] flex-shrink-0">
         <div className="flex items-center gap-3">
           <MfsLogo className="h-6 w-auto text-white" />
-          <div className="w-px h-6 bg-slate-200" />
-          <span className="text-slate-500 text-sm font-medium">HACCP — Process Room</span>
+          <div className="w-px h-6 bg-slate-600" />
+          <span className="text-slate-300 text-sm font-medium">HACCP — Process Room</span>
         </div>
         <div className="flex items-center gap-3">
           {/* Documents register link */}
           <button onClick={() => { window.location.href = '/haccp/documents' }}
-            className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 hover:text-white transition-all text-xs font-bold">
+            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/18 border border-white/15 rounded-xl px-3 py-2 text-slate-200 hover:text-white transition-all text-xs font-bold">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
             Documents
           </button>
-          <div className="flex items-center gap-2 bg-slate-50 rounded-full px-3 py-1.5">
+          <div className="flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-3 py-1.5">
             <div className="w-6 h-6 rounded-full bg-[#EB6619] flex items-center justify-center text-white text-[9px] font-bold">
               {initials(userName)}
             </div>
             <span className="text-white text-xs font-medium">{userName}</span>
-            <button onClick={signOut} className="text-slate-400 hover:text-slate-500 text-[10px] ml-1 transition-colors">Sign out</button>
+            <button onClick={signOut} className="text-slate-400 hover:text-slate-200 text-[10px] ml-1 transition-colors">Sign out</button>
           </div>
         </div>
       </div>
@@ -484,7 +484,7 @@ function HomeScreen({ userName }: { userName: string }) {
           </div>
 
           {/* Divider */}
-          <div className="h-px bg-white mx-1" />
+          <div className="h-px bg-slate-300 mx-1" />
 
           {/* Small tile row */}
           <div className="flex gap-3">
@@ -516,7 +516,7 @@ function HomeScreen({ userName }: { userName: string }) {
           <div className="h-px bg-slate-200" />
 
           <div>
-            <p className="text-slate-400 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Today</p>
+            <p className="text-slate-600 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Today</p>
             <div className="bg-slate-100 rounded-full h-1.5 overflow-hidden">
               <div className="bg-[#EB6619] h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
@@ -528,12 +528,12 @@ function HomeScreen({ userName }: { userName: string }) {
 
           {overdue.length > 0 && (
             <div>
-              <p className="text-slate-400 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Overdue</p>
+              <p className="text-slate-600 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Overdue</p>
               <div className="space-y-1.5">
                 {overdue.map((item) => (
                   <div key={item} className="border-l-2 border-red-500 pl-2">
                     <p className="text-red-600 text-[11px] font-medium">{item}</p>
-                    <p className="text-slate-400 text-[9px]">PM check due</p>
+                    <p className="text-slate-500 text-[9px]">PM check due</p>
                   </div>
                 ))}
               </div>
@@ -543,7 +543,7 @@ function HomeScreen({ userName }: { userName: string }) {
           <div className="h-px bg-slate-200" />
 
           <div>
-            <p className="text-slate-400 text-[9px] font-bold tracking-[.1em] uppercase mb-1.5">Sync</p>
+            <p className="text-slate-600 text-[9px] font-bold tracking-[.1em] uppercase mb-1.5">Sync</p>
             <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
               <span className="text-slate-500 text-[10px]">Online</span>
@@ -636,17 +636,17 @@ function LoginDoor() {
         <MfsLogo className="h-8 mb-4 text-white" />
         <p className="text-[#EB6619] text-xs font-bold tracking-[.35em] uppercase">Process Room</p>
         <h1 className="text-white text-2xl font-bold tracking-wide mt-1">HACCP Compliance</h1>
-        <p className="text-slate-400 text-sm mt-2">Tap your name to continue</p>
+        <p className="text-slate-600 text-sm mt-2">Tap your name to continue</p>
       </div>
       <div className="mx-8 h-px bg-slate-100" />
       <div className="flex-1 flex items-start justify-center px-6 pt-8 pb-10">
         {loading ? (
-          <div className="flex items-center gap-3 text-slate-400 text-sm mt-12">
+          <div className="flex items-center gap-3 text-slate-600 text-sm mt-12">
             <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
             Loading…
           </div>
         ) : staff.length === 0 ? (
-          <p className="text-slate-400 text-sm mt-12 text-center px-8">No staff found. Add butcher or warehouse users via the admin panel.</p>
+          <p className="text-slate-600 text-sm mt-12 text-center px-8">No staff found. Add butcher or warehouse users via the admin panel.</p>
         ) : (
           <div className="w-full max-w-sm grid grid-cols-2 gap-4">
             {staff.map((m) => <StaffCard key={m.id} member={m} onSelect={setSelected} />)}
