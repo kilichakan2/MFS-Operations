@@ -377,22 +377,22 @@ export default function ColdStoragePage() {
 
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B]">
-        <button onClick={() => { window.location.href = '/haccp' }} className="text-slate-400 hover:text-slate-700 transition-colors flex-shrink-0">
+        <button onClick={() => { window.location.href = '/haccp' }} className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
-          <h1 className="text-slate-900 text-lg font-bold leading-tight">Temperature Check</h1>
+          <p className="text-orange-400 text-[10px] font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
+          <h1 className="text-white text-lg font-bold leading-tight">Temperature Check</h1>
         </div>
         {/* ? quick-tip button */}
         <button onClick={() => setShowQuick(true)}
-          className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-2 text-slate-500 hover:text-white transition-all text-xs font-bold flex-shrink-0">
+          className="flex items-center gap-1.5 bg-white/10 hover:bg-white/18 border border-white/15 rounded-xl px-3 py-2 text-white/60 hover:text-white transition-all text-xs font-bold flex-shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Quick ref
         </button>
         {/* Handbook button — navigates to dedicated document page */}
         <button onClick={openHandbook}
-          className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl px-3 py-2 text-[#EB6619] transition-all text-xs font-bold flex-shrink-0">
+          className="flex items-center gap-1.5 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-400/40 rounded-xl px-3 py-2 text-orange-300 transition-all text-xs font-bold flex-shrink-0">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
           Handbook
         </button>
