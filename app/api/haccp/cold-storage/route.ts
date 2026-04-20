@@ -24,15 +24,9 @@ function todayUK(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
 }
 
-function tempStatus(temp: number, unitType: string): 'pass' | 'amber' | 'critical' {
-  if (unitType === 'freezer') {
-    if (temp <= -18) return 'pass'
-    if (temp <= -15) return 'amber'
-    return 'critical'
-  }
-  // chiller: ≤5 pass, 5-8 amber, >8 critical (CA-001)
-  if (temp <= 5)  return 'pass'
-  if (temp <= 8)  return 'amber'
+function tempStatus(temp: number, targetC: number, maxC: number): 'pass' | 'amber' | 'critical' {
+  if (temp <= targetC) return 'pass'
+  if (temp <= maxC)    return 'amber'
   return 'critical'
 }
 
@@ -106,21 +100,24 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── A3: derive unit_type from DB, do not trust client ────────────────────
+    // ── A3 + A6: derive unit_type AND thresholds from DB, not from client ──
     const { data: units, error: unitsErr } = await supabase
       .from('haccp_cold_storage_units')
-      .select('id, name, unit_type')
+      .select('id, name, unit_type, target_temp_c, max_temp_c')
       .eq('active', true)
 
     if (unitsErr || !units || units.length === 0) {
       return NextResponse.json({ error: 'Could not load active units' }, { status: 500 })
     }
-    const unitTypeById = new Map<string, string>(units.map((u) => [u.id, u.unit_type]))
+    const unitById = new Map<string, {
+      id: string; name: string; unit_type: string;
+      target_temp_c: number; max_temp_c: number
+    }>(units.map((u) => [u.id, u]))
     const unitNameById = new Map<string, string>(units.map((u) => [u.id, u.name]))
 
     // Every submitted reading must correspond to an active unit
     for (const r of readings) {
-      if (!unitTypeById.has(r.unit_id)) {
+      if (!unitById.has(r.unit_id)) {
         return NextResponse.json(
           { error: `Unknown or inactive unit: ${r.unit_id}` },
           { status: 400 },
@@ -128,13 +125,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Pre-compute statuses using the SERVER-derived unit_type, so a malformed
-    // client body cannot mis-classify a reading.
-    const readingsWithStatus = readings.map((r) => ({
-      ...r,
-      unit_type: unitTypeById.get(r.unit_id)!,
-      status:    tempStatus(r.temperature_c, unitTypeById.get(r.unit_id)!),
-    }))
+    // Pre-compute statuses using the SERVER-side unit config, so a malformed
+    // client body cannot mis-classify a reading. Thresholds are DB-driven (A6).
+    const readingsWithStatus = readings.map((r) => {
+      const u = unitById.get(r.unit_id)!
+      return {
+        ...r,
+        unit_type: u.unit_type,
+        status:    tempStatus(r.temperature_c, Number(u.target_temp_c), Number(u.max_temp_c)),
+      }
+    })
     const hasDeviation = readingsWithStatus.some((r) => r.status !== 'pass')
 
     if (hasDeviation) {

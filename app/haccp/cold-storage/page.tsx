@@ -32,16 +32,11 @@ type TempStatus = 'pass' | 'amber' | 'critical' | null
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getTempStatus(temp: number, unitType: string): TempStatus {
+function getTempStatus(temp: number, unit: StorageUnit): TempStatus {
   if (isNaN(temp)) return null
-  if (unitType === 'freezer') {
-    if (temp <= -18) return 'pass'
-    if (temp <= -15) return 'amber'
-    return 'critical'
-  }
-  // chiller: ≤5 pass, 5–8 amber, >8 critical (CA-001)
-  if (temp <= 5)  return 'pass'
-  if (temp <= 8)  return 'amber'
+  // Unified logic across chillers & freezers — thresholds come from the DB.
+  if (temp <= unit.target_temp_c) return 'pass'
+  if (temp <= unit.max_temp_c)    return 'amber'
   return 'critical'
 }
 
@@ -49,7 +44,7 @@ function getCorrectiveAction(status: TempStatus, unitType: string): string {
   if (status === 'amber' && unitType === 'freezer') return 'Keep door closed. Check for ice build-up on coils. Monitor closely. Acceptable short-term if product is re-frozen immediately.'
   if (status === 'critical' && unitType === 'freezer') return 'Assess product for thawing — check ice crystal formation and texture. Transfer to a functioning freezer. Do NOT refreeze if product has already thawed.'
   if (status === 'amber') return 'Check door seals and closure. Verify unit is not overloaded. Reduce loading if necessary. Recheck within 30 minutes. Transfer product to backup chiller if temperature is still rising. Call refrigeration engineer.'
-  if (status === 'critical') return 'CRITICAL: Minimise door openings immediately. Transfer ALL product to backup refrigeration unit. Probe individual product temperatures. Contact refrigeration engineer urgently. Segregate any product above 8°C for safety assessment. Supervisor sign-off required.'
+  if (status === 'critical') return 'CRITICAL: Minimise door openings immediately. Transfer ALL product to backup refrigeration unit. Probe individual product temperatures. Contact refrigeration engineer urgently. Segregate any product above the limit for safety assessment. Supervisor sign-off required.'
   return ''
 }
 
@@ -75,16 +70,15 @@ const STATUS_LABEL: Record<string, string> = {
 
 // ─── Numpad ───────────────────────────────────────────────────────────────────
 
-function Numpad({ value, onChange, onClose, unitName, unitType }: {
+function Numpad({ value, onChange, onClose, unit }: {
   value:    string
   onChange: (v: string) => void
   onClose:  () => void
-  unitName: string
-  unitType: string
+  unit:     StorageUnit
 }) {
   const numericVal = parseFloat(value)
-  const status     = getTempStatus(numericVal, unitType)
-  const isNeg      = unitType === 'freezer'
+  const status     = getTempStatus(numericVal, unit)
+  const isNeg      = unit.unit_type === 'freezer'
 
   function press(key: string) {
     if (key === 'back') { onChange(value.slice(0, -1)); return }
@@ -101,7 +95,7 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
       <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
         <div>
           <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
-          <h2 className="text-slate-900 text-xl font-bold mt-0.5">{unitName}</h2>
+          <h2 className="text-slate-900 text-xl font-bold mt-0.5">{unit.name}</h2>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2">
           <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -123,7 +117,7 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
             </div>
           )}
           {status && status !== 'pass' && (
-            <p className="text-slate-400 text-xs mt-3 max-w-xs mx-auto leading-relaxed">{getCorrectiveAction(status, unitType)}</p>
+            <p className="text-slate-400 text-xs mt-3 max-w-xs mx-auto leading-relaxed">{getCorrectiveAction(status, unit.unit_type)}</p>
           )}
         </div>
 
@@ -218,7 +212,7 @@ function getActionList(
       'Minimise door openings',
       'Transfer all product to backup unit immediately',
       'Probe individual products to assess core temperature',
-      'Segregate any product >8°C for assessment',
+      'Segregate any product above the limit for assessment',
       'Contact refrigeration engineer urgently',
       'Assess all product for safety before release',
     ]
@@ -462,12 +456,12 @@ export default function ColdStoragePage() {
   const deviations = units
     .filter((u) => {
       const t = parseFloat(temps[u.id] ?? '')
-      return !isNaN(t) && getTempStatus(t, u.unit_type) !== 'pass'
+      return !isNaN(t) && getTempStatus(t, u) !== 'pass'
     })
     .map((u) => ({
       name:     u.name,
       temp:     parseFloat(temps[u.id]),
-      status:   getTempStatus(parseFloat(temps[u.id]), u.unit_type),
+      status:   getTempStatus(parseFloat(temps[u.id]), u),
       unitType: u.unit_type,
     }))
 
@@ -579,7 +573,7 @@ export default function ColdStoragePage() {
         ) : units.map((unit) => {
           const raw    = temps[unit.id] ?? ''
           const numVal = parseFloat(raw)
-          const status = raw !== '' && !isNaN(numVal) ? getTempStatus(numVal, unit.unit_type) : null
+          const status = raw !== '' && !isNaN(numVal) ? getTempStatus(numVal, unit) : null
           const existing_session = existing.find((r) => r.unit_id === unit.id && r.session === session)
 
           return (
@@ -595,7 +589,7 @@ export default function ColdStoragePage() {
                 <div>
                   <p className="text-slate-900 font-semibold text-base">{unit.name}</p>
                   <p className="text-slate-400 text-xs mt-0.5">
-                    {unit.unit_type === 'freezer' ? 'Target ≤-18°C' : 'Target ≤5°C · Max 8°C'}
+                    {`Target ≤${unit.target_temp_c}°C · Max ${unit.max_temp_c}°C`}
                     {existing_session ? ' · Already recorded' : ''}
                   </p>
                 </div>
@@ -661,8 +655,7 @@ export default function ColdStoragePage() {
           value={temps[numpadUnit.id] ?? ''}
           onChange={(v) => setTemps((prev) => ({ ...prev, [numpadUnit.id]: v }))}
           onClose={() => setNumpadUnit(null)}
-          unitName={numpadUnit.name}
-          unitType={numpadUnit.unit_type}
+          unit={numpadUnit}
         />
       )}
 

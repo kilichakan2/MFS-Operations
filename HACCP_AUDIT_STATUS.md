@@ -42,9 +42,13 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
   and Quick Ref panel. CCP 2 now covers 4 units: Lamb, Dispatch, Dairy
   Fridges + Freezer. _Merged 2026-04-20._
 
-- [ ] **A6. Drive chiller thresholds from `unit.max_temp_c`**
-  Currently hardcoded — changing `max_temp_c` in DB has no effect. Also resolves
-  the "per-unit limit" design question (Option A: unit-level, DB-driven).
+- [x] **A6. Drive chiller thresholds from `unit.max_temp_c`**
+  Pass/amber/critical logic now unified: pass ≤ `target_temp_c`, amber between
+  target and `max_temp_c`, critical above `max_temp_c`. Both server and client
+  read thresholds from DB per unit — changing a unit's limits takes effect
+  instantly, no redeploy. Chiller targets aligned to CA-001 (3→5°C) as part
+  of this. Unit tile now shows the actual per-unit target/max. Generic copy
+  replaces "above 8°C" references. _Merged 2026-04-20._
 
 ### Phase C — later, not blockers
 
@@ -96,4 +100,4 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 
 ## Session log
 
-- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units. A3 (server-derived unit_type) + A4 (today-only date guard) complete.
+- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units. A3 (server-derived unit_type) + A4 (today-only date guard) complete. A6 (DB-driven thresholds) complete. **CCP 2 Phase A fully closed out.**
