@@ -5,3 +5,9 @@ node_modules/
 out/
 .DS_Store
 *.pem
+-e 
+# Next.js generated
+next-env.d.ts
+
+# TypeScript incremental build cache
+*.tsbuildinfo
