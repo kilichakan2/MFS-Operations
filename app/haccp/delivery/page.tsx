@@ -24,6 +24,7 @@ interface Delivery  {
   temperature_c:        number
   temp_status:          string
   covered_contaminated: string
+  corrective_action_required: boolean
   contamination_notes:  string | null
   notes:                string | null
   born_in:              string | null
@@ -271,6 +272,144 @@ function CCAPopup({ tempStatus, contaminated, onConfirm, onBack }: {
   )
 }
 
+// ─── Delivery Detail Sheet ────────────────────────────────────────────────────
+
+function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
+  const bornLabel   = COUNTRIES.find((c) => c.code === d.born_in)?.label   ?? d.born_in
+  const rearedLabel = COUNTRIES.find((c) => c.code === d.reared_in)?.label ?? d.reared_in
+  const catLabel    = CATEGORIES.find((c) => c.key === d.product_category)
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end" style={{ position: 'fixed' }}>
+      <div className="bg-white rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100 sticky top-0 bg-white">
+          <div className="flex items-center gap-2">
+            {d.delivery_number && (
+              <span className="text-xs font-bold bg-slate-900 text-white px-2 py-0.5 rounded font-mono flex-shrink-0">#{d.delivery_number}</span>
+            )}
+            <h2 className="text-slate-900 font-bold text-lg">{d.supplier}</h2>
+          </div>
+          <button onClick={onClose}
+            className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-all">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 pb-8">
+
+          {/* Batch number — prominent */}
+          {d.batch_number && (
+            <div className="bg-slate-900 rounded-xl px-4 py-3">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
+              <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
+            </div>
+          )}
+
+          {/* Temperature */}
+          <div className={`rounded-xl px-4 py-3 border ${
+            d.temp_status === 'pass'   ? 'bg-green-50 border-green-200' :
+            d.temp_status === 'urgent' ? 'bg-amber-50 border-amber-200' :
+                                         'bg-red-50 border-red-200'
+          }`}>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature — CCP 1</p>
+            <div className="flex items-center justify-between">
+              <p className={`text-2xl font-bold font-mono ${
+                d.temp_status === 'pass'   ? 'text-green-700' :
+                d.temp_status === 'urgent' ? 'text-amber-700' : 'text-red-700'
+              }`}>{d.temperature_c}°C</p>
+              <span className={`text-xs font-bold px-3 py-1 rounded-full ${STATUS_BADGE[d.temp_status]}`}>
+                {STATUS_LABEL[d.temp_status]}
+              </span>
+            </div>
+            {catLabel && <p className="text-slate-500 text-xs mt-1">{catLabel.label} · limit {catLabel.limit}</p>}
+          </div>
+
+          {/* Two-column grid */}
+          <div className="grid grid-cols-2 gap-3">
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Slaughter site</p>
+              <p className="text-slate-900 font-mono font-bold text-sm">{d.slaughter_site ?? '—'}</p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Cut site</p>
+              <p className="text-slate-900 font-mono font-bold text-sm">
+                {d.cut_site
+                  ? d.cut_site === d.slaughter_site ? <span className="font-sans font-normal text-slate-500 text-xs">Same</span> : d.cut_site
+                  : '—'}
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Born in</p>
+              <p className="text-slate-900 font-semibold text-sm">{bornLabel ?? '—'}</p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Reared in</p>
+              <p className="text-slate-900 font-semibold text-sm">
+                {d.reared_in
+                  ? d.reared_in === d.born_in ? <span className="text-slate-500 font-normal text-xs">Same</span> : rearedLabel
+                  : '—'}
+              </p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Time</p>
+              <p className="text-slate-900 font-semibold text-sm">{deliveryTime(d.time_of_delivery)}</p>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Logged by</p>
+              <p className="text-slate-900 font-semibold text-sm truncate">{d.users?.name ?? '—'}</p>
+            </div>
+
+          </div>
+
+          {/* Product */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Product</p>
+            <p className="text-slate-900 text-sm font-medium">{d.product}</p>
+            <p className="text-slate-500 text-xs mt-0.5">{catLabel?.label ?? d.product_category}</p>
+          </div>
+
+          {/* Contamination */}
+          {d.covered_contaminated !== 'no' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">
+                Contamination — {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}
+              </p>
+              {d.contamination_notes && (
+                <p className="text-slate-700 text-xs leading-relaxed">{d.contamination_notes}</p>
+              )}
+            </div>
+          )}
+
+          {/* Corrective action required */}
+          {d.corrective_action_required && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective action required</p>
+              <p className="text-slate-600 text-xs leading-relaxed">A temperature deviation or contamination issue was recorded. Corrective action was documented at time of logging.</p>
+            </div>
+          )}
+
+          {/* Notes */}
+          {d.notes && (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Notes</p>
+              <p className="text-slate-700 text-xs leading-relaxed">{d.notes}</p>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DeliveryPage() {
@@ -297,9 +436,10 @@ export default function DeliveryPage() {
   const [notes,      setNotes]      = useState('')
 
   // UI state
-  const [showNumpad,  setShowNumpad]  = useState(false)
-  const [showCCA,     setShowCCA]     = useState(false)
-  const [showQuick,   setShowQuick]   = useState(false)
+  const [showNumpad,       setShowNumpad]       = useState(false)
+  const [showCCA,          setShowCCA]          = useState(false)
+  const [showQuick,        setShowQuick]        = useState(false)
+  const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null)
   const [submitting,  setSubmitting]  = useState(false)
   const [submitErr,   setSubmitErr]   = useState('')
   const [flash,       setFlash]       = useState(false)
@@ -802,28 +942,34 @@ export default function DeliveryPage() {
           ) : (
             <div className="space-y-2">
               {deliveries.map((d) => (
-                <div key={d.id} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                <button key={d.id}
+                  onClick={() => setSelectedDelivery(d)}
+                  className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-left transition-all hover:border-slate-300 hover:shadow-sm active:scale-[0.99]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         {d.delivery_number && (
-                          <span className="text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono">#{d.delivery_number}</span>
+                          <span className="text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono flex-shrink-0">#{d.delivery_number}</span>
                         )}
-                        <p className="text-slate-900 font-semibold text-sm">{d.supplier}</p>
+                        <p className="text-slate-900 font-semibold text-sm truncate">{d.supplier}</p>
                       </div>
-                      <p className="text-slate-500 text-xs mt-0.5">{d.product} · {CATEGORY_LABELS[d.product_category] ?? d.product_category}</p>
+                      <p className="text-slate-500 text-xs mt-0.5 truncate">{d.product} · {CATEGORY_LABELS[d.product_category] ?? d.product_category}</p>
                       {d.batch_number && (
                         <p className="text-slate-800 text-xs mt-0.5 font-mono font-bold tracking-wider">{d.batch_number}</p>
                       )}
-                      {(d.born_in || d.cut_site) && (
-                        <p className="text-slate-400 text-[10px] mt-0.5">
-                          {d.born_in && <>Born: {COUNTRIES.find((c) => c.code === d.born_in)?.label ?? d.born_in}</>}
-                          {d.reared_in && d.reared_in !== d.born_in && <> · Reared: {COUNTRIES.find((c) => c.code === d.reared_in)?.label ?? d.reared_in}</>}
-                          {d.cut_site && d.cut_site !== d.slaughter_site && ` · Cut: ${d.cut_site}`}
-                        </p>
-                      )}
+                      <div className="flex flex-wrap gap-x-3 mt-0.5">
+                        {d.slaughter_site && (
+                          <p className="text-slate-400 text-[10px]">Slaughter: <span className="font-mono font-bold text-slate-600">{d.slaughter_site}</span></p>
+                        )}
+                        {d.born_in && (
+                          <p className="text-slate-400 text-[10px]">
+                            Born: {COUNTRIES.find((c) => c.code === d.born_in)?.label ?? d.born_in}
+                            {d.reared_in && d.reared_in !== d.born_in && <> · Reared: {COUNTRIES.find((c) => c.code === d.reared_in)?.label ?? d.reared_in}</>}
+                          </p>
+                        )}
+                      </div>
                       {d.covered_contaminated !== 'no' && (
-                        <p className="text-amber-600 text-xs mt-1">Contamination {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}</p>
+                        <p className="text-amber-600 text-xs mt-1">⚠ Contamination {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}</p>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
@@ -831,9 +977,10 @@ export default function DeliveryPage() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_BADGE[d.temp_status] ?? 'bg-slate-100 text-slate-400'}`}>
                         {STATUS_LABEL[d.temp_status] ?? d.temp_status} · {d.temperature_c}°C
                       </span>
+                      <svg className="w-3.5 h-3.5 text-slate-300 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -841,7 +988,13 @@ export default function DeliveryPage() {
 
       </div>
 
-      {/* Numpad */}
+      {/* Delivery detail sheet */}
+      {selectedDelivery && (
+        <DeliveryDetail
+          d={selectedDelivery}
+          onClose={() => setSelectedDelivery(null)}
+        />
+      )}
       {showNumpad && (
         <Numpad value={tempVal} onChange={setTempVal} onClose={() => setShowNumpad(false)} category={category} />
       )}
