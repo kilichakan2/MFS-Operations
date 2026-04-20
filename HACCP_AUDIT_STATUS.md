@@ -92,11 +92,33 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 
 ---
 
+## Document Control
+
+- [ ] **Document Control Register itself is stale** (reprint as V1.1)
+  Register V1.0 (Nov 2025) lists HB-001 V4.0, MF-001 V4.0, CA-001 V1.0 —
+  the actual documents in use are V4.1 / V4.1 / V1.1. Version History Log
+  and Annual Review Sign-Off tables are both blank. Needs updated reprint
+  with version bumps logged and at least one review sign-off recorded.
+
+- [ ] **Reconcile `haccp_documents` app tables against paper register**
+  App has `haccp_documents`, `haccp_document_versions`, `haccp_document_reviews`.
+  Need to verify rows match the Document Control Register exactly and that
+  the `/haccp/documents` screen shows the correct current versions.
+
+- [ ] **Source docs still outstanding for upcoming audits:**
+  - `MMP-001` HACCP Policy — Mince & Meat Preparations (needed for CCP-M / CCP-MP audit)
+  - `MMP-HA-001` M&MP Hazard Analysis & Flowchart (needed for CCP-M / CCP-MP audit)
+  - `MMP-MF-001` Mince & Meat Preparations Monitoring Forms (needed for CCP-M / CCP-MP audit)
+  - `HM-001` Health Monitoring Forms (needed for SOP 8 People)
+
+---
+
 ## Reference documents
 
 - `HACCP_Policy_Handbook_V4_1.docx` — in project knowledge
 - `HACCP_Checklists_Monitoring_Forms_V4_1.pdf` — uploaded 2026-04-20
 - `HACCP_Checklists_-_Corrective_Actions_Reference_V1_1.docx` (CA-001) — uploaded 2026-04-20
+- `MFS_Document_Control_Register_V1_0.docx` — uploaded 2026-04-20
 
 ## Session log
 
