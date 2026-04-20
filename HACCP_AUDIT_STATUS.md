@@ -96,6 +96,14 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
     / SOP3 action lists (~6 issue types). Estimated 90 min once scoped.
   - [ ] **B7. DB-driven CCP 3 limits** (deferred — 4°C/12°C are fixed
     legal limits under EC 853/2004, unlikely to change)
+
+- [~] **CCP 1 — Goods In / Delivery Intake** (`/haccp/delivery`)
+  — audit complete, implementation pending. See dedicated plan in
+  **`HACCP_CCP1_AUDIT.md`** at repo root. Summary: 18 findings across
+  4 severities + 5 enhancement ideas. 3 blockers (CCA popup not writing
+  to DB, supplier_id never populated, contamination not classified per
+  CA-001). Three open questions for Hakan before starting Phase C.
+
 - [ ] **CCP-M / CCP-MP — Mince & Meat Prep** (`/haccp/mince`) — audit + CA wire-up
 
 ## SOPs
@@ -156,4 +164,4 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 
 ## Session log
 
-- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units. A3 (server-derived unit_type) + A4 (today-only date guard) complete. A6 (DB-driven thresholds) complete. **CCP 2 Phase A fully closed out.** CCP 3 audit started. B1 + B2 (unique indexes), B3 + B4 (today-only guards), B5 (temps CCA wiring) and B6 quick-version (diary CA writes) all complete. B6 full structured version deferred to follow-up.
+- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units. A3 (server-derived unit_type) + A4 (today-only date guard) complete. A6 (DB-driven thresholds) complete. **CCP 2 Phase A fully closed out.** CCP 3 audit started. B1 + B2 (unique indexes), B3 + B4 (today-only guards), B5 (temps CCA wiring) and B6 quick-version (diary CA writes) all complete. B6 full structured version deferred to follow-up. **CCP 3 Phase B closed out.** CCP 1 audit complete — findings + phased plan written to `HACCP_CCP1_AUDIT.md`. No code changes yet; awaiting decisions on 3 open questions.
