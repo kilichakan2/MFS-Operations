@@ -158,20 +158,140 @@ function Numpad({ value, onChange, onClose, unitName, unitType }: {
 
 // ─── CCA Popup ────────────────────────────────────────────────────────────────
 
+type CAPayload = {
+  cause:       string
+  action:      string
+  disposition: string
+  recurrence:  string
+  notes:       string
+}
+
+const CAUSE_OPTIONS = [
+  'Door left open',
+  'Unit overloaded',
+  'Seal damaged',
+  'Equipment failure',
+  'Power interruption',
+  'Other',
+]
+
+const RECURRENCE_OPTIONS = [
+  'Retrain staff on door discipline',
+  'Schedule maintenance check',
+  'Reduce loading limit',
+  'Replace door seal',
+  'Install temperature alarm',
+  'Other',
+]
+
+const DISPOSITION_OPTIONS = ['Accept', 'Conditional accept', 'Assess', 'Reject', 'Dispose']
+
+/**
+ * Action list per CA-001. Equipment failure cause overrides the status-based
+ * list with the dedicated equipment-failure action set.
+ */
+function getActionList(
+  cause: string,
+  worstStatus: TempStatus,
+  worstUnitType: string,
+): string[] {
+  if (cause === 'Equipment failure') {
+    return [
+      'Document time of failure discovery',
+      'Transfer products to backup refrigeration',
+      'Estimate time product was at elevated temperature',
+      'Contact refrigeration engineer',
+      'Assess each product individually (if >2h above limit)',
+      'Complete equipment failure log',
+    ]
+  }
+  if (worstUnitType === 'freezer') {
+    if (worstStatus === 'critical') {
+      return [
+        'Assess product for thawing (ice crystal formation, texture)',
+        'Transfer to functioning freezer',
+        'Do NOT refreeze if product has thawed',
+      ]
+    }
+    return [
+      'Keep door closed',
+      'Check for ice build-up on coils',
+      'Acceptable short-term if product re-frozen immediately',
+    ]
+  }
+  if (worstUnitType === 'room') {
+    if (worstStatus === 'critical') {
+      return [
+        'Stop bringing product into room',
+        'Return all product to chilled storage immediately',
+        'Investigate cooling failure',
+        'Do not resume production until <12°C',
+      ]
+    }
+    return [
+      'Investigate cooling cause (A/C, cooling unit)',
+      'Bring product in small quantities only',
+      'Monitor core temperatures closely',
+    ]
+  }
+  // chiller
+  if (worstStatus === 'critical') {
+    return [
+      'Minimise door openings',
+      'Transfer all product to backup unit immediately',
+      'Probe individual products to assess core temperature',
+      'Segregate any product >8°C for assessment',
+      'Contact refrigeration engineer urgently',
+      'Assess all product for safety before release',
+    ]
+  }
+  return [
+    'Check door seals and closure',
+    'Verify unit not overloaded / reduce loading',
+    'Recheck temperature within 30 minutes',
+    'Transfer product to backup chiller',
+    'Call refrigeration engineer',
+  ]
+}
+
 function CCAPopup({ deviations, onSubmit, onBack }: {
   deviations: { name: string; temp: number; status: TempStatus; unitType: string }[]
-  onSubmit:   (action: string, disposition: string, notes: string) => void
+  onSubmit:   (ca: CAPayload) => void
   onBack:     () => void
 }) {
-  const [action,      setAction]      = useState('')
-  const [disposition, setDisposition] = useState('')
-  const [notes,       setNotes]       = useState('')
+  const [cause,           setCause]           = useState('')
+  const [causeOther,      setCauseOther]      = useState('')
+  const [action,          setAction]          = useState('')
+  const [disposition,     setDisposition]     = useState('')
+  const [recurrence,      setRecurrence]      = useState('')
+  const [recurrenceOther, setRecurrenceOther] = useState('')
+  const [notes,           setNotes]           = useState('')
 
-  const worst = deviations.find((d) => d.status === 'critical') ?? deviations[0]
+  const worst       = deviations.find((d) => d.status === 'critical') ?? deviations[0]
+  const worstStatus = worst?.status ?? 'amber'
+  const worstType   = worst?.unitType ?? 'chiller'
 
-  const actions = worst?.status === 'critical'
-    ? ['Transfer all product to backup unit immediately', 'Call refrigeration engineer', 'Probe individual product temperatures', 'Segregate affected product for assessment']
-    : ['Check door seals and closure', 'Reduce loading / check not overloaded', 'Recheck temperature in 30 minutes', 'Transfer product to backup unit', 'Call refrigeration engineer']
+  const actions = getActionList(cause, worstStatus, worstType)
+
+  // If cause changes and the currently-picked action is no longer in the list, clear it
+  useEffect(() => {
+    if (action && !actions.includes(action)) setAction('')
+  }, [cause]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const finalCause      = cause === 'Other'      ? causeOther.trim()      : cause
+  const finalRecurrence = recurrence === 'Other' ? recurrenceOther.trim() : recurrence
+
+  const canSubmit = Boolean(finalCause && action && disposition && finalRecurrence)
+
+  function handleConfirm() {
+    onSubmit({
+      cause:       finalCause,
+      action,
+      disposition,
+      recurrence:  finalRecurrence,
+      notes:       notes.trim(),
+    })
+  }
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-end justify-center" style={{ position: 'fixed' }}>
@@ -197,22 +317,46 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
         </div>
 
         <div className="space-y-4">
+          {/* Cause */}
           <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Action taken</label>
-            <div className="space-y-2">
-              {actions.map((a) => (
-                <button key={a} onClick={() => setAction(a)}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ${
-                    action === a ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-600'
-                  }`}>{a}</button>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Cause of deviation</label>
+            <div className="grid grid-cols-2 gap-2">
+              {CAUSE_OPTIONS.map((c) => (
+                <button key={c} onClick={() => setCause(c)}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border ${
+                    cause === c ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                  }`}>{c}</button>
               ))}
             </div>
+            {cause === 'Other' && (
+              <input type="text" value={causeOther} onChange={(e) => setCauseOther(e.target.value)}
+                placeholder="Describe the cause…"
+                className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+            )}
           </div>
 
+          {/* Action taken */}
+          <div>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Action taken</label>
+            {!cause ? (
+              <p className="text-xs text-slate-400 italic px-1">Select a cause first to see relevant actions.</p>
+            ) : (
+              <div className="space-y-2">
+                {actions.map((a) => (
+                  <button key={a} onClick={() => setAction(a)}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ${
+                      action === a ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-600'
+                    }`}>{a}</button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Product disposition */}
           <div>
             <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
             <div className="grid grid-cols-3 gap-2">
-              {['Accept', 'Conditional accept', 'Assess', 'Reject', 'Dispose'].map((d) => (
+              {DISPOSITION_OPTIONS.map((d) => (
                 <button key={d} onClick={() => setDisposition(d)}
                   className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${
                     disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
@@ -221,6 +365,25 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
             </div>
           </div>
 
+          {/* Recurrence prevention */}
+          <div>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Recurrence prevention</label>
+            <div className="grid grid-cols-1 gap-2">
+              {RECURRENCE_OPTIONS.map((r) => (
+                <button key={r} onClick={() => setRecurrence(r)}
+                  className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                    recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                  }`}>{r}</button>
+              ))}
+            </div>
+            {recurrence === 'Other' && (
+              <input type="text" value={recurrenceOther} onChange={(e) => setRecurrenceOther(e.target.value)}
+                placeholder="Describe the prevention measure…"
+                className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+            )}
+          </div>
+
+          {/* Notes */}
           <div>
             <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
@@ -228,8 +391,8 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
               className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
-          <button onClick={() => onSubmit(action, disposition, notes)}
-            disabled={!action || !disposition}
+          <button onClick={handleConfirm}
+            disabled={!canSubmit}
             className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
             Confirm corrective action &amp; submit
           </button>
@@ -332,10 +495,10 @@ export default function ColdStoragePage() {
 
   const handleSubmitAttempt = useCallback(() => {
     if (deviations.length > 0) { setShowCCA(true); return }
-    doSubmit('', '', '')
+    doSubmit(null)
   }, [deviations])
 
-  const doSubmit = useCallback(async (action: string, disposition: string, notes: string) => {
+  const doSubmit = useCallback(async (ca: CAPayload | null) => {
     setSubmitting(true)
     setShowCCA(false)
     try {
@@ -347,9 +510,16 @@ export default function ColdStoragePage() {
       const res = await fetch('/api/haccp/cold-storage', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ session, date, readings, comments }),
+        body:    JSON.stringify({ session, date, readings, comments, corrective_action: ca }),
       })
       if (res.ok) {
+        const d = await res.json()
+        if (d.ca_write_failed) {
+          // Readings saved but CA row(s) didn't — don't silently succeed
+          setSubmitError('Readings saved, but corrective action record failed. Please notify admin.')
+          setSubmitting(false)
+          return
+        }
         setSubmitted(true)
         setTimeout(() => { window.location.href = '/haccp' }, 2000)
       } else {
