@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const [deliveries, suppliers] = await Promise.all([
       supabase
         .from('haccp_deliveries')
-        .select('id, date, time_of_delivery, supplier, product, product_category, temperature_c, temp_status, covered_contaminated, contamination_notes, notes, submitted_at, users!inner(name)')
+        .select('id, date, time_of_delivery, supplier, product, product_category, temperature_c, temp_status, covered_contaminated, contamination_notes, notes, country_of_origin, slaughter_site, batch_number, submitted_at, users!inner(name)')
         .eq('date', today)
         .order('submitted_at', { ascending: false }),
       supabase
@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
     const {
       supplier, product, product_category, temperature_c,
       covered_contaminated, contamination_notes, notes,
+      country_of_origin, slaughter_site, batch_number,
     } = body as {
       supplier:             string
       product:              string
@@ -91,6 +92,9 @@ export async function POST(req: NextRequest) {
       covered_contaminated: string
       contamination_notes?: string
       notes?:               string
+      country_of_origin?:   string
+      slaughter_site?:      string
+      batch_number?:        string
     }
 
     if (!supplier?.trim())          return NextResponse.json({ error: 'Supplier is required' },          { status: 400 })
@@ -115,6 +119,9 @@ export async function POST(req: NextRequest) {
       contamination_notes:    contamination_notes?.trim() || null,
       corrective_action_required,
       notes:                  notes?.trim() || null,
+      country_of_origin:      country_of_origin?.trim() || null,
+      slaughter_site:         slaughter_site?.trim() || null,
+      batch_number:           batch_number?.trim() || null,
     })
 
     if (error) {

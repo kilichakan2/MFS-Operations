@@ -26,6 +26,9 @@ interface Delivery  {
   covered_contaminated: string
   contamination_notes:  string | null
   notes:                string | null
+  country_of_origin:    string | null
+  slaughter_site:       string | null
+  batch_number:         string | null
   submitted_at:         string
   users:                { name: string }
 }
@@ -41,6 +44,24 @@ const CATEGORIES: { key: string; label: string; limit: string; detail: string }[
 
 const CATEGORY_LABELS: Record<string, string> = {
   red_meat:   'Red meat', offal: 'Offal', mince_prep: 'Mince / prep', frozen: 'Frozen',
+}
+
+// Country of origin options + ISO codes for batch number
+const COUNTRIES = [
+  { label: 'Ireland',     code: 'IRL' },
+  { label: 'UK',          code: 'UK'  },
+  { label: 'Australia',   code: 'AUS' },
+  { label: 'New Zealand', code: 'NZL' },
+  { label: 'Brazil',      code: 'BRA' },
+]
+
+// Generate batch number: DDMM-{COUNTRY_CODE}-{SLAUGHTER_SITE}
+function buildBatchNumber(date: string, countryCode: string, slaughterSite: string): string {
+  if (!date || !countryCode || !slaughterSite.trim()) return ''
+  const d   = new Date(date + 'T00:00:00')
+  const dd  = String(d.getDate()).padStart(2, '0')
+  const mm  = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}${mm}-${countryCode}-${slaughterSite.trim()}`
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -263,6 +284,8 @@ export default function DeliveryPage() {
   const [contam,     setContam]     = useState('')
   const [contamType, setcontamType] = useState('')   // sub-type when yes_actioned
   const [contamNote, setContamNote] = useState('')
+  const [country,    setCountry]    = useState('')
+  const [slaughter,  setSlaughter]  = useState('')
   const [notes,      setNotes]      = useState('')
 
   // UI state
@@ -306,6 +329,7 @@ export default function DeliveryPage() {
     setSupplierSel(''); setSupplierOther(''); setProduct('')
     setCategory(''); setTempVal(''); setContam('')
     setcontamType(''); setContamNote(''); setNotes(''); setSubmitErr('')
+    setCountry(''); setSlaughter('')
   }
 
   async function doSubmit() {
@@ -319,6 +343,14 @@ export default function DeliveryPage() {
           covered_contaminated: contam,
           contamination_notes: contamNote || undefined,
           notes: notes || undefined,
+          country_of_origin: country || undefined,
+          slaughter_site:    slaughter || undefined,
+          batch_number:      country && slaughter
+            ? buildBatchNumber(
+                new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }),
+                country, slaughter
+              )
+            : undefined,
         }),
       })
       if (res.ok) {
@@ -423,6 +455,52 @@ export default function DeliveryPage() {
                   className="w-full bg-slate-100 border border-amber-400 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]" />
               )}
             </div>
+
+            {/* Country of origin */}
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Country of origin</p>
+              <div className="flex flex-wrap gap-2">
+                {COUNTRIES.map((c) => (
+                  <button key={c.code}
+                    onPointerDown={(e) => { e.preventDefault(); setCountry(c.code) }}
+                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      country === c.code
+                        ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
+                        : 'border-slate-300 bg-white text-slate-600'
+                    }`}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Slaughter site */}
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Slaughter site code</p>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={slaughter}
+                onChange={(e) => setSlaughter(e.target.value.replace(/[^0-9]/g, ''))}
+                placeholder="e.g. 1234"
+                maxLength={8}
+                className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
+            </div>
+
+            {/* Batch number — auto-generated, shown as soon as country + slaughter filled */}
+            {country && slaughter && (
+              <div className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3">
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">Batch reference (auto-generated)</p>
+                <p className="text-white text-lg font-bold font-mono tracking-widest">
+                  {buildBatchNumber(
+                    new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }),
+                    country,
+                    slaughter
+                  )}
+                </p>
+                <p className="text-slate-500 text-[10px] mt-1">DDMM · country code · slaughter site</p>
+              </div>
+            )}
 
             {/* Product description */}
             <div>
@@ -630,9 +708,15 @@ export default function DeliveryPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-slate-900 font-semibold text-sm">{d.supplier}</p>
-                      <p className="text-slate-400 text-xs mt-0.5">{d.product} · {CATEGORY_LABELS[d.product_category] ?? d.product_category}</p>
+                      <p className="text-slate-500 text-xs mt-0.5">{d.product} · {CATEGORY_LABELS[d.product_category] ?? d.product_category}</p>
+                      {d.batch_number && (
+                        <p className="text-slate-800 text-xs mt-0.5 font-mono font-bold tracking-wider">{d.batch_number}</p>
+                      )}
+                      {d.country_of_origin && (
+                        <p className="text-slate-400 text-[10px] mt-0.5">{COUNTRIES.find((c) => c.code === d.country_of_origin)?.label ?? d.country_of_origin}</p>
+                      )}
                       {d.covered_contaminated !== 'no' && (
-                        <p className="text-[#EB6619] text-xs mt-1">Contamination {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}</p>
+                        <p className="text-amber-600 text-xs mt-1">Contamination {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}</p>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
