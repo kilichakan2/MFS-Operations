@@ -61,7 +61,41 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 ## Other CCPs — full audit still to do
 
 - [ ] **CCP 1 — Receipt / Goods In** (`/haccp/delivery`) — audit + CA wire-up
-- [ ] **CCP 3 — Processing Room** (`/haccp/process-room`) — audit + CA wire-up; absorb Process Room reading once A5 is done
+- [x] **CCP 3 — Processing Room** (`/haccp/process-room`) — Phase B complete
+
+  - [x] **B1. Unique index `(date, session)` on `haccp_processing_temps`**
+    `idx_haccp_pt_unique` applied. One temperature session per day. API
+    converts Postgres 23505 into a clean 409 "already submitted for today".
+    _Merged 2026-04-20._
+  - [x] **B2. Unique index `(date, phase)` on `haccp_daily_diary`**
+    `idx_haccp_dd_unique` applied. One diary phase (opening/operational/
+    closing) per day. Clean 409 on duplicate. _Merged 2026-04-20._
+  - [x] **B3. Temps POST — today-only date guard**
+    Server rejects any date != today (Europe/London) with 400. Historical
+    dates still viewable via GET date picker. _Merged 2026-04-20._
+  - [x] **B4. Diary POST — today-only date guard**
+    Same pattern as B3 for the diary path. _Merged 2026-04-20._
+  - [x] **B5. Temps CCA popup wired to `haccp_corrective_actions`**
+    Popup captures cause, action (CA-001 verbatim, switches by cause +
+    breached channel), disposition, recurrence prevention, notes. One CA
+    row per breached channel (product and/or room — up to 2 rows per
+    submission), linked via `source_id`. `ccp_ref='CCP3'`.
+    `management_verification_required=true` for any product breach or
+    room >15°C. _Merged 2026-04-20._
+  - [x] **B6. Diary issues write CA rows (quick version)**
+    When issues=true, one CA row is written per failed check item.
+    `source_table='haccp_daily_diary'`, `ccp_ref='SOP1-{phase}'`.
+    `action_taken` carries the `what_did_you_do` free text.
+    `product_disposition` and `recurrence_prevention` left null in this
+    quick version. _Merged 2026-04-20._
+
+  - [ ] **B6 follow-up — structured diary CA (revisit)**
+    Current quick version does not capture structured cause, disposition,
+    or recurrence prevention for diary issues. Full version needs an
+    action-picker UI per failed check item mapped to CA-001's SOP1 / SOP2
+    / SOP3 action lists (~6 issue types). Estimated 90 min once scoped.
+  - [ ] **B7. DB-driven CCP 3 limits** (deferred — 4°C/12°C are fixed
+    legal limits under EC 853/2004, unlikely to change)
 - [ ] **CCP-M / CCP-MP — Mince & Meat Prep** (`/haccp/mince`) — audit + CA wire-up
 
 ## SOPs
@@ -83,8 +117,8 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 
 - [ ] Restore unique constraints dropped for testing:
   - ~~`haccp_cold_storage_temps`~~ (done — A1)
-  - `haccp_processing_temps (date, session)`
-  - `haccp_daily_diary (date, phase, submitted_by)`
+  - ~~`haccp_processing_temps (date, session)`~~ (done — B1)
+  - ~~`haccp_daily_diary (date, phase, submitted_by)`~~ (done — B2, scoped to `(date, phase)` per design call)
 - [ ] Add species constraint to `haccp_mince_log` (first delete `TEST-BATCH-001`)
 - [ ] Remove all remaining test/dummy records
 - [ ] Export function (PDF/CSV for FSA inspectors)
@@ -122,4 +156,4 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 
 ## Session log
 
-- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units. A3 (server-derived unit_type) + A4 (today-only date guard) complete. A6 (DB-driven thresholds) complete. **CCP 2 Phase A fully closed out.**
+- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units. A3 (server-derived unit_type) + A4 (today-only date guard) complete. A6 (DB-driven thresholds) complete. **CCP 2 Phase A fully closed out.** CCP 3 audit started. B1 + B2 (unique indexes), B3 + B4 (today-only guards), B5 (temps CCA wiring) and B6 quick-version (diary CA writes) all complete. B6 full structured version deferred to follow-up.
