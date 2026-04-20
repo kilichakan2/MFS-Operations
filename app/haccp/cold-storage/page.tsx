@@ -15,7 +15,7 @@ import { useState, useEffect, useCallback } from 'react'
 interface StorageUnit {
   id:            string
   name:          string
-  unit_type:     'chiller' | 'freezer' | 'room'
+  unit_type:     'chiller' | 'freezer'
   target_temp_c: number
   max_temp_c:    number
 }
@@ -39,11 +39,6 @@ function getTempStatus(temp: number, unitType: string): TempStatus {
     if (temp <= -15) return 'amber'
     return 'critical'
   }
-  if (unitType === 'room') {
-    if (temp <= 12) return 'pass'
-    if (temp <= 15) return 'amber'
-    return 'critical'
-  }
   // chiller: ≤5 pass, 5–8 amber, >8 critical (CA-001)
   if (temp <= 5)  return 'pass'
   if (temp <= 8)  return 'amber'
@@ -53,8 +48,6 @@ function getTempStatus(temp: number, unitType: string): TempStatus {
 function getCorrectiveAction(status: TempStatus, unitType: string): string {
   if (status === 'amber' && unitType === 'freezer') return 'Keep door closed. Check for ice build-up on coils. Monitor closely. Acceptable short-term if product is re-frozen immediately.'
   if (status === 'critical' && unitType === 'freezer') return 'Assess product for thawing — check ice crystal formation and texture. Transfer to a functioning freezer. Do NOT refreeze if product has already thawed.'
-  if (status === 'amber' && unitType === 'room') return 'Room temperature rising above 12°C. Investigate cause — check air conditioning and cooling unit. Bring product to production area in small quantities only. Monitor product core temperatures closely.'
-  if (status === 'critical' && unitType === 'room') return 'CRITICAL: Room temperature above 15°C. Stop bringing product in. Return all product to chilled storage immediately. Do not resume production until cooling failure is resolved and temperature is back below 12°C.'
   if (status === 'amber') return 'Check door seals and closure. Verify unit is not overloaded. Reduce loading if necessary. Recheck within 30 minutes. Transfer product to backup chiller if temperature is still rising. Call refrigeration engineer.'
   if (status === 'critical') return 'CRITICAL: Minimise door openings immediately. Transfer ALL product to backup refrigeration unit. Probe individual product temperatures. Contact refrigeration engineer urgently. Segregate any product above 8°C for safety assessment. Supervisor sign-off required.'
   return ''
@@ -217,21 +210,6 @@ function getActionList(
       'Keep door closed',
       'Check for ice build-up on coils',
       'Acceptable short-term if product re-frozen immediately',
-    ]
-  }
-  if (worstUnitType === 'room') {
-    if (worstStatus === 'critical') {
-      return [
-        'Stop bringing product into room',
-        'Return all product to chilled storage immediately',
-        'Investigate cooling failure',
-        'Do not resume production until <12°C',
-      ]
-    }
-    return [
-      'Investigate cooling cause (A/C, cooling unit)',
-      'Bring product in small quantities only',
-      'Monitor core temperatures closely',
     ]
   }
   // chiller
@@ -617,9 +595,7 @@ export default function ColdStoragePage() {
                 <div>
                   <p className="text-slate-900 font-semibold text-base">{unit.name}</p>
                   <p className="text-slate-400 text-xs mt-0.5">
-                    {unit.unit_type === 'freezer' ? 'Target ≤-18°C' :
-                     unit.unit_type === 'room'    ? 'Room ambient · Max 12°C' :
-                                                   'Target ≤5°C · Max 8°C'}
+                    {unit.unit_type === 'freezer' ? 'Target ≤-18°C' : 'Target ≤5°C · Max 8°C'}
                     {existing_session ? ' · Already recorded' : ''}
                   </p>
                 </div>
@@ -716,14 +692,6 @@ export default function ColdStoragePage() {
                   <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤5°C — Pass</span></div>
                   <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-slate-600">5–8°C — Amber: check seals, recheck in 30 min</span></div>
                   <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;8°C — Critical: transfer all product, call engineer</span></div>
-                </div>
-              </div>
-              <div className="bg-white rounded-xl p-4">
-                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Process Room (ambient)</p>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤12°C — Pass</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-slate-600">12–15°C — Amber: investigate cooling</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;15°C — Critical: stop loading, return product to storage</span></div>
                 </div>
               </div>
               <div className="bg-white rounded-xl p-4">

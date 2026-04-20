@@ -29,10 +29,12 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 - [ ] **A4. Reject POSTs where `date != today UK`**
   HACCP records must be immutable after-the-fact.
 
-- [ ] **A5. Retire Process Room from `haccp_cold_storage_units`**
-  Belongs in CCP 3, currently double-logged under two CCPs.
-  DB: `UPDATE haccp_cold_storage_units SET active=false WHERE name='Process Room'`.
-  Code: remove `unit_type='room'` handling from route.ts + page.tsx + Quick Ref.
+- [x] **A5. Retire Process Room from `haccp_cold_storage_units`**
+  Process Room deactivated in CCP 2; stays in CCP 3 where it belongs.
+  All `unit_type='room'` handling stripped from route.ts, page.tsx,
+  `getCorrectiveAction()`, `getActionList()`, unit tile target line,
+  and Quick Ref panel. CCP 2 now covers 4 units: Lamb, Dispatch, Dairy
+  Fridges + Freezer. _Merged 2026-04-20._
 
 - [ ] **A6. Drive chiller thresholds from `unit.max_temp_c`**
   Currently hardcoded — changing `max_temp_c` in DB has no effect. Also resolves
@@ -88,4 +90,4 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 
 ## Session log
 
-- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete.
+- **2026-04-20** — CCP 2 audit started. 19 April test data cleared. A2 (CCA wiring) complete and verified on prod — test submission produced 4 linked CA rows with correct mgmt_verify flags. A1 (unique index) complete. A5 (Process Room retirement) complete — CCP 2 now covers 4 units.
