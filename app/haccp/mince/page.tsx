@@ -883,11 +883,11 @@ export default function MincePage() {
                   </button>
                 </div>
 
-                {/* Deviation info — popup opens on submit */}
-                {mTempFail && !mKillHardFail && (
+                {/* Deviation info — shown only when all fields are present */}
+                {mTempFail && !mKillHardFail && mSpecies && mKillDate && mInputVal && mOutputVal && (
                   <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
-                    <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature deviation detected</p>
-                    <p className="text-slate-600 text-xs">A corrective action record will be required before this submission is saved.</p>
+                    <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature deviation — action required</p>
+                    <p className="text-slate-600 text-xs">Submit to open the corrective action form.</p>
                   </div>
                 )}
 
