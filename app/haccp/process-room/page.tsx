@@ -200,6 +200,13 @@ function Numpad({ value, onChange, onClose, label, limit }: {
 
 // ─── CCA Popup ────────────────────────────────────────────────────────────────
 
+type CAPayload = {
+  cause:       string
+  disposition: string
+  recurrence:  string
+  notes:       string
+}
+
 // ─── CA constants (Batch 4 — adaptive redesign) ──────────────────────────────
 
 const CAUSE_OPTIONS = [
