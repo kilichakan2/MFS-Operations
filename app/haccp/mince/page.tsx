@@ -85,22 +85,56 @@ type CAPayload = { cause: string; disposition: string; recurrence: string; notes
 
 type CAChannel = 'M1-input' | 'M1-output' | 'MP1-input' | 'MP1-output'
 
-const MINCE_CAUSES = [
-  'Supplier delivered above temperature',
-  'Delay in transit / vehicle issue',
-  'Insufficient chilling after delivery',
-  'Batch too large for chiller',
-  'Chiller / freezer malfunction',
-  'Other',
-]
+// Causes split by channel type — input breach ≠ output breach
+const MINCE_CAUSES_BY_CHANNEL: Record<CAChannel, string[]> = {
+  'M1-input': [
+    'Supplier delivered product above temperature',
+    'Delay in transit / vehicle breakdown',
+    'Insufficient chilling at supplier before dispatch',
+    'Product left unrefrigerated during intake process',
+    'Intake temperature probe fault',
+    'Other',
+  ],
+  'M1-output': [
+    'Insufficient chilling time after mincing',
+    'Batch too large — chiller capacity exceeded',
+    'Chiller malfunction / temperature drift',
+    'Room temperature too high during production',
+    'Mincing friction heat — batch minced too quickly',
+    'Other',
+  ],
+  'MP1-input': [
+    'Supplier delivered product above temperature',
+    'Delay in transit / vehicle breakdown',
+    'Insufficient chilling at supplier before dispatch',
+    'Product left unrefrigerated during intake process',
+    'Intake temperature probe fault',
+    'Other',
+  ],
+  'MP1-output': [
+    'Insufficient chilling time after preparation',
+    'Batch too large — chiller capacity exceeded',
+    'Chiller malfunction / temperature drift',
+    'Room temperature too high during production',
+    'Other',
+  ],
+}
 
 const MINCE_RECURRENCE_BY_CAUSE: Record<string, string[]> = {
-  'Supplier delivered above temperature': ['Raise with supplier', 'Request temperature logs on next delivery', 'Review approved supplier status', 'Other'],
-  'Delay in transit / vehicle issue':     ['Improve delivery scheduling', 'Request pre-cooled vehicles', 'Raise with supplier', 'Other'],
-  'Insufficient chilling after delivery': ['Chill immediately on receipt', 'Reduce batch sizes', 'Review intake procedure', 'Other'],
-  'Batch too large for chiller':          ['Reduce batch sizes', 'Split into smaller runs', 'Review chiller capacity', 'Other'],
-  'Chiller / freezer malfunction':        ['Contact refrigeration engineer', 'Schedule maintenance check', 'Install temperature alarm', 'Other'],
-  'Other':                                ['Review procedure', 'Retrain staff', 'Schedule maintenance check', 'Other'],
+  // Input-related causes
+  'Supplier delivered product above temperature':         ['Issue formal supplier notification', 'Request temperature records on next delivery', 'Review approved supplier status', 'Other'],
+  'Delay in transit / vehicle breakdown':                 ['Improve delivery scheduling', 'Request pre-cooled delivery vehicles', 'Review delivery SLA with supplier', 'Other'],
+  'Insufficient chilling at supplier before dispatch':    ['Issue formal supplier notification', 'Review approved supplier status', 'Request HACCP evidence from supplier', 'Other'],
+  'Product left unrefrigerated during intake process':    ['Retrain intake staff on cold chain procedure', 'Revise intake SOP — chill immediately on receipt', 'Other'],
+  'Intake temperature probe fault':                       ['Calibrate or replace probe immediately', 'Schedule regular probe calibration checks', 'Other'],
+  // Output-related causes
+  'Insufficient chilling time after mincing':             ['Increase chilling time before dispatch', 'Use blast chiller for mince output', 'Other'],
+  'Batch too large — chiller capacity exceeded':          ['Reduce batch sizes', 'Split into smaller runs', 'Review chiller capacity vs production volume', 'Other'],
+  'Chiller malfunction / temperature drift':              ['Contact refrigeration engineer immediately', 'Schedule preventive maintenance', 'Install temperature alarm', 'Other'],
+  'Room temperature too high during production':          ['Improve ventilation in production room', 'Reduce production room temperature', 'Monitor CCP3 room temp before mincing', 'Other'],
+  'Mincing friction heat — batch minced too quickly':     ['Slow down mincing process', 'Chill mince immediately post-mincing', 'Reduce batch size', 'Other'],
+  'Insufficient chilling time after preparation':         ['Increase chilling time before dispatch', 'Use blast chiller', 'Other'],
+  'Other':                                                ['Review procedure', 'Retrain staff', 'Schedule maintenance check', 'Other'],
 }
 
 // Protocol steps per channel — read-only in popup
@@ -250,11 +284,11 @@ function CCAPopup({ channels, onSubmit, onBack }: {
             </div>
           ))}
 
-          {/* Cause */}
+          {/* Cause — channel-specific */}
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
             <div className="grid grid-cols-2 gap-2">
-              {MINCE_CAUSES.map((c) => (
+              {MINCE_CAUSES_BY_CHANNEL[primary].map((c) => (
                 <button key={c} onClick={() => setCause(c)}
                   className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border ${
                     cause === c ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
