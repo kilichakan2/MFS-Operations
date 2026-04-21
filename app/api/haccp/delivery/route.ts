@@ -11,6 +11,12 @@
  *          deviation tracks (temp + contam), one CA row per active track.
  *   C8  — born_in / reared_in / slaughter_site / cut_site mandatory.
  *   fmt — batch code DDMM-CC-N (was DDMM-COUNTRY-SITE-N).
+ *
+ * Batch 3:
+ *   C6  — contamination_type required when deviation flagged.
+ *          Server derives action_taken from (temp_status × cause) and
+ *          contamination_type — not user-supplied. action field removed
+ *          from CAPayload. Cause validated against track-specific sets.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -20,9 +26,9 @@ const supabase = supabaseService
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// action is NOT in the payload — server derives it from deviation + cause
 type CAPayload = {
   cause:       string
-  action:      string
   disposition: string
   recurrence:  string
   notes?:      string
@@ -36,6 +42,92 @@ const DISPOSITION_MAP: Record<string, string> = {
   'Assess':             'assess',
   'Reject':             'reject',
   'Dispose':            'dispose',
+}
+
+// Valid causes per track — client must send one of these
+const VALID_TEMP_CAUSES = new Set([
+  'Cold chain break in transport',
+  'Inadequate pre-chilling at supplier',
+  'Vehicle refrigeration failure',
+  'Delivery delayed — product held too long',
+  'Other',
+])
+
+const VALID_CONTAM_CAUSES = new Set([
+  'Contamination during handling',
+  'Packaging damaged in transit',
+  'Supplier loading error',
+  'Missing documentation',
+  'Other',
+])
+
+const VALID_CONTAM_TYPES = new Set([
+  'uncovered', 'contaminated_faecal', 'packaging_damaged', 'missing_docs',
+])
+
+// ─── Protocol lookup (CA-001 verbatim) ────────────────────────────────────────
+
+const PROTOCOL_CONDITIONAL_ACCEPT = [
+  'Accept conditionally — do NOT reject the delivery',
+  'Place immediately into coldest chiller area',
+  'Use within reduced shelf life — halve remaining use-by',
+  'Document assessment and accelerated use decision',
+  'Review supplier performance',
+]
+
+const PROTOCOL_REJECT = [
+  'REJECT delivery immediately — do NOT accept product',
+  'Photograph product and temperature reading',
+  'Complete Non-Conformance Report',
+  'Notify supplier in writing within 24 hours',
+  'Segregate and arrange return or disposal',
+]
+
+const PROTOCOL_EQUIPMENT_FAILURE = [
+  'Verify product core temperature with calibrated probe',
+  'If within conditional limits: accept with reduced shelf life; if exceeds legal limit: REJECT',
+  'Document refrigeration failure and photograph vehicle thermometer',
+  'Report equipment failure to supplier in writing',
+  'Do not use this vehicle until fault is rectified',
+]
+
+const PROTOCOL_CONTAM: Record<string, string[]> = {
+  uncovered: [
+    'If minor exposure only: re-cover immediately, use for immediate processing only',
+    'If visible contamination or cross-contamination risk: REJECT',
+    'Document incident and notify supplier',
+  ],
+  contaminated_faecal: [
+    'Trim contaminated area using clean knife',
+    'Dispose of trimmings as Category 2/3 ABP',
+    'Sterilise knife immediately after trimming (≥82°C)',
+    'Document trimming action and disposal',
+    'If contamination excessive: REJECT entire carcase',
+  ],
+  packaging_damaged: [
+    'If seal broken on vacuum pack or visible ingress: REJECT and dispose',
+    'Minor outer damage with intact inner seal: re-pack and use immediately',
+    'Document and notify supplier',
+  ],
+  missing_docs: [
+    'Hold product in segregated area',
+    'Request traceability documents from supplier within 2 hours',
+    'If not received within 2 hours: REJECT delivery',
+  ],
+}
+
+function deriveTempAction(status: string, cause: string): string {
+  if (cause === 'Vehicle refrigeration failure') {
+    return PROTOCOL_EQUIPMENT_FAILURE.join(' | ')
+  }
+  return status === 'urgent'
+    ? PROTOCOL_CONDITIONAL_ACCEPT.join(' | ')
+    : PROTOCOL_REJECT.join(' | ')
+}
+
+function deriveContamAction(contamType: string): string {
+  const steps = PROTOCOL_CONTAM[contamType]
+  return steps ? steps.join(' | ') : 'Assess and take appropriate action per CA-001'
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -135,7 +227,7 @@ export async function POST(req: NextRequest) {
     const {
       supplier_id, supplier_name,
       product, product_category, temperature_c,
-      covered_contaminated, contamination_notes, notes,
+      covered_contaminated, contamination_type, contamination_notes, notes,
       born_in, reared_in, slaughter_site, cut_site,
       corrective_action_temp,
       corrective_action_contam,
@@ -146,6 +238,7 @@ export async function POST(req: NextRequest) {
       product_category:          string
       temperature_c:             number
       covered_contaminated:      string
+      contamination_type?:       string
       contamination_notes?:      string
       notes?:                    string
       born_in?:                  string
@@ -221,10 +314,16 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         )
       }
-      const { cause, action, disposition, recurrence } = corrective_action_temp
-      if (!cause?.trim() || !action?.trim() || !disposition?.trim() || !recurrence?.trim()) {
+      const { cause, disposition, recurrence } = corrective_action_temp
+      if (!cause?.trim() || !disposition?.trim() || !recurrence?.trim()) {
         return NextResponse.json(
           { error: 'Corrective action incomplete (temp track)' },
+          { status: 400 },
+        )
+      }
+      if (!VALID_TEMP_CAUSES.has(cause)) {
+        return NextResponse.json(
+          { error: `Invalid temperature cause: ${cause}` },
           { status: 400 },
         )
       }
@@ -237,16 +336,29 @@ export async function POST(req: NextRequest) {
     }
 
     if (hasDeviationContam) {
+      // C6: contamination_type required
+      if (!contamination_type?.trim() || !VALID_CONTAM_TYPES.has(contamination_type)) {
+        return NextResponse.json(
+          { error: 'Contamination type required (uncovered / contaminated_faecal / packaging_damaged / missing_docs)' },
+          { status: 400 },
+        )
+      }
       if (!corrective_action_contam) {
         return NextResponse.json(
           { error: 'Corrective action required for contamination deviation' },
           { status: 400 },
         )
       }
-      const { cause, action, disposition, recurrence } = corrective_action_contam
-      if (!cause?.trim() || !action?.trim() || !disposition?.trim() || !recurrence?.trim()) {
+      const { cause, disposition, recurrence } = corrective_action_contam
+      if (!cause?.trim() || !disposition?.trim() || !recurrence?.trim()) {
         return NextResponse.json(
           { error: 'Corrective action incomplete (contamination track)' },
+          { status: 400 },
+        )
+      }
+      if (!VALID_CONTAM_CAUSES.has(cause)) {
+        return NextResponse.json(
+          { error: `Invalid contamination cause: ${cause}` },
           { status: 400 },
         )
       }
@@ -285,6 +397,7 @@ export async function POST(req: NextRequest) {
         temperature_c,
         temp_status:               status,
         covered_contaminated,
+        contamination_type:        hasDeviationContam ? contamination_type!.trim() : null,
         contamination_notes:       contamination_notes?.trim() || null,
         corrective_action_required,
         notes:                     notes?.trim() || null,
@@ -317,8 +430,9 @@ export async function POST(req: NextRequest) {
       const caRows: Array<Record<string, unknown>> = []
 
       if (hasDeviationTemp && corrective_action_temp) {
-        const ca  = corrective_action_temp
-        const rec = ca.notes?.trim()
+        const ca         = corrective_action_temp
+        const actionText = deriveTempAction(status, ca.cause)
+        const rec        = ca.notes?.trim()
           ? `${ca.recurrence} | Notes: ${ca.notes.trim()}`
           : ca.recurrence
 
@@ -328,7 +442,7 @@ export async function POST(req: NextRequest) {
           source_id:                       inserted.id,
           ccp_ref:                         'CCP1',
           deviation_description:           `Temperature: ${temperature_c}°C (${status}) on ${product_category}. Cause: ${ca.cause}`,
-          action_taken:                    ca.action,
+          action_taken:                    actionText,
           product_disposition:             DISPOSITION_MAP[ca.disposition],
           recurrence_prevention:           rec,
           management_verification_required: status === 'fail',
@@ -337,8 +451,9 @@ export async function POST(req: NextRequest) {
       }
 
       if (hasDeviationContam && corrective_action_contam) {
-        const ca  = corrective_action_contam
-        const rec = ca.notes?.trim()
+        const ca         = corrective_action_contam
+        const actionText = deriveContamAction(contamination_type!)
+        const rec        = ca.notes?.trim()
           ? `${ca.recurrence} | Notes: ${ca.notes.trim()}`
           : ca.recurrence
 
@@ -347,8 +462,8 @@ export async function POST(req: NextRequest) {
           source_table:                    'haccp_deliveries',
           source_id:                       inserted.id,
           ccp_ref:                         'CCP1',
-          deviation_description:           `Contamination: ${covered_contaminated}. Cause: ${ca.cause}`,
-          action_taken:                    ca.action,
+          deviation_description:           `Contamination: ${covered_contaminated} (${contamination_type}). Cause: ${ca.cause}`,
+          action_taken:                    actionText,
           product_disposition:             DISPOSITION_MAP[ca.disposition],
           recurrence_prevention:           rec,
           management_verification_required: covered_contaminated === 'yes',

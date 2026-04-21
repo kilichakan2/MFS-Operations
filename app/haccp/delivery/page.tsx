@@ -23,9 +23,9 @@ import { useState, useEffect, useCallback } from 'react'
 
 type TempStatus = 'pass' | 'urgent' | 'fail' | null
 
+// action is NOT in the payload — server derives it from deviation + cause
 type CAPayload = {
   cause:       string
-  action:      string
   disposition: string
   recurrence:  string
   notes:       string
@@ -256,140 +256,173 @@ function Numpad({ value, onChange, onClose, category }: {
   )
 }
 
-// ─── CCA Popup (C1 — structured 2-track) ─────────────────────────────────────
+// ─── CA constants (Batch 3 — adaptive/smart redesign) ─────────────────────────
 
-const DISPOSITION_OPTIONS = ['Accept', 'Conditional accept', 'Assess', 'Reject', 'Dispose']
-
-const CCA_CAUSES = [
+// Track-specific cause lists
+const TEMP_CAUSES = [
   'Cold chain break in transport',
   'Inadequate pre-chilling at supplier',
-  'Transport vehicle refrigeration failure',
+  'Vehicle refrigeration failure',
   'Delivery delayed — product held too long',
+  'Other',
+]
+
+const CONTAM_CAUSES = [
+  'Contamination during handling',
   'Packaging damaged in transit',
   'Supplier loading error',
-  'Contamination during handling',
+  'Missing documentation',
   'Other',
 ]
 
-const CCA_RECURRENCES = [
-  'Contact supplier — cold chain audit',
-  'Add supplier to watch list',
-  'Request supplier corrective action plan',
-  'Arrange supplier site visit',
-  'Retrain receiving staff',
-  'Review delivery window / timing',
-  'Other',
-]
+// Cause-aware recurrence options — 3-4 items per cause, not a generic list of 7
+const RECURRENCE_BY_CAUSE: Record<string, string[]> = {
+  'Cold chain break in transport':            ['Contact supplier — cold chain audit', 'Request supplier corrective action plan', 'Add supplier to watch list', 'Other'],
+  'Inadequate pre-chilling at supplier':      ['Contact supplier — cold chain audit', 'Request supplier corrective action plan', 'Arrange supplier site visit', 'Other'],
+  'Vehicle refrigeration failure':            ['Report equipment failure to supplier in writing', 'Do not use vehicle until fault rectified', 'Request replacement vehicle arrangement', 'Other'],
+  'Delivery delayed — product held too long': ['Review delivery window / timing with supplier', 'Contact supplier — scheduling discussion', 'Other'],
+  'Contamination during handling':            ['Retrain receiving staff', 'Review intake procedures', 'Contact supplier', 'Other'],
+  'Packaging damaged in transit':             ['Request supplier corrective action plan', 'Review packaging requirements with supplier', 'Other'],
+  'Supplier loading error':                   ['Request supplier corrective action plan', 'Contact supplier — loading procedure review', 'Other'],
+  'Missing documentation':                    ['Contact supplier — documentation requirements', 'Add to documentation watch list', 'Other'],
+  'Other':                                    ['Contact supplier', 'Retrain receiving staff', 'Review intake procedures', 'Other'],
+}
 
-const ACTIONS_EQUIPMENT_FAILURE = [
-  'Verify product core temperature with calibrated probe',
-  'If temperature within conditional limits: accept with reduced shelf life',
-  'If temperature exceeds legal limit: REJECT',
-  'Document refrigeration failure and photograph vehicle thermometer',
-  'Report equipment failure to supplier in writing',
-  'Do not use this vehicle until fault is rectified',
-]
+// Predetermined action protocols (CA-001) — shown read-only, stored server-side
+const PROTOCOL_STEPS: Record<string, string[]> = {
+  temp_urgent: [
+    'Accept conditionally — do NOT reject the delivery',
+    'Place immediately into coldest chiller area',
+    'Use within reduced shelf life — halve remaining use-by',
+    'Document assessment and accelerated use decision',
+    'Review supplier performance',
+  ],
+  temp_fail: [
+    'REJECT delivery immediately — do NOT accept product',
+    'Photograph product and temperature reading',
+    'Complete Non-Conformance Report',
+    'Notify supplier in writing within 24 hours',
+    'Segregate and arrange return or disposal',
+  ],
+  temp_equipment: [
+    'Verify product core temperature with calibrated probe',
+    'If within conditional limits: accept with reduced shelf life',
+    'If exceeds legal limit: REJECT immediately',
+    'Document refrigeration failure and photograph vehicle thermometer',
+    'Report equipment failure to supplier in writing',
+    'Do not use this vehicle until fault is rectified',
+  ],
+  contam_uncovered: [
+    'If minor exposure only: re-cover immediately, use for immediate processing only',
+    'If visible contamination or cross-contamination risk: REJECT',
+    'Document incident and notify supplier',
+  ],
+  contam_contaminated_faecal: [
+    'Trim contaminated area using clean knife',
+    'Dispose of trimmings as Category 2/3 ABP',
+    'Sterilise knife immediately after trimming (\u226582\u00b0C)',
+    'Document trimming action and disposal',
+    'If contamination excessive: REJECT entire carcase',
+  ],
+  contam_packaging_damaged: [
+    'If seal broken on vacuum pack or visible ingress: REJECT and dispose',
+    'Minor outer damage with intact inner seal: re-pack and use immediately',
+    'Document and notify supplier',
+  ],
+  contam_missing_docs: [
+    'Hold product in segregated area',
+    'Request traceability documents from supplier within 2 hours',
+    'If not received within 2 hours: REJECT delivery',
+  ],
+}
 
-const ACTIONS_CONDITIONAL_ACCEPT = [
-  'Accept conditionally — do NOT reject the delivery',
-  'Place immediately into coldest chiller area (or refreeze immediately if frozen)',
-  'Use within reduced shelf life — halve remaining use-by',
-  'Document assessment and accelerated use decision',
-  'Review supplier performance',
-]
+function getTempProtocolKey(tempStatus: TempStatus, cause: string): string {
+  if (cause === 'Vehicle refrigeration failure') return 'temp_equipment'
+  return tempStatus === 'urgent' ? 'temp_urgent' : 'temp_fail'
+}
 
-const ACTIONS_REJECT = [
-  'REJECT delivery immediately — do NOT accept product',
-  'Photograph product and temperature reading',
-  'Complete Non-Conformance Report',
-  'Notify supplier in writing within 24 hours',
-  'Segregate and return or dispose as required',
-  'Do not accept for human consumption',
-]
+// Disposition: limited options per scenario (not full 5-picker)
+function getDispositionOptions(track: 'temp' | 'contam', tempStatus: TempStatus, contaminated: string): string[] {
+  if (track === 'temp') {
+    if (tempStatus === 'fail') return ['Reject']
+    return ['Conditional accept', 'Reject']
+  }
+  return contaminated === 'yes_actioned'
+    ? ['Accept', 'Assess', 'Reject']
+    : ['Assess', 'Reject']
+}
 
-const ACTIONS_CONTAM = [
-  'Trim contaminated area using clean knife',
-  'Dispose of trimmings as Category 2/3 ABP',
-  'Sterilise knife immediately after trimming (≥82°C)',
-  'Document trimming action and disposal',
-  'If contamination excessive: REJECT entire carcase',
-]
+const CONTAM_TYPE_LABELS: Record<string, string> = {
+  uncovered:           'Product uncovered / exposed',
+  contaminated_faecal: 'Faecal, wool, or hide contamination',
+  packaging_damaged:   'Packaging damaged',
+  missing_docs:        'Missing documentation',
+}
 
-function CCAPopup({ tempStatus, contaminated, onSubmit, onBack }: {
+// ─── CCAPopup ─────────────────────────────────────────────────────────────────
+
+function CCAPopup({ tempStatus, contaminated, contamType, onSubmit, onBack }: {
   tempStatus:   TempStatus
   contaminated: string
+  contamType:   string
   onSubmit:     (caTemp: CAPayload | null, caContam: CAPayload | null) => void
   onBack:       () => void
 }) {
   const activeTempTrack   = tempStatus === 'urgent' || tempStatus === 'fail'
-  const activeContamTrack = contaminated === 'yes'  || contaminated === 'yes_actioned'
+  const activeContamTrack = contaminated === 'yes' || contaminated === 'yes_actioned'
 
-  const [cause,        setCause]        = useState('')
-  const [recurrence,   setRecurrence]   = useState('')
-  const [notes,        setNotes]        = useState('')
-  const [tempAction,   setTempAction]   = useState('')
-  const [tempDisp,     setTempDisp]     = useState<string>(
-    tempStatus === 'fail' ? 'Reject' : tempStatus === 'urgent' ? 'Conditional accept' : ''
+  const [tempCause,      setTempCause]      = useState('')
+  const [tempDisp,       setTempDisp]       = useState(
+    tempStatus === 'fail' ? 'Reject' : 'Conditional accept',
   )
-  const [contamAction, setContamAction] = useState('')
-  const [contamDisp,   setContamDisp]   = useState<string>(
-    contaminated === 'yes' ? 'Assess' : 'Accept'
+  const [tempRecurrence, setTempRecurrence] = useState('')
+
+  const [contamCause,      setContamCause]      = useState('')
+  const [contamDisp,       setContamDisp]       = useState(
+    contaminated === 'yes_actioned' ? 'Accept' : 'Assess',
   )
+  const [contamRecurrence, setContamRecurrence] = useState('')
 
-  // Clear per-track actions when cause changes
-  useEffect(() => {
-    setTempAction('')
-    setContamAction('')
-  }, [cause])
+  const [notes, setNotes] = useState('')
 
-  const isEquipmentCause =
-    cause === 'Transport vehicle refrigeration failure' ||
-    cause === 'Cold chain break in transport'
+  const tempProtocolKey     = getTempProtocolKey(tempStatus, tempCause)
+  const tempProtocolSteps   = PROTOCOL_STEPS[tempProtocolKey] ?? PROTOCOL_STEPS['temp_urgent']
+  const contamProtocolKey   = contamType ? `contam_${contamType}` : ''
+  const contamProtocolSteps = contamProtocolKey ? (PROTOCOL_STEPS[contamProtocolKey] ?? []) : []
 
-  function getTempActions(): string[] {
-    if (!cause) return []
-    if (isEquipmentCause) return ACTIONS_EQUIPMENT_FAILURE
-    return tempStatus === 'urgent' ? ACTIONS_CONDITIONAL_ACCEPT : ACTIONS_REJECT
-  }
-
-  function getContamActions(): string[] {
-    if (!cause) return []
-    if (isEquipmentCause) return ACTIONS_EQUIPMENT_FAILURE
-    return ACTIONS_CONTAM
-  }
+  const tempDispOptions   = getDispositionOptions('temp',   tempStatus,  contaminated)
+  const contamDispOptions = getDispositionOptions('contam', tempStatus,  contaminated)
 
   const isSubmittable =
-    cause.trim() !== '' &&
-    recurrence.trim() !== '' &&
-    (!activeTempTrack   || (tempAction.trim()   !== '' && tempDisp.trim()   !== '')) &&
-    (!activeContamTrack || (contamAction.trim() !== '' && contamDisp.trim() !== ''))
+    (!activeTempTrack   || (tempCause   !== '' && tempDisp   !== '' && tempRecurrence   !== '')) &&
+    (!activeContamTrack || (contamCause !== '' && contamDisp !== '' && contamRecurrence !== ''))
 
   function handleSubmit() {
     if (!isSubmittable) return
     const caTemp: CAPayload | null = activeTempTrack ? {
-      cause, action: tempAction, disposition: tempDisp, recurrence, notes,
+      cause: tempCause, disposition: tempDisp, recurrence: tempRecurrence, notes,
     } : null
     const caContam: CAPayload | null = activeContamTrack ? {
-      cause, action: contamAction, disposition: contamDisp, recurrence, notes,
+      cause: contamCause, disposition: contamDisp, recurrence: contamRecurrence, notes,
     } : null
     onSubmit(caTemp, caContam)
   }
 
   const headerColour = tempStatus === 'fail' ? 'text-red-600' : 'text-[#EB6619]'
   const submitBg     = tempStatus === 'fail' ? 'bg-red-600'   : 'bg-[#EB6619]'
-  const twoTracks    = activeTempTrack && activeContamTrack
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
       <div className="bg-white rounded-t-3xl w-full max-h-[90vh] overflow-y-auto">
 
-        {/* Header */}
         <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
           <div>
             <p className={`text-xs font-bold tracking-widest uppercase ${headerColour}`}>CCP 1 — Corrective Action</p>
-            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Record what you did</h2>
+            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Record what happened</h2>
             <p className="text-slate-400 text-xs mt-0.5">
-              {twoTracks ? 'Two deviations — complete both tracks below' : 'Complete all fields to submit'}
+              {activeTempTrack && activeContamTrack
+                ? 'Two deviations — complete both sections below'
+                : 'Complete all fields to submit'}
             </p>
           </div>
           <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 transition-all active:scale-95 mt-1">
@@ -397,82 +430,114 @@ function CCAPopup({ tempStatus, contaminated, onSubmit, onBack }: {
           </button>
         </div>
 
-        <div className="px-6 pb-8 pt-5 space-y-6">
+        <div className="px-6 pb-8 pt-5 space-y-5">
 
-          {/* Shared: Cause */}
-          <div>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Cause of deviation</p>
-            <div className="space-y-2">
-              {CCA_CAUSES.map((c) => (
-                <button key={c} onClick={() => setCause(c)}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                    cause === c ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
-                  }`}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Temperature track */}
-          {activeTempTrack && cause && (
-            <div className="border border-amber-200 rounded-2xl overflow-hidden">
+          {activeTempTrack && (
+            <div className={`border rounded-2xl overflow-hidden ${tempStatus === 'fail' ? 'border-red-200' : 'border-amber-200'}`}>
               <div className={`px-4 py-3 ${tempStatus === 'fail' ? 'bg-red-50' : 'bg-amber-50'}`}>
                 <p className={`text-xs font-bold uppercase tracking-widest ${tempStatus === 'fail' ? 'text-red-600' : 'text-amber-700'}`}>
-                  Temperature — {tempStatus === 'fail' ? 'Reject required' : 'Conditional accept'}
+                  Temperature deviation
+                </p>
+                <p className="text-slate-600 text-xs mt-0.5">
+                  {tempStatus === 'fail' ? 'Reject required (>8\u00b0C)' : 'Conditional accept (5\u20138\u00b0C)'}
+                  {tempCause === 'Vehicle refrigeration failure' && ' \u2014 equipment failure override'}
                 </p>
               </div>
-              <div className="px-4 py-4 space-y-4 bg-white">
+              <div className="px-4 py-4 space-y-5 bg-white">
                 <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</p>
-                  <div className="space-y-2">
-                    {getTempActions().map((a) => (
-                      <button key={a} onClick={() => setTempAction(a)}
-                        className={`w-full text-left flex items-start gap-3 px-4 py-3 rounded-xl border transition-all ${
-                          tempAction === a ? 'border-[#EB6619] bg-amber-50' : 'border-slate-200 bg-white'
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Required action (CA-001)</p>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+                    {tempProtocolSteps.map((step, i) => (
+                      <div key={i} className="flex items-start gap-2.5">
+                        <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 ${tempStatus === 'fail' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>{i + 1}</div>
+                        <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
+                  <div className="space-y-1.5">
+                    {TEMP_CAUSES.map((c) => (
+                      <button key={c} onClick={() => { setTempCause(c); setTempRecurrence('') }}
+                        className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                          tempCause === c ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
                         }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${tempAction === a ? 'bg-[#EB6619]' : 'bg-slate-300'}`}/>
-                        <p className="text-slate-700 text-sm">{a}</p>
+                        {c}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
-                  <div className="flex flex-wrap gap-2">
-                    {DISPOSITION_OPTIONS.map((d) => (
-                      <button key={d} onClick={() => setTempDisp(d)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
-                          tempDisp === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-500'
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+                    Product disposition{tempStatus === 'fail' && <span className="ml-1 text-red-500 normal-case font-normal">\u2014 locked</span>}
+                  </p>
+                  <div className="flex gap-2 flex-wrap">
+                    {tempDispOptions.map((d) => (
+                      <button key={d} onClick={() => { if (tempStatus !== 'fail') setTempDisp(d) }}
+                        disabled={tempStatus === 'fail'}
+                        className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                          tempDisp === d
+                            ? tempStatus === 'fail' ? 'border-red-400 bg-red-50 text-red-600' : 'border-[#EB6619] bg-amber-50 text-[#EB6619]'
+                            : 'border-slate-200 bg-white text-slate-400'
                         }`}>
                         {d}
                       </button>
                     ))}
                   </div>
                 </div>
+                {tempCause && (
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
+                    <div className="space-y-1.5">
+                      {(RECURRENCE_BY_CAUSE[tempCause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                        <button key={r} onClick={() => setTempRecurrence(r)}
+                          className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                            tempRecurrence === r ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
+                          }`}>
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Contamination track */}
-          {activeContamTrack && cause && (
+          {activeContamTrack && (
             <div className="border border-amber-200 rounded-2xl overflow-hidden">
               <div className="bg-amber-50 px-4 py-3">
-                <p className="text-amber-700 text-xs font-bold uppercase tracking-widest">
-                  Contamination — {contaminated === 'yes' ? 'Rejected product' : 'Actioned at intake'}
+                <p className="text-amber-700 text-xs font-bold uppercase tracking-widest">Contamination deviation</p>
+                <p className="text-slate-600 text-xs mt-0.5">
+                  {CONTAM_TYPE_LABELS[contamType] ?? contamType}
+                  {' \u00b7 '}
+                  {contaminated === 'yes_actioned' ? 'Actioned at intake' : 'Not yet actioned'}
                 </p>
               </div>
-              <div className="px-4 py-4 space-y-4 bg-white">
+              <div className="px-4 py-4 space-y-5 bg-white">
+                {contamProtocolSteps.length > 0 && (
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Required action (CA-001)</p>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+                      {contamProtocolSteps.map((step, i) => (
+                        <div key={i} className="flex items-start gap-2.5">
+                          <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-amber-100 text-amber-700">{i + 1}</div>
+                          <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</p>
-                  <div className="space-y-2">
-                    {getContamActions().map((a) => (
-                      <button key={a} onClick={() => setContamAction(a)}
-                        className={`w-full text-left flex items-start gap-3 px-4 py-3 rounded-xl border transition-all ${
-                          contamAction === a ? 'border-[#EB6619] bg-amber-50' : 'border-slate-200 bg-white'
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
+                  <div className="space-y-1.5">
+                    {CONTAM_CAUSES.map((c) => (
+                      <button key={c} onClick={() => { setContamCause(c); setContamRecurrence('') }}
+                        className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                          contamCause === c ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
                         }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${contamAction === a ? 'bg-[#EB6619]' : 'bg-slate-300'}`}/>
-                        <p className="text-slate-700 text-sm">{a}</p>
+                        {c}
                       </button>
                     ))}
                   </div>
@@ -480,44 +545,43 @@ function CCAPopup({ tempStatus, contaminated, onSubmit, onBack }: {
                 <div>
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
                   <div className="flex flex-wrap gap-2">
-                    {DISPOSITION_OPTIONS.map((d) => (
+                    {contamDispOptions.map((d) => (
                       <button key={d} onClick={() => setContamDisp(d)}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
-                          contamDisp === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-500'
+                        className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                          contamDisp === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-400'
                         }`}>
                         {d}
                       </button>
                     ))}
                   </div>
                 </div>
+                {contamCause && (
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
+                    <div className="space-y-1.5">
+                      {(RECURRENCE_BY_CAUSE[contamCause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                        <button key={r} onClick={() => setContamRecurrence(r)}
+                          className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                            contamRecurrence === r ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
+                          }`}>
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* Shared: Recurrence prevention */}
-          <div>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
-            <div className="space-y-2">
-              {CCA_RECURRENCES.map((r) => (
-                <button key={r} onClick={() => setRecurrence(r)}
-                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                    recurrence === r ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
-                  }`}>
-                  {r}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Shared: Notes (optional) */}
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Additional notes <span className="normal-case font-normal">(optional)</span></p>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              placeholder="Any additional context…"
+              placeholder="Any additional context\u2026"
               className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
-          <p className="text-slate-400 text-xs">This record is immutable once submitted. CA-001 verbatim actions listed above.</p>
+          <p className="text-slate-400 text-xs">This record is immutable once submitted. Protocol per CA-001.</p>
 
           <button onClick={handleSubmit} disabled={!isSubmittable}
             className={`w-full text-white font-bold py-4 rounded-xl text-base disabled:opacity-40 transition-all ${submitBg}`}>
@@ -813,6 +877,7 @@ export default function DeliveryPage() {
     category &&
     tempVal !== '' && !isNaN(tempNum) &&
     contam &&
+    (contam === 'no' || Boolean(contamType)) &&
     Boolean(bornIn) &&
     Boolean(rearedIn) &&
     slaughter.trim() !== '' &&
@@ -838,6 +903,7 @@ export default function DeliveryPage() {
           product_category:     category,
           temperature_c:        tempNum,
           covered_contaminated: contam,
+          contamination_type:   (contam !== 'no' && contamType) ? contamType : undefined,
           contamination_notes:  contamNote || undefined,
           notes:                notes || undefined,
           born_in:              bornIn   || undefined,
@@ -1165,50 +1231,24 @@ export default function DeliveryPage() {
                   </button>
                 ))}
               </div>
-              {contam === 'yes_actioned' && (
+              {(contam === 'yes' || contam === 'yes_actioned') && (
                 <div className="mt-3 space-y-3">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Type of contamination (CA-001)</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                    Type of contamination <span className="text-red-400">*</span>
+                  </p>
                   <div className="space-y-2">
                     {[
-                      {
-                        key: 'uncovered',
-                        label: 'Product uncovered / exposed',
-                        actions: ['REJECT if visible contamination or cross-contamination risk','If minor exposure only: assess quality, re-cover immediately, use for immediate processing only','Document incident and notify supplier'],
-                      },
-                      {
-                        key: 'faecal_wool_hide',
-                        label: 'Contamination — faecal, wool, or hide',
-                        actions: ['TRIM contaminated area using clean knife','Dispose of trimmings as Category 2/3 ABP','Sterilise knife immediately after trimming (≥82°C)','Document trimming action and disposal','If contamination excessive: REJECT entire carcase'],
-                      },
-                      {
-                        key: 'packaging',
-                        label: 'Packaging damaged',
-                        actions: ['If seal broken on vacuum pack or visible ingress: REJECT and dispose','Minor outer damage with intact inner seal: re-pack and use immediately','Document and notify supplier'],
-                      },
-                      {
-                        key: 'missing_docs',
-                        label: 'Missing documentation',
-                        actions: ['Hold product in segregated area','Request traceability documents from supplier within 2 hours','If not received: reject delivery'],
-                      },
+                      { key: 'uncovered',           label: 'Product uncovered / exposed' },
+                      { key: 'contaminated_faecal', label: 'Faecal, wool, or hide contamination' },
+                      { key: 'packaging_damaged',   label: 'Packaging damaged' },
+                      { key: 'missing_docs',        label: 'Missing documentation' },
                     ].map((t) => (
-                      <div key={t.key}>
-                        <button onClick={() => { setContamType(t.key); setContamNote(t.actions.join(' | ')) }}
-                          className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                            contamType === t.key ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-slate-300 bg-white text-slate-600'
-                          }`}>
-                          {t.label}
-                        </button>
-                        {contamType === t.key && (
-                          <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-1.5">
-                            {t.actions.map((a, i) => (
-                              <div key={i} className="flex items-start gap-2">
-                                <div className="w-1.5 h-1.5 rounded-full bg-[#EB6619] flex-shrink-0 mt-1.5"/>
-                                <p className="text-slate-600 text-xs leading-relaxed">{a}</p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <button key={t.key} onClick={() => setContamType(t.key)}
+                        className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                          contamType === t.key ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-300 bg-white text-slate-600'
+                        }`}>
+                        {t.label}
+                      </button>
                     ))}
                   </div>
                   {contamType && (
@@ -1217,11 +1257,6 @@ export default function DeliveryPage() {
                       className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
                   )}
                 </div>
-              )}
-              {contam === 'yes' && (
-                <textarea value={contamNote} onChange={(e) => setContamNote(e.target.value)} rows={2}
-                  placeholder="Describe reason for rejection…"
-                  className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
               )}
             </div>
 
@@ -1334,6 +1369,7 @@ export default function DeliveryPage() {
         <CCAPopup
           tempStatus={tempStat}
           contaminated={contam}
+          contamType={contamType}
           onSubmit={(caTemp, caContam) => doSubmit(caTemp, caContam)}
           onBack={() => setShowCCA(false)}
         />
