@@ -13,15 +13,16 @@ import { useState, useEffect, useCallback } from 'react'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CleanEntry {
-  id:              string
-  date:            string
-  time_of_clean:   string
-  what_was_cleaned:string
-  issues:          boolean
-  what_did_you_do: string | null
-  verified_by:     string | null
-  submitted_at:    string
-  users:           { name: string }
+  id:               string
+  date:             string
+  time_of_clean:    string
+  what_was_cleaned: string
+  issues:           boolean
+  what_did_you_do:  string | null
+  verified_by:      string | null
+  sanitiser_temp_c: number | null
+  submitted_at:     string
+  users:            { name: string }
 }
 
 // ─── Category chips ───────────────────────────────────────────────────────────
@@ -206,8 +207,15 @@ export default function CleaningPage() {
   const [flash,     setFlash]     = useState(false)
   const [showQuick, setShowQuick] = useState(false)
   const [timeNow,   setTimeNow]   = useState(nowDisplay())
-  const [verifiedBy,setVerifiedBy]= useState('')
-  const [showCCA,   setShowCCA]   = useState(false)
+  const [verifiedBy,  setVerifiedBy]  = useState('')
+  const [showCCA,     setShowCCA]     = useState(false)
+  const [sanitiserTemp, setSanitiserTemp] = useState('')
+
+  const steriliserSelected = selected.has('Knife steriliser (82°C)')
+  const sanitiserTempNum   = parseFloat(sanitiserTemp)
+  const sanitiserTempPass  = sanitiserTemp !== '' && !isNaN(sanitiserTempNum)
+    ? sanitiserTempNum >= 82
+    : null
 
   // Keep displayed time current
   useEffect(() => {
@@ -239,26 +247,29 @@ export default function CleaningPage() {
     setIssues(false)
     setNote('')
     setVerifiedBy('')
+    setSanitiserTemp('')
     setSubmitErr('')
   }
 
   async function doSubmit(ca: CAPayload | null) {
     setShowCCA(false); setSubmitErr(''); setSubmitting(true)
-    const cats    = Array.from(selected)
-    const cleaned = cats
+    const cats     = Array.from(selected)
+    const cleaned  = cats
       .map((c) => c === 'Other' && otherText.trim() ? `Other: ${otherText.trim()}` : c)
       .join(', ')
+    const hasIssue = issues || sanitiserTempPass === false
     try {
       const res = await fetch('/api/haccp/cleaning', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           what_was_cleaned: cleaned,
-          issues,
+          issues: hasIssue,
           what_did_you_do: ca
             ? `${ca.cause} | ${ca.disposition} | ${ca.recurrence}`
             : undefined,
           verified_by: verifiedBy,
+          sanitiser_temp_c: steriliserSelected && sanitiserTemp !== '' ? sanitiserTempNum : undefined,
           corrective_action: ca ?? undefined,
         }),
       })
@@ -278,9 +289,13 @@ export default function CleaningPage() {
   function handleSubmit() {
     setSubmitErr('')
     const cats = Array.from(selected)
-    if (cats.length === 0)      { setSubmitErr('Select at least one item that was cleaned'); return }
-    if (!verifiedBy.trim())     { setSubmitErr('Select who verified this clean'); return }
-    if (issues) { setShowCCA(true); return }
+    if (cats.length === 0)  { setSubmitErr('Select at least one item that was cleaned'); return }
+    if (!verifiedBy.trim()) { setSubmitErr('Select who verified this clean'); return }
+    if (steriliserSelected && sanitiserTemp === '') { setSubmitErr('Enter the knife steriliser temperature'); return }
+
+    // Steriliser fail auto-triggers issues
+    const hasIssue = issues || sanitiserTempPass === false
+    if (hasIssue) { setShowCCA(true); return }
     doSubmit(null)
   }
 
@@ -369,6 +384,34 @@ export default function CleaningPage() {
             </div>
           )}
 
+          {/* Knife steriliser temperature — shown when steriliser selected */}
+          {steriliserSelected && (
+            <div className="px-4 pb-3">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+                Knife steriliser temperature <span className="text-red-500">*</span>
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={sanitiserTemp}
+                  onChange={(e) => setSanitiserTemp(e.target.value)}
+                  placeholder="°C"
+                  className={`w-32 border rounded-xl px-4 py-2.5 text-slate-900 text-sm font-mono focus:outline-none transition-all ${
+                    sanitiserTempPass === null  ? 'border-blue-100 bg-white focus:border-orange-500'
+                    : sanitiserTempPass         ? 'border-green-300 bg-green-50'
+                                                : 'border-red-300 bg-red-50'
+                  }`}
+                />
+                {sanitiserTempPass === true  && <span className="text-green-600 text-xs font-bold">✓ Pass ≥82°C</span>}
+                {sanitiserTempPass === false && (
+                  <span className="text-red-600 text-xs font-bold">✗ FAIL — corrective action required</span>
+                )}
+              </div>
+              <p className="text-slate-400 text-[10px] mt-1.5 ml-1">Must reach ≥82°C for 30 seconds. Log the actual reading.</p>
+            </div>
+          )}
+
           <div className="h-px bg-slate-50 mx-4" />
 
           {/* Issues toggle */}
@@ -390,11 +433,15 @@ export default function CleaningPage() {
             </div>
           </div>
 
-          {issues && (
+          {(issues || sanitiserTempPass === false) && (
             <div className="px-4 pb-3">
               <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
                 <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective action required</p>
-                <p className="text-slate-600 text-xs">Submit to open the corrective action form — you'll log the cause and what was done.</p>
+                <p className="text-slate-600 text-xs">
+                  {sanitiserTempPass === false
+                    ? 'Steriliser temperature below 82°C — submit to log the corrective action.'
+                    : 'Submit to open the corrective action form — you\'ll log the cause and what was done.'}
+                </p>
               </div>
             </div>
           )}
@@ -474,6 +521,11 @@ export default function CleaningPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium leading-snug">{e.what_was_cleaned}</p>
                     <p className="text-slate-400 text-xs mt-0.5">{e.users?.name ?? 'Unknown'}{e.verified_by ? ` · Verified: ${e.verified_by}` : ''}</p>
+                    {e.sanitiser_temp_c != null && (
+                      <p className={`text-xs font-mono font-bold mt-0.5 ${e.sanitiser_temp_c >= 82 ? 'text-green-600' : 'text-red-600'}`}>
+                        Steriliser: {e.sanitiser_temp_c}°C {e.sanitiser_temp_c >= 82 ? '✓' : '✗'}
+                      </p>
+                    )}
                     {e.issues && e.what_did_you_do && (
                       <p className="text-[#EB6619] text-xs mt-1 italic leading-snug">{e.what_did_you_do}</p>
                     )}

@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
         issues,
         what_did_you_do,
         verified_by,
+        sanitiser_temp_c,
         submitted_at,
         submitted_by,
         users!inner(name)
@@ -84,12 +85,13 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { what_was_cleaned, issues, what_did_you_do, verified_by, corrective_action } = body as {
-      what_was_cleaned:   string
-      issues:             boolean
-      what_did_you_do?:   string
-      verified_by:        string
-      corrective_action?: CAPayload
+    const { what_was_cleaned, issues, what_did_you_do, verified_by, sanitiser_temp_c, corrective_action } = body as {
+      what_was_cleaned:    string
+      issues:              boolean
+      what_did_you_do?:    string
+      verified_by:         string
+      sanitiser_temp_c?:   number
+      corrective_action?:  CAPayload
     }
 
     if (!what_was_cleaned?.trim())
@@ -102,13 +104,14 @@ export async function POST(req: NextRequest) {
     const { data: inserted, error } = await supabase
       .from('haccp_cleaning_log')
       .insert({
-        submitted_by:    userId,
-        date:            todayUK(),
-        time_of_clean:   nowTimeUK(),
+        submitted_by:     userId,
+        date:             todayUK(),
+        time_of_clean:    nowTimeUK(),
         what_was_cleaned,
         issues,
-        verified_by:     verified_by.trim(),
-        what_did_you_do: what_did_you_do?.trim() || null,
+        verified_by:      verified_by.trim(),
+        sanitiser_temp_c: sanitiser_temp_c ?? null,
+        what_did_you_do:  what_did_you_do?.trim() || null,
       })
       .select('id')
       .single()
