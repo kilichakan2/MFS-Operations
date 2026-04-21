@@ -361,22 +361,20 @@ export default function MincePage() {
    */
   function deliveryMatchesSpecies(d: DeliveryOption, species: string): boolean {
     if (!species) return true
+    // red_meat is the legacy value before lamb/beef split — show for both
+    if (d.product_category === 'red_meat') return true
     switch (species) {
-      case 'lamb':
-        return d.product_category === 'lamb'
+      case 'lamb':         return d.product_category === 'lamb'
       case 'beef':
-      case 'imported_vac':
-        // Imported vac-packed beef was logged as 'beef' at goods-in
-        return d.product_category === 'beef'
-      default:
-        return true
+      case 'imported_vac': return d.product_category === 'beef'
+      default:             return true
     }
   }
 
-  /** Delivery batch picker — shows last 16 days, filtered by species when on mince form */
+  /** Delivery batch picker — shows last 16 days, filtered by species */
   function DeliveryPicker({ form }: { form: 'mince' | 'meatprep' }) {
-    const selectedIds   = form === 'mince' ? mSourceIds     : pSourceIds
-    const activeSpecies = form === 'mince' ? mSpecies       : ''   // only filter on mince form
+    const selectedIds   = form === 'mince' ? mSourceIds  : pSourceIds
+    const activeSpecies = form === 'mince' ? mSpecies    : pSpecies  // filter on both forms when species set
     const toggle = (d: DeliveryOption) => {
       const setIds     = form === 'mince' ? setMSourceIds     : setPSourceIds
       const setBatches = form === 'mince' ? setMSourceBatches : setPSourceBatches
@@ -396,11 +394,12 @@ export default function MincePage() {
       )
     }
 
-    if (form === 'mince' && activeSpecies && !hasFiltered) {
+    if (activeSpecies && !hasFiltered) {
+      const spLabel = SPECIES.find(s => s.key === activeSpecies)?.label ?? activeSpecies
       return (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <p className="text-amber-700 text-xs font-semibold">No {mSp?.label} batches found in recent deliveries.</p>
-          <p className="text-slate-500 text-xs mt-1">Log the delivery first via the Goods In section, or continue — source batches are optional.</p>
+          <p className="text-amber-700 text-xs font-semibold">No {spLabel} batches found in recent deliveries.</p>
+          <p className="text-slate-500 text-xs mt-1">Log the delivery first via the Goods In section, or continue without selecting a source batch.</p>
         </div>
       )
     }
