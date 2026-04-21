@@ -55,9 +55,9 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 - [ ] Real-time WhatsApp/email alert to Hakan/Ege/Daryl on critical deviations
 - [ ] Admin amendment flow (add correction notes to immutable readings)
 - [ ] Atomic readings+CA insert via RPC (replaces the `ca_write_failed` flag)
-- [ ] **Adaptive CA popup redesign** — CCP 2 CA popup uses the old pattern
-  (pick action from list, full 5-option disposition, generic recurrence list).
-  Needs same Batch 3 treatment as CCP 1. **Revisit after CCP 1 go-live.**
+- [x] **Adaptive CA popup redesign** — CCP 2 CA popup redesigned to match
+  CCP1 Batch 3 pattern. Action server-derived, cause validated, disposition
+  pre-filled/limited, recurrence cause-aware. _Batch 4, 2026-04-21._
 
 ---
 
@@ -99,12 +99,9 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
     / SOP3 action lists (~6 issue types). Estimated 90 min once scoped.
   - [ ] **B7. DB-driven CCP 3 limits** (deferred — 4°C/12°C are fixed
     legal limits under EC 853/2004, unlikely to change)
-  - [ ] **Adaptive CA popup redesign** — CCP 3 CA popup (cold-storage +
-    process-room) uses the old pattern (pick action from list, shared cause,
-    full 5-option disposition picker, generic 6-option recurrence list).
-    Needs same Batch 3 treatment as CCP 1: action server-derived, cause
-    relevant to scenario, disposition pre-filled/limited, recurrence
-    cause-aware. **Revisit after CCP 1 go-live.**
+  - [x] **Adaptive CA popup redesign** — CCP 3 CA popup redesigned to
+    match CCP1 Batch 3 pattern. Action server-derived, cause validated,
+    disposition pre-filled/limited, recurrence cause-aware. _Batch 4, 2026-04-21._
 
 - [~] **CCP 1 — Goods In / Delivery Intake** (`/haccp/delivery`)
   — audit complete, Batches 1+2+3 merged. See **`HACCP_CCP1_AUDIT.md`**.
