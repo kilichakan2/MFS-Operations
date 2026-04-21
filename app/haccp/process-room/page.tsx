@@ -200,13 +200,7 @@ function Numpad({ value, onChange, onClose, label, limit }: {
 
 // ─── CCA Popup ────────────────────────────────────────────────────────────────
 
-type CAPayload = {
-  cause:       string
-  action:      string
-  disposition: string
-  recurrence:  string
-  notes:       string
-}
+// ─── CA constants (Batch 4 — adaptive redesign) ──────────────────────────────
 
 const CAUSE_OPTIONS = [
   'A/C or cooling failure',
@@ -218,59 +212,69 @@ const CAUSE_OPTIONS = [
   'Other',
 ]
 
-const RECURRENCE_OPTIONS = [
-  'Retrain staff on batch timing',
-  'Schedule A/C maintenance',
-  'Reduce batch sizes',
-  'Replace door seal',
-  'Install temperature alarm',
-  'Other',
-]
-
-const DISPOSITION_OPTIONS = ['Accept', 'Conditional accept', 'Assess', 'Reject', 'Dispose']
-
-/** Action list per CA-001 CCP 3 section, switched by cause + what breached */
-function getActionList(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string[] {
-  if (cause === 'Equipment failure') {
-    return [
-      'Document time of failure discovery',
-      'Transfer products to chilled storage',
-      'Estimate time product was at elevated temperature',
-      'Contact refrigeration/maintenance engineer',
-      'Assess each product individually (if >2h above limit)',
-      'Complete equipment failure log',
-    ]
-  }
-  // Product breach — CA-001 wording verbatim
-  if (productBreached) {
-    return [
-      'Return product to chilled storage immediately',
-      'Record time product was above temperature limit',
-      'If <2 hours at <8°C: complete processing within 30 minutes then chill',
-      'If >2 hours or >8°C: segregate product for safety assessment',
-      'Reduce batch sizes for future processing',
-    ]
-  }
-  // Room breach only — CA-001 wording verbatim
-  if (roomBreached) {
-    if (roomTemp > 15) {
-      return [
-        'Stop loading product into room',
-        'Return all product to chilled storage immediately',
-        'Investigate cooling failure urgently',
-        'Do not resume until temperature below 12°C',
-      ]
-    }
-    return [
-      'Do NOT stop cutting',
-      'Bring product to production progressively in small quantities',
-      'Monitor product core temperature — must remain ≤4°C',
-      'If core temp rises above 4°C, return to chilled storage',
-      'Investigate cause — check A/C and cooling unit',
-    ]
-  }
-  return []
+const RECURRENCE_BY_CAUSE: Record<string, string[]> = {
+  'A/C or cooling failure':        ['Schedule A/C maintenance', 'Install temperature alarm', 'Other'],
+  'Doors left open':               ['Retrain staff on door discipline', 'Add door-close reminder signage', 'Other'],
+  'Product held in room too long': ['Retrain staff on batch timing', 'Reduce batch sizes', 'Other'],
+  'Batch too large':               ['Reduce batch sizes', 'Retrain staff on batch timing', 'Other'],
+  'Equipment failure':             ['Contact refrigeration/maintenance engineer', 'Schedule maintenance check', 'Install temperature alarm', 'Other'],
+  'Power interruption':            ['Install temperature alarm', 'Review backup power options', 'Schedule maintenance check', 'Other'],
+  'Other':                         ['Schedule maintenance check', 'Retrain staff', 'Install temperature alarm', 'Other'],
 }
+
+const PROTOCOL_STEPS: Record<string, string[]> = {
+  product_breach: [
+    'Return product to chilled storage immediately',
+    'Record time product was above temperature limit',
+    'If <2 hours at <8\u00b0C: complete processing within 30 minutes then chill',
+    'If >2 hours or >8\u00b0C: segregate product for safety assessment',
+    'Reduce batch sizes for future processing',
+  ],
+  room_breach_high: [
+    'Stop loading product into room',
+    'Return all product to chilled storage immediately',
+    'Investigate cooling failure urgently',
+    'Do not resume until temperature below 12\u00b0C',
+  ],
+  room_breach_amber: [
+    'Do NOT stop cutting',
+    'Bring product to production progressively in small quantities',
+    'Monitor product core temperature — must remain \u22644\u00b0C',
+    'If core temp rises above 4\u00b0C, return to chilled storage',
+    'Investigate cause — check A/C and cooling unit',
+  ],
+  equipment_failure: [
+    'Document time of failure discovery',
+    'Transfer products to chilled storage immediately',
+    'Estimate time product was at elevated temperature',
+    'Contact refrigeration/maintenance engineer urgently',
+    'Assess each product individually (if >2h above limit)',
+    'Complete equipment failure log',
+  ],
+}
+
+function getProtocolKey(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string {
+  if (cause === 'Equipment failure') return 'equipment_failure'
+  if (productBreached) return 'product_breach'
+  if (roomBreached)    return roomTemp > 15 ? 'room_breach_high' : 'room_breach_amber'
+  return 'product_breach'
+}
+
+function getDispositionDefault(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string {
+  if (cause === 'Equipment failure') return 'Assess'
+  if (productBreached)               return 'Assess'
+  if (roomBreached && roomTemp > 15) return 'Assess'
+  return 'Accept'
+}
+
+function getDispositionOptions(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string[] {
+  if (cause === 'Equipment failure') return ['Assess', 'Conditional accept', 'Reject']
+  if (productBreached)               return ['Assess', 'Reject', 'Conditional accept']
+  if (roomBreached && roomTemp > 15) return ['Assess', 'Reject']
+  return ['Accept', 'Assess', 'Conditional accept']
+}
+
+// ─── CCAPopup ─────────────────────────────────────────────────────────────────
 
 function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
   productTemp: number
@@ -278,71 +282,80 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
   onSubmit:    (ca: CAPayload) => void
   onBack:      () => void
 }) {
-  const [cause,           setCause]           = useState('')
-  const [causeOther,      setCauseOther]      = useState('')
-  const [action,          setAction]          = useState('')
-  const [disposition,     setDisposition]     = useState('')
-  const [recurrence,      setRecurrence]      = useState('')
-  const [recurrenceOther, setRecurrenceOther] = useState('')
-  const [notes,           setNotes]           = useState('')
-
   const productBreached = productTemp > 4
   const roomBreached    = roomTemp > 12
 
-  const actions = getActionList(cause, productBreached, roomBreached, roomTemp)
+  const [cause,       setCause]       = useState('')
+  const [disposition, setDisposition] = useState(getDispositionDefault('', productBreached, roomBreached, roomTemp))
+  const [recurrence,  setRecurrence]  = useState('')
+  const [notes,       setNotes]       = useState('')
 
-  // Clear action if cause change invalidates it
+  const protocolKey   = getProtocolKey(cause, productBreached, roomBreached, roomTemp)
+  const protocolSteps = PROTOCOL_STEPS[protocolKey] ?? []
+  const dispOptions   = getDispositionOptions(cause, productBreached, roomBreached, roomTemp)
+
   useEffect(() => {
-    if (action && !actions.includes(action)) setAction('')
+    setDisposition(getDispositionDefault(cause, productBreached, roomBreached, roomTemp))
+    setRecurrence('')
   }, [cause]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const finalCause      = cause === 'Other'      ? causeOther.trim()      : cause
-  const finalRecurrence = recurrence === 'Other' ? recurrenceOther.trim() : recurrence
-  const canSubmit = Boolean(finalCause && action && disposition && finalRecurrence)
+  const canSubmit = Boolean(cause && disposition && recurrence)
 
   function handleConfirm() {
-    onSubmit({
-      cause:       finalCause,
-      action,
-      disposition,
-      recurrence:  finalRecurrence,
-      notes:       notes.trim(),
-    })
+    onSubmit({ cause, disposition, recurrence, notes: notes.trim() })
   }
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
       <div className="bg-white rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
-        <div className="flex items-start justify-between p-6 pb-4">
+
+        <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
           <div>
             <p className="text-red-600 text-xs font-bold tracking-widest uppercase">CCP 3 deviation</p>
             <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action Required</h2>
           </div>
-          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95 mt-1">
+          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 transition-all active:scale-95 mt-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
-        <div className="px-6 pb-6 space-y-4">
+        <div className="px-6 pb-8 pt-4 space-y-5">
+
           {/* Deviation summary */}
           <div className="space-y-2">
             {productBreached && (
               <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3">
-                <p className="text-red-600 font-semibold text-sm">Product temp: {productTemp}°C — limit ≤4°C</p>
+                <p className="text-red-600 font-semibold text-sm">Product temp: {productTemp}\u00b0C \u2014 limit \u22644\u00b0C</p>
                 <p className="text-slate-400 text-xs mt-0.5">Return to chilled storage. Apply time-based decision tree.</p>
               </div>
             )}
             {roomBreached && (
               <div className={`border rounded-xl px-4 py-3 ${roomTemp > 15 ? 'bg-red-50 border-red-300' : 'bg-amber-50 border-amber-300'}`}>
-                <p className={`font-semibold text-sm ${roomTemp > 15 ? 'text-red-600' : 'text-[#EB6619]'}`}>Room temp: {roomTemp}°C — limit ≤12°C</p>
-                {roomTemp <= 15 && <p className="text-slate-500 text-xs mt-0.5 font-medium">Do NOT stop cutting — bring product progressively.</p>}
+                <p className={`font-semibold text-sm ${roomTemp > 15 ? 'text-red-600' : 'text-[#EB6619]'}`}>Room temp: {roomTemp}\u00b0C \u2014 limit \u226412\u00b0C</p>
+                {roomTemp <= 15 && <p className="text-slate-500 text-xs mt-0.5 font-medium">Do NOT stop cutting \u2014 bring product progressively.</p>}
               </div>
             )}
           </div>
 
+          {/* Required protocol — read only */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Required action (CA-001)
+              {cause === 'Equipment failure' && <span className="ml-1 text-amber-600 normal-case font-normal">\u2014 equipment failure override</span>}
+            </p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+              {protocolSteps.map((step, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-red-100 text-red-600">{i + 1}</div>
+                  <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Cause */}
           <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Cause of deviation</p>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
             <div className="grid grid-cols-2 gap-2">
               {CAUSE_OPTIONS.map((c) => (
                 <button key={c} onClick={() => setCause(c)}
@@ -351,218 +364,52 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
                   }`}>{c}</button>
               ))}
             </div>
-            {cause === 'Other' && (
-              <input type="text" value={causeOther} onChange={(e) => setCauseOther(e.target.value)}
-                placeholder="Describe the cause…"
-                className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
-            )}
           </div>
 
-          {/* Action taken (CA-001) */}
+          {/* Disposition — pre-filled, limited options */}
           <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</p>
-            {!cause ? (
-              <p className="text-xs text-slate-400 italic px-1">Select a cause first to see relevant actions.</p>
-            ) : (
-              <div className="space-y-2">
-                {actions.map((a) => (
-                  <button key={a} onClick={() => setAction(a)}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ${action === a ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
-                    {a}
-                  </button>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
+            <div className="flex flex-wrap gap-2">
+              {dispOptions.map((d) => (
+                <button key={d} onClick={() => setDisposition(d)}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                    disposition === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-400'
+                  }`}>{d}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Recurrence — cause-aware */}
+          {cause && (
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
+              <div className="space-y-1.5">
+                {(RECURRENCE_BY_CAUSE[cause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                  <button key={r} onClick={() => setRecurrence(r)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                      recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                    }`}>{r}</button>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Product disposition */}
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</p>
-            <div className="grid grid-cols-3 gap-2">
-              {DISPOSITION_OPTIONS.map((d) => (
-                <button key={d} onClick={() => setDisposition(d)}
-                  className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'}`}>
-                  {d}
-                </button>
-              ))}
             </div>
-          </div>
-
-          {/* Recurrence prevention */}
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
-            <div className="grid grid-cols-1 gap-2">
-              {RECURRENCE_OPTIONS.map((r) => (
-                <button key={r} onClick={() => setRecurrence(r)}
-                  className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'}`}>
-                  {r}
-                </button>
-              ))}
-            </div>
-            {recurrence === 'Other' && (
-              <input type="text" value={recurrenceOther} onChange={(e) => setRecurrenceOther(e.target.value)}
-                placeholder="Describe the prevention measure…"
-                className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
-            )}
-          </div>
+          )}
 
           {/* Notes */}
           <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</p>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes <span className="normal-case font-normal">(optional)</span></p>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              placeholder="Additional details…"
+              placeholder="Additional details\u2026"
               className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
           </div>
 
-          <button onClick={handleConfirm}
-            disabled={!canSubmit}
+          <p className="text-slate-400 text-xs">This record is immutable once submitted. Protocol per CA-001.</p>
+
+          <button onClick={handleConfirm} disabled={!canSubmit}
             className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
             Confirm &amp; submit
           </button>
         </div>
       </div>
-    </div>
-  )
-}
-
-// ─── Diary Phase Card ─────────────────────────────────────────────────────────
-
-function DiaryPhaseCard({
-  phase, existing, onSubmit,
-}: {
-  phase:    Phase
-  existing: DiaryEntry | undefined
-  onSubmit: (phase: Phase, results: Record<string,boolean>, issues: boolean, note: string) => Promise<void>
-}) {
-  const checks  = CHECKS[phase]
-  const isDone  = !!existing
-  const [open,  setOpen]   = useState(false)
-  const [results, setResults] = useState<Record<string,boolean>>({})
-  const [issues,  setIssues]  = useState(false)
-  const [note,    setNote]    = useState('')
-  const [saving,  setSaving]  = useState(false)
-  const [err,     setErr]     = useState('')
-
-  const allAnswered = checks.every((c) => results[c.key] !== undefined)
-
-  function toggle(key: string, val: boolean) {
-    setResults((prev) => ({ ...prev, [key]: val }))
-    // If anything is set to false, auto-toggle issues on
-    if (!val) setIssues(true)
-  }
-
-  async function handleSubmit() {
-    if (!allAnswered) { setErr('Answer all items before submitting'); return }
-    if (issues && !note.trim()) { setErr('Describe what was done about the issue'); return }
-    setSaving(true); setErr('')
-    await onSubmit(phase, results, issues, note)
-    setSaving(false)
-  }
-
-  if (isDone) {
-    const anyFail = Object.values(existing.check_results).some((v) => v === false)
-    return (
-      <div className="bg-green-50 border border-green-200 rounded-2xl overflow-hidden">
-        <button onClick={() => setOpen(!open)} className="w-full px-4 py-3 flex items-center justify-between">
-          <div>
-            <p className="text-slate-900 font-semibold text-sm">{PHASE_LABELS[phase]}</p>
-            <p className="text-green-600 text-xs mt-0.5">
-              Done · {new Date(existing.submitted_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
-              {anyFail ? ' · issues noted' : ' · all pass'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {existing.issues && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-[#EB6619]">Issue noted</span>}
-            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-              <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M19 9l-7 7-7-7"/></svg>
-          </div>
-        </button>
-        {open && (
-          <div className="px-4 pb-4 border-t border-blue-100 pt-3 space-y-1.5">
-            {checks.map((c) => (
-              <div key={c.key} className="flex items-center gap-3">
-                <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${existing.check_results[c.key] ? 'bg-green-100' : 'bg-red-50'}`}>
-                  {existing.check_results[c.key]
-                    ? <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                    : <svg className="w-3 h-3 text-red-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  }
-                </div>
-                <p className="text-slate-500 text-xs">{c.label}</p>
-              </div>
-            ))}
-            {existing.issues && existing.what_did_you_do && (
-              <div className="mt-3 bg-amber-50 border-l-2 border-amber-400 pl-3 py-2 border-radius-0">
-                <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-0.5">Action taken</p>
-                <p className="text-slate-500 text-xs italic">{existing.what_did_you_do}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className={`border rounded-2xl overflow-hidden ${open ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-white'}`}>
-      <button onClick={() => setOpen(!open)} className="w-full px-4 py-3 flex items-center justify-between">
-        <div>
-          <p className="text-slate-900 font-semibold text-sm">{PHASE_LABELS[phase]}</p>
-          <p className="text-slate-400 text-xs mt-0.5">{PHASE_SUBS[phase]}</p>
-        </div>
-        <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M19 9l-7 7-7-7"/></svg>
-      </button>
-
-      {open && (
-        <div className="border-t border-blue-100">
-          <div className="px-4 py-3 space-y-2">
-            {checks.map((c) => (
-              <div key={c.key} className="flex items-center gap-3">
-                <button onPointerDown={(e) => { e.preventDefault(); toggle(c.key, true) }}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2 transition-all active:scale-95 ${results[c.key] === true ? 'bg-green-100 border-green-300' : 'bg-white border-slate-300'}`}>
-                  <svg className={`w-5 h-5 ${results[c.key] === true ? 'text-green-600' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                </button>
-                <button onPointerDown={(e) => { e.preventDefault(); toggle(c.key, false) }}
-                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2 transition-all active:scale-95 ${results[c.key] === false ? 'bg-red-50 border-red-400' : 'bg-white border-slate-300'}`}>
-                  <svg className={`w-5 h-5 ${results[c.key] === false ? 'text-red-600' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-                <p className="text-slate-700 text-sm flex-1">{c.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="px-4 pb-4 space-y-3 border-t border-blue-100 pt-3">
-            <div className="flex items-center gap-3">
-              <p className="text-slate-500 text-sm">Any issues?</p>
-              <div className="flex gap-2 ml-auto">
-                {[true, false].map((v) => (
-                  <button key={String(v)} onClick={() => setIssues(v)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${issues === v ? (v ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-green-100 border-green-300 text-green-600') : 'bg-white border-slate-300 text-slate-600'}`}>
-                    {v ? 'Yes' : 'No'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {issues && (
-              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
-                placeholder="What did you do? Describe the action taken…"
-                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
-            )}
-
-            {err && <p className="text-red-600 text-xs">{err}</p>}
-
-            <button onClick={handleSubmit} disabled={!allAnswered || saving}
-              className="w-full bg-[#EB6619] text-white font-bold py-3.5 rounded-xl text-sm disabled:opacity-40 flex items-center justify-center gap-2">
-              {saving
-                ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Submitting…</>
-                : `Submit ${PHASE_LABELS[phase].toLowerCase()}`
-              }
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

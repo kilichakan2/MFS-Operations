@@ -4,6 +4,10 @@
  * GET  — returns all active cold storage units + today's readings
  * POST — submits readings for a session (AM or PM), plus writes a corrective
  *        action row (one per deviating reading) when any reading fails.
+ *
+ * Batch 4: action field removed from CAPayload — server derives action_taken
+ * from protocol lookup (CA-001). Cause validated against valid set.
+ * Disposition pre-filled by client; validated server-side.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,6 +22,71 @@ const DISPOSITION_MAP: Record<string, string> = {
   'Assess':             'assess',
   'Reject':             'reject',
   'Dispose':            'dispose',
+}
+
+const VALID_CAUSES = new Set([
+  'Door left open',
+  'Unit overloaded',
+  'Seal damaged',
+  'Equipment failure',
+  'Power interruption',
+  'Other',
+])
+
+// ─── Protocol lookup (CA-001 verbatim) ────────────────────────────────────────
+
+const PROTOCOLS: Record<string, string[]> = {
+  chiller_critical: [
+    'Minimise door openings immediately',
+    'Transfer all product to backup unit immediately',
+    'Probe individual products to assess core temperature',
+    'Segregate any product above the legal limit for assessment',
+    'Contact refrigeration engineer urgently',
+    'Assess all product for safety before release',
+  ],
+  chiller_amber: [
+    'Check door seals and closure',
+    'Verify unit not overloaded / reduce loading',
+    'Recheck temperature within 30 minutes',
+    'Transfer product to backup chiller if temperature does not recover',
+    'Call refrigeration engineer if fault persists',
+  ],
+  freezer_critical: [
+    'Assess product for thawing (ice crystal formation, texture)',
+    'Transfer to functioning freezer immediately',
+    'Do NOT refreeze if product has fully thawed',
+    'Contact refrigeration engineer urgently',
+  ],
+  freezer_amber: [
+    'Keep door closed — minimise openings',
+    'Check for ice build-up on coils',
+    'Monitor temperature — acceptable short-term if product re-frozen immediately',
+    'Call refrigeration engineer if temperature does not recover',
+  ],
+  equipment_failure: [
+    'Document time of failure discovery',
+    'Transfer products to backup refrigeration immediately',
+    'Estimate time product was at elevated temperature',
+    'Contact refrigeration engineer urgently',
+    'Assess each product individually (if >2h above limit)',
+    'Complete equipment failure log',
+  ],
+}
+
+function deriveColdStorageAction(
+  cause: string,
+  worstStatus: 'amber' | 'critical',
+  worstUnitType: string,
+): string {
+  if (cause === 'Equipment failure') return PROTOCOLS.equipment_failure.join(' | ')
+  if (worstUnitType === 'freezer') {
+    return worstStatus === 'critical'
+      ? PROTOCOLS.freezer_critical.join(' | ')
+      : PROTOCOLS.freezer_amber.join(' | ')
+  }
+  return worstStatus === 'critical'
+    ? PROTOCOLS.chiller_critical.join(' | ')
+    : PROTOCOLS.chiller_amber.join(' | ')
 }
 
 function todayUK(): string {
@@ -81,7 +150,6 @@ export async function POST(req: NextRequest) {
       comments: string
       corrective_action?: {
         cause:       string
-        action:      string
         disposition: string
         recurrence:  string
         notes:       string
@@ -141,9 +209,12 @@ export async function POST(req: NextRequest) {
       if (!corrective_action) {
         return NextResponse.json({ error: 'Corrective action required for deviation' }, { status: 400 })
       }
-      const { cause, action, disposition, recurrence } = corrective_action
-      if (!cause || !action || !disposition || !recurrence) {
+      const { cause, disposition, recurrence } = corrective_action
+      if (!cause || !disposition || !recurrence) {
         return NextResponse.json({ error: 'Incomplete corrective action' }, { status: 400 })
+      }
+      if (!VALID_CAUSES.has(cause)) {
+        return NextResponse.json({ error: `Invalid cause: ${cause}` }, { status: 400 })
       }
       if (!DISPOSITION_MAP[disposition]) {
         return NextResponse.json({ error: `Invalid disposition: ${disposition}` }, { status: 400 })
@@ -193,6 +264,13 @@ export async function POST(req: NextRequest) {
         ? `${corrective_action.recurrence} | Notes: ${corrective_action.notes}`
         : corrective_action.recurrence
 
+      // Derive action_taken server-side from the worst deviation's unit type + status
+      const worstDev    = deviations.find((r) => r.temp_status === 'critical') ?? deviations[0]
+      const worstUnit   = unitById.get(worstDev.unit_id)
+      const worstType   = worstUnit?.unit_type ?? 'chiller'
+      const worstStatus = (worstDev.temp_status === 'critical' ? 'critical' : 'amber') as 'amber' | 'critical'
+      const actionText  = deriveColdStorageAction(corrective_action.cause, worstStatus, worstType)
+
       const caRows = deviations.map((r) => ({
         actioned_by:   userId,
         source_table:  'haccp_cold_storage_temps',
@@ -200,7 +278,7 @@ export async function POST(req: NextRequest) {
         ccp_ref:       'CCP2',
         deviation_description:
           `${unitNameById.get(r.unit_id) ?? 'Unknown unit'}: ${r.temperature_c}°C (${r.temp_status}). Cause: ${corrective_action.cause}`,
-        action_taken:             corrective_action.action,
+        action_taken:             actionText,
         product_disposition:      dispositionEnum,
         recurrence_prevention:    recurrence,
         management_verification_required: r.temp_status === 'critical',

@@ -147,11 +147,11 @@ function Numpad({ value, onChange, onClose, unit }: {
 
 type CAPayload = {
   cause:       string
-  action:      string
   disposition: string
   recurrence:  string
   notes:       string
 }
+// ─── CA constants (Batch 4 — adaptive redesign) ──────────────────────────────
 
 const CAUSE_OPTIONS = [
   'Door left open',
@@ -162,113 +162,108 @@ const CAUSE_OPTIONS = [
   'Other',
 ]
 
-const RECURRENCE_OPTIONS = [
-  'Retrain staff on door discipline',
-  'Schedule maintenance check',
-  'Reduce loading limit',
-  'Replace door seal',
-  'Install temperature alarm',
-  'Other',
-]
+const RECURRENCE_BY_CAUSE: Record<string, string[]> = {
+  'Door left open':     ['Retrain staff on door discipline', 'Add door-close reminder signage', 'Other'],
+  'Unit overloaded':    ['Reduce loading limit', 'Retrain staff on loading limits', 'Other'],
+  'Seal damaged':       ['Replace door seal', 'Schedule maintenance check', 'Other'],
+  'Equipment failure':  ['Contact refrigeration engineer', 'Schedule maintenance check', 'Install temperature alarm', 'Other'],
+  'Power interruption': ['Install temperature alarm', 'Review backup power options', 'Schedule maintenance check', 'Other'],
+  'Other':              ['Schedule maintenance check', 'Retrain staff', 'Install temperature alarm', 'Other'],
+}
 
-const DISPOSITION_OPTIONS = ['Accept', 'Conditional accept', 'Assess', 'Reject', 'Dispose']
-
-/**
- * Action list per CA-001. Equipment failure cause overrides the status-based
- * list with the dedicated equipment-failure action set.
- */
-function getActionList(
-  cause: string,
-  worstStatus: TempStatus,
-  worstUnitType: string,
-): string[] {
-  if (cause === 'Equipment failure') {
-    return [
-      'Document time of failure discovery',
-      'Transfer products to backup refrigeration',
-      'Estimate time product was at elevated temperature',
-      'Contact refrigeration engineer',
-      'Assess each product individually (if >2h above limit)',
-      'Complete equipment failure log',
-    ]
-  }
-  if (worstUnitType === 'freezer') {
-    if (worstStatus === 'critical') {
-      return [
-        'Assess product for thawing (ice crystal formation, texture)',
-        'Transfer to functioning freezer',
-        'Do NOT refreeze if product has thawed',
-      ]
-    }
-    return [
-      'Keep door closed',
-      'Check for ice build-up on coils',
-      'Acceptable short-term if product re-frozen immediately',
-    ]
-  }
-  // chiller
-  if (worstStatus === 'critical') {
-    return [
-      'Minimise door openings',
-      'Transfer all product to backup unit immediately',
-      'Probe individual products to assess core temperature',
-      'Segregate any product above the limit for assessment',
-      'Contact refrigeration engineer urgently',
-      'Assess all product for safety before release',
-    ]
-  }
-  return [
+// Predetermined protocols (CA-001) — shown read-only, stored server-side
+const PROTOCOL_STEPS: Record<string, string[]> = {
+  chiller_critical: [
+    'Minimise door openings immediately',
+    'Transfer all product to backup unit immediately',
+    'Probe individual products to assess core temperature',
+    'Segregate any product above the legal limit for assessment',
+    'Contact refrigeration engineer urgently',
+    'Assess all product for safety before release',
+  ],
+  chiller_amber: [
     'Check door seals and closure',
     'Verify unit not overloaded / reduce loading',
     'Recheck temperature within 30 minutes',
-    'Transfer product to backup chiller',
-    'Call refrigeration engineer',
-  ]
+    'Transfer product to backup chiller if temperature does not recover',
+    'Call refrigeration engineer if fault persists',
+  ],
+  freezer_critical: [
+    'Assess product for thawing (ice crystal formation, texture)',
+    'Transfer to functioning freezer immediately',
+    'Do NOT refreeze if product has fully thawed',
+    'Contact refrigeration engineer urgently',
+  ],
+  freezer_amber: [
+    'Keep door closed — minimise openings',
+    'Check for ice build-up on coils',
+    'Monitor — acceptable short-term if product re-frozen immediately',
+    'Call refrigeration engineer if temperature does not recover',
+  ],
+  equipment_failure: [
+    'Document time of failure discovery',
+    'Transfer products to backup refrigeration immediately',
+    'Estimate time product was at elevated temperature',
+    'Contact refrigeration engineer urgently',
+    'Assess each product individually (if >2h above limit)',
+    'Complete equipment failure log',
+  ],
 }
+
+function getProtocolKey(cause: string, worstStatus: TempStatus, worstUnitType: string): string {
+  if (cause === 'Equipment failure') return 'equipment_failure'
+  if (worstUnitType === 'freezer') return worstStatus === 'critical' ? 'freezer_critical' : 'freezer_amber'
+  return worstStatus === 'critical' ? 'chiller_critical' : 'chiller_amber'
+}
+
+function getDispositionDefault(cause: string, worstStatus: TempStatus): string {
+  if (cause === 'Equipment failure') return 'Assess'
+  return worstStatus === 'critical' ? 'Assess' : 'Conditional accept'
+}
+
+function getDispositionOptions(cause: string, worstStatus: TempStatus): string[] {
+  if (cause === 'Equipment failure') return ['Assess', 'Conditional accept', 'Reject']
+  if (worstStatus === 'critical')    return ['Assess', 'Reject']
+  return ['Conditional accept', 'Assess', 'Accept']
+}
+
+// ─── CCAPopup ─────────────────────────────────────────────────────────────────
 
 function CCAPopup({ deviations, onSubmit, onBack }: {
   deviations: { name: string; temp: number; status: TempStatus; unitType: string }[]
   onSubmit:   (ca: CAPayload) => void
   onBack:     () => void
 }) {
-  const [cause,           setCause]           = useState('')
-  const [causeOther,      setCauseOther]      = useState('')
-  const [action,          setAction]          = useState('')
-  const [disposition,     setDisposition]     = useState('')
-  const [recurrence,      setRecurrence]      = useState('')
-  const [recurrenceOther, setRecurrenceOther] = useState('')
-  const [notes,           setNotes]           = useState('')
-
   const worst       = deviations.find((d) => d.status === 'critical') ?? deviations[0]
   const worstStatus = worst?.status ?? 'amber'
   const worstType   = worst?.unitType ?? 'chiller'
 
-  const actions = getActionList(cause, worstStatus, worstType)
+  const [cause,      setCause]      = useState('')
+  const [disposition, setDisposition] = useState(getDispositionDefault('', worstStatus as TempStatus))
+  const [recurrence, setRecurrence] = useState('')
+  const [notes,      setNotes]      = useState('')
 
-  // If cause changes and the currently-picked action is no longer in the list, clear it
+  const protocolKey   = getProtocolKey(cause, worstStatus as TempStatus, worstType)
+  const protocolSteps = PROTOCOL_STEPS[protocolKey] ?? []
+  const dispOptions   = getDispositionOptions(cause, worstStatus as TempStatus)
+
+  // Reset disposition default when cause changes
   useEffect(() => {
-    if (action && !actions.includes(action)) setAction('')
+    setDisposition(getDispositionDefault(cause, worstStatus as TempStatus))
+    setRecurrence('')
   }, [cause]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const finalCause      = cause === 'Other'      ? causeOther.trim()      : cause
-  const finalRecurrence = recurrence === 'Other' ? recurrenceOther.trim() : recurrence
-
-  const canSubmit = Boolean(finalCause && action && disposition && finalRecurrence)
+  const canSubmit = Boolean(cause && disposition && recurrence)
 
   function handleConfirm() {
-    onSubmit({
-      cause:       finalCause,
-      action,
-      disposition,
-      recurrence:  finalRecurrence,
-      notes:       notes.trim(),
-    })
+    onSubmit({ cause, disposition, recurrence, notes: notes.trim() })
   }
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-end justify-center" style={{ position: 'fixed' }}>
-      <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 max-h-[85vh] overflow-y-auto">
-        <div className="flex items-start justify-between mb-5">
+      <div className="bg-white rounded-t-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+
+        <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
           <div>
             <p className="text-red-600 text-xs font-bold tracking-widest uppercase">CCP 2 deviation</p>
             <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action Required</h2>
@@ -278,20 +273,38 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
           </button>
         </div>
 
-        <div className="space-y-2 mb-5">
-          {deviations.map((d) => (
-            <div key={d.name} className={`rounded-xl p-3 border ${STATUS_BG[d.status ?? 'amber']}`}>
-              <span className="font-semibold text-sm">{d.name}: {d.temp}°C</span>
-              <span className="ml-2 text-xs opacity-75">— {STATUS_LABEL[d.status ?? 'amber']}</span>
-              <p className="text-xs mt-1 opacity-70">{getCorrectiveAction(d.status, d.unitType)}</p>
-            </div>
-          ))}
-        </div>
+        <div className="px-6 pb-8 pt-4 space-y-5">
 
-        <div className="space-y-4">
+          {/* Deviation summary */}
+          <div className="space-y-2">
+            {deviations.map((d) => (
+              <div key={d.name} className={`rounded-xl p-3 border ${STATUS_BG[d.status ?? 'amber']}`}>
+                <span className="font-semibold text-sm">{d.name}: {d.temp}\u00b0C</span>
+                <span className="ml-2 text-xs opacity-75">\u2014 {STATUS_LABEL[d.status ?? 'amber']}</span>
+                <p className="text-xs mt-1 opacity-70">{getCorrectiveAction(d.status, d.unitType)}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Required protocol — read only, updates if cause changes */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Required action (CA-001)
+              {cause === 'Equipment failure' && <span className="ml-1 text-amber-600 normal-case font-normal">\u2014 equipment failure override</span>}
+            </p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+              {protocolSteps.map((step, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-red-100 text-red-600">{i + 1}</div>
+                  <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Cause */}
           <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Cause of deviation</label>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
             <div className="grid grid-cols-2 gap-2">
               {CAUSE_OPTIONS.map((c) => (
                 <button key={c} onClick={() => setCause(c)}
@@ -300,71 +313,47 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
                   }`}>{c}</button>
               ))}
             </div>
-            {cause === 'Other' && (
-              <input type="text" value={causeOther} onChange={(e) => setCauseOther(e.target.value)}
-                placeholder="Describe the cause…"
-                className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
-            )}
           </div>
 
-          {/* Action taken */}
+          {/* Disposition — pre-filled, limited options */}
           <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Action taken</label>
-            {!cause ? (
-              <p className="text-xs text-slate-400 italic px-1">Select a cause first to see relevant actions.</p>
-            ) : (
-              <div className="space-y-2">
-                {actions.map((a) => (
-                  <button key={a} onClick={() => setAction(a)}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border ${
-                      action === a ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-slate-50 border-slate-200 text-slate-600'
-                    }`}>{a}</button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Product disposition */}
-          <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
-            <div className="grid grid-cols-3 gap-2">
-              {DISPOSITION_OPTIONS.map((d) => (
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
+            <div className="flex flex-wrap gap-2">
+              {dispOptions.map((d) => (
                 <button key={d} onClick={() => setDisposition(d)}
-                  className={`py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                    disposition === d ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                    disposition === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-400'
                   }`}>{d}</button>
               ))}
             </div>
           </div>
 
-          {/* Recurrence prevention */}
-          <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Recurrence prevention</label>
-            <div className="grid grid-cols-1 gap-2">
-              {RECURRENCE_OPTIONS.map((r) => (
-                <button key={r} onClick={() => setRecurrence(r)}
-                  className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                    recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
-                  }`}>{r}</button>
-              ))}
+          {/* Recurrence — cause-aware, appears after cause selected */}
+          {cause && (
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
+              <div className="space-y-1.5">
+                {(RECURRENCE_BY_CAUSE[cause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                  <button key={r} onClick={() => setRecurrence(r)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                      recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                    }`}>{r}</button>
+                ))}
+              </div>
             </div>
-            {recurrence === 'Other' && (
-              <input type="text" value={recurrenceOther} onChange={(e) => setRecurrenceOther(e.target.value)}
-                placeholder="Describe the prevention measure…"
-                className="mt-2 w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
-            )}
-          </div>
+          )}
 
           {/* Notes */}
           <div>
-            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Notes (optional)</label>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes <span className="normal-case font-normal">(optional)</span></p>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              placeholder="Any additional details…"
+              placeholder="Any additional details\u2026"
               className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
-          <button onClick={handleConfirm}
-            disabled={!canSubmit}
+          <p className="text-slate-400 text-xs">This record is immutable once submitted. Protocol per CA-001.</p>
+
+          <button onClick={handleConfirm} disabled={!canSubmit}
             className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
             Confirm corrective action &amp; submit
           </button>
@@ -373,6 +362,7 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
     </div>
   )
 }
+
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 

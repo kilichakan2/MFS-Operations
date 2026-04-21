@@ -3,6 +3,9 @@
  *
  * GET  — today's temperature readings + diary phase completions
  * POST — submit temperature session OR a diary phase
+ *
+ * Batch 4: action field removed from CAPayload — server derives action_taken
+ * from protocol lookup (CA-001). Cause validated against valid set.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -17,6 +20,65 @@ const DISPOSITION_MAP: Record<string, string> = {
   'Assess':             'assess',
   'Reject':             'reject',
   'Dispose':            'dispose',
+}
+
+const VALID_CAUSES = new Set([
+  'A/C or cooling failure',
+  'Doors left open',
+  'Product held in room too long',
+  'Batch too large',
+  'Equipment failure',
+  'Power interruption',
+  'Other',
+])
+
+// ─── Protocol lookup (CA-001 CCP 3 verbatim) ─────────────────────────────────
+
+const PROTOCOLS: Record<string, string[]> = {
+  product_breach: [
+    'Return product to chilled storage immediately',
+    'Record time product was above temperature limit',
+    'If <2 hours at <8\u00b0C: complete processing within 30 minutes then chill',
+    'If >2 hours or >8\u00b0C: segregate product for safety assessment',
+    'Reduce batch sizes for future processing',
+  ],
+  room_breach_high: [
+    'Stop loading product into room',
+    'Return all product to chilled storage immediately',
+    'Investigate cooling failure urgently',
+    'Do not resume until temperature below 12\u00b0C',
+  ],
+  room_breach_amber: [
+    'Do NOT stop cutting',
+    'Bring product to production progressively in small quantities',
+    'Monitor product core temperature — must remain \u22644\u00b0C',
+    'If core temp rises above 4\u00b0C, return to chilled storage',
+    'Investigate cause — check A/C and cooling unit',
+  ],
+  equipment_failure: [
+    'Document time of failure discovery',
+    'Transfer products to chilled storage immediately',
+    'Estimate time product was at elevated temperature',
+    'Contact refrigeration/maintenance engineer urgently',
+    'Assess each product individually (if >2h above limit)',
+    'Complete equipment failure log',
+  ],
+}
+
+function deriveProcRoomAction(
+  cause: string,
+  productBreached: boolean,
+  roomBreached: boolean,
+  roomTemp: number,
+): string {
+  if (cause === 'Equipment failure') return PROTOCOLS.equipment_failure.join(' | ')
+  if (productBreached)               return PROTOCOLS.product_breach.join(' | ')
+  if (roomBreached) {
+    return roomTemp > 15
+      ? PROTOCOLS.room_breach_high.join(' | ')
+      : PROTOCOLS.room_breach_amber.join(' | ')
+  }
+  return PROTOCOLS.product_breach.join(' | ')
 }
 
 function todayUK(): string {
@@ -81,7 +143,6 @@ export async function POST(req: NextRequest) {
         room_temp_c:    number
         corrective_action?: {
           cause:       string
-          action:      string
           disposition: string
           recurrence:  string
           notes:       string
@@ -110,9 +171,12 @@ export async function POST(req: NextRequest) {
         if (!corrective_action) {
           return NextResponse.json({ error: 'Corrective action required for deviation' }, { status: 400 })
         }
-        const { cause, action, disposition, recurrence } = corrective_action
-        if (!cause || !action || !disposition || !recurrence) {
+        const { cause, disposition, recurrence } = corrective_action
+        if (!cause || !disposition || !recurrence) {
           return NextResponse.json({ error: 'Incomplete corrective action' }, { status: 400 })
+        }
+        if (!VALID_CAUSES.has(cause)) {
+          return NextResponse.json({ error: `Invalid cause: ${cause}` }, { status: 400 })
         }
         if (!DISPOSITION_MAP[disposition]) {
           return NextResponse.json({ error: `Invalid disposition: ${disposition}` }, { status: 400 })
@@ -155,6 +219,14 @@ export async function POST(req: NextRequest) {
           ? `${corrective_action.recurrence} | Notes: ${corrective_action.notes}`
           : corrective_action.recurrence
 
+        // Derive action_taken server-side per channel
+        const productActionText = deriveProcRoomAction(
+          corrective_action.cause, true, false, room_temp_c,
+        )
+        const roomActionText = deriveProcRoomAction(
+          corrective_action.cause, false, true, room_temp_c,
+        )
+
         const caRows: Array<Record<string, unknown>> = []
         if (!productPass) {
           caRows.push({
@@ -163,11 +235,11 @@ export async function POST(req: NextRequest) {
             source_id:     inserted.id,
             ccp_ref:       'CCP3',
             deviation_description:
-              `Product: ${product_temp_c}°C (limit ≤4°C). Cause: ${corrective_action.cause}`,
-            action_taken:             corrective_action.action,
+              `Product: ${product_temp_c}\u00b0C (limit \u22644\u00b0C). Cause: ${corrective_action.cause}`,
+            action_taken:             productActionText,
             product_disposition:      dispositionEnum,
             recurrence_prevention:    recurrence,
-            management_verification_required: true, // product >4°C is always critical
+            management_verification_required: true,
           })
         }
         if (!roomPass) {
@@ -177,11 +249,11 @@ export async function POST(req: NextRequest) {
             source_id:     inserted.id,
             ccp_ref:       'CCP3',
             deviation_description:
-              `Room: ${room_temp_c}°C (limit ≤12°C). Cause: ${corrective_action.cause}`,
-            action_taken:             corrective_action.action,
+              `Room: ${room_temp_c}\u00b0C (limit \u226412\u00b0C). Cause: ${corrective_action.cause}`,
+            action_taken:             roomActionText,
             product_disposition:      dispositionEnum,
             recurrence_prevention:    recurrence,
-            management_verification_required: room_temp_c > 15, // critical if >15°C
+            management_verification_required: room_temp_c > 15,
           })
         }
 
