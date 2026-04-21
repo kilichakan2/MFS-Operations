@@ -57,14 +57,16 @@ interface Delivery  {
 // ─── Product categories ───────────────────────────────────────────────────────
 
 const CATEGORIES: { key: string; label: string; limit: string; detail: string }[] = [
-  { key: 'red_meat',   label: 'Red meat (beef / lamb)', limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
-  { key: 'offal',      label: 'Offal',                  limit: '≤3°C',               detail: '≤3°C pass · >3°C reject' },
-  { key: 'mince_prep', label: 'Mince / meat prep',      limit: '≤4°C',               detail: '≤4°C pass · >4°C reject' },
-  { key: 'frozen',     label: 'Frozen',                 limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional (refreeze immediately) · >-15°C reject' },
+  { key: 'lamb',       label: 'Lamb',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
+  { key: 'beef',       label: 'Beef',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
+  { key: 'offal',      label: 'Offal',             limit: '≤3°C',               detail: '≤3°C pass · >3°C reject' },
+  { key: 'mince_prep', label: 'Mince / meat prep', limit: '≤4°C',               detail: '≤4°C pass · >4°C reject' },
+  { key: 'frozen',     label: 'Frozen',            limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional (refreeze immediately) · >-15°C reject' },
 ]
 
 const CATEGORY_LABELS: Record<string, string> = {
-  red_meat:   'Red meat', offal: 'Offal', mince_prep: 'Mince / prep', frozen: 'Frozen',
+  lamb: 'Lamb', beef: 'Beef', red_meat: 'Red meat',
+  offal: 'Offal', mince_prep: 'Mince / prep', frozen: 'Frozen',
 }
 
 // ─── Countries ────────────────────────────────────────────────────────────────
@@ -139,6 +141,8 @@ function buildBatchPrefix(date: string, countryCode: string): string {
 function calcStatus(temp: number, category: string): TempStatus {
   if (isNaN(temp)) return null
   switch (category) {
+    case 'lamb':
+    case 'beef':
     case 'red_meat':   return temp <= 5.0   ? 'pass' : temp <= 8.0   ? 'urgent' : 'fail'
     case 'offal':      return temp <= 3.0   ? 'pass' : 'fail'
     case 'mince_prep': return temp <= 4.0   ? 'pass' : 'fail'

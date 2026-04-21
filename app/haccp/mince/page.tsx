@@ -16,6 +16,7 @@ interface DeliveryOption {
   id:               string
   supplier:         string
   product:          string
+  product_category: string
   batch_number:     string
   slaughter_site:   string | null
   born_in:          string | null
@@ -197,7 +198,7 @@ export default function MincePage() {
   // ── Meatprep form state ─────────────────────────────────────────────────────
   const [pProductName,      setPProductName]      = useState('')
   const [pSpecies,          setPSpecies]          = useState('')
-  const [pKillDate,         setPKillDate]         = useState('')
+  const [pKillDate,         setPKillDate]         = useState('')  // kept for route compat — not shown in UI
   const [pInputVal,         setPInputVal]         = useState('')
   const [pOutputVal,        setPOutputVal]        = useState('')
   const [pOutputMode,       setPOutputMode]       = useState<'chilled'|'frozen'>('chilled')
@@ -355,21 +356,18 @@ export default function MincePage() {
   }
 
   /**
-   * Returns true if a delivery batch matches the given species.
-   * Uses product name text matching since haccp_deliveries has no species column yet.
-   * TODO: add species column to haccp_deliveries as part of CCP1 Phase D.
+   * Filter deliveries by product_category to match the selected mince species.
+   * product_category is now 'lamb' or 'beef' — direct match, no text heuristics.
    */
   function deliveryMatchesSpecies(d: DeliveryOption, species: string): boolean {
-    if (!species) return true  // no species selected — show all
-    const name = d.product.toLowerCase()
+    if (!species) return true
     switch (species) {
       case 'lamb':
-        return name.includes('lamb')
+        return d.product_category === 'lamb'
       case 'beef':
-        return name.includes('beef') && !name.includes('lamb')
       case 'imported_vac':
-        // Imported vac-packed beef — product name usually contains 'beef' or 'vac'
-        return (name.includes('beef') || name.includes('vac')) && !name.includes('lamb')
+        // Imported vac-packed beef was logged as 'beef' at goods-in
+        return d.product_category === 'beef'
       default:
         return true
     }
@@ -789,18 +787,6 @@ export default function MincePage() {
                       <p className="text-slate-500 text-[10px] mb-1">Selected mince batches:</p>
                       <p className="text-slate-800 text-xs font-mono font-bold">{pMinceBatchCodes.join(' · ')}</p>
                     </div>
-                  )}
-                </div>
-
-                {/* Kill date (optional for prep) */}
-                <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Kill date (optional — for traceability)</p>
-                  <input type="date" value={pKillDate}
-                    onChange={(e) => setPKillDate(e.target.value)}
-                    max={new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })}
-                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
-                  {pDays !== null && pKillDate && (
-                    <p className="text-slate-500 text-xs mt-1.5 ml-1">{pDays} days from kill date</p>
                   )}
                 </div>
 

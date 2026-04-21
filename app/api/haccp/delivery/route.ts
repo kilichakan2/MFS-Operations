@@ -145,6 +145,8 @@ function nowTimeUK(): string {
 
 function tempStatus(temp: number, category: string): 'pass' | 'urgent' | 'fail' {
   switch (category) {
+    case 'lamb':
+    case 'beef':
     case 'red_meat':   return temp <= 5.0   ? 'pass' : temp <= 8.0   ? 'urgent' : 'fail'
     case 'offal':      return temp <= 3.0   ? 'pass' : 'fail'
     case 'mince_prep': return temp <= 4.0   ? 'pass' : 'fail'
@@ -180,7 +182,7 @@ export async function GET(req: NextRequest) {
       supabase
         .from('haccp_deliveries')
         .select(`
-          id, date, time_of_delivery, supplier, product, product_category,
+          id, date, time_of_delivery, supplier, product, product_category, species,
           temperature_c, temp_status, covered_contaminated, contamination_notes, notes,
           born_in, reared_in, slaughter_site, cut_site, batch_number, delivery_number,
           submitted_at, users!inner(name)
