@@ -55,6 +55,9 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 - [ ] Real-time WhatsApp/email alert to Hakan/Ege/Daryl on critical deviations
 - [ ] Admin amendment flow (add correction notes to immutable readings)
 - [ ] Atomic readings+CA insert via RPC (replaces the `ca_write_failed` flag)
+- [ ] **Adaptive CA popup redesign** — CCP 2 CA popup uses the old pattern
+  (pick action from list, full 5-option disposition, generic recurrence list).
+  Needs same Batch 3 treatment as CCP 1. **Revisit after CCP 1 go-live.**
 
 ---
 
@@ -96,15 +99,26 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
     / SOP3 action lists (~6 issue types). Estimated 90 min once scoped.
   - [ ] **B7. DB-driven CCP 3 limits** (deferred — 4°C/12°C are fixed
     legal limits under EC 853/2004, unlikely to change)
+  - [ ] **Adaptive CA popup redesign** — CCP 3 CA popup (cold-storage +
+    process-room) uses the old pattern (pick action from list, shared cause,
+    full 5-option disposition picker, generic 6-option recurrence list).
+    Needs same Batch 3 treatment as CCP 1: action server-derived, cause
+    relevant to scenario, disposition pre-filled/limited, recurrence
+    cause-aware. **Revisit after CCP 1 go-live.**
 
 - [~] **CCP 1 — Goods In / Delivery Intake** (`/haccp/delivery`)
-  — audit complete, Batches 1+2 merged. See **`HACCP_CCP1_AUDIT.md`**.
+  — audit complete, Batches 1+2+3 merged. See **`HACCP_CCP1_AUDIT.md`**.
   - [x] **C11** clean 409 on delivery_number race condition
   - [x] **C2** supplier_id resolved from chip UUID
   - [x] **C1** CCA popup wired to haccp_corrective_actions (two-track)
   - [x] **C8** traceability mandatory on every submission
   - [x] Batch code DDMM-CC-N + ISO alpha-2 country codes
-  - [ ] **C6** contamination classification enum (Batch 3)
+  - [x] **C6** contamination_type enum (uncovered / contaminated_faecal /
+    packaging_damaged / missing_docs). DB column added. Sub-picker shown
+    for yes + yes_actioned. Required before CCA popup opens.
+  - [x] **Adaptive CA popup** — action_taken server-derived per CA-001
+    protocol; causes split per track; disposition pre-filled + locked/limited
+    by scenario; recurrence cause-aware (3-4 options per cause).
   - [ ] Phase D items (C5, C12, C13, C15, C16, C17)
   - [ ] Phase E enhancements (photos, NCR, supplier dashboard, etc.)
 

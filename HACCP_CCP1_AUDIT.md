@@ -319,6 +319,11 @@ Numbering starts at C to continue the letter series (A = CCP 2, B = CCP 3).
   each). C8 strict mandatory traceability (born_in/reared_in/slaughter_site/cut_site
   required on every submission). Batch code format: DDMM-CC-N (ISO alpha-2). Country
   list expanded to 14 curated + full ISO search. Awaiting live kiosk test.
+  Batch 3 shipped (commit 6ed8aa1): C6 contamination_type DB column + sub-picker for
+  both yes/yes_actioned. CCAPopup redesigned — action_taken now server-derived per
+  CA-001 protocol (not user pick). Causes split per track. Disposition pre-filled and
+  locked/limited by scenario. Recurrence cause-aware (3-4 options per cause).
+  Equipment failure cause switches temp to 6-step override protocol.
 - **2026-04-20** — Audit complete. Schema + current data reviewed. 8
   deliveries in DB, 0 with supplier_id, 2 deviations with 0 linked CA rows.
   18 findings across 4 severities + 5 enhancement ideas. No code
