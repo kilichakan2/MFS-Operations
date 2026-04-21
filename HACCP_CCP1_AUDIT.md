@@ -75,7 +75,7 @@ Scoring the same way as CCP 2 / CCP 3 — critical = go-live blocker.
 
 ### 🔴 Critical (go-live blockers)
 
-**C1. CCA popup is acknowledgement-only — no CA row written**
+**C1. ✅ CCA popup wired to `haccp_corrective_actions` (Batch 2)**
 
 Same pattern gap as CCP 2 pre-A2 and CCP 3 pre-B5. Two existing deviations
 in DB, zero CA rows for CCP1. The popup displays CA-001 required actions
@@ -124,7 +124,7 @@ Today all of these get collapsed into one generic "yes" flag. The popup
 shows a single contam action list (the faecal/wool/hide one). Three of
 the four deviation categories are therefore guided wrong.
 
-**C8. Traceability fields are optional for red meat**
+**C8. ✅ Traceability mandatory on every submission (Batch 2)**
 
 `born_in`, `reared_in`, `slaughter_site`, `cut_site` are nullable on the
 schema and not enforced by the form for `red_meat` category. The UK
@@ -314,6 +314,11 @@ Numbering starts at C to continue the letter series (A = CCP 2, B = CCP 3).
 
 ## Session log
 
+- **2026-04-21** — Batch 1 (C11 + C2) already on main. Batch 2 shipped (commit a78739e):
+  C1 CCA popup wired to haccp_corrective_actions (two-track: temp + contam, one CA row
+  each). C8 strict mandatory traceability (born_in/reared_in/slaughter_site/cut_site
+  required on every submission). Batch code format: DDMM-CC-N (ISO alpha-2). Country
+  list expanded to 14 curated + full ISO search. Awaiting live kiosk test.
 - **2026-04-20** — Audit complete. Schema + current data reviewed. 8
   deliveries in DB, 0 with supplier_id, 2 deviations with 0 linked CA rows.
   18 findings across 4 severities + 5 enhancement ideas. No code

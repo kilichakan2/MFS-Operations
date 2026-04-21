@@ -1,7 +1,7 @@
 # HACCP Kiosk — Audit Status
 
 Living tracker for the section-by-section audit before go-live.
-Last updated: 2026-04-20
+Last updated: 2026-04-21
 
 Legend — [x] done on main · [ ] outstanding · [~] in progress
 
@@ -98,11 +98,15 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
     legal limits under EC 853/2004, unlikely to change)
 
 - [~] **CCP 1 — Goods In / Delivery Intake** (`/haccp/delivery`)
-  — audit complete, implementation pending. See dedicated plan in
-  **`HACCP_CCP1_AUDIT.md`** at repo root. Summary: 18 findings across
-  4 severities + 5 enhancement ideas. 3 blockers (CCA popup not writing
-  to DB, supplier_id never populated, contamination not classified per
-  CA-001). Three open questions for Hakan before starting Phase C.
+  — audit complete, Batches 1+2 merged. See **`HACCP_CCP1_AUDIT.md`**.
+  - [x] **C11** clean 409 on delivery_number race condition
+  - [x] **C2** supplier_id resolved from chip UUID
+  - [x] **C1** CCA popup wired to haccp_corrective_actions (two-track)
+  - [x] **C8** traceability mandatory on every submission
+  - [x] Batch code DDMM-CC-N + ISO alpha-2 country codes
+  - [ ] **C6** contamination classification enum (Batch 3)
+  - [ ] Phase D items (C5, C12, C13, C15, C16, C17)
+  - [ ] Phase E enhancements (photos, NCR, supplier dashboard, etc.)
 
 - [ ] **CCP-M / CCP-MP — Mince & Meat Prep** (`/haccp/mince`) — audit + CA wire-up
 
@@ -118,6 +122,8 @@ Legend — [x] done on main · [ ] outstanding · [~] in progress
 - [ ] People / SOP 8 — health declarations, visitor log, return-to-work
 - [ ] Admin HACCP panel (`/haccp/admin`)
 - [ ] CCA admin view — resolve flow + management verification queue
+- [ ] **S1 — Suppliers admin CRUD** (`/haccp/admin/suppliers`) — add/edit/deactivate
+  approved suppliers. Currently edit via SQL only. Part of Admin HACCP panel.
 
 ---
 
