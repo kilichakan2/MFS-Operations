@@ -414,6 +414,147 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
   )
 }
 
+// ─── DiaryPhaseCard ───────────────────────────────────────────────────────────
+
+function DiaryPhaseCard({
+  phase, existing, onSubmit,
+}: {
+  phase:    Phase
+  existing: DiaryEntry | undefined
+  onSubmit: (phase: Phase, results: Record<string,boolean>, issues: boolean, note: string) => Promise<void>
+}) {
+  const checks  = CHECKS[phase]
+  const isDone  = !!existing
+  const [open,  setOpen]   = useState(false)
+  const [results, setResults] = useState<Record<string,boolean>>({})
+  const [issues,  setIssues]  = useState(false)
+  const [note,    setNote]    = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [err,     setErr]     = useState('')
+
+  const allAnswered = checks.every((c) => results[c.key] !== undefined)
+
+  function toggle(key: string, val: boolean) {
+    setResults((prev) => ({ ...prev, [key]: val }))
+    if (!val) setIssues(true)
+  }
+
+  async function handleSubmit() {
+    if (!allAnswered) { setErr('Answer all items before submitting'); return }
+    if (issues && !note.trim()) { setErr('Describe what was done about the issue'); return }
+    setSaving(true); setErr('')
+    await onSubmit(phase, results, issues, note)
+    setSaving(false)
+  }
+
+  if (isDone) {
+    const anyFail = Object.values(existing.check_results).some((v) => v === false)
+    return (
+      <div className="bg-green-50 border border-green-200 rounded-2xl overflow-hidden">
+        <button onClick={() => setOpen(!open)} className="w-full px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="text-slate-900 font-semibold text-sm">{PHASE_LABELS[phase]}</p>
+            <p className="text-green-600 text-xs mt-0.5">
+              Done · {new Date(existing.submitted_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
+              {anyFail ? ' · issues noted' : ' · all pass'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {existing.issues && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-[#EB6619]">Issue noted</span>}
+            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+        </button>
+        {open && (
+          <div className="px-4 pb-4 border-t border-blue-100 pt-3 space-y-1.5">
+            {checks.map((c) => (
+              <div key={c.key} className="flex items-center gap-3">
+                <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 ${existing.check_results[c.key] ? 'bg-green-100' : 'bg-red-50'}`}>
+                  {existing.check_results[c.key]
+                    ? <svg className="w-3 h-3 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                    : <svg className="w-3 h-3 text-red-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  }
+                </div>
+                <p className="text-slate-500 text-xs">{c.label}</p>
+              </div>
+            ))}
+            {existing.issues && existing.what_did_you_do && (
+              <div className="mt-3 bg-amber-50 border-l-2 border-amber-400 pl-3 py-2">
+                <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-0.5">Action taken</p>
+                <p className="text-slate-500 text-xs italic">{existing.what_did_you_do}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`border rounded-2xl overflow-hidden ${open ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-white'}`}>
+      <button onClick={() => setOpen(!open)} className="w-full px-4 py-3 flex items-center justify-between">
+        <div>
+          <p className="text-slate-900 font-semibold text-sm">{PHASE_LABELS[phase]}</p>
+          <p className="text-slate-400 text-xs mt-0.5">{PHASE_SUBS[phase]}</p>
+        </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+
+      {open && (
+        <div className="border-t border-blue-100">
+          <div className="px-4 py-3 space-y-2">
+            {checks.map((c) => (
+              <div key={c.key} className="flex items-center gap-3">
+                <button onPointerDown={(e) => { e.preventDefault(); toggle(c.key, true) }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2 transition-all active:scale-95 ${results[c.key] === true ? 'bg-green-100 border-green-300' : 'bg-white border-slate-300'}`}>
+                  <svg className={`w-5 h-5 ${results[c.key] === true ? 'text-green-600' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+                <button onPointerDown={(e) => { e.preventDefault(); toggle(c.key, false) }}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border-2 transition-all active:scale-95 ${results[c.key] === false ? 'bg-red-50 border-red-400' : 'bg-white border-slate-300'}`}>
+                  <svg className={`w-5 h-5 ${results[c.key] === false ? 'text-red-600' : 'text-slate-300'}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+                <p className="text-slate-700 text-sm flex-1">{c.label}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="px-4 pb-4 space-y-3 border-t border-blue-100 pt-3">
+            <div className="flex items-center gap-3">
+              <p className="text-slate-500 text-sm">Any issues?</p>
+              <div className="flex gap-2 ml-auto">
+                {[true, false].map((v) => (
+                  <button key={String(v)} onClick={() => setIssues(v)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${issues === v ? (v ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-green-100 border-green-300 text-green-600') : 'bg-white border-slate-300 text-slate-600'}`}>
+                    {v ? 'Yes' : 'No'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {issues && (
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2}
+                placeholder="What did you do? Describe the action taken…"
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
+            )}
+
+            {err && <p className="text-red-600 text-xs">{err}</p>}
+
+            <button onClick={handleSubmit} disabled={!allAnswered || saving}
+              className="w-full bg-[#EB6619] text-white font-bold py-3.5 rounded-xl text-sm disabled:opacity-40 flex items-center justify-center gap-2">
+              {saving
+                ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Submitting…</>
+                : `Submit ${PHASE_LABELS[phase].toLowerCase()}`
+              }
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ProcessRoomPage() {
