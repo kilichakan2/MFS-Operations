@@ -33,7 +33,7 @@ function nowTimeUK(): string {
 
 function nDaysAgoUK(n: number): string {
   const d = new Date()
-  d.setDate(d.getDate() - n)
+  d.setUTCHours(d.getUTCHours() - (n * 24))
   return d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
 }
 

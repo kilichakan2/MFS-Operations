@@ -20,6 +20,7 @@ interface DeliveryOption {
   slaughter_site:   string | null
   born_in:          string | null
   delivery_number:  number | null
+  date:             string
   temperature_c:    number
   temp_status:      string
 }
