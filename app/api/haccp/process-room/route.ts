@@ -38,21 +38,21 @@ const PROTOCOLS: Record<string, string[]> = {
   product_breach: [
     'Return product to chilled storage immediately',
     'Record time product was above temperature limit',
-    'If <2 hours at <8\u00b0C: complete processing within 30 minutes then chill',
-    'If >2 hours or >8\u00b0C: segregate product for safety assessment',
+    'If <2 hours at <8°C: complete processing within 30 minutes then chill',
+    'If >2 hours or >8°C: segregate product for safety assessment',
     'Reduce batch sizes for future processing',
   ],
   room_breach_high: [
     'Stop loading product into room',
     'Return all product to chilled storage immediately',
     'Investigate cooling failure urgently',
-    'Do not resume until temperature below 12\u00b0C',
+    'Do not resume until temperature below 12°C',
   ],
   room_breach_amber: [
     'Do NOT stop cutting',
     'Bring product to production progressively in small quantities',
-    'Monitor product core temperature — must remain \u22644\u00b0C',
-    'If core temp rises above 4\u00b0C, return to chilled storage',
+    'Monitor product core temperature — must remain ≤4°C',
+    'If core temp rises above 4°C, return to chilled storage',
     'Investigate cause — check A/C and cooling unit',
   ],
   equipment_failure: [
@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
             source_id:     inserted.id,
             ccp_ref:       'CCP3',
             deviation_description:
-              `Product: ${product_temp_c}\u00b0C (limit \u22644\u00b0C). Cause: ${corrective_action.cause}`,
+              `Product: ${product_temp_c}°C (limit ≤4°C). Cause: ${corrective_action.cause}`,
             action_taken:             productActionText,
             product_disposition:      dispositionEnum,
             recurrence_prevention:    recurrence,
@@ -249,7 +249,7 @@ export async function POST(req: NextRequest) {
             source_id:     inserted.id,
             ccp_ref:       'CCP3',
             deviation_description:
-              `Room: ${room_temp_c}\u00b0C (limit \u226412\u00b0C). Cause: ${corrective_action.cause}`,
+              `Room: ${room_temp_c}°C (limit ≤12°C). Cause: ${corrective_action.cause}`,
             action_taken:             roomActionText,
             product_disposition:      dispositionEnum,
             recurrence_prevention:    recurrence,

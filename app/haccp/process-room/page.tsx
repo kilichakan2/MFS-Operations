@@ -226,21 +226,21 @@ const PROTOCOL_STEPS: Record<string, string[]> = {
   product_breach: [
     'Return product to chilled storage immediately',
     'Record time product was above temperature limit',
-    'If <2 hours at <8\u00b0C: complete processing within 30 minutes then chill',
-    'If >2 hours or >8\u00b0C: segregate product for safety assessment',
+    'If <2 hours at <8°C: complete processing within 30 minutes then chill',
+    'If >2 hours or >8°C: segregate product for safety assessment',
     'Reduce batch sizes for future processing',
   ],
   room_breach_high: [
     'Stop loading product into room',
     'Return all product to chilled storage immediately',
     'Investigate cooling failure urgently',
-    'Do not resume until temperature below 12\u00b0C',
+    'Do not resume until temperature below 12°C',
   ],
   room_breach_amber: [
     'Do NOT stop cutting',
     'Bring product to production progressively in small quantities',
-    'Monitor product core temperature — must remain \u22644\u00b0C',
-    'If core temp rises above 4\u00b0C, return to chilled storage',
+    'Monitor product core temperature — must remain ≤4°C',
+    'If core temp rises above 4°C, return to chilled storage',
     'Investigate cause — check A/C and cooling unit',
   ],
   equipment_failure: [
@@ -325,14 +325,14 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
           <div className="space-y-2">
             {productBreached && (
               <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3">
-                <p className="text-red-600 font-semibold text-sm">Product temp: {productTemp}\u00b0C \u2014 limit \u22644\u00b0C</p>
+                <p className="text-red-600 font-semibold text-sm">Product temp: {productTemp}°C — limit ≤4°C</p>
                 <p className="text-slate-400 text-xs mt-0.5">Return to chilled storage. Apply time-based decision tree.</p>
               </div>
             )}
             {roomBreached && (
               <div className={`border rounded-xl px-4 py-3 ${roomTemp > 15 ? 'bg-red-50 border-red-300' : 'bg-amber-50 border-amber-300'}`}>
-                <p className={`font-semibold text-sm ${roomTemp > 15 ? 'text-red-600' : 'text-[#EB6619]'}`}>Room temp: {roomTemp}\u00b0C \u2014 limit \u226412\u00b0C</p>
-                {roomTemp <= 15 && <p className="text-slate-500 text-xs mt-0.5 font-medium">Do NOT stop cutting \u2014 bring product progressively.</p>}
+                <p className={`font-semibold text-sm ${roomTemp > 15 ? 'text-red-600' : 'text-[#EB6619]'}`}>Room temp: {roomTemp}°C — limit ≤12°C</p>
+                {roomTemp <= 15 && <p className="text-slate-500 text-xs mt-0.5 font-medium">Do NOT stop cutting — bring product progressively.</p>}
               </div>
             )}
           </div>
@@ -341,7 +341,7 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
               Required action (CA-001)
-              {cause === 'Equipment failure' && <span className="ml-1 text-amber-600 normal-case font-normal">\u2014 equipment failure override</span>}
+              {cause === 'Equipment failure' && <span className="ml-1 text-amber-600 normal-case font-normal">— equipment failure override</span>}
             </p>
             <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
               {protocolSteps.map((step, i) => (

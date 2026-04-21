@@ -279,8 +279,8 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
           <div className="space-y-2">
             {deviations.map((d) => (
               <div key={d.name} className={`rounded-xl p-3 border ${STATUS_BG[d.status ?? 'amber']}`}>
-                <span className="font-semibold text-sm">{d.name}: {d.temp}\u00b0C</span>
-                <span className="ml-2 text-xs opacity-75">\u2014 {STATUS_LABEL[d.status ?? 'amber']}</span>
+                <span className="font-semibold text-sm">{d.name}: {d.temp}°C</span>
+                <span className="ml-2 text-xs opacity-75">— {STATUS_LABEL[d.status ?? 'amber']}</span>
                 <p className="text-xs mt-1 opacity-70">{getCorrectiveAction(d.status, d.unitType)}</p>
               </div>
             ))}
@@ -290,7 +290,7 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
               Required action (CA-001)
-              {cause === 'Equipment failure' && <span className="ml-1 text-amber-600 normal-case font-normal">\u2014 equipment failure override</span>}
+              {cause === 'Equipment failure' && <span className="ml-1 text-amber-600 normal-case font-normal">— equipment failure override</span>}
             </p>
             <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
               {protocolSteps.map((step, i) => (
