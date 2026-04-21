@@ -200,6 +200,7 @@ function Numpad({ value, onChange, onClose, label, limit }: {
 
 // ─── CCA Popup ────────────────────────────────────────────────────────────────
 
+// action is NOT in the payload — server derives it from deviation + cause
 type CAPayload = {
   cause:       string
   disposition: string
@@ -209,7 +210,7 @@ type CAPayload = {
 
 // ─── CA constants (Batch 4 — adaptive redesign) ──────────────────────────────
 
-const CAUSE_OPTIONS = [
+const CCP3_CAUSES = [
   'A/C or cooling failure',
   'Doors left open',
   'Product held in room too long',
@@ -219,7 +220,7 @@ const CAUSE_OPTIONS = [
   'Other',
 ]
 
-const RECURRENCE_BY_CAUSE: Record<string, string[]> = {
+const CCP3_RECURRENCE_BY_CAUSE: Record<string, string[]> = {
   'A/C or cooling failure':        ['Schedule A/C maintenance', 'Install temperature alarm', 'Other'],
   'Doors left open':               ['Retrain staff on door discipline', 'Add door-close reminder signage', 'Other'],
   'Product held in room too long': ['Retrain staff on batch timing', 'Reduce batch sizes', 'Other'],
@@ -229,26 +230,26 @@ const RECURRENCE_BY_CAUSE: Record<string, string[]> = {
   'Other':                         ['Schedule maintenance check', 'Retrain staff', 'Install temperature alarm', 'Other'],
 }
 
-const PROTOCOL_STEPS: Record<string, string[]> = {
+const CCP3_PROTOCOL_STEPS: Record<string, string[]> = {
   product_breach: [
     'Return product to chilled storage immediately',
     'Record time product was above temperature limit',
-    'If <2 hours at <8°C: complete processing within 30 minutes then chill',
-    'If >2 hours or >8°C: segregate product for safety assessment',
+    'If <2 hours at <8\u00b0C: complete processing within 30 minutes then chill',
+    'If >2 hours or >8\u00b0C: segregate product for safety assessment',
     'Reduce batch sizes for future processing',
   ],
   room_breach_high: [
     'Stop loading product into room',
     'Return all product to chilled storage immediately',
     'Investigate cooling failure urgently',
-    'Do not resume until temperature below 12°C',
+    'Do not resume until temperature below 12\u00b0C',
   ],
   room_breach_amber: [
     'Do NOT stop cutting',
     'Bring product to production progressively in small quantities',
-    'Monitor product core temperature — must remain ≤4°C',
-    'If core temp rises above 4°C, return to chilled storage',
-    'Investigate cause — check A/C and cooling unit',
+    'Monitor product core temperature \u2014 must remain \u22644\u00b0C',
+    'If core temp rises above 4\u00b0C, return to chilled storage',
+    'Investigate cause \u2014 check A/C and cooling unit',
   ],
   equipment_failure: [
     'Document time of failure discovery',
@@ -260,29 +261,28 @@ const PROTOCOL_STEPS: Record<string, string[]> = {
   ],
 }
 
-function getProtocolKey(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string {
+function ccp3ProtocolKey(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string {
   if (cause === 'Equipment failure') return 'equipment_failure'
   if (productBreached) return 'product_breach'
   if (roomBreached)    return roomTemp > 15 ? 'room_breach_high' : 'room_breach_amber'
   return 'product_breach'
 }
 
-function getDispositionDefault(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string {
+function ccp3DispositionDefault(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string {
   if (cause === 'Equipment failure') return 'Assess'
   if (productBreached)               return 'Assess'
   if (roomBreached && roomTemp > 15) return 'Assess'
   return 'Accept'
 }
 
-function getDispositionOptions(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string[] {
+function ccp3DispositionOptions(cause: string, productBreached: boolean, roomBreached: boolean, roomTemp: number): string[] {
   if (cause === 'Equipment failure') return ['Assess', 'Conditional accept', 'Reject']
   if (productBreached)               return ['Assess', 'Reject', 'Conditional accept']
   if (roomBreached && roomTemp > 15) return ['Assess', 'Reject']
   return ['Accept', 'Assess', 'Conditional accept']
 }
 
-// ─── CCAPopup ─────────────────────────────────────────────────────────────────
-
+/** CCP 3 corrective action popup — adaptive design */
 function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
   productTemp: number
   roomTemp:    number
@@ -293,16 +293,16 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
   const roomBreached    = roomTemp > 12
 
   const [cause,       setCause]       = useState('')
-  const [disposition, setDisposition] = useState(getDispositionDefault('', productBreached, roomBreached, roomTemp))
+  const [disposition, setDisposition] = useState(ccp3DispositionDefault('', productBreached, roomBreached, roomTemp))
   const [recurrence,  setRecurrence]  = useState('')
   const [notes,       setNotes]       = useState('')
 
-  const protocolKey   = getProtocolKey(cause, productBreached, roomBreached, roomTemp)
-  const protocolSteps = PROTOCOL_STEPS[protocolKey] ?? []
-  const dispOptions   = getDispositionOptions(cause, productBreached, roomBreached, roomTemp)
+  const protocolKey   = ccp3ProtocolKey(cause, productBreached, roomBreached, roomTemp)
+  const protocolSteps = CCP3_PROTOCOL_STEPS[protocolKey] ?? []
+  const dispOptions   = ccp3DispositionOptions(cause, productBreached, roomBreached, roomTemp)
 
   useEffect(() => {
-    setDisposition(getDispositionDefault(cause, productBreached, roomBreached, roomTemp))
+    setDisposition(ccp3DispositionDefault(cause, productBreached, roomBreached, roomTemp))
     setRecurrence('')
   }, [cause]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -344,7 +344,7 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
             )}
           </div>
 
-          {/* Required protocol — read only */}
+          {/* Required protocol — read only, updates if cause changes */}
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
               Required action (CA-001)
@@ -364,7 +364,7 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
             <div className="grid grid-cols-2 gap-2">
-              {CAUSE_OPTIONS.map((c) => (
+              {CCP3_CAUSES.map((c) => (
                 <button key={c} onClick={() => setCause(c)}
                   className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border ${
                     cause === c ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
@@ -391,7 +391,7 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
             <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
               <div className="space-y-1.5">
-                {(RECURRENCE_BY_CAUSE[cause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                {(CCP3_RECURRENCE_BY_CAUSE[cause] ?? CCP3_RECURRENCE_BY_CAUSE['Other']).map((r) => (
                   <button key={r} onClick={() => setRecurrence(r)}
                     className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
                       recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
@@ -405,7 +405,7 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes <span className="normal-case font-normal">(optional)</span></p>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              placeholder="Additional details\u2026"
+              placeholder="Additional details…"
               className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
           </div>
 
@@ -421,7 +421,7 @@ function CCAPopup({ productTemp, roomTemp, onSubmit, onBack }: {
   )
 }
 
-// ─── DiaryPhaseCard ───────────────────────────────────────────────────────────
+// ─── Diary Phase Card ─────────────────────────────────────────────────────────
 
 function DiaryPhaseCard({
   phase, existing, onSubmit,
@@ -443,6 +443,7 @@ function DiaryPhaseCard({
 
   function toggle(key: string, val: boolean) {
     setResults((prev) => ({ ...prev, [key]: val }))
+    // If anything is set to false, auto-toggle issues on
     if (!val) setIssues(true)
   }
 
@@ -488,7 +489,7 @@ function DiaryPhaseCard({
               </div>
             ))}
             {existing.issues && existing.what_did_you_do && (
-              <div className="mt-3 bg-amber-50 border-l-2 border-amber-400 pl-3 py-2">
+              <div className="mt-3 bg-amber-50 border-l-2 border-amber-400 pl-3 py-2 border-radius-0">
                 <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-0.5">Action taken</p>
                 <p className="text-slate-500 text-xs italic">{existing.what_did_you_do}</p>
               </div>
