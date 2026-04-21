@@ -27,14 +27,18 @@ interface CleanEntry {
 // ─── Category chips ───────────────────────────────────────────────────────────
 
 const CATEGORIES: { label: string; freq: string }[] = [
-  { label: 'Knives / tools',        freq: 'Each use + end of shift' },
-  { label: 'Cutting boards',        freq: 'Between product types + end of shift' },
-  { label: 'Work surfaces',         freq: 'Every 2 hours + end of shift' },
-  { label: 'Processing equipment',  freq: 'End of each shift' },
-  { label: 'Production area floor', freq: 'End of each shift' },
-  { label: 'Corridor',              freq: 'End of each shift' },
-  { label: 'Cold storage',          freq: 'Weekly minimum' },
-  { label: 'Other',                 freq: '' },
+  { label: 'Knives',                          freq: 'After each use + 82°C steriliser start/end of shift' },
+  { label: 'Knife steriliser (82°C)',          freq: 'Start and end of shift — temp logged' },
+  { label: 'Cutting boards',                  freq: 'Between product types + end of shift' },
+  { label: 'Work surfaces / prep tables',     freq: 'Every 2 hours during production + end of shift' },
+  { label: 'Mincing equipment',               freq: 'After each run + end of shift' },
+  { label: 'Vacuum packer / MAP machine',     freq: 'End of each shift' },
+  { label: 'Weighing scales',                 freq: 'End of each shift' },
+  { label: 'Production area floor',           freq: 'End of each shift' },
+  { label: 'Production area drains',          freq: 'End of each shift' },
+  { label: 'Cold storage interior',           freq: 'Weekly + after spillage' },
+  { label: 'Corridor / welfare areas',        freq: 'End of each shift' },
+  { label: 'Other',                           freq: '' },
 ]
 
 const VERIFIED_BY_PRESETS = ['Daryl', 'Hakan', 'Ege']
@@ -520,11 +524,16 @@ export default function CleaningPage() {
                 <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-3">Minimum frequencies (SOP 2B)</p>
                 <div className="space-y-2">
                   {[
-                    ['Knives / tools',         'Start and end of shift via 82°C steriliser'],
-                    ['Cutting boards',          'Between different product types + end of day'],
-                    ['Work surfaces',           'Every 2 hours during production + end of shift'],
-                    ['Processing equipment',    'End of each shift'],
-                    ['Production area floor',   'End of each shift'],
+                    ['Knives',                       'After each use + 82°C steriliser start/end of shift'],
+                    ['Knife steriliser (82°C)',       'Start and end of shift — temp logged'],
+                    ['Cutting boards',               'Between product types + end of shift'],
+                    ['Work surfaces / prep tables',  'Every 2 hours during production + end of shift'],
+                    ['Mincing equipment',            'After each run + end of shift'],
+                    ['Vacuum packer / MAP machine',  'End of each shift'],
+                    ['Weighing scales',              'End of each shift'],
+                    ['Production area floor',        'End of each shift'],
+                    ['Production area drains',       'End of each shift'],
+                    ['Cold storage interior',        'Weekly + after spillage'],
                   ].map(([item, freq]) => (
                     <div key={item} className="flex gap-3">
                       <span className="text-slate-500 text-xs w-36 flex-shrink-0">{item}</span>
