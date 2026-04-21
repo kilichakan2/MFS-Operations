@@ -26,16 +26,18 @@ interface CleanEntry {
 
 // ─── Category chips ───────────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  'Knives / tools',
-  'Cutting boards',
-  'Work surfaces',
-  'Processing equipment',
-  'Production area floor',
-  'Corridor',
-  'Cold storage',
-  'Other',
+const CATEGORIES: { label: string; freq: string }[] = [
+  { label: 'Knives / tools',        freq: 'Each use + end of shift' },
+  { label: 'Cutting boards',        freq: 'Between product types + end of shift' },
+  { label: 'Work surfaces',         freq: 'Every 2 hours + end of shift' },
+  { label: 'Processing equipment',  freq: 'End of each shift' },
+  { label: 'Production area floor', freq: 'End of each shift' },
+  { label: 'Corridor',              freq: 'End of each shift' },
+  { label: 'Cold storage',          freq: 'Weekly minimum' },
+  { label: 'Other',                 freq: '' },
 ]
+
+const VERIFIED_BY_PRESETS = ['Daryl', 'Hakan', 'Ege']
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -168,12 +170,12 @@ export default function CleaningPage() {
 
       <div className="flex-1 px-5 py-4 space-y-4 overflow-y-auto">
 
-        {/* Time separation banner */}
-        <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-start gap-3">
-          <svg className="w-4 h-4 text-[#EB6619] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        {/* Time separation info */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3">
+          <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           <div>
-            <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Time separation required</p>
-            <p className="text-slate-600 text-xs leading-relaxed">Meat and mince require a FULL 4-step clean between categories. Process one category at a time. Log each changeover here. Meat preparations containing allergens (marinades, coatings, seasonings) require the same strict separation — allergen products AFTER plain, with a verified clean in between.</p>
+            <p className="text-blue-700 text-[10px] font-bold uppercase tracking-widest mb-1">Cleaning reminder</p>
+            <p className="text-slate-500 text-xs leading-relaxed">Full 4-step clean required between different product categories (e.g. lamb → beef, plain → allergen). Allergen products must always be processed after plain products with a verified clean in between. Log each changeover here.</p>
           </div>
         </div>
 
@@ -196,15 +198,16 @@ export default function CleaningPage() {
 
           {/* Category chips */}
           <div className="px-4 pt-3 pb-2 flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => {
-              const on = selected.has(cat)
+            {CATEGORIES.map(({ label, freq }) => {
+              const on = selected.has(label)
               return (
-                <button key={cat}
-                  onPointerDown={(e) => { e.preventDefault(); toggleCategory(cat) }}
-                  className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                <button key={label}
+                  onPointerDown={(e) => { e.preventDefault(); toggleCategory(label) }}
+                  className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 text-left ${
                     on ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
                   }`}>
-                  {cat}
+                  <span>{label}</span>
+                  {freq && <span className={`block text-[10px] font-normal mt-0.5 ${on ? 'text-orange-400' : 'text-slate-300'}`}>{freq}</span>}
                 </button>
               )
             })}
@@ -259,13 +262,30 @@ export default function CleaningPage() {
           {/* Verified by */}
           <div className="px-4 pb-3">
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Verified by</p>
-            <input
-              type="text"
-              value={verifiedBy}
-              onChange={(e) => setVerifiedBy(e.target.value)}
-              placeholder="Name of person who checked the clean…"
-              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500"
-            />
+            <div className="flex flex-wrap gap-2 mb-2">
+              {VERIFIED_BY_PRESETS.map((name) => (
+                <button key={name}
+                  onPointerDown={(e) => { e.preventDefault(); setVerifiedBy(name) }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                    verifiedBy === name ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                  }`}>{name}</button>
+              ))}
+              <button
+                onPointerDown={(e) => { e.preventDefault(); setVerifiedBy('') }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                  verifiedBy !== '' && !VERIFIED_BY_PRESETS.includes(verifiedBy) ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                }`}>Other</button>
+            </div>
+            {/* Show text input if Other selected or no preset matches */}
+            {!VERIFIED_BY_PRESETS.includes(verifiedBy) && (
+              <input
+                type="text"
+                value={verifiedBy}
+                onChange={(e) => setVerifiedBy(e.target.value)}
+                placeholder="Enter name…"
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500"
+              />
+            )}
           </div>
 
           {/* Date / time meta */}
