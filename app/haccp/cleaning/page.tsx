@@ -39,7 +39,131 @@ const CATEGORIES: { label: string; freq: string }[] = [
 
 const VERIFIED_BY_PRESETS = ['Daryl', 'Hakan', 'Ege']
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── CA constants (SOP 2 issues) ──────────────────────────────────────────────
+
+type CAPayload = { cause: string; disposition: string; recurrence: string; notes: string }
+
+const SOP2_CAUSES = [
+  'Visible residue remaining after clean',
+  'Steriliser not reaching 82°C',
+  'Cleaning agent unavailable or wrong dilution',
+  'Equipment damage preventing full clean',
+  'Time pressure — clean was rushed',
+  'Other',
+]
+
+const SOP2_RECURRENCE_BY_CAUSE: Record<string, string[]> = {
+  'Visible residue remaining after clean':     ['Retrain on 4-step cleaning process', 'Increase cleaning time allocated', 'Check cleaning agent concentration', 'Other'],
+  'Steriliser not reaching 82°C':              ['Service or replace steriliser immediately', 'Log steriliser temps at start of every shift', 'Use chemical sanitiser as backup until fixed', 'Other'],
+  'Cleaning agent unavailable or wrong dilution': ['Review stock levels and set reorder trigger', 'Keep backup supply on-site', 'Post dilution guide at cleaning station', 'Other'],
+  'Equipment damage preventing full clean':    ['Take equipment out of service immediately', 'Report for maintenance', 'Do not use until repaired and re-verified', 'Other'],
+  'Time pressure — clean was rushed':          ['Review production schedule — allow adequate cleaning time', 'Do not start next batch until clean is verified', 'Raise with supervisor', 'Other'],
+  'Other':                                     ['Review cleaning procedure', 'Retrain staff', 'Schedule maintenance check', 'Other'],
+}
+
+const SOP2_DISPOSITIONS = ['Re-cleaned and verified', 'Equipment isolated', 'Supervisor notified', 'Maintenance requested']
+
+const SOP2_PROTOCOL = [
+  'Stop using affected equipment or area immediately',
+  'Re-clean using the full 4-step process',
+  'Verify clean before returning to use',
+  'Do not continue production until re-clean is confirmed',
+  'If issue cannot be resolved: notify supervisor and isolate area',
+]
+
+// ─── CCA Popup ────────────────────────────────────────────────────────────────
+
+function CCAPopup({ onSubmit, onBack }: { onSubmit: (ca: CAPayload) => void; onBack: () => void }) {
+  const [cause,       setCause]       = useState('')
+  const [disposition, setDisposition] = useState(SOP2_DISPOSITIONS[0])
+  const [recurrence,  setRecurrence]  = useState('')
+  const [notes,       setNotes]       = useState('')
+
+  const canSubmit = Boolean(cause && disposition && recurrence)
+
+  return (
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{ position: 'fixed' }}>
+      <div className="bg-white rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
+        <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
+          <div>
+            <p className="text-red-600 text-xs font-bold tracking-widest uppercase">Cleaning issue</p>
+            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action Required</h2>
+          </div>
+          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95 mt-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div className="px-6 pb-8 pt-4 space-y-5">
+          {/* Protocol — read-only */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Required action — SOP 2</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+              {SOP2_PROTOCOL.map((step, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-red-100 text-red-600">{i + 1}</div>
+                  <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Cause */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused the issue?</p>
+            <div className="grid grid-cols-2 gap-2">
+              {SOP2_CAUSES.map((c) => (
+                <button key={c} onClick={() => { setCause(c); setRecurrence('') }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border text-left ${
+                    cause === c ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                  }`}>{c}</button>
+              ))}
+            </div>
+          </div>
+          {/* Disposition */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What was done?</p>
+            <div className="flex flex-wrap gap-2">
+              {SOP2_DISPOSITIONS.map((d) => (
+                <button key={d} onClick={() => setDisposition(d)}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                    disposition === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-400'
+                  }`}>{d}</button>
+              ))}
+            </div>
+          </div>
+          {/* Recurrence — cause-aware */}
+          {cause && (
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">How to prevent recurrence?</p>
+              <div className="space-y-1.5">
+                {(SOP2_RECURRENCE_BY_CAUSE[cause] ?? SOP2_RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                  <button key={r} onClick={() => setRecurrence(r)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                      recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                    }`}>{r}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Notes */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes <span className="normal-case font-normal">(optional)</span></p>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              placeholder="Additional details…"
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
+          </div>
+          <p className="text-slate-400 text-xs">This record is immutable once submitted. Protocol per SOP 2.</p>
+          <button onClick={() => onSubmit({ cause, disposition, recurrence, notes: notes.trim() })}
+            disabled={!canSubmit}
+            className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
+            Confirm &amp; submit
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 
 function nowDisplay(): string {
   return new Date().toLocaleTimeString('en-GB', {
@@ -76,6 +200,7 @@ export default function CleaningPage() {
   const [showQuick, setShowQuick] = useState(false)
   const [timeNow,   setTimeNow]   = useState(nowDisplay())
   const [verifiedBy,setVerifiedBy]= useState('')
+  const [showCCA,   setShowCCA]   = useState(false)
 
   // Keep displayed time current
   useEffect(() => {
@@ -110,23 +235,25 @@ export default function CleaningPage() {
     setSubmitErr('')
   }
 
-  async function handleSubmit() {
-    setSubmitErr('')
-    const cats = Array.from(selected)
-    if (cats.length === 0)        { setSubmitErr('Select at least one item that was cleaned'); return }
-    if (!verifiedBy.trim())       { setSubmitErr('Enter who verified this clean'); return }
-    if (issues && !note.trim())   { setSubmitErr('Describe what was done about the issue'); return }
-
+  async function doSubmit(ca: CAPayload | null) {
+    setShowCCA(false); setSubmitErr(''); setSubmitting(true)
+    const cats    = Array.from(selected)
     const cleaned = cats
       .map((c) => c === 'Other' && otherText.trim() ? `Other: ${otherText.trim()}` : c)
       .join(', ')
-
-    setSubmitting(true)
     try {
       const res = await fetch('/api/haccp/cleaning', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ what_was_cleaned: cleaned, issues, what_did_you_do: note, verified_by: verifiedBy }),
+        body: JSON.stringify({
+          what_was_cleaned: cleaned,
+          issues,
+          what_did_you_do: ca
+            ? `${ca.cause} | ${ca.disposition} | ${ca.recurrence}`
+            : undefined,
+          verified_by: verifiedBy,
+          corrective_action: ca ?? undefined,
+        }),
       })
       if (res.ok) {
         setFlash(true)
@@ -139,6 +266,15 @@ export default function CleaningPage() {
       }
     } catch { setSubmitErr('Connection error — try again') }
     finally { setSubmitting(false) }
+  }
+
+  function handleSubmit() {
+    setSubmitErr('')
+    const cats = Array.from(selected)
+    if (cats.length === 0)      { setSubmitErr('Select at least one item that was cleaned'); return }
+    if (!verifiedBy.trim())     { setSubmitErr('Select who verified this clean'); return }
+    if (issues) { setShowCCA(true); return }
+    doSubmit(null)
   }
 
   const anyCatSelected = selected.size > 0
@@ -249,13 +385,10 @@ export default function CleaningPage() {
 
           {issues && (
             <div className="px-4 pb-3">
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={2}
-                placeholder="What did you do to resolve the issue…"
-                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"
-              />
+              <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective action required</p>
+                <p className="text-slate-600 text-xs">Submit to open the corrective action form — you'll log the cause and what was done.</p>
+              </div>
             </div>
           )}
 
@@ -411,6 +544,14 @@ Meat preparations containing allergens (marinades, coatings, seasonings) require
             </div>
           </div>
         </div>
+      )}
+
+      {/* CCA Popup */}
+      {showCCA && (
+        <CCAPopup
+          onSubmit={(ca) => doSubmit(ca)}
+          onBack={() => setShowCCA(false)}
+        />
       )}
 
     </div>

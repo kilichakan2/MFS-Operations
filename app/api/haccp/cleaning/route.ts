@@ -10,6 +10,15 @@ import { supabaseService }           from '@/lib/supabase'
 
 const supabase = supabaseService
 
+type CAPayload = { cause: string; disposition: string; recurrence: string; notes: string }
+
+const DISPOSITION_MAP: Record<string, string> = {
+  'Re-cleaned and verified': 'accept',
+  'Equipment isolated':      'conditional_accept',
+  'Supervisor notified':     'assess',
+  'Maintenance requested':   'assess',
+}
+
 function todayUK(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
 }
@@ -75,39 +84,66 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { what_was_cleaned, issues, what_did_you_do, verified_by } = body as {
-      what_was_cleaned: string
-      issues:           boolean
-      what_did_you_do?: string
-      verified_by:      string
+    const { what_was_cleaned, issues, what_did_you_do, verified_by, corrective_action } = body as {
+      what_was_cleaned:   string
+      issues:             boolean
+      what_did_you_do?:   string
+      verified_by:        string
+      corrective_action?: CAPayload
     }
 
-    if (!what_was_cleaned?.trim()) {
+    if (!what_was_cleaned?.trim())
       return NextResponse.json({ error: 'Select at least one item that was cleaned' }, { status: 400 })
-    }
-    if (!verified_by?.trim()) {
+    if (!verified_by?.trim())
       return NextResponse.json({ error: 'Verified by is required' }, { status: 400 })
-    }
-    if (issues && !what_did_you_do?.trim()) {
-      return NextResponse.json({ error: 'Describe what was done about the issue' }, { status: 400 })
-    }
+    if (issues && !corrective_action)
+      return NextResponse.json({ error: 'Corrective action is required when issues are reported' }, { status: 400 })
 
-    const { error } = await supabase.from('haccp_cleaning_log').insert({
-      submitted_by:    userId,
-      date:            todayUK(),
-      time_of_clean:   nowTimeUK(),
-      what_was_cleaned,
-      issues,
-      verified_by:     verified_by.trim(),
-      what_did_you_do: what_did_you_do?.trim() || null,
-    })
+    const { data: inserted, error } = await supabase
+      .from('haccp_cleaning_log')
+      .insert({
+        submitted_by:    userId,
+        date:            todayUK(),
+        time_of_clean:   nowTimeUK(),
+        what_was_cleaned,
+        issues,
+        verified_by:     verified_by.trim(),
+        what_did_you_do: what_did_you_do?.trim() || null,
+      })
+      .select('id')
+      .single()
 
     if (error) {
       console.error('[POST /api/haccp/cleaning]', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true })
+    // Write CA row if issues reported
+    let caWriteFailed = false
+    if (issues && corrective_action && inserted) {
+      const ca        = corrective_action
+      const disp      = DISPOSITION_MAP[ca.disposition] ?? 'assess'
+      const recNotes  = ca.notes ? `${ca.recurrence} | Notes: ${ca.notes}` : ca.recurrence
+
+      const { error: caErr } = await supabase.from('haccp_corrective_actions').insert({
+        actioned_by:   userId,
+        source_table:  'haccp_cleaning_log',
+        source_id:     inserted.id,
+        ccp_ref:       'SOP2',
+        deviation_description: `Cleaning issue: ${what_was_cleaned}. Cause: ${ca.cause}`,
+        action_taken:  `${ca.disposition}. Protocol: Stop use, re-clean full 4-step, verify before returning to service.`,
+        product_disposition:   disp,
+        recurrence_prevention: recNotes,
+        management_verification_required: false,
+      })
+
+      if (caErr) {
+        console.error('[POST /api/haccp/cleaning] CA insert failed:', caErr)
+        caWriteFailed = true
+      }
+    }
+
+    return NextResponse.json({ ok: true, ca_write_failed: caWriteFailed })
 
   } catch (err) {
     console.error('[POST /api/haccp/cleaning] Unhandled:', err)
