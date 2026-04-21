@@ -79,6 +79,75 @@ const COUNTRIES: Record<string, string> = {
   IRL: 'Ireland', UK: 'UK', AUS: 'Australia', NZL: 'New Zealand', BRA: 'Brazil',
 }
 
+// ─── CA constants (Phase M-B/C — adaptive popup) ─────────────────────────────
+
+type CAPayload = { cause: string; disposition: string; recurrence: string; notes: string }
+
+type CAChannel = 'M1-input' | 'M1-output' | 'MP1-input' | 'MP1-output'
+
+const MINCE_CAUSES = [
+  'Supplier delivered above temperature',
+  'Delay in transit / vehicle issue',
+  'Insufficient chilling after delivery',
+  'Batch too large for chiller',
+  'Chiller / freezer malfunction',
+  'Other',
+]
+
+const MINCE_RECURRENCE_BY_CAUSE: Record<string, string[]> = {
+  'Supplier delivered above temperature': ['Raise with supplier', 'Request temperature logs on next delivery', 'Review approved supplier status', 'Other'],
+  'Delay in transit / vehicle issue':     ['Improve delivery scheduling', 'Request pre-cooled vehicles', 'Raise with supplier', 'Other'],
+  'Insufficient chilling after delivery': ['Chill immediately on receipt', 'Reduce batch sizes', 'Review intake procedure', 'Other'],
+  'Batch too large for chiller':          ['Reduce batch sizes', 'Split into smaller runs', 'Review chiller capacity', 'Other'],
+  'Chiller / freezer malfunction':        ['Contact refrigeration engineer', 'Schedule maintenance check', 'Install temperature alarm', 'Other'],
+  'Other':                                ['Review procedure', 'Retrain staff', 'Schedule maintenance check', 'Other'],
+}
+
+// Protocol steps per channel — read-only in popup
+const MINCE_PROTOCOL: Record<CAChannel, string[]> = {
+  'M1-input': [
+    'Quarantine batch immediately',
+    'Assess product condition and odour',
+    'Attempt rapid chilling to ≤7°C within 2 hours',
+    'If ≤7°C not achieved within 2 hours: reject — return to supplier',
+    'Investigate supplier temperature control',
+    'Record on Mincing Production Log (MMP-MF-001 Form 1)',
+  ],
+  'M1-output': [
+    'Extend chilling period — recheck after 30 minutes',
+    'If still above 2°C: assess product safety',
+    'Reduce batch size — friction heat may be the cause',
+    'Do not dispatch until ≤2°C confirmed',
+  ],
+  'MP1-input': [
+    'Quarantine batch immediately',
+    'Assess product condition',
+    'Attempt rapid chilling to ≤7°C within 2 hours',
+    'If ≤7°C not achieved: reject product',
+    'Record on Meat Prep Log (MMP-MF-001 Form 2)',
+  ],
+  'MP1-output': [
+    'Extend chilling period — recheck after 30 minutes',
+    'If still above 4°C: assess product safety before dispatch',
+    'Consider reducing batch size',
+    'Do not dispatch until temperature compliance achieved',
+  ],
+}
+
+const MINCE_DISPOSITION_BY_CHANNEL: Record<CAChannel, string[]> = {
+  'M1-input':  ['Assess', 'Reject', 'Conditional accept'],
+  'M1-output': ['Conditional accept', 'Assess', 'Reject'],
+  'MP1-input': ['Assess', 'Reject', 'Conditional accept'],
+  'MP1-output':['Conditional accept', 'Assess', 'Reject'],
+}
+
+const CHANNEL_LABELS: Record<CAChannel, string> = {
+  'M1-input':  'CCP-M1 — Input temperature exceeded',
+  'M1-output': 'CCP-M1 — Output temperature exceeded',
+  'MP1-input': 'CCP-MP1 — Input temperature exceeded',
+  'MP1-output':'CCP-MP1 — Output temperature exceeded',
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function inputTempPass(temp: number): boolean {
@@ -115,6 +184,132 @@ function todayStr() {
   return new Date().toLocaleDateString('en-GB', {
     timeZone: 'Europe/London', weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
   })
+}
+
+// ─── CCA Popup ───────────────────────────────────────────────────────────────
+
+function CCAPopup({ channels, onSubmit, onBack }: {
+  channels:  CAChannel[]
+  onSubmit:  (ca: CAPayload) => void
+  onBack:    () => void
+}) {
+  // Use the first channel's protocol/disposition as primary (both share the same cause list)
+  const primary = channels[0]
+
+  const [cause,       setCause]       = useState('')
+  const [disposition, setDisposition] = useState(MINCE_DISPOSITION_BY_CHANNEL[primary][0])
+  const [recurrence,  setRecurrence]  = useState('')
+  const [notes,       setNotes]       = useState('')
+
+  useEffect(() => {
+    setDisposition(MINCE_DISPOSITION_BY_CHANNEL[primary][0])
+    setRecurrence('')
+  }, [cause]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const canSubmit = Boolean(cause && disposition && recurrence)
+
+  return (
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{ position: 'fixed' }}>
+      <div className="bg-white rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
+
+        <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
+          <div>
+            <p className="text-red-600 text-xs font-bold tracking-widest uppercase">Temperature deviation</p>
+            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action Required</h2>
+          </div>
+          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95 mt-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <div className="px-6 pb-8 pt-4 space-y-5">
+
+          {/* Deviation summary */}
+          <div className="space-y-2">
+            {channels.map((ch) => (
+              <div key={ch} className="bg-red-50 border border-red-300 rounded-xl px-4 py-3">
+                <p className="text-red-600 text-xs font-bold">{CHANNEL_LABELS[ch]}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Protocol — read-only */}
+          {channels.map((ch) => (
+            <div key={ch}>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+                Required action — {CHANNEL_LABELS[ch]}
+              </p>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+                {MINCE_PROTOCOL[ch].map((step, i) => (
+                  <div key={i} className="flex items-start gap-2.5">
+                    <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-red-100 text-red-600">{i + 1}</div>
+                    <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {/* Cause */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
+            <div className="grid grid-cols-2 gap-2">
+              {MINCE_CAUSES.map((c) => (
+                <button key={c} onClick={() => setCause(c)}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border ${
+                    cause === c ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                  }`}>{c}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Disposition */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
+            <div className="flex flex-wrap gap-2">
+              {MINCE_DISPOSITION_BY_CHANNEL[primary].map((d) => (
+                <button key={d} onClick={() => setDisposition(d)}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                    disposition === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-400'
+                  }`}>{d}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Recurrence — cause-aware */}
+          {cause && (
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
+              <div className="space-y-1.5">
+                {(MINCE_RECURRENCE_BY_CAUSE[cause] ?? MINCE_RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                  <button key={r} onClick={() => setRecurrence(r)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                      recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                    }`}>{r}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes <span className="normal-case font-normal">(optional)</span></p>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              placeholder="Additional details…"
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
+          </div>
+
+          <p className="text-slate-400 text-xs">This record is immutable once submitted. Protocol per CA-001 Table 4.</p>
+
+          <button onClick={() => onSubmit({ cause, disposition, recurrence, notes: notes.trim() })}
+            disabled={!canSubmit}
+            className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
+            Confirm &amp; submit
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── Numpad ───────────────────────────────────────────────────────────────────
@@ -193,7 +388,6 @@ export default function MincePage() {
   const [mOutputMode,    setMOutputMode]    = useState<'chilled'|'frozen'>('chilled')
   const [mSourceIds,     setMSourceIds]     = useState<string[]>([])
   const [mSourceBatches, setMSourceBatches] = useState<string[]>([])
-  const [mCA,            setMCA]            = useState('')
 
   // ── Meatprep form state ─────────────────────────────────────────────────────
   const [pProductName,      setPProductName]      = useState('')
@@ -209,7 +403,6 @@ export default function MincePage() {
   // Source mince batches (today's runs) — for prep coming from mince
   const [pMinceBatchIds,    setPMinceBatchIds]    = useState<string[]>([])
   const [pMinceBatchCodes,  setPMinceBatchCodes]  = useState<string[]>([])
-  const [pCA,               setPCA]              = useState('')
 
   // ── Time sep form state ─────────────────────────────────────────────────────
   const [tPlainEnd,      setTPlainEnd]      = useState('')
@@ -224,6 +417,9 @@ export default function MincePage() {
   const [submitErr,   setSubmitErr]   = useState('')
   const [submitting,  setSubmitting]  = useState(false)
   const [flash,       setFlash]       = useState('')
+  const [showCCA,     setShowCCA]     = useState(false)
+  const [ccaChannels, setCcaChannels] = useState<CAChannel[]>([])
+  const [pendingTab,  setPendingTab]  = useState<'mince' | 'meatprep' | null>(null)
 
   const loadData = useCallback(() => {
     fetch('/api/haccp/mince-prep')
@@ -261,66 +457,49 @@ export default function MincePage() {
 
   function resetMince() {
     setMSpecies(''); setMKillDate(''); setMInputVal(''); setMOutputVal('')
-    setMOutputMode('chilled'); setMSourceIds([]); setMSourceBatches([]); setMCA('')
+    setMOutputMode('chilled'); setMSourceIds([]); setMSourceBatches([])
   }
   function resetPrep() {
     setPProductName(''); setPSpecies(''); setPKillDate(''); setPInputVal(''); setPOutputVal('')
     setPOutputMode('chilled'); setPAllergens([]); setPLabelCheck(false)
     setPSourceIds([]); setPSourceBatches([])
     setPMinceBatchIds([]); setPMinceBatchCodes([])
-    setPCA('')
   }
   function resetTs() { setTPlainEnd(''); setTCleanDone(''); setTAllergenStart(''); setTVerifiedBy(''); setTAllergens(''); setTCA('') }
 
-  async function handleSubmit() {
-    setSubmitErr(''); setSubmitting(true)
+  async function doSubmit(ca: CAPayload | null) {
+    setShowCCA(false); setSubmitErr(''); setSubmitting(true)
+    const activeTab = pendingTab ?? tab
+    setPendingTab(null)
     try {
       let body: Record<string, unknown>
 
-      if (tab === 'mince') {
-        if (!mSpecies || !mKillDate || !mInputVal || !mOutputVal) {
-          setSubmitErr('Fill in all required fields'); setSubmitting(false); return
-        }
-        // Kill date hard fail — block submission
-        if (mKillHardFail) {
-          setSubmitErr(`Kill date exceeded (${mDays} days) — DO NOT MINCE. Segregate product.`)
-          setSubmitting(false); return
-        }
-        if (mTempFail && !mCA.trim()) {
-          setSubmitErr('Corrective action required for temperature deviation')
-          setSubmitting(false); return
-        }
+      if (activeTab === 'mince') {
         body = {
           form: 'mince', product_species: mSpecies, kill_date: mKillDate,
           input_temp_c: mInputNum, output_temp_c: mOutputNum, output_mode: mOutputMode,
           source_batch_numbers: mSourceBatches, source_delivery_ids: mSourceIds,
-          corrective_action: mCA || undefined,
+          corrective_action: ca ?? undefined,
         }
-      } else if (tab === 'meatprep') {
-        if (!pProductName || !pInputVal || !pOutputVal) {
-          setSubmitErr('Fill in all required fields'); setSubmitting(false); return
-        }
+      } else if (activeTab === 'meatprep') {
         body = {
           form: 'meatprep', product_name: pProductName,
           product_species: pSpecies || undefined,
-          kill_date: pKillDate || undefined,
+          kill_date: undefined,
           input_temp_c: pInputNum, output_temp_c: pOutputNum, output_mode: pOutputMode,
           allergens_present: pAllergens, label_check_completed: pLabelCheck,
           source_batch_numbers: pSourceBatches, source_delivery_ids: pSourceIds,
           source_mince_batch_ids: pMinceBatchCodes,
-          corrective_action: pCA || undefined,
+          corrective_action: ca ?? undefined,
         }
       } else {
-        if (!tCleanDone || !tVerifiedBy || !tAllergens) {
-          setSubmitErr('Fill in all required fields'); setSubmitting(false); return
-        }
         body = {
           form: 'timesep',
           plain_products_end_time: tPlainEnd || undefined,
           clean_completed_time: tCleanDone,
           allergen_products_start_time: tAllergenStart || undefined,
           clean_verified_by: tVerifiedBy, allergens_in_production: tAllergens,
-          corrective_action: tCA || undefined,
+          corrective_action: undefined,
         }
       }
 
@@ -331,12 +510,16 @@ export default function MincePage() {
 
       if (res.ok) {
         const d = await res.json()
-        const msg = tab === 'mince'
+        if (d.ca_write_failed) {
+          setSubmitErr('Record saved, but corrective action log failed. Notify admin.')
+          return
+        }
+        const msg = activeTab === 'mince'
           ? `Mince logged — ${d.batch_code}`
-          : tab === 'meatprep' ? `Prep logged — ${d.batch_code}`
+          : activeTab === 'meatprep' ? `Prep logged — ${d.batch_code}`
           : 'Time separation logged'
         setFlash(msg)
-        tab === 'mince' ? resetMince() : tab === 'meatprep' ? resetPrep() : resetTs()
+        activeTab === 'mince' ? resetMince() : activeTab === 'meatprep' ? resetPrep() : resetTs()
         loadData()
         setTimeout(() => setFlash(''), 3000)
       } else {
@@ -345,6 +528,43 @@ export default function MincePage() {
       }
     } catch { setSubmitErr('Connection error') }
     finally { setSubmitting(false) }
+  }
+
+  function handleSubmit() {
+    setSubmitErr('')
+
+    if (tab === 'mince') {
+      if (!mSpecies || !mKillDate || !mInputVal || !mOutputVal) {
+        setSubmitErr('Fill in all required fields'); return
+      }
+      if (mKillHardFail) {
+        setSubmitErr(`Kill date exceeded (${mDays} days) — DO NOT MINCE. Segregate product.`); return
+      }
+      if (mTempFail) {
+        // Open CCA popup
+        const channels: CAChannel[] = []
+        if (mInPass === false)  channels.push('M1-input')
+        if (mOutPass === false) channels.push('M1-output')
+        setCcaChannels(channels); setPendingTab('mince'); setShowCCA(true); return
+      }
+      doSubmit(null)
+    } else if (tab === 'meatprep') {
+      if (!pProductName || !pInputVal || !pOutputVal) {
+        setSubmitErr('Fill in all required fields'); return
+      }
+      if (pInPass === false || pOutPass === false) {
+        const channels: CAChannel[] = []
+        if (pInPass === false)  channels.push('MP1-input')
+        if (pOutPass === false) channels.push('MP1-output')
+        setCcaChannels(channels); setPendingTab('meatprep'); setShowCCA(true); return
+      }
+      doSubmit(null)
+    } else {
+      if (!tCleanDone || !tVerifiedBy || !tAllergens) {
+        setSubmitErr('Fill in all required fields'); return
+      }
+      doSubmit(null)
+    }
   }
 
   // Numpad target state
@@ -663,30 +883,11 @@ export default function MincePage() {
                   </button>
                 </div>
 
-                {/* Kill date hard fail block */}
-                {mKillHardFail && (
-                  <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3">
-                    <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">DO NOT MINCE — Kill Date Exceeded</p>
-                    <p className="text-slate-700 text-xs">Segregate this product immediately. Return to supplier or dispose of as Category 3 ABP. Submission is blocked.</p>
-                  </div>
-                )}
-
-                {/* Temperature corrective action */}
+                {/* Deviation info — popup opens on submit */}
                 {mTempFail && !mKillHardFail && (
-                  <div>
-                    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-2 space-y-1.5">
-                      <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature deviation — required actions (MMP-001 §12)</p>
-                      {mInPass === false && (
-                        <p className="text-slate-700 text-xs">• Input temp exceeded: Quarantine. Chill rapidly to ≤7°C within 2 hours or reject.</p>
-                      )}
-                      {mOutPass === false && (
-                        <p className="text-slate-700 text-xs">• Output temp exceeded: Extend chilling. Recheck. Assess product if still exceeded.</p>
-                      )}
-                    </div>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Action taken (required)</p>
-                    <textarea value={mCA} onChange={(e) => setMCA(e.target.value)} rows={2}
-                      placeholder="Describe action taken…"
-                      className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                  <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                    <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature deviation detected</p>
+                    <p className="text-slate-600 text-xs">A corrective action record will be required before this submission is saved.</p>
                   </div>
                 )}
 
@@ -695,7 +896,7 @@ export default function MincePage() {
               </div>
 
               <button onClick={handleSubmit}
-                disabled={submitting || !mSpecies || !mKillDate || !mInputVal || !mOutputVal || mKillHardFail || (mTempFail && !mCA.trim())}
+                disabled={submitting || !mSpecies || !mKillDate || !mInputVal || !mOutputVal || mKillHardFail}
                 className="w-full bg-orange-600 text-white font-bold py-4 text-sm disabled:opacity-40 flex items-center justify-center gap-2">
                 {submitting ? 'Saving…' : mKillHardFail ? 'Blocked — kill date exceeded' : 'Submit mince log'}
               </button>
@@ -874,18 +1075,11 @@ export default function MincePage() {
                   </button>
                 )}
 
-                {/* Corrective action */}
-                {pAnyFail && (
-                  <div>
-                    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-2 space-y-1.5">
-                      <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">Deviation — required actions</p>
-                      {pInPass === false && <p className="text-slate-700 text-xs">• Input temp exceeded: Quarantine. Chill rapidly or reject.</p>}
-                      {pOutPass === false && <p className="text-slate-700 text-xs">• Output temp exceeded: Extend chilling. Recheck.</p>}
-                      {pAllergenIssue && <p className="text-slate-700 text-xs">• Allergens declared but label not checked: STOP production. Verify label before continuing.</p>}
-                    </div>
-                    <textarea value={pCA} onChange={(e) => setPCA(e.target.value)} rows={2}
-                      placeholder="Describe action taken…"
-                      className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                {/* Deviation info — popup opens on submit */}
+                {(pInPass === false || pOutPass === false) && (
+                  <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                    <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature deviation detected</p>
+                    <p className="text-slate-600 text-xs">A corrective action record will be required before this submission is saved.</p>
                   </div>
                 )}
 
@@ -893,7 +1087,7 @@ export default function MincePage() {
                 {submitErr && <p className="text-red-600 text-xs">{submitErr}</p>}
               </div>
 
-              <button onClick={handleSubmit} disabled={submitting || !pProductName || !pInputVal || !pOutputVal || (pAllergens.length > 0 && !pLabelCheck && !pCA) || (pAnyFail && !pCA.trim())}
+              <button onClick={handleSubmit} disabled={submitting || !pProductName || !pInputVal || !pOutputVal || pAllergenIssue}
                 className="w-full bg-orange-600 text-white font-bold py-4 text-sm disabled:opacity-40 flex items-center justify-center gap-2">
                 {submitting ? 'Saving…' : 'Submit meat prep log'}
               </button>
@@ -1035,6 +1229,15 @@ export default function MincePage() {
         )}
 
       </div>
+
+      {/* CCA Popup */}
+      {showCCA && (
+        <CCAPopup
+          channels={ccaChannels}
+          onSubmit={(ca) => doSubmit(ca)}
+          onBack={() => { setShowCCA(false); setPendingTab(null) }}
+        />
+      )}
 
       {/* Numpad */}
       {numpad && numpadState[numpad] && (() => {
