@@ -62,10 +62,9 @@ interface TimesepRecord {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SPECIES = [
-  { key: 'beef',     label: 'Beef',              inputLimit: '≤7°C',  maxDays: 6  },
-  { key: 'lamb',     label: 'Lamb',              inputLimit: '≤7°C',  maxDays: 6  },
-  { key: 'vac_beef', label: 'Vac-packed beef',   inputLimit: '≤7°C',  maxDays: 15 },
-  { key: 'poultry',  label: 'Poultry',           inputLimit: '≤4°C',  maxDays: 3  },
+  { key: 'lamb',         label: 'Lamb',                   inputLimit: '≤7°C', maxDays: 6,    killEnforced: true  },
+  { key: 'beef',         label: 'Beef (fresh)',            inputLimit: '≤7°C', maxDays: 6,    killEnforced: true  },
+  { key: 'imported_vac', label: 'Imported / vac-packed',  inputLimit: '≤7°C', maxDays: null, killEnforced: false },
 ]
 
 const ALLERGENS = [
@@ -80,9 +79,8 @@ const COUNTRIES: Record<string, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function inputTempPass(temp: number, species: string): boolean {
-  if (species === 'poultry') return temp <= 4
-  return temp <= 7
+function inputTempPass(temp: number): boolean {
+  return temp <= 7  // all current species are red meat ≤7°C
 }
 
 function outputTempPass(temp: number, form: 'mince' | 'meatprep', mode: string): boolean {
@@ -90,9 +88,17 @@ function outputTempPass(temp: number, form: 'mince' | 'meatprep', mode: string):
   return form === 'mince' ? temp <= 2 : temp <= 4
 }
 
+/** imported_vac has no enforced limit — always passes (informational only) */
 function killDaysPass(species: string, days: number): boolean {
   const sp = SPECIES.find((s) => s.key === species)
-  return sp ? days <= sp.maxDays : days <= 6
+  if (!sp || !sp.killEnforced) return true
+  return days <= (sp.maxDays ?? 6)
+}
+
+function killDaysHardFail(species: string, days: number): boolean {
+  const sp = SPECIES.find((s) => s.key === species)
+  if (!sp || !sp.killEnforced) return false
+  return days > (sp.maxDays ?? 6)
 }
 
 function calcDays(killDate: string): number {
@@ -174,12 +180,12 @@ export default function MincePage() {
   const [prepRecs,  setPrepRecs]      = useState<MeatprepRecord[]>([])
   const [tsRecs,    setTsRecs]        = useState<TimesepRecord[]>([])
   const [deliveries,setDeliveries]    = useState<DeliveryOption[]>([])
+  const [minceBatches, setMinceBatches] = useState<{ id: string; batch_code: string; species: string; kill_date: string; output_mode: string }[]>([])
   const [loading,   setLoading]       = useState(true)
 
   // ── Mince form state ────────────────────────────────────────────────────────
   const [mSpecies,       setMSpecies]       = useState('')
   const [mKillDate,      setMKillDate]      = useState('')
-  const [mKillSource,    setMKillSource]    = useState<'delivery'|'manual'>('delivery')
   const [mInputVal,      setMInputVal]      = useState('')
   const [mOutputVal,     setMOutputVal]     = useState('')
   const [mOutputMode,    setMOutputMode]    = useState<'chilled'|'frozen'>('chilled')
@@ -188,17 +194,20 @@ export default function MincePage() {
   const [mCA,            setMCA]            = useState('')
 
   // ── Meatprep form state ─────────────────────────────────────────────────────
-  const [pProductName,   setPProductName]   = useState('')
-  const [pSpecies,       setPSpecies]       = useState('')
-  const [pKillDate,      setPKillDate]      = useState('')
-  const [pInputVal,      setPInputVal]      = useState('')
-  const [pOutputVal,     setPOutputVal]     = useState('')
-  const [pOutputMode,    setPOutputMode]    = useState<'chilled'|'frozen'>('chilled')
-  const [pAllergens,     setPAllergens]     = useState<string[]>([])
-  const [pLabelCheck,    setPLabelCheck]    = useState(false)
-  const [pSourceIds,     setPSourceIds]     = useState<string[]>([])
-  const [pSourceBatches, setPSourceBatches] = useState<string[]>([])
-  const [pCA,            setPCA]            = useState('')
+  const [pProductName,      setPProductName]      = useState('')
+  const [pSpecies,          setPSpecies]          = useState('')
+  const [pKillDate,         setPKillDate]         = useState('')
+  const [pInputVal,         setPInputVal]         = useState('')
+  const [pOutputVal,        setPOutputVal]        = useState('')
+  const [pOutputMode,       setPOutputMode]       = useState<'chilled'|'frozen'>('chilled')
+  const [pAllergens,        setPAllergens]        = useState<string[]>([])
+  const [pLabelCheck,       setPLabelCheck]       = useState(false)
+  const [pSourceIds,        setPSourceIds]        = useState<string[]>([])
+  const [pSourceBatches,    setPSourceBatches]    = useState<string[]>([])
+  // Source mince batches (today's runs) — for prep coming from mince
+  const [pMinceBatchIds,    setPMinceBatchIds]    = useState<string[]>([])
+  const [pMinceBatchCodes,  setPMinceBatchCodes]  = useState<string[]>([])
+  const [pCA,               setPCA]              = useState('')
 
   // ── Time sep form state ─────────────────────────────────────────────────────
   const [tPlainEnd,      setTPlainEnd]      = useState('')
@@ -222,6 +231,7 @@ export default function MincePage() {
         setPrepRecs(d.meatprep ?? [])
         setTsRecs(d.timesep ?? [])
         setDeliveries(d.deliveries ?? [])
+        setMinceBatches(d.mince_batches ?? [])
       })
       .catch((e) => setSubmitErr(`Load error — ${e.message}`))
       .finally(() => setLoading(false))
@@ -229,52 +239,36 @@ export default function MincePage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  // Kill date auto from selected delivery
-  function toggleDelivery(d: DeliveryOption, form: 'mince' | 'meatprep') {
-    const setIds     = form === 'mince' ? setMSourceIds     : setPSourceIds
-    const setBatches = form === 'mince' ? setMSourceBatches : setPSourceBatches
-    const setKD      = form === 'mince' ? setMKillDate      : setPKillDate
-
-    setIds((prev) => {
-      const next = prev.includes(d.id) ? prev.filter((x) => x !== d.id) : [...prev, d.id]
-      return next
-    })
-    setBatches((prev) => {
-      const next = prev.includes(d.batch_number!)
-        ? prev.filter((x) => x !== d.batch_number)
-        : [...prev, d.batch_number!]
-      return next
-    })
-    // Auto-set kill date from first selected delivery (if not already set)
-    if (!prev_kill_date_set.current && d.batch_number) {
-      // Kill date comes from the slaughter site on the batch — user may need to enter manually
-      // We note the delivery is selected but kill date still needs entry from paperwork
-    }
-  }
-
-  // We can't auto-derive kill date from delivery easily (it's not stored on delivery)
-  // But we do show the delivery batch info so user can reference the paperwork
-  // Kill date is entered manually but the delivery source is linked
-  const mInputNum  = parseFloat(mInputVal)
-  const mOutputNum = parseFloat(mOutputVal)
-  const mDays      = mKillDate ? calcDays(mKillDate) : null
-  const mKillPass  = mDays !== null && mSpecies ? killDaysPass(mSpecies, mDays) : null
-  const mInPass    = mSpecies && mInputVal ? inputTempPass(mInputNum, mSpecies) : null
-  const mOutPass   = mOutputVal ? outputTempPass(mOutputNum, 'mince', mOutputMode) : null
-  const mAnyFail   = mKillPass === false || mInPass === false || mOutPass === false
-  const mSp        = SPECIES.find((s) => s.key === mSpecies)
+  const mInputNum     = parseFloat(mInputVal)
+  const mOutputNum    = parseFloat(mOutputVal)
+  const mDays         = mKillDate ? calcDays(mKillDate) : null
+  const mKillHardFail = mDays !== null && mSpecies ? killDaysHardFail(mSpecies, mDays) : false
+  const mKillPass     = mDays !== null && mSpecies ? killDaysPass(mSpecies, mDays) : null
+  const mInPass       = mInputVal ? inputTempPass(mInputNum) : null
+  const mOutPass      = mOutputVal ? outputTempPass(mOutputNum, 'mince', mOutputMode) : null
+  const mTempFail     = mInPass === false || mOutPass === false
+  const mSp           = SPECIES.find((s) => s.key === mSpecies)
 
   const pInputNum  = parseFloat(pInputVal)
   const pOutputNum = parseFloat(pOutputVal)
   const pDays      = pKillDate ? calcDays(pKillDate) : null
-  const pInPass    = pSpecies && pInputVal ? inputTempPass(pInputNum, pSpecies) : null
+  const pInPass    = pInputVal ? inputTempPass(pInputNum) : null
   const pOutPass   = pOutputVal ? outputTempPass(pOutputNum, 'meatprep', pOutputMode) : null
   const pAllergenIssue = pAllergens.length > 0 && !pLabelCheck
   const pAnyFail   = pInPass === false || pOutPass === false || pAllergenIssue
 
-  function resetMince() { setMSpecies(''); setMKillDate(''); setMKillSource('delivery'); setMInputVal(''); setMOutputVal(''); setMOutputMode('chilled'); setMSourceIds([]); setMSourceBatches([]); setMCA('') }
-  function resetPrep()  { setPProductName(''); setPSpecies(''); setPKillDate(''); setPInputVal(''); setPOutputVal(''); setPOutputMode('chilled'); setPAllergens([]); setPLabelCheck(false); setPSourceIds([]); setPSourceBatches([]); setPCA('') }
-  function resetTs()    { setTPlainEnd(''); setTCleanDone(''); setTAllergenStart(''); setTVerifiedBy(''); setTAllergens(''); setTCA('') }
+  function resetMince() {
+    setMSpecies(''); setMKillDate(''); setMInputVal(''); setMOutputVal('')
+    setMOutputMode('chilled'); setMSourceIds([]); setMSourceBatches([]); setMCA('')
+  }
+  function resetPrep() {
+    setPProductName(''); setPSpecies(''); setPKillDate(''); setPInputVal(''); setPOutputVal('')
+    setPOutputMode('chilled'); setPAllergens([]); setPLabelCheck(false)
+    setPSourceIds([]); setPSourceBatches([])
+    setPMinceBatchIds([]); setPMinceBatchCodes([])
+    setPCA('')
+  }
+  function resetTs() { setTPlainEnd(''); setTCleanDone(''); setTAllergenStart(''); setTVerifiedBy(''); setTAllergens(''); setTCA('') }
 
   async function handleSubmit() {
     setSubmitErr(''); setSubmitting(true)
@@ -282,27 +276,50 @@ export default function MincePage() {
       let body: Record<string, unknown>
 
       if (tab === 'mince') {
-        if (!mSpecies || !mKillDate || !mInputVal || !mOutputVal)
-          { setSubmitErr('Fill in all required fields'); setSubmitting(false); return }
-        body = { form: 'mince', product_species: mSpecies, kill_date: mKillDate,
+        if (!mSpecies || !mKillDate || !mInputVal || !mOutputVal) {
+          setSubmitErr('Fill in all required fields'); setSubmitting(false); return
+        }
+        // Kill date hard fail — block submission
+        if (mKillHardFail) {
+          setSubmitErr(`Kill date exceeded (${mDays} days) — DO NOT MINCE. Segregate product.`)
+          setSubmitting(false); return
+        }
+        if (mTempFail && !mCA.trim()) {
+          setSubmitErr('Corrective action required for temperature deviation')
+          setSubmitting(false); return
+        }
+        body = {
+          form: 'mince', product_species: mSpecies, kill_date: mKillDate,
           input_temp_c: mInputNum, output_temp_c: mOutputNum, output_mode: mOutputMode,
           source_batch_numbers: mSourceBatches, source_delivery_ids: mSourceIds,
-          corrective_action: mCA || undefined }
+          corrective_action: mCA || undefined,
+        }
       } else if (tab === 'meatprep') {
-        if (!pProductName || !pInputVal || !pOutputVal)
-          { setSubmitErr('Fill in all required fields'); setSubmitting(false); return }
-        body = { form: 'meatprep', product_name: pProductName, product_species: pSpecies || undefined,
-          kill_date: pKillDate || undefined, input_temp_c: pInputNum, output_temp_c: pOutputNum,
-          output_mode: pOutputMode, allergens_present: pAllergens, label_check_completed: pLabelCheck,
+        if (!pProductName || !pInputVal || !pOutputVal) {
+          setSubmitErr('Fill in all required fields'); setSubmitting(false); return
+        }
+        body = {
+          form: 'meatprep', product_name: pProductName,
+          product_species: pSpecies || undefined,
+          kill_date: pKillDate || undefined,
+          input_temp_c: pInputNum, output_temp_c: pOutputNum, output_mode: pOutputMode,
+          allergens_present: pAllergens, label_check_completed: pLabelCheck,
           source_batch_numbers: pSourceBatches, source_delivery_ids: pSourceIds,
-          corrective_action: pCA || undefined }
+          source_mince_batch_ids: pMinceBatchCodes,
+          corrective_action: pCA || undefined,
+        }
       } else {
-        if (!tCleanDone || !tVerifiedBy || !tAllergens)
-          { setSubmitErr('Fill in all required fields'); setSubmitting(false); return }
-        body = { form: 'timesep', plain_products_end_time: tPlainEnd || undefined,
-          clean_completed_time: tCleanDone, allergen_products_start_time: tAllergenStart || undefined,
+        if (!tCleanDone || !tVerifiedBy || !tAllergens) {
+          setSubmitErr('Fill in all required fields'); setSubmitting(false); return
+        }
+        body = {
+          form: 'timesep',
+          plain_products_end_time: tPlainEnd || undefined,
+          clean_completed_time: tCleanDone,
+          allergen_products_start_time: tAllergenStart || undefined,
           clean_verified_by: tVerifiedBy, allergens_in_production: tAllergens,
-          corrective_action: tCA || undefined }
+          corrective_action: tCA || undefined,
+        }
       }
 
       const res = await fetch('/api/haccp/mince-prep', {
@@ -313,15 +330,16 @@ export default function MincePage() {
       if (res.ok) {
         const d = await res.json()
         const msg = tab === 'mince'
-          ? `Mince logged — batch ${d.batch_code}`
-          : tab === 'meatprep' ? `Prep logged — batch ${d.batch_code}`
+          ? `Mince logged — ${d.batch_code}`
+          : tab === 'meatprep' ? `Prep logged — ${d.batch_code}`
           : 'Time separation logged'
         setFlash(msg)
         tab === 'mince' ? resetMince() : tab === 'meatprep' ? resetPrep() : resetTs()
         loadData()
         setTimeout(() => setFlash(''), 3000)
       } else {
-        const d = await res.json(); setSubmitErr(d.error ?? 'Submission failed')
+        const d = await res.json()
+        setSubmitErr(d.error ?? 'Submission failed')
       }
     } catch { setSubmitErr('Connection error') }
     finally { setSubmitting(false) }
@@ -329,14 +347,13 @@ export default function MincePage() {
 
   // Numpad target state
   const numpadState: Record<string, [string, (v: string) => void, string, string]> = {
-    m_input:  [mInputVal,  setMInputVal,  'Input temperature (CCP-M1)', mSp ? mSp.inputLimit : '≤7°C'],
-    m_output: [mOutputVal, setMOutputVal, 'Output temperature (CCP-M1)', mOutputMode === 'frozen' ? '≤-18°C' : '≤2°C'],
+    m_input:  [mInputVal,  setMInputVal,  'Input temperature (CCP-M1)', '≤7°C'],
+    m_output: [mOutputVal, setMOutputVal, 'Output temperature — check after chilling/freezing (CCP-M1)', mOutputMode === 'frozen' ? '≤-18°C' : '≤2°C'],
     p_input:  [pInputVal,  setPInputVal,  'Input temperature (CCP-MP1)', '≤7°C'],
-    p_output: [pOutputVal, setPOutputVal, 'Output temperature (CCP-MP1)', pOutputMode === 'frozen' ? '≤-18°C' : '≤4°C'],
+    p_output: [pOutputVal, setPOutputVal, 'Output temperature — check after chilling/freezing (CCP-MP1)', pOutputMode === 'frozen' ? '≤-18°C' : '≤4°C'],
   }
 
-  const prev_kill_date_set = { current: false }
-
+  /** Delivery batch picker — shows last 16 days of deliveries */
   function DeliveryPicker({ form }: { form: 'mince' | 'meatprep' }) {
     const selectedIds = form === 'mince' ? mSourceIds : pSourceIds
     const toggle = (d: DeliveryOption) => {
@@ -347,9 +364,8 @@ export default function MincePage() {
     }
     if (deliveries.length === 0) {
       return (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <p className="text-amber-700 text-xs font-bold uppercase tracking-widest mb-1">No delivery batches today</p>
-          <p className="text-slate-600 text-xs">Log delivery batches first via the Delivery section, or enter kill date manually below.</p>
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+          <p className="text-slate-500 text-xs">No delivery batches in the last 16 days.</p>
         </div>
       )
     }
@@ -357,6 +373,7 @@ export default function MincePage() {
       <div className="space-y-2">
         {deliveries.map((d) => {
           const sel = selectedIds.includes(d.id)
+          const isToday = d.date === new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
           return (
             <button key={d.id} onClick={() => toggle(d)}
               className={`w-full text-left rounded-xl px-4 py-3 border-2 transition-all ${
@@ -364,8 +381,9 @@ export default function MincePage() {
               }`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {d.delivery_number && <span className="text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono">#{d.delivery_number}</span>}
+                    {!isToday && <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{d.date}</span>}
                     <p className={`text-sm font-semibold ${sel ? 'text-slate-900' : 'text-slate-700'}`}>{d.supplier}</p>
                   </div>
                   <p className="text-slate-500 text-xs mt-0.5 truncate">{d.product}</p>
@@ -379,6 +397,45 @@ export default function MincePage() {
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${d.temp_status === 'pass' ? 'bg-green-100 text-green-700' : d.temp_status === 'urgent' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                     {d.temperature_c}°C
                   </span>
+                </div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
+  /** Mince batch picker for the prep form — today's mince runs */
+  function MinceBatchPicker() {
+    if (minceBatches.length === 0) {
+      return (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+          <p className="text-slate-500 text-xs">No mince runs logged today — select delivery batches above if sourcing direct from delivery.</p>
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-2">
+        {minceBatches.map((m) => {
+          const sel = pMinceBatchIds.includes(m.id)
+          return (
+            <button key={m.id} onClick={() => {
+              setPMinceBatchIds((prev) => prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id])
+              setPMinceBatchCodes((prev) => prev.includes(m.batch_code) ? prev.filter((x) => x !== m.batch_code) : [...prev, m.batch_code])
+            }}
+              className={`w-full text-left rounded-xl px-4 py-3 border-2 transition-all ${
+                sel ? 'border-orange-500 bg-orange-50' : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold font-mono ${sel ? 'text-slate-900' : 'text-slate-700'}`}>{m.batch_code}</p>
+                  <p className="text-slate-400 text-xs mt-0.5">
+                    {m.species} · kill {m.kill_date} · {m.output_mode}
+                  </p>
+                </div>
+                <div className={`w-5 h-5 rounded border-2 flex-shrink-0 flex items-center justify-center ${sel ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-white'}`}>
+                  {sel && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
               </div>
             </button>
@@ -456,7 +513,9 @@ export default function MincePage() {
                           mSpecies === s.key ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-slate-300 bg-white text-slate-600'
                         }`}>
                         {s.label}
-                        <span className="block text-[9px] font-normal opacity-60">max {s.maxDays}d · {s.inputLimit}</span>
+                        <span className="block text-[9px] font-normal opacity-60">
+                          {s.killEnforced ? `max ${s.maxDays}d · ${s.inputLimit}` : `no kill limit · ${s.inputLimit}`}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -477,7 +536,9 @@ export default function MincePage() {
                 {/* Kill date */}
                 <div>
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-                    Kill date (CCP-M2) {mSpecies && <span className="text-orange-600">— max {mSp?.maxDays} days for {mSp?.label}</span>}
+                    Kill date (CCP-M2)
+                    {mSp && mSp.killEnforced && <span className="text-orange-600"> — max {mSp.maxDays} days for {mSp.label}</span>}
+                    {mSp && !mSp.killEnforced && <span className="text-slate-400"> — recorded for traceability only</span>}
                   </p>
                   <input type="date" value={mKillDate}
                     onChange={(e) => setMKillDate(e.target.value)}
@@ -485,19 +546,27 @@ export default function MincePage() {
                     className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
                   {mDays !== null && mSpecies && (
                     <div className={`mt-2 rounded-xl px-4 py-3 border ${
-                      mKillPass ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                      mKillHardFail ? 'bg-red-50 border-red-300' :
+                      mKillPass     ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'
                     }`}>
                       <div className="flex items-center justify-between">
-                        <p className={`text-sm font-bold ${mKillPass ? 'text-green-700' : 'text-red-700'}`}>
+                        <p className={`text-sm font-bold ${mKillHardFail ? 'text-red-700' : mKillPass ? 'text-green-700' : 'text-slate-700'}`}>
                           {mDays} days from kill
                         </p>
-                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${mKillPass ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {mKillPass ? `Pass ≤${mSp?.maxDays}d` : `FAIL — DO NOT MINCE`}
+                        <span className={`text-xs font-bold px-3 py-1 rounded-full ${
+                          mKillHardFail           ? 'bg-red-100 text-red-700' :
+                          !mSp?.killEnforced       ? 'bg-slate-100 text-slate-600' :
+                          mKillPass               ? 'bg-green-100 text-green-700' :
+                                                    'bg-amber-100 text-amber-700'
+                        }`}>
+                          {mKillHardFail    ? 'DO NOT MINCE' :
+                           !mSp?.killEnforced ? 'Informational' :
+                           mKillPass         ? `Pass ≤${mSp?.maxDays}d` : 'Warning'}
                         </span>
                       </div>
-                      {!mKillPass && (
-                        <p className="text-red-600 text-xs mt-1.5 font-medium">
-                          Kill date exceeded. Segregate product. Return to supplier or dispose as Category 3 ABP.
+                      {mKillHardFail && (
+                        <p className="text-red-600 text-xs mt-1.5 font-semibold">
+                          Kill date exceeded — segregate product. Return to supplier or dispose as Category 3 ABP.
                         </p>
                       )}
                     </div>
@@ -545,7 +614,7 @@ export default function MincePage() {
                       mOutPass    ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                     }`}>
                     <div>
-                      <p className="text-slate-400 text-xs mb-0.5">Must reach {mOutputMode === 'frozen' ? '≤-18°C' : '≤2°C'} after chilling</p>
+                      <p className="text-slate-400 text-xs mb-0.5">Check after {mOutputMode === 'frozen' ? 'freezing' : 'chilling'} — must reach {mOutputMode === 'frozen' ? '≤-18°C' : '≤2°C'}</p>
                       <p className={`text-2xl font-bold font-mono ${!mOutputVal ? 'text-slate-300' : mOutPass ? 'text-green-700' : 'text-red-600'}`}>
                         {mOutputVal && !isNaN(mOutputNum) ? `${mOutputNum}°C` : 'Tap to enter'}
                       </p>
@@ -558,16 +627,21 @@ export default function MincePage() {
                   </button>
                 </div>
 
-                {/* Corrective action */}
-                {mAnyFail && (
+                {/* Kill date hard fail block */}
+                {mKillHardFail && (
+                  <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3">
+                    <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">DO NOT MINCE — Kill Date Exceeded</p>
+                    <p className="text-slate-700 text-xs">Segregate this product immediately. Return to supplier or dispose of as Category 3 ABP. Submission is blocked.</p>
+                  </div>
+                )}
+
+                {/* Temperature corrective action */}
+                {mTempFail && !mKillHardFail && (
                   <div>
                     <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-2 space-y-1.5">
-                      <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">Deviation — required actions (MMP-001 §12)</p>
-                      {mKillPass === false && (
-                        <p className="text-slate-700 text-xs">• Kill date exceeded: DO NOT PROCESS. Segregate. Return to supplier or dispose as Cat 3 ABP.</p>
-                      )}
+                      <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature deviation — required actions (MMP-001 §12)</p>
                       {mInPass === false && (
-                        <p className="text-slate-700 text-xs">• Input temp exceeded: Quarantine. Chill rapidly to &lt;7°C within 2 hours or reject.</p>
+                        <p className="text-slate-700 text-xs">• Input temp exceeded: Quarantine. Chill rapidly to ≤7°C within 2 hours or reject.</p>
                       )}
                       {mOutPass === false && (
                         <p className="text-slate-700 text-xs">• Output temp exceeded: Extend chilling. Recheck. Assess product if still exceeded.</p>
@@ -584,9 +658,10 @@ export default function MincePage() {
                 {submitErr && <p className="text-red-600 text-xs">{submitErr}</p>}
               </div>
 
-              <button onClick={handleSubmit} disabled={submitting || !mSpecies || !mKillDate || !mInputVal || !mOutputVal || (mAnyFail && !mCA.trim())}
+              <button onClick={handleSubmit}
+                disabled={submitting || !mSpecies || !mKillDate || !mInputVal || !mOutputVal || mKillHardFail || (mTempFail && !mCA.trim())}
                 className="w-full bg-orange-600 text-white font-bold py-4 text-sm disabled:opacity-40 flex items-center justify-center gap-2">
-                {submitting ? 'Saving…' : 'Submit mince log'}
+                {submitting ? 'Saving…' : mKillHardFail ? 'Blocked — kill date exceeded' : 'Submit mince log'}
               </button>
             </div>
 
@@ -647,7 +722,7 @@ export default function MincePage() {
 
                 {/* Species (optional for prep) */}
                 <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Species (optional — for kill date reference)</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Species (optional — for traceability)</p>
                   <div className="flex flex-wrap gap-2">
                     {SPECIES.map((s) => (
                       <button key={s.key} onClick={() => setPSpecies(pSpecies === s.key ? '' : s.key)}
@@ -660,10 +735,22 @@ export default function MincePage() {
                   </div>
                 </div>
 
-                {/* Delivery batch picker */}
+                {/* Source — delivery batches */}
                 <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Source delivery batches</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Source delivery batches (select all that apply)</p>
                   <DeliveryPicker form="meatprep" />
+                </div>
+
+                {/* Source — mince batches (today's runs) */}
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Source mince batches — today's runs (select if prep comes from mince)</p>
+                  <MinceBatchPicker />
+                  {pMinceBatchCodes.length > 0 && (
+                    <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      <p className="text-slate-500 text-[10px] mb-1">Selected mince batches:</p>
+                      <p className="text-slate-800 text-xs font-mono font-bold">{pMinceBatchCodes.join(' · ')}</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Kill date (optional for prep) */}
@@ -715,9 +802,12 @@ export default function MincePage() {
                       !pOutputVal ? 'border-blue-200 bg-white' :
                       pOutPass    ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'
                     }`}>
-                    <p className={`text-2xl font-bold font-mono ${!pOutputVal ? 'text-slate-300' : pOutPass ? 'text-green-700' : 'text-red-600'}`}>
-                      {pOutputVal && !isNaN(pOutputNum) ? `${pOutputNum}°C` : 'Tap to enter'}
-                    </p>
+                    <div>
+                      <p className="text-slate-400 text-xs mb-0.5">Check after {pOutputMode === 'frozen' ? 'freezing' : 'chilling'} — must reach {pOutputMode === 'frozen' ? '≤-18°C' : '≤4°C'}</p>
+                      <p className={`text-2xl font-bold font-mono ${!pOutputVal ? 'text-slate-300' : pOutPass ? 'text-green-700' : 'text-red-600'}`}>
+                        {pOutputVal && !isNaN(pOutputNum) ? `${pOutputNum}°C` : 'Tap to enter'}
+                      </p>
+                    </div>
                     {pOutPass !== null && pOutputVal && (
                       <span className={`text-xs font-bold px-2 py-1 rounded-full ${pOutPass ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {pOutPass ? 'Pass' : 'Fail'}
