@@ -4,6 +4,15 @@
  * CCP 1 — Delivery Intake (Goods In Temperature Check)
  * Event-driven: one record per delivery. Form resets after submit.
  * Supplier: dropdown from DB + "Other" free text fallback.
+ *
+ * Batch 2:
+ *   C1  — CCAPopup rewritten: structured 2-track (temp + contam) with
+ *          cause / action / disposition / recurrence / notes. One CAPayload
+ *          per active track sent to server.
+ *   C8  — born_in / reared_in / slaughter_site / cut_site required on every
+ *          submission (all categories). isValid gated + required indicators.
+ *   fmt — batch code DDMM-CC-N. COUNTRIES expanded to 14 ISO alpha-2 +
+ *          full search over extended ISO list.
  */
 
 'use client'
@@ -13,6 +22,14 @@ import { useState, useEffect, useCallback } from 'react'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TempStatus = 'pass' | 'urgent' | 'fail' | null
+
+type CAPayload = {
+  cause:       string
+  action:      string
+  disposition: string
+  recurrence:  string
+  notes:       string
+}
 
 interface Supplier  { id: string; name: string }
 interface Delivery  {
@@ -50,22 +67,71 @@ const CATEGORY_LABELS: Record<string, string> = {
   red_meat:   'Red meat', offal: 'Offal', mince_prep: 'Mince / prep', frozen: 'Frozen',
 }
 
-// Country of origin options + ISO codes for batch number
-const COUNTRIES = [
-  { label: 'Ireland',     code: 'IRL' },
-  { label: 'UK',          code: 'UK'  },
-  { label: 'Australia',   code: 'AUS' },
-  { label: 'New Zealand', code: 'NZL' },
-  { label: 'Brazil',      code: 'BRA' },
+// ─── Countries ────────────────────────────────────────────────────────────────
+
+// Curated 14 — shown as chips. ISO 3166-1 alpha-2.
+const CURATED_CODES = ['GB','IE','AU','NZ','BR','US','AR','UY','ZA','NL','DE','FR','ES','PL']
+
+// Full list for search (curated + common additional countries)
+const ALL_COUNTRIES: { label: string; code: string }[] = [
+  { label: 'United Kingdom',   code: 'GB' },
+  { label: 'Ireland',          code: 'IE' },
+  { label: 'Australia',        code: 'AU' },
+  { label: 'New Zealand',      code: 'NZ' },
+  { label: 'Brazil',           code: 'BR' },
+  { label: 'United States',    code: 'US' },
+  { label: 'Argentina',        code: 'AR' },
+  { label: 'Uruguay',          code: 'UY' },
+  { label: 'South Africa',     code: 'ZA' },
+  { label: 'Netherlands',      code: 'NL' },
+  { label: 'Germany',          code: 'DE' },
+  { label: 'France',           code: 'FR' },
+  { label: 'Spain',            code: 'ES' },
+  { label: 'Poland',           code: 'PL' },
+  { label: 'Austria',          code: 'AT' },
+  { label: 'Belgium',          code: 'BE' },
+  { label: 'Canada',           code: 'CA' },
+  { label: 'Chile',            code: 'CL' },
+  { label: 'China',            code: 'CN' },
+  { label: 'Czech Republic',   code: 'CZ' },
+  { label: 'Denmark',          code: 'DK' },
+  { label: 'Finland',          code: 'FI' },
+  { label: 'Greece',           code: 'GR' },
+  { label: 'Hungary',          code: 'HU' },
+  { label: 'India',            code: 'IN' },
+  { label: 'Italy',            code: 'IT' },
+  { label: 'Japan',            code: 'JP' },
+  { label: 'Lithuania',        code: 'LT' },
+  { label: 'Mexico',           code: 'MX' },
+  { label: 'Norway',           code: 'NO' },
+  { label: 'Pakistan',         code: 'PK' },
+  { label: 'Paraguay',         code: 'PY' },
+  { label: 'Portugal',         code: 'PT' },
+  { label: 'Romania',          code: 'RO' },
+  { label: 'Slovakia',         code: 'SK' },
+  { label: 'Sweden',           code: 'SE' },
+  { label: 'Switzerland',      code: 'CH' },
+  { label: 'Thailand',         code: 'TH' },
+  { label: 'Turkey',           code: 'TR' },
+  { label: 'Ukraine',          code: 'UA' },
+  { label: 'Viet Nam',         code: 'VN' },
 ]
 
-// Generate batch number: DDMM-{COUNTRY_CODE}-{SLAUGHTER_SITE}
-function buildBatchNumber(date: string, countryCode: string, slaughterSite: string): string {
-  if (!date || !countryCode || !slaughterSite.trim()) return ''
-  const d   = new Date(date + 'T00:00:00')
-  const dd  = String(d.getDate()).padStart(2, '0')
-  const mm  = String(d.getMonth() + 1).padStart(2, '0')
-  return `${dd}${mm}-${countryCode}-${slaughterSite.trim()}`
+const CURATED_COUNTRIES = ALL_COUNTRIES.filter((c) => CURATED_CODES.includes(c.code))
+
+function countryLabel(code: string | null): string {
+  if (!code) return '—'
+  return ALL_COUNTRIES.find((c) => c.code === code)?.label ?? code
+}
+
+// ─── Batch number preview (client-side, no delivery number) ──────────────────
+// Format: DDMM-CC   (server appends -N)
+function buildBatchPrefix(date: string, countryCode: string): string {
+  if (!date || !countryCode) return ''
+  const d  = new Date(date + 'T00:00:00')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  return `${dd}${mm}-${countryCode}`
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -73,12 +139,9 @@ function buildBatchNumber(date: string, countryCode: string, slaughterSite: stri
 function calcStatus(temp: number, category: string): TempStatus {
   if (isNaN(temp)) return null
   switch (category) {
-    // CA-001: chilled meat ≤8°C legal max, target ≤5°C
-    // 5–8°C = conditional accept (NOT reject), >8°C = reject
-    case 'red_meat':   return temp <= 5.0 ? 'pass' : temp <= 8.0 ? 'urgent' : 'fail'
-    case 'offal':      return temp <= 3.0 ? 'pass' : 'fail'
-    case 'mince_prep': return temp <= 4.0 ? 'pass' : 'fail'
-    // CA-001: frozen ≤-18°C target, acceptable to -15°C if re-frozen immediately
+    case 'red_meat':   return temp <= 5.0   ? 'pass' : temp <= 8.0   ? 'urgent' : 'fail'
+    case 'offal':      return temp <= 3.0   ? 'pass' : 'fail'
+    case 'mince_prep': return temp <= 4.0   ? 'pass' : 'fail'
     case 'frozen':     return temp <= -18.0 ? 'pass' : temp <= -15.0 ? 'urgent' : 'fail'
     default:           return null
   }
@@ -177,7 +240,6 @@ function Numpad({ value, onChange, onClose, category }: {
               ) : k}
             </button>
           ))}
-          {/* Negative toggle for frozen */}
           {category === 'frozen' && (
             <button onPointerDown={(e) => { e.preventDefault(); press('-') }}
               className="col-span-3 h-12 rounded-2xl bg-slate-50 text-slate-500 text-sm font-bold active:scale-95">
@@ -194,77 +256,272 @@ function Numpad({ value, onChange, onClose, category }: {
   )
 }
 
-// ─── CCA Popup ────────────────────────────────────────────────────────────────
+// ─── CCA Popup (C1 — structured 2-track) ─────────────────────────────────────
 
-function CCAPopup({ tempStatus, contaminated, onConfirm, onBack }: {
+const DISPOSITION_OPTIONS = ['Accept', 'Conditional accept', 'Assess', 'Reject', 'Dispose']
+
+const CCA_CAUSES = [
+  'Cold chain break in transport',
+  'Inadequate pre-chilling at supplier',
+  'Transport vehicle refrigeration failure',
+  'Delivery delayed — product held too long',
+  'Packaging damaged in transit',
+  'Supplier loading error',
+  'Contamination during handling',
+  'Other',
+]
+
+const CCA_RECURRENCES = [
+  'Contact supplier — cold chain audit',
+  'Add supplier to watch list',
+  'Request supplier corrective action plan',
+  'Arrange supplier site visit',
+  'Retrain receiving staff',
+  'Review delivery window / timing',
+  'Other',
+]
+
+const ACTIONS_EQUIPMENT_FAILURE = [
+  'Verify product core temperature with calibrated probe',
+  'If temperature within conditional limits: accept with reduced shelf life',
+  'If temperature exceeds legal limit: REJECT',
+  'Document refrigeration failure and photograph vehicle thermometer',
+  'Report equipment failure to supplier in writing',
+  'Do not use this vehicle until fault is rectified',
+]
+
+const ACTIONS_CONDITIONAL_ACCEPT = [
+  'Accept conditionally — do NOT reject the delivery',
+  'Place immediately into coldest chiller area (or refreeze immediately if frozen)',
+  'Use within reduced shelf life — halve remaining use-by',
+  'Document assessment and accelerated use decision',
+  'Review supplier performance',
+]
+
+const ACTIONS_REJECT = [
+  'REJECT delivery immediately — do NOT accept product',
+  'Photograph product and temperature reading',
+  'Complete Non-Conformance Report',
+  'Notify supplier in writing within 24 hours',
+  'Segregate and return or dispose as required',
+  'Do not accept for human consumption',
+]
+
+const ACTIONS_CONTAM = [
+  'Trim contaminated area using clean knife',
+  'Dispose of trimmings as Category 2/3 ABP',
+  'Sterilise knife immediately after trimming (≥82°C)',
+  'Document trimming action and disposal',
+  'If contamination excessive: REJECT entire carcase',
+]
+
+function CCAPopup({ tempStatus, contaminated, onSubmit, onBack }: {
   tempStatus:   TempStatus
   contaminated: string
-  onConfirm:    () => void
+  onSubmit:     (caTemp: CAPayload | null, caContam: CAPayload | null) => void
   onBack:       () => void
 }) {
-  // CA-001 verbatim corrective actions per deviation type
-  // tempStatus 'urgent' = conditional accept (5-8°C chilled, or -15 to -18°C frozen)
-  const conditionalAcceptActions = ['Accept conditionally — do NOT reject the delivery', 'Place immediately into coldest chiller area (or refreeze immediately if frozen)', 'Use within reduced shelf life — halve remaining use-by', 'Document assessment and accelerated use decision', 'Review supplier performance']
+  const activeTempTrack   = tempStatus === 'urgent' || tempStatus === 'fail'
+  const activeContamTrack = contaminated === 'yes'  || contaminated === 'yes_actioned'
 
-  const rejectActions = ['REJECT delivery immediately — do NOT accept product', 'Photograph product and temperature reading', 'Complete Non-Conformance Report', 'Notify supplier in writing within 24 hours', 'Segregate and return or dispose as required', 'Do not accept for human consumption']
+  const [cause,        setCause]        = useState('')
+  const [recurrence,   setRecurrence]   = useState('')
+  const [notes,        setNotes]        = useState('')
+  const [tempAction,   setTempAction]   = useState('')
+  const [tempDisp,     setTempDisp]     = useState<string>(
+    tempStatus === 'fail' ? 'Reject' : tempStatus === 'urgent' ? 'Conditional accept' : ''
+  )
+  const [contamAction, setContamAction] = useState('')
+  const [contamDisp,   setContamDisp]   = useState<string>(
+    contaminated === 'yes' ? 'Assess' : 'Accept'
+  )
 
-  const contamActions = ['Trim contaminated area using clean knife', 'Dispose of trimmings as Category 2/3 ABP', 'Sterilise knife immediately after trimming (≥82°C)', 'Document trimming action and disposal', 'If contamination excessive: REJECT entire carcase']
+  // Clear per-track actions when cause changes
+  useEffect(() => {
+    setTempAction('')
+    setContamAction('')
+  }, [cause])
 
-  const showTemp   = tempStatus === 'urgent' || tempStatus === 'fail'
-  const showContam = contaminated === 'yes' || contaminated === 'yes_actioned'
-  const isConditional = tempStatus === 'urgent'
+  const isEquipmentCause =
+    cause === 'Transport vehicle refrigeration failure' ||
+    cause === 'Cold chain break in transport'
+
+  function getTempActions(): string[] {
+    if (!cause) return []
+    if (isEquipmentCause) return ACTIONS_EQUIPMENT_FAILURE
+    return tempStatus === 'urgent' ? ACTIONS_CONDITIONAL_ACCEPT : ACTIONS_REJECT
+  }
+
+  function getContamActions(): string[] {
+    if (!cause) return []
+    if (isEquipmentCause) return ACTIONS_EQUIPMENT_FAILURE
+    return ACTIONS_CONTAM
+  }
+
+  const isSubmittable =
+    cause.trim() !== '' &&
+    recurrence.trim() !== '' &&
+    (!activeTempTrack   || (tempAction.trim()   !== '' && tempDisp.trim()   !== '')) &&
+    (!activeContamTrack || (contamAction.trim() !== '' && contamDisp.trim() !== ''))
+
+  function handleSubmit() {
+    if (!isSubmittable) return
+    const caTemp: CAPayload | null = activeTempTrack ? {
+      cause, action: tempAction, disposition: tempDisp, recurrence, notes,
+    } : null
+    const caContam: CAPayload | null = activeContamTrack ? {
+      cause, action: contamAction, disposition: contamDisp, recurrence, notes,
+    } : null
+    onSubmit(caTemp, caContam)
+  }
+
+  const headerColour = tempStatus === 'fail' ? 'text-red-600' : 'text-[#EB6619]'
+  const submitBg     = tempStatus === 'fail' ? 'bg-red-600'   : 'bg-[#EB6619]'
+  const twoTracks    = activeTempTrack && activeContamTrack
 
   return (
     <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
-      <div className="bg-white rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
-        <div className="flex items-start justify-between p-6 pb-4">
+      <div className="bg-white rounded-t-3xl w-full max-h-[90vh] overflow-y-auto">
+
+        {/* Header */}
+        <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
           <div>
-            <p className={`text-xs font-bold tracking-widest uppercase ${isConditional ? 'text-[#EB6619]' : 'text-red-600'}`}>
-              {isConditional ? 'CCP 1 — Conditional accept' : 'CCP 1 — Reject required'}
+            <p className={`text-xs font-bold tracking-widest uppercase ${headerColour}`}>CCP 1 — Corrective Action</p>
+            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Record what you did</h2>
+            <p className="text-slate-400 text-xs mt-0.5">
+              {twoTracks ? 'Two deviations — complete both tracks below' : 'Complete all fields to submit'}
             </p>
-            <h2 className="text-slate-900 text-xl font-bold mt-0.5">
-              {isConditional ? 'Do NOT reject — take action below' : 'Corrective Action Required'}
-            </h2>
           </div>
-          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95 mt-1">
+          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 transition-all active:scale-95 mt-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div className="px-6 pb-6 space-y-5">
-          {showTemp && (
-            <div>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">
-                {isConditional ? 'Required actions — conditional accept (CA-001)' : 'Required actions — reject (CA-001)'}
-              </p>
-              <div className="space-y-2">
-                {(isConditional ? conditionalAcceptActions : rejectActions).map((a) => (
-                  <div key={a} className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
-                    isConditional ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+
+        <div className="px-6 pb-8 pt-5 space-y-6">
+
+          {/* Shared: Cause */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Cause of deviation</p>
+            <div className="space-y-2">
+              {CCA_CAUSES.map((c) => (
+                <button key={c} onClick={() => setCause(c)}
+                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                    cause === c ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
                   }`}>
-                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${isConditional ? 'bg-[#EB6619]' : 'bg-red-300'}`}/>
-                    <p className="text-slate-700 text-sm">{a}</p>
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Temperature track */}
+          {activeTempTrack && cause && (
+            <div className="border border-amber-200 rounded-2xl overflow-hidden">
+              <div className={`px-4 py-3 ${tempStatus === 'fail' ? 'bg-red-50' : 'bg-amber-50'}`}>
+                <p className={`text-xs font-bold uppercase tracking-widest ${tempStatus === 'fail' ? 'text-red-600' : 'text-amber-700'}`}>
+                  Temperature — {tempStatus === 'fail' ? 'Reject required' : 'Conditional accept'}
+                </p>
+              </div>
+              <div className="px-4 py-4 space-y-4 bg-white">
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</p>
+                  <div className="space-y-2">
+                    {getTempActions().map((a) => (
+                      <button key={a} onClick={() => setTempAction(a)}
+                        className={`w-full text-left flex items-start gap-3 px-4 py-3 rounded-xl border transition-all ${
+                          tempAction === a ? 'border-[#EB6619] bg-amber-50' : 'border-slate-200 bg-white'
+                        }`}>
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${tempAction === a ? 'bg-[#EB6619]' : 'bg-slate-300'}`}/>
+                        <p className="text-slate-700 text-sm">{a}</p>
+                      </button>
+                    ))}
                   </div>
-                ))}
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
+                  <div className="flex flex-wrap gap-2">
+                    {DISPOSITION_OPTIONS.map((d) => (
+                      <button key={d} onClick={() => setTempDisp(d)}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                          tempDisp === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-500'
+                        }`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
-          {showContam && (
-            <div>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Contamination — required actions (CA-001)</p>
-              <div className="space-y-2">
-                {contamActions.map((a) => (
-                  <div key={a} className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200">
-                    <div className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 bg-[#EB6619]"/>
-                    <p className="text-slate-700 text-sm">{a}</p>
+
+          {/* Contamination track */}
+          {activeContamTrack && cause && (
+            <div className="border border-amber-200 rounded-2xl overflow-hidden">
+              <div className="bg-amber-50 px-4 py-3">
+                <p className="text-amber-700 text-xs font-bold uppercase tracking-widest">
+                  Contamination — {contaminated === 'yes' ? 'Rejected product' : 'Actioned at intake'}
+                </p>
+              </div>
+              <div className="px-4 py-4 space-y-4 bg-white">
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</p>
+                  <div className="space-y-2">
+                    {getContamActions().map((a) => (
+                      <button key={a} onClick={() => setContamAction(a)}
+                        className={`w-full text-left flex items-start gap-3 px-4 py-3 rounded-xl border transition-all ${
+                          contamAction === a ? 'border-[#EB6619] bg-amber-50' : 'border-slate-200 bg-white'
+                        }`}>
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1.5 ${contamAction === a ? 'bg-[#EB6619]' : 'bg-slate-300'}`}/>
+                        <p className="text-slate-700 text-sm">{a}</p>
+                      </button>
+                    ))}
                   </div>
-                ))}
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
+                  <div className="flex flex-wrap gap-2">
+                    {DISPOSITION_OPTIONS.map((d) => (
+                      <button key={d} onClick={() => setContamDisp(d)}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border-2 transition-all ${
+                          contamDisp === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-500'
+                        }`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           )}
-          <p className="text-slate-400 text-xs">By confirming, you acknowledge these actions have been taken or are in progress. This record is immutable once submitted.</p>
-          <button onClick={onConfirm}
-            className={`w-full text-white font-bold py-4 rounded-xl text-base ${isConditional ? 'bg-[#EB6619]' : 'bg-red-600'}`}>
-            Confirm &amp; submit
+
+          {/* Shared: Recurrence prevention */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
+            <div className="space-y-2">
+              {CCA_RECURRENCES.map((r) => (
+                <button key={r} onClick={() => setRecurrence(r)}
+                  className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                    recurrence === r ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
+                  }`}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Shared: Notes (optional) */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Additional notes <span className="normal-case font-normal">(optional)</span></p>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              placeholder="Any additional context…"
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+          </div>
+
+          <p className="text-slate-400 text-xs">This record is immutable once submitted. CA-001 verbatim actions listed above.</p>
+
+          <button onClick={handleSubmit} disabled={!isSubmittable}
+            className={`w-full text-white font-bold py-4 rounded-xl text-base disabled:opacity-40 transition-all ${submitBg}`}>
+            Confirm &amp; submit delivery
           </button>
         </div>
       </div>
@@ -275,8 +532,8 @@ function CCAPopup({ tempStatus, contaminated, onConfirm, onBack }: {
 // ─── Delivery Detail Sheet ────────────────────────────────────────────────────
 
 function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
-  const bornLabel   = COUNTRIES.find((c) => c.code === d.born_in)?.label   ?? d.born_in
-  const rearedLabel = COUNTRIES.find((c) => c.code === d.reared_in)?.label ?? d.reared_in
+  const bornLabel   = countryLabel(d.born_in)
+  const rearedLabel = countryLabel(d.reared_in)
   const catLabel    = CATEGORIES.find((c) => c.key === d.product_category)
 
   return (
@@ -299,7 +556,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
 
         <div className="px-5 py-4 space-y-4 pb-8">
 
-          {/* Batch number — prominent */}
+          {/* Batch number */}
           {d.batch_number && (
             <div className="bg-slate-900 rounded-xl px-4 py-3">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
@@ -311,7 +568,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
           <div className={`rounded-xl px-4 py-3 border ${
             d.temp_status === 'pass'   ? 'bg-green-50 border-green-200' :
             d.temp_status === 'urgent' ? 'bg-amber-50 border-amber-200' :
-                                         'bg-red-50 border-red-200'
+                                          'bg-red-50 border-red-200'
           }`}>
             <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature — CCP 1</p>
             <div className="flex items-center justify-between">
@@ -345,14 +602,16 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
 
             <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Born in</p>
-              <p className="text-slate-900 font-semibold text-sm">{bornLabel ?? '—'}</p>
+              <p className="text-slate-900 font-semibold text-sm">{bornLabel}</p>
             </div>
 
             <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Reared in</p>
               <p className="text-slate-900 font-semibold text-sm">
                 {d.reared_in
-                  ? d.reared_in === d.born_in ? <span className="text-slate-500 font-normal text-xs">Same</span> : rearedLabel
+                  ? d.reared_in === d.born_in
+                    ? <span className="text-slate-500 font-normal text-xs">Same</span>
+                    : rearedLabel
                   : '—'}
               </p>
             </div>
@@ -410,6 +669,79 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
   )
 }
 
+// ─── Country Picker (shared component for born_in / reared_in) ───────────────
+
+function CountryPicker({ value, onChange, label, required }: {
+  value:    string
+  onChange: (code: string) => void
+  label:    string
+  required?: boolean
+}) {
+  const [search, setSearch] = useState('')
+  const q = search.trim().toLowerCase()
+
+  const searchResults = q.length >= 1
+    ? ALL_COUNTRIES.filter(
+        (c) => !CURATED_CODES.includes(c.code) &&
+               (c.label.toLowerCase().includes(q) || c.code.toLowerCase().includes(q))
+      ).slice(0, 8)
+    : []
+
+  return (
+    <div>
+      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </p>
+      {/* Curated chips */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {CURATED_COUNTRIES.map((c) => (
+          <button key={c.code}
+            onPointerDown={(e) => { e.preventDefault(); onChange(c.code); setSearch('') }}
+            className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+              value === c.code
+                ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
+                : 'border-slate-300 bg-white text-slate-600'
+            }`}>
+            {c.code}
+            <span className="ml-1 font-normal text-slate-400 text-[10px]">{c.label.split(' ')[0]}</span>
+          </button>
+        ))}
+      </div>
+      {/* Search for others */}
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search other countries…"
+        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 text-sm focus:outline-none focus:border-orange-400"
+      />
+      {searchResults.length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {searchResults.map((c) => (
+            <button key={c.code}
+              onPointerDown={(e) => { e.preventDefault(); onChange(c.code); setSearch('') }}
+              className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                value === c.code
+                  ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
+                  : 'border-slate-300 bg-white text-slate-600'
+              }`}>
+              {c.code}
+              <span className="ml-1 font-normal text-slate-400 text-[10px]">{c.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {q.length >= 1 && searchResults.length === 0 && (
+        <p className="text-slate-400 text-xs mt-2">No results for &quot;{search}&quot;</p>
+      )}
+      {/* Show selected value if it came from search (not in curated chips) */}
+      {value && !CURATED_CODES.includes(value) && (
+        <p className="text-[#EB6619] text-xs mt-1.5 font-medium">Selected: {value} — {countryLabel(value)}</p>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function DeliveryPage() {
@@ -419,21 +751,21 @@ export default function DeliveryPage() {
   const [nextNumber, setNextNumber] = useState(1)
 
   // Form state
-  const [supplierSel, setSupplierSel] = useState('')    // selected preset or 'other'
-  const [supplierOther, setSupplierOther] = useState('') // free text when 'other'
-  const [product,    setProduct]    = useState('')
-  const [category,   setCategory]   = useState('')
-  const [tempVal,    setTempVal]    = useState('')
-  const [contam,     setContam]     = useState('')
-  const [contamType, setcontamType] = useState('')   // sub-type when yes_actioned
-  const [contamNote, setContamNote] = useState('')
-  const [bornIn,     setBornIn]     = useState('')
-  const [rearedIn,   setRearedIn]   = useState('')
-  const [rearedSame, setRearedSame] = useState(false)
-  const [slaughter,  setSlaughter]  = useState('')
-  const [cutSite,    setCutSite]    = useState('')     // '' = not set, 'same' = same as slaughter, else numeric code
-  const [cutSameAs,  setCutSameAs]  = useState(false)
-  const [notes,      setNotes]      = useState('')
+  const [supplierSel,   setSupplierSel]   = useState('')
+  const [supplierOther, setSupplierOther] = useState('')
+  const [product,       setProduct]       = useState('')
+  const [category,      setCategory]      = useState('')
+  const [tempVal,       setTempVal]       = useState('')
+  const [contam,        setContam]        = useState('')
+  const [contamType,    setContamType]    = useState('')
+  const [contamNote,    setContamNote]    = useState('')
+  const [bornIn,        setBornIn]        = useState('')
+  const [rearedIn,      setRearedIn]      = useState('')
+  const [rearedSame,    setRearedSame]    = useState(false)
+  const [slaughter,     setSlaughter]     = useState('')
+  const [cutSite,       setCutSite]       = useState('')
+  const [cutSameAs,     setCutSameAs]     = useState(false)
+  const [notes,         setNotes]         = useState('')
 
   // UI state
   const [showNumpad,       setShowNumpad]       = useState(false)
@@ -464,51 +796,69 @@ export default function DeliveryPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
-  const tempNum    = parseFloat(tempVal)
-  const tempStat   = category ? calcStatus(tempNum, category) : null
-  // supplierSel holds a supplier UUID (chip) or 'other' (free text) or '' (none)
-  const supplierIdSel  = supplierSel && supplierSel !== 'other' ? supplierSel : ''
+  const tempNum  = parseFloat(tempVal)
+  const tempStat = category ? calcStatus(tempNum, category) : null
+
+  const supplierIdSel     = supplierSel && supplierSel !== 'other' ? supplierSel : ''
   const supplierOtherTrim = supplierOther.trim()
-  const supplierChosen = Boolean(supplierIdSel || (supplierSel === 'other' && supplierOtherTrim))
+  const supplierChosen    = Boolean(supplierIdSel || (supplierSel === 'other' && supplierOtherTrim))
 
   const needsCCA = (tempStat === 'urgent' || tempStat === 'fail') ||
                    (contam === 'yes' || contam === 'yes_actioned')
 
-  const isValid = supplierChosen && product.trim() && category &&
-                  tempVal !== '' && !isNaN(tempNum) && contam
+  // C8: all 4 traceability fields mandatory
+  const isValid =
+    supplierChosen &&
+    product.trim() &&
+    category &&
+    tempVal !== '' && !isNaN(tempNum) &&
+    contam &&
+    Boolean(bornIn) &&
+    Boolean(rearedIn) &&
+    slaughter.trim() !== '' &&
+    Boolean(cutSite)
 
   function resetForm() {
     setSupplierSel(''); setSupplierOther(''); setProduct('')
     setCategory(''); setTempVal(''); setContam('')
-    setcontamType(''); setContamNote(''); setNotes(''); setSubmitErr('')
-    setBornIn(''); setRearedIn(''); setRearedSame(false); setSlaughter(''); setCutSite(''); setCutSameAs(false)
+    setContamType(''); setContamNote(''); setNotes(''); setSubmitErr('')
+    setBornIn(''); setRearedIn(''); setRearedSame(false)
+    setSlaughter(''); setCutSite(''); setCutSameAs(false)
   }
 
-  async function doSubmit() {
+  async function doSubmit(caTemp?: CAPayload | null, caContam?: CAPayload | null) {
     setShowCCA(false); setSubmitting(true); setSubmitErr('')
     try {
       const res = await fetch('/api/haccp/delivery', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // Send supplier_id for approved-list chip, or supplier_name for "Other"
           supplier_id:   supplierIdSel || undefined,
           supplier_name: supplierSel === 'other' ? supplierOtherTrim : undefined,
-          product: product.trim(),
-          product_category: category, temperature_c: tempNum,
+          product:       product.trim(),
+          product_category:     category,
+          temperature_c:        tempNum,
           covered_contaminated: contam,
-          contamination_notes: contamNote || undefined,
-          notes: notes || undefined,
-          born_in:           bornIn || undefined,
-          reared_in:         rearedIn || undefined,
-          slaughter_site:    slaughter || undefined,
-          cut_site:          cutSite || undefined,
+          contamination_notes:  contamNote || undefined,
+          notes:                notes || undefined,
+          born_in:              bornIn   || undefined,
+          reared_in:            rearedIn || undefined,
+          slaughter_site:       slaughter || undefined,
+          cut_site:             cutSite   || undefined,
+          corrective_action_temp:   caTemp   ?? undefined,
+          corrective_action_contam: caContam ?? undefined,
         }),
       })
+      const d = await res.json()
       if (res.ok) {
-        setFlash(true); resetForm(); loadData()
-        setTimeout(() => setFlash(false), 2500)
+        if (d.ca_write_failed) {
+          setSubmitErr('Delivery saved — but corrective action record failed to write. Notify admin to log manually.')
+        } else {
+          setFlash(true)
+          setTimeout(() => setFlash(false), 2500)
+        }
+        resetForm(); loadData()
       } else {
-        const d = await res.json(); setSubmitErr(d.error ?? 'Submission failed')
+        setSubmitErr(d.error ?? 'Submission failed')
       }
     } catch { setSubmitErr('Connection error — try again') }
     finally { setSubmitting(false) }
@@ -521,6 +871,10 @@ export default function DeliveryPage() {
   }
 
   const catDef = CATEGORIES.find((c) => c.key === category)
+
+  // Batch number preview (shown once bornIn is set)
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
+  const batchPreview = bornIn ? `${buildBatchPrefix(todayStr, bornIn)}-${nextNumber}` : ''
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col select-none">
@@ -580,7 +934,6 @@ export default function DeliveryPage() {
             {/* Supplier */}
             <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Supplier</p>
-              {/* Preset supplier chips */}
               <div className="flex flex-wrap gap-2 mb-2">
                 {suppliers.map((s) => (
                   <button key={s.id}
@@ -599,7 +952,6 @@ export default function DeliveryPage() {
                   Other
                 </button>
               </div>
-              {/* Free text when Other selected */}
               {supplierSel === 'other' && (
                 <input type="text" value={supplierOther} onChange={(e) => setSupplierOther(e.target.value)}
                   placeholder="Enter supplier name…"
@@ -607,42 +959,30 @@ export default function DeliveryPage() {
               )}
             </div>
 
-            {/* Born in */}
-            <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Born in</p>
-              <div className="flex flex-wrap gap-2">
-                {COUNTRIES.map((c) => (
-                  <button key={c.code}
-                    onPointerDown={(e) => {
-                      e.preventDefault()
-                      setBornIn(c.code)
-                      // If reared was set to same, keep it in sync
-                      if (rearedSame) setRearedIn(c.code)
-                    }}
-                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      bornIn === c.code
-                        ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
-                        : 'border-slate-300 bg-white text-slate-600'
-                    }`}>
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Born in (C8: required) */}
+            <CountryPicker
+              value={bornIn}
+              onChange={(code) => {
+                setBornIn(code)
+                if (rearedSame) setRearedIn(code)
+              }}
+              label="Born in"
+              required
+            />
 
-            {/* Reared in */}
+            {/* Reared in (C8: required) */}
             {bornIn && (
               <div>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Reared in</p>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+                  Reared in<span className="text-red-500 ml-0.5">*</span>
+                </p>
                 <div className="flex flex-wrap gap-2 mb-2">
                   <button
                     onPointerDown={(e) => { e.preventDefault(); setRearedSame(true); setRearedIn(bornIn) }}
                     className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      rearedSame
-                        ? 'border-green-500 bg-green-50 text-green-700'
-                        : 'border-slate-300 bg-white text-slate-600'
+                      rearedSame ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-300 bg-white text-slate-600'
                     }`}>
-                    ✓ Same as born in ({COUNTRIES.find((c) => c.code === bornIn)?.label})
+                    ✓ Same as born in ({countryLabel(bornIn)})
                   </button>
                   <button
                     onPointerDown={(e) => { e.preventDefault(); setRearedSame(false); setRearedIn('') }}
@@ -655,45 +995,43 @@ export default function DeliveryPage() {
                   </button>
                 </div>
                 {!rearedSame && (
-                  <div className="flex flex-wrap gap-2">
-                    {COUNTRIES.map((c) => (
-                      <button key={c.code}
-                        onPointerDown={(e) => { e.preventDefault(); setRearedIn(c.code) }}
-                        className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                          rearedIn === c.code
-                            ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
-                            : 'border-slate-300 bg-white text-slate-600'
-                        }`}>
-                        {c.label}
-                      </button>
-                    ))}
-                  </div>
+                  <CountryPicker
+                    value={rearedIn}
+                    onChange={setRearedIn}
+                    label="Reared in country"
+                    required
+                  />
                 )}
               </div>
             )}
 
-            {/* Slaughter site */}
+            {/* Slaughter site (C8: required) */}
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Slaughter site code</p>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+                Slaughter site code<span className="text-red-500 ml-0.5">*</span>
+              </p>
               <input
                 type="text"
                 inputMode="text"
                 autoCapitalize="characters"
                 value={slaughter}
                 onChange={(e) => {
-                  setSlaughter(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())
-                  // If "same" was selected, keep cut in sync
-                  if (cutSameAs) setCutSite(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())
+                  const v = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+                  setSlaughter(v)
+                  if (cutSameAs) setCutSite(v)
                 }}
-                placeholder="e.g. GB1234 or 1234"
-                maxLength={8}
+                placeholder="e.g. GB1234"
+                maxLength={10}
                 className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
+              <p className="text-slate-400 text-[10px] mt-1 ml-1">Format: GB XXXX (UK approval number) or local code</p>
             </div>
 
-            {/* Cut site */}
+            {/* Cut site (C8: required) */}
             {slaughter.length > 0 && (
               <div>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Cut site code</p>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+                  Cut site code<span className="text-red-500 ml-0.5">*</span>
+                </p>
                 <div className="flex gap-2 mb-2">
                   <button
                     onPointerDown={(e) => { e.preventDefault(); setCutSameAs(true); setCutSite(slaughter) }}
@@ -717,30 +1055,22 @@ export default function DeliveryPage() {
                     autoCapitalize="characters"
                     value={cutSite}
                     onChange={(e) => setCutSite(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
-                    placeholder="e.g. AU1234 or 5678"
-                    maxLength={8}
+                    placeholder="e.g. AU1234"
+                    maxLength={10}
                     className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
                 )}
               </div>
             )}
 
-            {/* Batch number — auto-generated once born in + slaughter set */}
-            {bornIn && rearedIn && slaughter && (
+            {/* Batch number preview */}
+            {batchPreview && (
               <div className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3">
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">Batch reference (auto-generated)</p>
-                <p className="text-white text-lg font-bold font-mono tracking-widest">
-                  {buildBatchNumber(
-                    new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' }),
-                    bornIn,
-                    slaughter
-                  )}-{nextNumber}
-                </p>
-                <div className="flex gap-3 mt-1.5">
-                  <p className="text-slate-500 text-[10px]">DDMM · born-in · slaughter · delivery #{nextNumber}</p>
-                </div>
-                {bornIn !== rearedIn && (
+                <p className="text-white text-lg font-bold font-mono tracking-widest">{batchPreview}</p>
+                <p className="text-slate-500 text-[10px] mt-1">DDMM · country code (ISO) · delivery #{nextNumber}</p>
+                {bornIn && rearedIn && rearedIn !== bornIn && (
                   <p className="text-amber-400 text-[10px] mt-1">
-                    Born: {COUNTRIES.find((c) => c.code === bornIn)?.label} · Reared: {COUNTRIES.find((c) => c.code === rearedIn)?.label}
+                    Born: {countryLabel(bornIn)} · Reared: {countryLabel(rearedIn)}
                   </p>
                 )}
               </div>
@@ -796,7 +1126,6 @@ export default function DeliveryPage() {
                 )}
               </button>
 
-              {/* Inline urgent note */}
               {tempStat === 'urgent' && (
                 <div className="mt-2 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
                   <p className="text-amber-700 text-xs font-bold uppercase tracking-widest mb-1.5">Conditional accept — do NOT reject (CA-001)</p>
@@ -824,7 +1153,7 @@ export default function DeliveryPage() {
                   { val: 'yes',          label: 'Yes — rejected' },
                   { val: 'yes_actioned', label: 'Yes — actioned' },
                 ].map((o) => (
-                  <button key={o.val} onClick={() => { setContam(o.val); setcontamType(''); setContamNote('') }}
+                  <button key={o.val} onClick={() => { setContam(o.val); setContamType(''); setContamNote('') }}
                     className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
                       contam === o.val
                         ? o.val === 'no'
@@ -863,7 +1192,7 @@ export default function DeliveryPage() {
                       },
                     ].map((t) => (
                       <div key={t.key}>
-                        <button onClick={() => { setcontamType(t.key); setContamNote(t.actions.join(' | ')) }}
+                        <button onClick={() => { setContamType(t.key); setContamNote(t.actions.join(' | ')) }}
                           className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
                             contamType === t.key ? 'border-amber-500 bg-amber-50 text-amber-800' : 'border-slate-300 bg-white text-slate-600'
                           }`}>
@@ -929,7 +1258,7 @@ export default function DeliveryPage() {
         {/* Today's log */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Today's deliveries</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Today&apos;s deliveries</p>
             {deliveries.length > 0 && (
               <span className="bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs font-bold text-green-600">
                 {deliveries.length} logged
@@ -969,8 +1298,8 @@ export default function DeliveryPage() {
                         )}
                         {d.born_in && (
                           <p className="text-slate-400 text-[10px]">
-                            Born: {COUNTRIES.find((c) => c.code === d.born_in)?.label ?? d.born_in}
-                            {d.reared_in && d.reared_in !== d.born_in && <> · Reared: {COUNTRIES.find((c) => c.code === d.reared_in)?.label ?? d.reared_in}</>}
+                            Born: {countryLabel(d.born_in)}
+                            {d.reared_in && d.reared_in !== d.born_in && <> · Reared: {countryLabel(d.reared_in)}</>}
                           </p>
                         )}
                       </div>
@@ -994,20 +1323,20 @@ export default function DeliveryPage() {
 
       </div>
 
-      {/* Delivery detail sheet */}
+      {/* Overlays */}
       {selectedDelivery && (
-        <DeliveryDetail
-          d={selectedDelivery}
-          onClose={() => setSelectedDelivery(null)}
-        />
+        <DeliveryDetail d={selectedDelivery} onClose={() => setSelectedDelivery(null)} />
       )}
       {showNumpad && (
         <Numpad value={tempVal} onChange={setTempVal} onClose={() => setShowNumpad(false)} category={category} />
       )}
-
-      {/* CCA popup */}
       {showCCA && (
-        <CCAPopup tempStatus={tempStat} contaminated={contam} onConfirm={doSubmit} onBack={() => setShowCCA(false)} />
+        <CCAPopup
+          tempStatus={tempStat}
+          contaminated={contam}
+          onSubmit={(caTemp, caContam) => doSubmit(caTemp, caContam)}
+          onBack={() => setShowCCA(false)}
+        />
       )}
 
       {/* Quick reference */}
