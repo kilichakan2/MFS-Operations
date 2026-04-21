@@ -575,14 +575,12 @@ export default function MincePage() {
     p_output: [pOutputVal, setPOutputVal, 'Output temperature — check after chilling/freezing (CCP-MP1)', pOutputMode === 'frozen' ? '≤-18°C' : '≤4°C'],
   }
 
-  /**
-   * Filter deliveries by product_category to match the selected mince species.
-   * product_category is now 'lamb' or 'beef' — direct match, no text heuristics.
-   */
-  function deliveryMatchesSpecies(d: DeliveryOption, species: string): boolean {
+  // Pre-compute filtered delivery lists in component body — avoids stale closure in DeliveryPicker
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
+
+  function matchesSpecies(d: DeliveryOption, species: string): boolean {
     if (!species) return true
-    // red_meat is the legacy value before lamb/beef split — show for both
-    if (d.product_category === 'red_meat') return true
+    if (d.product_category === 'red_meat') return true  // legacy — show for both
     switch (species) {
       case 'lamb':         return d.product_category === 'lamb'
       case 'beef':
@@ -591,10 +589,14 @@ export default function MincePage() {
     }
   }
 
-  /** Delivery batch picker — shows last 16 days, filtered by species */
-  function DeliveryPicker({ form }: { form: 'mince' | 'meatprep' }) {
-    const selectedIds   = form === 'mince' ? mSourceIds  : pSourceIds
-    const activeSpecies = form === 'mince' ? mSpecies    : pSpecies  // filter on both forms when species set
+  const filteredMDeliveries = deliveries.filter((d) => matchesSpecies(d, mSpecies))
+  const filteredPDeliveries = deliveries.filter((d) => matchesSpecies(d, pSpecies))
+
+  /** Delivery batch picker — receives pre-filtered list as prop */
+  function DeliveryPicker({
+    form, filtered, activeSpecies,
+  }: { form: 'mince' | 'meatprep'; filtered: DeliveryOption[]; activeSpecies: string }) {
+    const selectedIds = form === 'mince' ? mSourceIds : pSourceIds
     const toggle = (d: DeliveryOption) => {
       const setIds     = form === 'mince' ? setMSourceIds     : setPSourceIds
       const setBatches = form === 'mince' ? setMSourceBatches : setPSourceBatches
@@ -602,7 +604,6 @@ export default function MincePage() {
       setBatches((prev) => prev.includes(d.batch_number) ? prev.filter((x) => x !== d.batch_number) : [...prev, d.batch_number])
     }
 
-    const filtered = deliveries.filter((d) => deliveryMatchesSpecies(d, activeSpecies))
     const hasDeliveries = deliveries.length > 0
     const hasFiltered   = filtered.length > 0
 
@@ -624,7 +625,6 @@ export default function MincePage() {
       )
     }
 
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
     return (
       <div className="space-y-2">
         {filtered.map((d) => {
@@ -780,7 +780,7 @@ export default function MincePage() {
                 {/* Delivery batch picker */}
                 <div>
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Source delivery batches (select all that apply)</p>
-                  <DeliveryPicker form="mince" />
+                  <DeliveryPicker form="mince" filtered={filteredMDeliveries} activeSpecies={mSpecies} />
                   {mSourceBatches.length > 0 && (
                     <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                       <p className="text-slate-500 text-[10px] mb-1">Selected batches:</p>
@@ -975,7 +975,7 @@ export default function MincePage() {
                 {/* Source — delivery batches */}
                 <div>
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Source delivery batches (select all that apply)</p>
-                  <DeliveryPicker form="meatprep" />
+                  <DeliveryPicker form="meatprep" filtered={filteredPDeliveries} activeSpecies={pSpecies} />
                 </div>
 
                 {/* Source — mince batches (today's runs) */}
