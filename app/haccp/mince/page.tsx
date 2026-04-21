@@ -354,27 +354,65 @@ export default function MincePage() {
     p_output: [pOutputVal, setPOutputVal, 'Output temperature — check after chilling/freezing (CCP-MP1)', pOutputMode === 'frozen' ? '≤-18°C' : '≤4°C'],
   }
 
-  /** Delivery batch picker — shows last 16 days of deliveries */
+  /**
+   * Returns true if a delivery batch matches the given species.
+   * Uses product name text matching since haccp_deliveries has no species column yet.
+   * TODO: add species column to haccp_deliveries as part of CCP1 Phase D.
+   */
+  function deliveryMatchesSpecies(d: DeliveryOption, species: string): boolean {
+    if (!species) return true  // no species selected — show all
+    const name = d.product.toLowerCase()
+    switch (species) {
+      case 'lamb':
+        return name.includes('lamb')
+      case 'beef':
+        return name.includes('beef') && !name.includes('lamb')
+      case 'imported_vac':
+        // Imported vac-packed beef — product name usually contains 'beef' or 'vac'
+        return (name.includes('beef') || name.includes('vac')) && !name.includes('lamb')
+      default:
+        return true
+    }
+  }
+
+  /** Delivery batch picker — shows last 16 days, filtered by species when on mince form */
   function DeliveryPicker({ form }: { form: 'mince' | 'meatprep' }) {
-    const selectedIds = form === 'mince' ? mSourceIds : pSourceIds
+    const selectedIds   = form === 'mince' ? mSourceIds     : pSourceIds
+    const activeSpecies = form === 'mince' ? mSpecies       : ''   // only filter on mince form
     const toggle = (d: DeliveryOption) => {
       const setIds     = form === 'mince' ? setMSourceIds     : setPSourceIds
       const setBatches = form === 'mince' ? setMSourceBatches : setPSourceBatches
       setIds((prev) => prev.includes(d.id) ? prev.filter((x) => x !== d.id) : [...prev, d.id])
       setBatches((prev) => prev.includes(d.batch_number) ? prev.filter((x) => x !== d.batch_number) : [...prev, d.batch_number])
     }
-    if (deliveries.length === 0) {
+
+    const filtered = deliveries.filter((d) => deliveryMatchesSpecies(d, activeSpecies))
+    const hasDeliveries = deliveries.length > 0
+    const hasFiltered   = filtered.length > 0
+
+    if (!hasDeliveries) {
       return (
         <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
           <p className="text-slate-500 text-xs">No delivery batches in the last 16 days.</p>
         </div>
       )
     }
+
+    if (form === 'mince' && activeSpecies && !hasFiltered) {
+      return (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-amber-700 text-xs font-semibold">No {mSp?.label} batches found in recent deliveries.</p>
+          <p className="text-slate-500 text-xs mt-1">Log the delivery first via the Goods In section, or continue — source batches are optional.</p>
+        </div>
+      )
+    }
+
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
     return (
       <div className="space-y-2">
-        {deliveries.map((d) => {
-          const sel = selectedIds.includes(d.id)
-          const isToday = d.date === new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
+        {filtered.map((d) => {
+          const sel     = selectedIds.includes(d.id)
+          const isToday = d.date === today
           return (
             <button key={d.id} onClick={() => toggle(d)}
               className={`w-full text-left rounded-xl px-4 py-3 border-2 transition-all ${
