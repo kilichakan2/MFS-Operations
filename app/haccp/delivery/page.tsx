@@ -268,6 +268,7 @@ const TEMP_CAUSES = [
   'Inadequate pre-chilling at supplier',
   'Vehicle refrigeration failure',
   'Delivery delayed — product held too long',
+  'Probe / thermometer fault — reading may be inaccurate',
   'Other',
 ]
 
@@ -289,6 +290,7 @@ const RECURRENCE_BY_CAUSE: Record<string, string[]> = {
   'Packaging damaged in transit':             ['Request supplier corrective action plan', 'Review packaging requirements with supplier', 'Other'],
   'Supplier loading error':                   ['Request supplier corrective action plan', 'Contact supplier — loading procedure review', 'Other'],
   'Missing documentation':                    ['Contact supplier — documentation requirements', 'Add to documentation watch list', 'Other'],
+  'Probe / thermometer fault — reading may be inaccurate': ['Calibrate probe immediately', 'Verify product core temp with second probe', 'Replace probe if fault confirmed', 'Other'],
   'Other':                                    ['Contact supplier', 'Retrain receiving staff', 'Review intake procedures', 'Other'],
 }
 

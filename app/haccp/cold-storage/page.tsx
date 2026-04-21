@@ -159,16 +159,20 @@ const CAUSE_OPTIONS = [
   'Seal damaged',
   'Equipment failure',
   'Power interruption',
+  'Defrost cycle — scheduled temperature rise',
+  'High ambient room temperature',
   'Other',
 ]
 
 const RECURRENCE_BY_CAUSE: Record<string, string[]> = {
-  'Door left open':     ['Retrain staff on door discipline', 'Add door-close reminder signage', 'Other'],
-  'Unit overloaded':    ['Reduce loading limit', 'Retrain staff on loading limits', 'Other'],
-  'Seal damaged':       ['Replace door seal', 'Schedule maintenance check', 'Other'],
-  'Equipment failure':  ['Contact refrigeration engineer', 'Schedule maintenance check', 'Install temperature alarm', 'Other'],
-  'Power interruption': ['Install temperature alarm', 'Review backup power options', 'Schedule maintenance check', 'Other'],
-  'Other':              ['Schedule maintenance check', 'Retrain staff', 'Install temperature alarm', 'Other'],
+  'Door left open':                           ['Retrain staff on door discipline', 'Add door-close reminder signage', 'Other'],
+  'Unit overloaded':                          ['Reduce loading limit', 'Retrain staff on loading limits', 'Other'],
+  'Seal damaged':                             ['Replace door seal immediately', 'Schedule maintenance check', 'Other'],
+  'Equipment failure':                        ['Contact refrigeration engineer', 'Schedule maintenance check', 'Install temperature alarm', 'Other'],
+  'Power interruption':                       ['Install temperature alarm', 'Review backup power options', 'Schedule maintenance check', 'Other'],
+  'Defrost cycle — scheduled temperature rise': ['Review defrost cycle schedule', 'Adjust defrost timing to avoid busy periods', 'Verify unit recovers within 30 minutes', 'Other'],
+  'High ambient room temperature':            ['Improve room ventilation', 'Reduce ambient temperature in storage area', 'Monitor unit during hot weather', 'Other'],
+  'Other':                                    ['Schedule maintenance check', 'Retrain staff', 'Install temperature alarm', 'Other'],
 }
 
 // Predetermined protocols (CA-001) — shown read-only, stored server-side
@@ -347,7 +351,7 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes <span className="normal-case font-normal">(optional)</span></p>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              placeholder="Any additional details\u2026"
+              placeholder="Any additional details…"
               className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
 
