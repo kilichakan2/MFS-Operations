@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
         what_was_cleaned,
         issues,
         what_did_you_do,
+        verified_by,
         submitted_at,
         submitted_by,
         users!inner(name)
@@ -74,14 +75,18 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { what_was_cleaned, issues, what_did_you_do } = body as {
+    const { what_was_cleaned, issues, what_did_you_do, verified_by } = body as {
       what_was_cleaned: string
       issues:           boolean
       what_did_you_do?: string
+      verified_by:      string
     }
 
     if (!what_was_cleaned?.trim()) {
       return NextResponse.json({ error: 'Select at least one item that was cleaned' }, { status: 400 })
+    }
+    if (!verified_by?.trim()) {
+      return NextResponse.json({ error: 'Verified by is required' }, { status: 400 })
     }
     if (issues && !what_did_you_do?.trim()) {
       return NextResponse.json({ error: 'Describe what was done about the issue' }, { status: 400 })
@@ -93,6 +98,7 @@ export async function POST(req: NextRequest) {
       time_of_clean:   nowTimeUK(),
       what_was_cleaned,
       issues,
+      verified_by:     verified_by.trim(),
       what_did_you_do: what_did_you_do?.trim() || null,
     })
 

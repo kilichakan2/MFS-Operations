@@ -19,6 +19,7 @@ interface CleanEntry {
   what_was_cleaned:string
   issues:          boolean
   what_did_you_do: string | null
+  verified_by:     string | null
   submitted_at:    string
   users:           { name: string }
 }
@@ -72,6 +73,7 @@ export default function CleaningPage() {
   const [flash,     setFlash]     = useState(false)
   const [showQuick, setShowQuick] = useState(false)
   const [timeNow,   setTimeNow]   = useState(nowDisplay())
+  const [verifiedBy,setVerifiedBy]= useState('')
 
   // Keep displayed time current
   useEffect(() => {
@@ -102,16 +104,17 @@ export default function CleaningPage() {
     setOtherText('')
     setIssues(false)
     setNote('')
+    setVerifiedBy('')
     setSubmitErr('')
   }
 
   async function handleSubmit() {
     setSubmitErr('')
     const cats = Array.from(selected)
-    if (cats.length === 0) { setSubmitErr('Select at least one item that was cleaned'); return }
-    if (issues && !note.trim()) { setSubmitErr('Describe what was done about the issue'); return }
+    if (cats.length === 0)        { setSubmitErr('Select at least one item that was cleaned'); return }
+    if (!verifiedBy.trim())       { setSubmitErr('Enter who verified this clean'); return }
+    if (issues && !note.trim())   { setSubmitErr('Describe what was done about the issue'); return }
 
-    // Build the what_was_cleaned string — replace 'Other' with free text if provided
     const cleaned = cats
       .map((c) => c === 'Other' && otherText.trim() ? `Other: ${otherText.trim()}` : c)
       .join(', ')
@@ -121,7 +124,7 @@ export default function CleaningPage() {
       const res = await fetch('/api/haccp/cleaning', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ what_was_cleaned: cleaned, issues, what_did_you_do: note }),
+        body: JSON.stringify({ what_was_cleaned: cleaned, issues, what_did_you_do: note, verified_by: verifiedBy }),
       })
       if (res.ok) {
         setFlash(true)
@@ -253,6 +256,18 @@ export default function CleaningPage() {
             </div>
           )}
 
+          {/* Verified by */}
+          <div className="px-4 pb-3">
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Verified by</p>
+            <input
+              type="text"
+              value={verifiedBy}
+              onChange={(e) => setVerifiedBy(e.target.value)}
+              placeholder="Name of person who checked the clean…"
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500"
+            />
+          </div>
+
           {/* Date / time meta */}
           <div className="px-4 pb-3 flex items-center justify-between">
             <p className="text-slate-300 text-xs">{todayDisplay()}</p>
@@ -298,7 +313,7 @@ export default function CleaningPage() {
                   className="bg-white border border-blue-100 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium leading-snug">{e.what_was_cleaned}</p>
-                    <p className="text-slate-400 text-xs mt-0.5">{e.users?.name ?? 'Unknown'}</p>
+                    <p className="text-slate-400 text-xs mt-0.5">{e.users?.name ?? 'Unknown'}{e.verified_by ? ` · Verified: ${e.verified_by}` : ''}</p>
                     {e.issues && e.what_did_you_do && (
                       <p className="text-[#EB6619] text-xs mt-1 italic leading-snug">{e.what_did_you_do}</p>
                     )}
