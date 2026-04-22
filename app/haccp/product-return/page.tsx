@@ -125,13 +125,82 @@ const CA_ACTIONS: Record<string, { title: string; steps: string[]; suggestedDisp
   },
 }
 
-// ─── Disposition options ──────────────────────────────────────────────────────
+// ─── Code-aware assessment checklists ────────────────────────────────────────
+// FSA 852/2004 — checklist items must be relevant to the actual return reason
+
+const CHECKLIST_BY_CODE: Record<string, string[]> = {
+  RC01: [
+    'Temperature — core temperature probed and recorded above',
+    'Visual inspection — no discolouration, swelling, off-odours, or leakage',
+    'Packaging integrity — seals intact, no tears or punctures',
+    'Date / shelf-life — remaining shelf life verified',
+    'Batch traceability — batch code matches original delivery documentation',
+  ],
+  RC02: [
+    'Visual inspection — document exact nature of quality issue (colour, odour, texture)',
+    'Packaging integrity — seals intact, no secondary contamination',
+    'Temperature — verify cold chain compliant (probe if uncertain)',
+    'Date / shelf-life — remaining shelf life verified',
+    'Batch traceability — batch code matches original delivery documentation',
+  ],
+  RC03: [
+    'Temperature — cold chain verified compliant',
+    'Packaging integrity — seals intact, no damage',
+    'Date / shelf-life — remaining shelf life acceptable',
+    'Product identity — confirm what was delivered vs what was ordered',
+  ],
+  RC04: [
+    'Date / shelf-life — confirm exact remaining shelf life',
+    'Temperature — cold chain verified compliant',
+    'Packaging integrity — seals intact',
+    'Batch traceability — batch code matches documentation',
+  ],
+  RC05: [
+    'Packaging assessment — document exact nature and extent of damage',
+    'Seal integrity — confirm whether inner seal is breached or intact',
+    'Visual inspection — assess for contamination or ingress',
+    'Temperature — cold chain verified compliant',
+  ],
+  RC06: [
+    'Confirm no physical product was returned (quantity discrepancy only)',
+    'Delivery records — verify against picking sheet and invoice',
+    'Credit or re-delivery required — note action to be taken',
+  ],
+  RC07: [
+    'Temperature — cold chain verified compliant on return',
+    'Packaging integrity — seals intact, no damage',
+    'Date / shelf-life — remaining shelf life acceptable for restock',
+  ],
+  RC08: [
+    'Visual inspection — no discolouration, damage, swelling, or off-odours',
+    'Packaging integrity — seals intact, no tears or punctures',
+    'Temperature — cold chain verified (probe if uncertain)',
+    'Date / shelf-life — remaining shelf life verified',
+    'Document reason in full before proceeding',
+  ],
+}
+
+// ─── Code-aware disposition options ──────────────────────────────────────────
+// Not all dispositions are valid for every return code
+
+const DISPOSITIONS_BY_CODE: Record<string, string[]> = {
+  RC01: ['quarantine', 'dispose'],            // Temp complaint — never restock directly, must assess or dispose
+  RC02: ['reprocess', 'quarantine', 'dispose'],
+  RC03: ['restock', 'reprocess', 'dispose'],
+  RC04: ['restock', 'quarantine', 'dispose'],
+  RC05: ['reprocess', 'quarantine', 'dispose'],
+  RC06: ['restock'],                           // Quantity — no physical product returned, always restock
+  RC07: ['restock', 'dispose'],
+  RC08: ['restock', 'reprocess', 'quarantine', 'dispose'],
+}
+
+// ─── Disposition options (master list — filtered per code above) ──────────────
 
 const DISPOSITIONS = [
-  { val: 'restock',    label: 'Return to stock',         colour: 'green'  },
-  { val: 'reprocess',  label: 'Reprocess / repack',      colour: 'blue'   },
-  { val: 'quarantine', label: 'Quarantine',               colour: 'amber'  },
-  { val: 'dispose',    label: 'Dispose as ABP',           colour: 'red'    },
+  { val: 'restock',    label: 'Return to stock',    colour: 'green'  },
+  { val: 'reprocess',  label: 'Reprocess / repack', colour: 'blue'   },
+  { val: 'quarantine', label: 'Quarantine',          colour: 'amber'  },
+  { val: 'dispose',    label: 'Dispose as ABP',      colour: 'red'    },
 ]
 
 const DISP_STYLE: Record<string, { active: string; badge: string }> = {
@@ -250,8 +319,10 @@ export default function ProductReturnPage() {
   const [notes,         setNotes]         = useState('')
   const [verifiedBy,    setVerifiedBy]    = useState('')
 
-  // Checklist state (5 assessment items from SOP 12)
-  const [checked, setChecked] = useState<boolean[]>([false, false, false, false, false])
+  // Checklist — dynamic length based on selected return code
+  const checklistItems = returnCode ? (CHECKLIST_BY_CODE[returnCode] ?? []) : []
+  const [checked, setChecked] = useState<boolean[]>([])
+
   function toggleCheck(i: number) {
     setChecked((prev) => prev.map((v, idx) => idx === i ? !v : v))
   }
@@ -285,10 +356,13 @@ export default function ProductReturnPage() {
     setReturnCode(code)
     setRcNotes('')
     setTempVal('')
+    setChecked(new Array(CHECKLIST_BY_CODE[code]?.length ?? 0).fill(false))
     const ca = CA_ACTIONS[code]
     if (ca) {
       setCaText(ca.steps.join('\n'))
-      setDisposition(ca.suggestedDisposition)
+      // Only set suggested disposition if it's valid for this code
+      const allowed = DISPOSITIONS_BY_CODE[code] ?? []
+      setDisposition(allowed.includes(ca.suggestedDisposition) ? ca.suggestedDisposition : allowed[0] ?? '')
     }
   }
 
@@ -296,16 +370,26 @@ export default function ProductReturnPage() {
     setReturnCode(''); setRcNotes(''); setCustomer(''); setProduct('')
     setCustomerId(null); setCustomerSearch('')
     setTempVal(''); setDisposition(''); setCaText(''); setNotes('')
-    setVerifiedBy(''); setSubmitErr('')
-    setChecked([false, false, false, false, false])
+    setVerifiedBy(''); setSubmitErr(''); setChecked([])
   }
 
   const rc       = RETURN_CODES.find((r) => r.code === returnCode)
   const tempNum  = parseFloat(tempVal)
   const tempOk   = !isNaN(tempNum) && tempVal !== '' ? tempAcceptable(tempNum) : null
 
+  const allowedDispositions = returnCode
+    ? DISPOSITIONS.filter((d) => (DISPOSITIONS_BY_CODE[returnCode] ?? DISPOSITIONS.map(d => d.val)).includes(d.val))
+    : DISPOSITIONS
+
+  // Hard warning — RC01 temp breach + restock is a food safety violation
+  const tempBreachRestockWarn =
+    returnCode === 'RC01' &&
+    tempOk !== null && !tempOk.pass &&
+    disposition === 'restock'
+
   const isValid =
     customer.trim() && product.trim() && returnCode && disposition &&
+    !tempBreachRestockWarn &&
     verifiedBy.trim() &&
     (returnCode !== 'RC08' || rcNotes.trim()) &&
     (returnCode !== 'RC01' || (tempVal !== '' && !isNaN(tempNum)))
@@ -507,20 +591,14 @@ export default function ProductReturnPage() {
               </div>
             )}
 
-            {/* Assessment checklist */}
-            {returnCode && (
+            {/* Assessment checklist — items vary by return code */}
+            {returnCode && checklistItems.length > 0 && (
               <div>
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
                   Assessment checklist (SOP 12) — tap each to confirm
                 </p>
                 <div className="bg-slate-50 border border-blue-100 rounded-xl overflow-hidden">
-                  {[
-                    'Visual inspection — no discolouration, damage, swelling, leakage, or off-odours',
-                    'Packaging integrity — seals intact, no tears or punctures, labelling legible',
-                    'Date / shelf-life — remaining shelf life verified',
-                    'Batch / lot traceability — batch code matches original delivery documentation',
-                    returnCode === 'RC01' ? 'Temperature — core temperature recorded above' : 'Temperature — record if uncertain about cold chain',
-                  ].map((item, i) => (
+                  {checklistItems.map((item, i) => (
                     <button key={i} onClick={() => toggleCheck(i)}
                       className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-all border-b border-slate-100 last:border-b-0 ${
                         checked[i] ? 'bg-green-50' : 'bg-white hover:bg-slate-50'
@@ -540,19 +618,19 @@ export default function ProductReturnPage() {
                     </button>
                   ))}
                 </div>
-                {checked.every(Boolean) && (
+                {checked.length > 0 && checked.every(Boolean) && (
                   <p className="text-green-600 text-xs font-bold mt-1.5 px-1">✓ All checks completed</p>
                 )}
               </div>
             )}
 
-            {/* Disposition */}
+            {/* Disposition — filtered by return code */}
             {returnCode && (
               <div>
                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Disposition</p>
                 {ca && <p className="text-slate-400 text-[10px] mb-2">Suggested: <span className="font-bold text-slate-600">{DISP_LABELS[ca.suggestedDisposition]}</span></p>}
                 <div className="grid grid-cols-2 gap-2">
-                  {DISPOSITIONS.map((d) => {
+                  {allowedDispositions.map((d) => {
                     const style = DISP_STYLE[d.colour]
                     return (
                       <button key={d.val} onClick={() => setDisposition(d.val)}
@@ -562,6 +640,13 @@ export default function ProductReturnPage() {
                     )
                   })}
                 </div>
+                {/* Hard warning — temp breach + restock is a food safety violation */}
+                {tempBreachRestockWarn && (
+                  <div className="mt-2 bg-red-50 border border-red-400 rounded-xl px-4 py-3">
+                    <p className="text-red-700 text-xs font-bold uppercase tracking-widest mb-1">⚠ Cannot restock — temperature breach</p>
+                    <p className="text-slate-600 text-xs">Product arrived above 7°C. Return to stock is not permitted. Select Quarantine (for assessment) or Dispose as ABP.</p>
+                  </div>
+                )}
               </div>
             )}
 
