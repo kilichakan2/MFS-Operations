@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     const amOverdueCutoff = 10
     const pmOverdueCutoff = 14
 
-    const [cold, room, diary, cleaning, deliveries, mince, returns, ccas, weekly, monthly, cal] =
+    const [cold, room, diary, cleaning, deliveries, mince, returns, ccas, weekly, monthly, cal, training] =
       await Promise.all([
         supabase.from('haccp_cold_storage_temps').select('session').eq('date', today),
         supabase.from('haccp_processing_temps').select('session').eq('date', today),
@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
         supabase.from('haccp_weekly_review').select('id').gte('week_ending', getWeekStart()).limit(1),
         supabase.from('haccp_monthly_review').select('id').gte('month_year', getMonthStart()).limit(1),
         supabase.from('haccp_calibration_log').select('id, ice_water_pass, boiling_water_pass').gte('date', getMonthStart()).limit(10),
+        supabase.from('haccp_staff_training').select('refresh_date').not('refresh_date', 'is', null),
       ])
 
     const coldSessions = (cold.data ?? []).map((r) => r.session)
@@ -128,6 +129,16 @@ export async function GET(req: NextRequest) {
         const d = new Date(); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
         return d.getDate() === last // last day of month
       })(),
+      training_overdue:  (training.data ?? []).filter((r) => {
+        const row = r as { refresh_date?: string }
+        return row.refresh_date && new Date(row.refresh_date) < new Date(today)
+      }).length,
+      training_due_soon: (training.data ?? []).filter((r) => {
+        const row = r as { refresh_date?: string }
+        if (!row.refresh_date) return false
+        const diff = (new Date(row.refresh_date).getTime() - new Date(today).getTime()) / 86400000
+        return diff >= 0 && diff <= 30
+      }).length,
       total_checks:       total,
       completed_checks:   done,
     })

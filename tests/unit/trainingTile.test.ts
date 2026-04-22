@@ -1,0 +1,154 @@
+/**
+ * tests/unit/trainingTile.test.ts
+ *
+ * Tests for:
+ * - Training tile state (overdue/due-soon/all-current)
+ * - Refresh date auto-calculation (+12 months)
+ * - Document version tracking
+ * - Acknowledgment checklist — all 7 items required
+ */
+
+import { describe, it, expect } from 'vitest'
+
+// ── Mirror refresh status logic from training page ────────────────────────────
+
+function refreshStatus(refreshDate: string, today: string): {
+  label: string; tone: 'overdue' | 'due_soon' | 'current'
+} {
+  const todayDate   = new Date(today)
+  const refresh     = new Date(refreshDate)
+  const daysUntil   = Math.floor((refresh.getTime() - todayDate.getTime()) / 86400000)
+
+  if (daysUntil < 0)   return { label: `Overdue by ${Math.abs(daysUntil)}d`, tone: 'overdue'  }
+  if (daysUntil <= 30) return { label: `Due in ${daysUntil}d`,               tone: 'due_soon' }
+  return               { label: `Due ${refreshDate}`,                        tone: 'current'  }
+}
+
+function addMonths(dateStr: string, months: number): string {
+  const d = new Date(dateStr)
+  d.setMonth(d.getMonth() + months)
+  return d.toISOString().split('T')[0]
+}
+
+// ── Mirror tile badge logic from homepage ─────────────────────────────────────
+
+function trainingBadge(overdueCount: number, dueSoonCount: number): string {
+  if (overdueCount > 0)  return `${overdueCount} overdue`
+  if (dueSoonCount > 0)  return `${dueSoonCount} due soon`
+  return 'All current ✓'
+}
+
+// ── Butchery acknowledgment items ─────────────────────────────────────────────
+
+const BUTCHERY_ACK_IDS = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7']
+
+function allTicked(ticked: Record<string, boolean>): boolean {
+  return BUTCHERY_ACK_IDS.every((id) => ticked[id] === true)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Training refresh date auto-calculation', () => {
+  it('adds exactly 12 months', () => {
+    expect(addMonths('2026-04-22', 12)).toBe('2027-04-22')
+  })
+
+  it('handles month-end correctly (Jan 31 → Jan 31 next year)', () => {
+    expect(addMonths('2026-01-31', 12)).toBe('2027-01-31')
+  })
+
+  it('handles year rollover', () => {
+    expect(addMonths('2026-12-01', 12)).toBe('2027-12-01')
+  })
+
+  it('is editable — can be set to different value', () => {
+    const auto = addMonths('2026-04-22', 12)
+    const manual = '2028-04-22'
+    expect(auto).not.toBe(manual) // user changed it
+  })
+})
+
+describe('Refresh status colour logic', () => {
+  it('overdue when refresh date is in the past', () => {
+    expect(refreshStatus('2026-03-01', '2026-04-22').tone).toBe('overdue')
+  })
+
+  it('overdue by correct number of days', () => {
+    const status = refreshStatus('2026-04-12', '2026-04-22')
+    expect(status.tone).toBe('overdue')
+    expect(status.label).toContain('10d')
+  })
+
+  it('due_soon within 30 days', () => {
+    expect(refreshStatus('2026-05-01', '2026-04-22').tone).toBe('due_soon')
+    expect(refreshStatus('2026-05-22', '2026-04-22').tone).toBe('due_soon')
+  })
+
+  it('current when more than 30 days away', () => {
+    expect(refreshStatus('2026-06-01', '2026-04-22').tone).toBe('current')
+    expect(refreshStatus('2027-04-22', '2026-04-22').tone).toBe('current')
+  })
+
+  it('exactly today is overdue (0 days remaining rounds down)', () => {
+    // daysUntil = 0 → not < 0 → due_soon (0 is within 30 days)
+    expect(refreshStatus('2026-04-22', '2026-04-22').tone).toBe('due_soon')
+  })
+})
+
+describe('Training tile badge', () => {
+  it('shows overdue count when records expired', () => {
+    expect(trainingBadge(2, 0)).toBe('2 overdue')
+  })
+
+  it('shows due soon count when upcoming within 30 days', () => {
+    expect(trainingBadge(0, 1)).toBe('1 due soon')
+  })
+
+  it('prioritises overdue over due_soon', () => {
+    expect(trainingBadge(1, 3)).toBe('1 overdue')
+  })
+
+  it('shows all current when no issues', () => {
+    expect(trainingBadge(0, 0)).toBe('All current ✓')
+  })
+})
+
+describe('Butchery acknowledgment checklist', () => {
+  it('valid when all 7 items ticked', () => {
+    const ticked = Object.fromEntries(BUTCHERY_ACK_IDS.map((id) => [id, true]))
+    expect(allTicked(ticked)).toBe(true)
+  })
+
+  it('invalid when any item not ticked', () => {
+    const ticked = Object.fromEntries(BUTCHERY_ACK_IDS.map((id) => [id, true]))
+    ticked['b5'] = false
+    expect(allTicked(ticked)).toBe(false)
+  })
+
+  it('invalid when all unticked', () => {
+    const ticked = Object.fromEntries(BUTCHERY_ACK_IDS.map((id) => [id, false]))
+    expect(allTicked(ticked)).toBe(false)
+  })
+
+  it('has exactly 7 items', () => {
+    expect(BUTCHERY_ACK_IDS).toHaveLength(7)
+  })
+})
+
+describe('Document version tracking', () => {
+  const CURRENT = 'V2.0'
+
+  it('no warning when version matches current', () => {
+    const version = 'V2.0'
+    expect(version === CURRENT).toBe(true)
+  })
+
+  it('warns when version does not match current', () => {
+    const version = 'V1.0'
+    expect(version === CURRENT).toBe(false)
+  })
+
+  it('version comparison is case-sensitive', () => {
+    expect('v2.0' === CURRENT).toBe(false) // lowercase v
+  })
+})

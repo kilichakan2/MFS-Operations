@@ -34,6 +34,8 @@ interface TodayStatus {
   weekly_review_overdue: boolean
   monthly_review_due:    boolean
   monthly_review_overdue:boolean
+  training_overdue:      number
+  training_due_soon:     number
   total_checks:          number
   completed_checks:      number
 }
@@ -71,6 +73,7 @@ const Icon = {
   cal:      <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>,
   review:   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
   people:   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  train:    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
   help:     <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
   close:    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   tick:     <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>,
@@ -446,6 +449,15 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <SmallTile id="people" icon={Icon.people} label="People" sub="Health · Visitor · Training"
               badge="Event only" due={false}
               onTap={() => { window.location.href = '/haccp/people' }} onHelp={() => setHelp('people')} />
+            <SmallTile id="training" icon={Icon.train} label="Training" sub="Staff · Allergen"
+              badge={
+                !s ? '—'
+                : s.training_overdue > 0  ? `${s.training_overdue} overdue`
+                : s.training_due_soon > 0 ? `${s.training_due_soon} due soon`
+                : 'All current ✓'
+              }
+              due={!!(s?.training_overdue || s?.training_due_soon)}
+              onTap={() => { window.location.href = '/haccp/training' }} onHelp={() => setHelp('people')} />
           </div>
 
         </div>
