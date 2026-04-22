@@ -67,17 +67,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       customer, customer_id, product, return_code, return_code_notes,
-      temperature_c, disposition, corrective_action, verified_by,
+      temperature_c, disposition, corrective_action, verified_by, source_batch_number,
     } = body as {
-      customer:           string
-      customer_id?:       string
-      product:            string
-      return_code:        string
-      return_code_notes?: string
-      temperature_c?:     number | null
-      disposition:        string
-      corrective_action?: string
-      verified_by:        string
+      customer:              string
+      customer_id?:          string
+      product:               string
+      return_code:           string
+      return_code_notes?:    string
+      temperature_c?:        number | null
+      disposition:           string
+      corrective_action?:    string
+      verified_by:           string
+      source_batch_number?:  string
     }
 
     if (!customer?.trim())    return NextResponse.json({ error: 'Customer is required' },             { status: 400 })
@@ -90,27 +91,55 @@ export async function POST(req: NextRequest) {
     if (return_code === 'RC01' && (temperature_c == null || isNaN(temperature_c)))
       return NextResponse.json({ error: 'Temperature is required for temperature complaints' }, { status: 400 })
 
-    const { error } = await supabase.from('haccp_returns').insert({
-      submitted_by:      userId,
-      date:              todayUK(),
-      time_of_return:    nowTimeUK(),
-      customer:          customer.trim(),
-      customer_id:       customer_id ?? null,
-      product:           product.trim(),
+    const { data: inserted, error } = await supabase.from('haccp_returns').insert({
+      submitted_by:        userId,
+      date:                todayUK(),
+      time_of_return:      nowTimeUK(),
+      customer:            customer.trim(),
+      customer_id:         customer_id ?? null,
+      product:             product.trim(),
       return_code,
-      return_code_notes: return_code_notes?.trim() || null,
-      temperature_c:     temperature_c ?? null,
+      return_code_notes:   return_code_notes?.trim() || null,
+      temperature_c:       temperature_c ?? null,
       disposition,
-      verified_by:       verified_by.trim(),
-      corrective_action: corrective_action?.trim() || null,
+      verified_by:         verified_by.trim(),
+      source_batch_number: source_batch_number?.trim() || null,
+      corrective_action:   corrective_action?.trim() || null,
     })
+    .select('id')
+    .single()
 
     if (error) {
       console.error('[POST /api/haccp/product-return]', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true })
+    // Write to haccp_corrective_actions for all returns (SOP 12 audit trail)
+    let caWriteFailed = false
+    if (inserted) {
+      const isFoodSafety = ['RC01', 'RC02', 'RC04', 'RC05'].includes(return_code)
+      const { error: caErr } = await supabase.from('haccp_corrective_actions').insert({
+        actioned_by:   userId,
+        source_table:  'haccp_returns',
+        source_id:     inserted.id,
+        ccp_ref:       'SOP12',
+        deviation_description: `Product return — ${return_code}: ${
+          return_code === 'RC01' && temperature_c != null
+            ? `Temperature ${temperature_c}°C on return. `
+            : ''
+        }Customer: ${customer.trim()}. Product: ${product.trim()}.`,
+        action_taken:  corrective_action?.trim() || `Disposition: ${disposition}. Authorised by: ${verified_by.trim()}.`,
+        product_disposition:   disposition,
+        recurrence_prevention: corrective_action?.trim() ? 'See corrective action notes' : 'Review procedures',
+        management_verification_required: isFoodSafety,
+      })
+      if (caErr) {
+        console.error('[POST /api/haccp/product-return] CA insert failed:', caErr)
+        caWriteFailed = true
+      }
+    }
+
+    return NextResponse.json({ ok: true, ca_write_failed: caWriteFailed })
 
   } catch (err) {
     console.error('[POST /api/haccp/product-return] Unhandled:', err)

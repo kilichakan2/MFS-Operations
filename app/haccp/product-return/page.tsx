@@ -318,6 +318,7 @@ export default function ProductReturnPage() {
   const [caText,        setCaText]        = useState('')
   const [notes,         setNotes]         = useState('')
   const [verifiedBy,    setVerifiedBy]    = useState('')
+  const [sourceBatch,   setSourceBatch]   = useState('')
 
   // Checklist — dynamic length based on selected return code
   const checklistItems = returnCode ? (CHECKLIST_BY_CODE[returnCode] ?? []) : []
@@ -370,7 +371,7 @@ export default function ProductReturnPage() {
     setReturnCode(''); setRcNotes(''); setCustomer(''); setProduct('')
     setCustomerId(null); setCustomerSearch('')
     setTempVal(''); setDisposition(''); setCaText(''); setNotes('')
-    setVerifiedBy(''); setSubmitErr(''); setChecked([])
+    setVerifiedBy(''); setSourceBatch(''); setSubmitErr(''); setChecked([])
   }
 
   const rc       = RETURN_CODES.find((r) => r.code === returnCode)
@@ -407,6 +408,7 @@ export default function ProductReturnPage() {
           temperature_c: returnCode === 'RC01' && tempVal ? tempNum : undefined,
           disposition, corrective_action: caText || undefined,
           verified_by: verifiedBy,
+          source_batch_number: sourceBatch.trim() || undefined,
         }),
       })
       if (res.ok) {
@@ -559,6 +561,14 @@ export default function ProductReturnPage() {
               <input type="text" value={product} onChange={(e) => setProduct(e.target.value)}
                 placeholder="e.g. Lamb leg — 4 units, batch MFS-2026-04"
                 className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+            </div>
+
+            {/* Source batch number — optional, for traceability */}
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Source batch number <span className="normal-case font-normal">(optional — from delivery label)</span></p>
+              <input type="text" value={sourceBatch} onChange={(e) => setSourceBatch(e.target.value)}
+                placeholder="e.g. 2104-GB-3, MINCE-2104-LAMB-1"
+                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm font-mono focus:outline-none focus:border-orange-500" />
             </div>
 
             {/* Temperature — RC01 only */}
