@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
         calibration_mode, cert_reference, purchase_date,
         ice_water_result_c, ice_water_pass,
         boiling_water_result_c, boiling_water_pass,
-        action_taken, submitted_at,
+        action_taken, verified_by, submitted_at,
         users!inner(name)
       `)
       .gte('date', new Date(new Date().setMonth(new Date().getMonth() - 6))
@@ -89,10 +89,11 @@ export async function POST(req: NextRequest) {
     const { calibration_mode } = body
 
     if (calibration_mode === 'certified_probe') {
-      const { thermometer_id, cert_reference, purchase_date, notes } = body
+      const { thermometer_id, cert_reference, purchase_date, notes, verified_by } = body
       if (!thermometer_id?.trim())  return NextResponse.json({ error: 'Probe ID / name is required' }, { status: 400 })
       if (!cert_reference?.trim())  return NextResponse.json({ error: 'Certificate reference is required' }, { status: 400 })
       if (!purchase_date)           return NextResponse.json({ error: 'Purchase date is required' }, { status: 400 })
+      if (!verified_by?.trim())     return NextResponse.json({ error: 'Verified by is required' }, { status: 400 })
 
       const { error } = await supabase.from('haccp_calibration_log').insert({
         submitted_by:     userId,
@@ -102,6 +103,7 @@ export async function POST(req: NextRequest) {
         calibration_mode: 'certified_probe',
         cert_reference:   cert_reference.trim(),
         purchase_date,
+        verified_by:      verified_by.trim(),
         action_taken:     notes?.trim() || null,
       })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -109,10 +111,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Manual test mode
-    const { thermometer_id, ice_water_result_c, boiling_water_result_c, action_taken } = body
+    const { thermometer_id, ice_water_result_c, boiling_water_result_c, action_taken, verified_by } = body
     if (!thermometer_id?.trim())         return NextResponse.json({ error: 'Probe ID / name is required' }, { status: 400 })
     if (ice_water_result_c == null)      return NextResponse.json({ error: 'Ice water reading is required' }, { status: 400 })
     if (boiling_water_result_c == null)  return NextResponse.json({ error: 'Boiling water reading is required' }, { status: 400 })
+    if (!verified_by?.trim())            return NextResponse.json({ error: 'Verified by is required' }, { status: 400 })
 
     const icePass     = ice_water_result_c    >= -1 && ice_water_result_c    <= 1
     const boilPass    = boiling_water_result_c >= 99 && boiling_water_result_c <= 101
@@ -132,6 +135,7 @@ export async function POST(req: NextRequest) {
       ice_water_pass:         icePass,
       boiling_water_result_c,
       boiling_water_pass:     boilPass,
+      verified_by:            verified_by.trim(),
       action_taken:           action_taken?.trim() || null,
     })
 

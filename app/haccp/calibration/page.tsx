@@ -28,9 +28,12 @@ interface CalibrationRecord {
   boiling_water_result_c:number | null
   boiling_water_pass:    boolean | null
   action_taken:          string | null
+  verified_by:           string | null
   submitted_at:          string
   users:                 { name: string }
 }
+
+const VERIFIED_BY_PRESETS = ['Daryl', 'Hakan', 'Ege']
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -150,6 +153,7 @@ export default function CalibrationPage() {
   const [submitting,   setSubmitting]   = useState(false)
   const [submitErr,    setSubmitErr]    = useState('')
   const [flash,        setFlash]        = useState(false)
+  const [verifiedBy,   setVerifiedBy]   = useState('')
 
   const loadData = useCallback(() => {
     fetch('/api/haccp/calibration')
@@ -169,7 +173,7 @@ export default function CalibrationPage() {
 
   function resetForm() {
     setProbeId(''); setIceVal(''); setBoilVal(''); setActionTaken('')
-    setCertRef(''); setPurchaseDate(''); setCertNotes(''); setSubmitErr('')
+    setCertRef(''); setPurchaseDate(''); setCertNotes(''); setVerifiedBy(''); setSubmitErr('')
   }
 
   function switchMode(m: Mode) { setMode(m); resetForm() }
@@ -177,15 +181,16 @@ export default function CalibrationPage() {
   const manualValid = probeId.trim() &&
     iceVal  !== '' && !isNaN(iceNum) &&
     boilVal !== '' && !isNaN(boilNum) &&
+    verifiedBy.trim() &&
     (!anyFail || actionTaken.trim())
 
-  const certValid = probeId.trim() && certRef.trim() && purchaseDate
+  const certValid = probeId.trim() && certRef.trim() && purchaseDate && verifiedBy.trim()
 
   async function handleSubmit() {
     setSubmitErr('')
     const body = mode === 'certified_probe'
-      ? { calibration_mode: 'certified_probe', thermometer_id: probeId, cert_reference: certRef, purchase_date: purchaseDate, notes: certNotes }
-      : { calibration_mode: 'manual', thermometer_id: probeId, ice_water_result_c: iceNum, boiling_water_result_c: boilNum, action_taken: actionTaken }
+      ? { calibration_mode: 'certified_probe', thermometer_id: probeId, cert_reference: certRef, purchase_date: purchaseDate, notes: certNotes, verified_by: verifiedBy }
+      : { calibration_mode: 'manual', thermometer_id: probeId, ice_water_result_c: iceNum, boiling_water_result_c: boilNum, action_taken: actionTaken, verified_by: verifiedBy }
 
     setSubmitting(true)
     try {
@@ -406,6 +411,30 @@ export default function CalibrationPage() {
               </>
             )}
 
+            {/* Verified by */}
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Verified by</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {VERIFIED_BY_PRESETS.map((name) => (
+                  <button key={name}
+                    onPointerDown={(e) => { e.preventDefault(); setVerifiedBy(name) }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      verifiedBy === name ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                    }`}>{name}</button>
+                ))}
+                <button
+                  onPointerDown={(e) => { e.preventDefault(); setVerifiedBy('') }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                    verifiedBy !== '' && !VERIFIED_BY_PRESETS.includes(verifiedBy) ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                  }`}>Other</button>
+              </div>
+              {!VERIFIED_BY_PRESETS.includes(verifiedBy) && (
+                <input type="text" value={verifiedBy} onChange={(e) => setVerifiedBy(e.target.value)}
+                  placeholder="Enter name…"
+                  className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+              )}
+            </div>
+
             <p className="text-slate-300 text-xs">{todayDisplay()}</p>
             {submitErr && <p className="text-red-600 text-xs">{submitErr}</p>}
 
@@ -457,7 +486,7 @@ export default function CalibrationPage() {
                           </p>
                         )}
                         {r.action_taken && <p className="text-[#EB6619] text-xs mt-1 italic">{r.action_taken}</p>}
-                        <p className="text-slate-300 text-xs mt-0.5">{r.users?.name} · {r.time_of_check?.slice(0,5)}</p>
+                        <p className="text-slate-300 text-xs mt-0.5">{r.users?.name}{r.verified_by ? ` · Verified: ${r.verified_by}` : ''} · {r.time_of_check?.slice(0,5)}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         <p className="text-slate-400 text-xs">{fmtDate(r.date)}</p>
