@@ -25,13 +25,17 @@ interface TodayStatus {
   daily_diary:        { opening: boolean; operational: boolean; closing: boolean; opening_overdue: boolean; operational_overdue: boolean; closing_overdue: boolean }
   cleaning:           { count_today: number; has_issues_today: boolean; overdue: boolean; last_logged_at: string | null }
   deliveries:         { count_today: number; deviations: number }
-  mince_runs:         { count_today: number; has_deviations: boolean }
-  product_returns:    { count_today: number }
-  calibration_due:    boolean
-  weekly_review_due:  boolean
-  monthly_review_due: boolean
-  total_checks:       number
-  completed_checks:   number
+  mince_runs:            { count_today: number; has_deviations: boolean }
+  product_returns:       { count_today: number; has_safety_returns: boolean }
+  calibration_due:       boolean
+  calibration_done:      boolean
+  calibration_pass:      boolean
+  weekly_review_due:     boolean
+  weekly_review_overdue: boolean
+  monthly_review_due:    boolean
+  monthly_review_overdue:boolean
+  total_checks:          number
+  completed_checks:      number
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -289,12 +293,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     : s.cleaning.overdue ? 'overdue'
     : 'neutral'
 
-  const diaryState: TileState = !s ? 'neutral'
-    : (s.daily_diary.opening && s.daily_diary.closing) ? 'complete'
-    : s.daily_diary.opening_overdue ? 'overdue'
-    : s.daily_diary.opening ? 'due'
-    : 'neutral'
-
   const delivState: TileState = !s ? 'neutral'
     : s.deliveries.deviations > 0 ? 'deviation'
     : s.deliveries.count_today > 0 ? 'complete'
@@ -315,12 +313,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     : s.processing_room.am_done       ? 'Temp PM due'
     : s.daily_diary.opening           ? 'Opening ✓'
     : 'Opening due'
-  const diaryBadge = !s ? '—'
-    : (s.daily_diary.opening && s.daily_diary.closing) ? 'Done ✓'
-    : s.daily_diary.closing_overdue   ? 'Closing overdue'
-    : s.daily_diary.opening_overdue   ? 'Opening overdue'
-    : s.daily_diary.opening           ? 'Open ✓ · Closing due'
-    : 'Opening due'
   const delivBadge = !s ? '—'
     : s.deliveries.deviations > 0 ? `${s.deliveries.count_today} logged · ${s.deliveries.deviations} fail`
     : s.deliveries.count_today > 0 ? `${s.deliveries.count_today} logged`
@@ -336,13 +328,16 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   function signOut() { window.location.href = '/api/auth/logout' }
 
   const overdue: string[] = []
-  if (s?.cold_storage.am_overdue)         overdue.push('Cold Storage AM')
-  if (s?.cold_storage.pm_overdue)         overdue.push('Cold Storage PM')
-  if (s?.processing_room.am_overdue)      overdue.push('Process Room Temp AM')
-  if (s?.processing_room.pm_overdue)      overdue.push('Process Room Temp PM')
-  if (s?.daily_diary.opening_overdue)     overdue.push('Process Room Opening checks')
-  if (s?.daily_diary.closing_overdue)     overdue.push('Process Room Closing checks')
-  if (s?.cleaning.overdue)                overdue.push('Cleaning log')
+  if (s?.cold_storage.am_overdue)          overdue.push('Cold Storage AM')
+  if (s?.cold_storage.pm_overdue)          overdue.push('Cold Storage PM')
+  if (s?.processing_room.am_overdue)       overdue.push('Process Room Temp AM')
+  if (s?.processing_room.pm_overdue)       overdue.push('Process Room Temp PM')
+  if (s?.daily_diary.opening_overdue)      overdue.push('Process Room Opening checks')
+  if (s?.daily_diary.closing_overdue)      overdue.push('Process Room Closing checks')
+  if (s?.cleaning.overdue)                 overdue.push('Cleaning log')
+  if (s?.calibration_due)                  overdue.push('Calibration (not done this month)')
+  if (s?.weekly_review_overdue)            overdue.push('Weekly review overdue')
+  if (s?.monthly_review_overdue)           overdue.push('Monthly review overdue')
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col select-none">
@@ -416,7 +411,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               badge={!s ? '—' : s.mince_runs.has_deviations ? `${s.mince_runs.count_today} runs · deviation` : s.mince_runs.count_today > 0 ? `${s.mince_runs.count_today} runs` : 'None today'}
               sub="CCP-M1 M2 · Kill date"
               onTap={() => { window.location.href = '/haccp/mince' }} onHelp={() => setHelp('mince')} />
-            <LargeTile id="product_return" icon={Icon.ret} label="Product Return" state="neutral" badge={s ? (s.product_returns.count_today > 0 ? `${s.product_returns.count_today} logged` : 'None') : '—'}
+            <LargeTile id="product_return" icon={Icon.ret} label="Product Return"
+              state={!s ? 'neutral' : s.product_returns.has_safety_returns ? 'deviation' : s.product_returns.count_today > 0 ? 'complete' : 'neutral'}
+              badge={!s ? '—' : s.product_returns.has_safety_returns ? `${s.product_returns.count_today} logged · safety` : s.product_returns.count_today > 0 ? `${s.product_returns.count_today} logged` : 'None'}
               sub="SOP 12 · RC01–RC08"
               onTap={() => { window.location.href = '/haccp/product-return' }} onHelp={() => setHelp('product_return')} />
           </div>
@@ -427,10 +424,24 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
           {/* Small tile row */}
           <div className="flex gap-3">
             <SmallTile id="calibration" icon={Icon.cal} label="Calibration" sub="Monthly · SOP 3"
-              badge={s?.calibration_due ? 'Due this month' : 'Not due'} due={s?.calibration_due ?? false}
+              badge={
+                !s ? '—'
+                : s.calibration_done && !s.calibration_pass ? 'Done · probe failed'
+                : s.calibration_done ? 'Done ✓'
+                : 'Due this month'
+              }
+              due={s?.calibration_due ?? false}
               onTap={() => { window.location.href = '/haccp/calibration' }} onHelp={() => setHelp('calibration')} />
             <SmallTile id="reviews" icon={Icon.review} label="Reviews" sub="Weekly + Monthly"
-              badge={s?.weekly_review_due ? 'Weekly due' : s?.monthly_review_due ? 'Monthly due' : 'Up to date'} due={s?.weekly_review_due || s?.monthly_review_due ? true : false}
+              badge={
+                !s ? '—'
+                : s.weekly_review_overdue  ? 'Weekly overdue'
+                : s.monthly_review_overdue ? 'Monthly overdue'
+                : s.weekly_review_due      ? 'Weekly due'
+                : s.monthly_review_due     ? 'Monthly due'
+                : 'Up to date ✓'
+              }
+              due={s?.weekly_review_overdue || s?.monthly_review_overdue || s?.weekly_review_due || s?.monthly_review_due ? true : false}
               onTap={() => { window.location.href = '/haccp/reviews' }} onHelp={() => setHelp('reviews')} />
             <SmallTile id="people" icon={Icon.people} label="People" sub="Health · Visitor · Training"
               badge="Event only" due={false}

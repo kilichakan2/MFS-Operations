@@ -45,11 +45,11 @@ export async function GET(req: NextRequest) {
         supabase.from('haccp_cleaning_log').select('submitted_at, issues').eq('date', today).order('submitted_at', { ascending: false }).limit(20),
         supabase.from('haccp_deliveries').select('temp_status').eq('date', today),
         supabase.from('haccp_mince_log').select('id, input_temp_pass, output_temp_pass, corrective_action').eq('date', today),
-        supabase.from('haccp_returns').select('id').eq('date', today),
+        supabase.from('haccp_returns').select('id, return_code').eq('date', today),
         supabase.from('haccp_corrective_actions').select('id').eq('resolved', false),
         supabase.from('haccp_weekly_review').select('id').gte('week_ending', getWeekStart()).limit(1),
         supabase.from('haccp_monthly_review').select('id').gte('month_year', getMonthStart()).limit(1),
-        supabase.from('haccp_calibration_log').select('id').gte('date', getMonthStart()).limit(1),
+        supabase.from('haccp_calibration_log').select('id, ice_water_pass, boiling_water_pass').gte('date', getMonthStart()).limit(10),
       ])
 
     const coldSessions = (cold.data ?? []).map((r) => r.session)
@@ -107,11 +107,27 @@ export async function GET(req: NextRequest) {
           return row.input_temp_pass === false || row.output_temp_pass === false || !!row.corrective_action
         }),
       },
-      product_returns: { count_today: (returns.data ?? []).length },
+      product_returns: {
+        count_today:       (returns.data ?? []).length,
+        has_safety_returns:(returns.data ?? []).some((r) =>
+          ['RC01','RC02','RC04','RC05'].includes((r as {return_code?: string}).return_code ?? '')
+        ),
+      },
       corrective_actions: { open: (ccas.data ?? []).length },
-      calibration_due:    (cal.data ?? []).length === 0,
-      weekly_review_due:  (weekly.data ?? []).length === 0,
-      monthly_review_due: (monthly.data ?? []).length === 0,
+      calibration_due:  (cal.data ?? []).length === 0,
+      calibration_done: (cal.data ?? []).length > 0,
+      calibration_pass: (cal.data ?? []).length > 0 &&
+        (cal.data ?? []).every((r) => {
+          const row = r as { ice_water_pass?: boolean; boiling_water_pass?: boolean }
+          return row.ice_water_pass !== false && row.boiling_water_pass !== false
+        }),
+      weekly_review_due:    (weekly.data ?? []).length === 0,
+      weekly_review_overdue:(weekly.data ?? []).length === 0 && new Date().getDay() === 5 && nowHour >= 17, // Friday after 17:00
+      monthly_review_due:   (monthly.data ?? []).length === 0,
+      monthly_review_overdue:(monthly.data ?? []).length === 0 && (() => {
+        const d = new Date(); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+        return d.getDate() === last // last day of month
+      })(),
       total_checks:       total,
       completed_checks:   done,
     })
