@@ -9,7 +9,7 @@ const COOKIE_CLEAR = {
 
 // GET — browser navigation (window.location.href) + optional ?redirect=
 export async function GET(req: NextRequest) {
-  const redirect = req.nextUrl.searchParams.get('redirect') ?? '/haccp'
+  const redirect = req.nextUrl.searchParams.get('redirect') ?? '/'
   const response = NextResponse.redirect(new URL(redirect, req.url))
 
   response.cookies.set('mfs_session', '', { ...COOKIE_CLEAR, httpOnly: true  })

@@ -421,7 +421,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   const pct   = s ? Math.round((s.completed_checks / s.total_checks) * 100) : 0
   const ccaOpen = s?.corrective_actions.open ?? 0
 
-  function signOut() { window.location.href = '/api/auth/logout?redirect=/haccp' }
+  function signOut() { window.location.href = '/api/auth/logout' }
 
   const overdue: string[] = []
   if (s?.cold_storage.pm_overdue) overdue.push('Cold Storage PM')
@@ -652,7 +652,16 @@ function LoginDoor() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col select-none">
-      <div className="flex flex-col items-center pt-10 pb-6 px-6">
+      {/* Top bar with back button */}
+      <div className="flex items-center px-5 pt-5">
+        <button
+          onPointerDown={(e) => { e.preventDefault(); window.location.href = '/' }}
+          className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors text-xs font-medium select-none active:scale-95">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          Back to main app
+        </button>
+      </div>
+      <div className="flex flex-col items-center pt-6 pb-6 px-6">
         <MfsLogo className="h-8 mb-4 text-white" />
         <p className="text-[#EB6619] text-xs font-bold tracking-[.35em] uppercase">Process Room</p>
         <h1 className="text-white text-2xl font-bold tracking-wide mt-1">HACCP Compliance</h1>
