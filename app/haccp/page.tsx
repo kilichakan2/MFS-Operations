@@ -25,7 +25,7 @@ interface TodayStatus {
   daily_diary:        { opening: boolean; operational: boolean; closing: boolean; opening_overdue: boolean; operational_overdue: boolean; closing_overdue: boolean }
   cleaning:           { count_today: number; has_issues_today: boolean; overdue: boolean; last_logged_at: string | null }
   deliveries:         { count_today: number; deviations: number }
-  mince_runs:         { count_today: number }
+  mince_runs:         { count_today: number; has_deviations: boolean }
   product_returns:    { count_today: number }
   calibration_due:    boolean
   weekly_review_due:  boolean
@@ -411,7 +411,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
 
           {/* Row 2 — 2 standard + wide CCA */}
           <div className="flex gap-3">
-            <LargeTile id="mince" icon={Icon.mince} label="Mince / Prep" state="neutral" badge={s ? (s.mince_runs.count_today > 0 ? `${s.mince_runs.count_today} runs` : 'None today') : '—'}
+            <LargeTile id="mince" icon={Icon.mince} label="Mince / Prep"
+              state={!s ? 'neutral' : s.mince_runs.has_deviations ? 'deviation' : s.mince_runs.count_today > 0 ? 'complete' : 'neutral'}
+              badge={!s ? '—' : s.mince_runs.has_deviations ? `${s.mince_runs.count_today} runs · deviation` : s.mince_runs.count_today > 0 ? `${s.mince_runs.count_today} runs` : 'None today'}
               sub="CCP-M1 M2 · Kill date"
               onTap={() => { window.location.href = '/haccp/mince' }} onHelp={() => setHelp('mince')} />
             <LargeTile id="product_return" icon={Icon.ret} label="Product Return" state="neutral" badge={s ? (s.product_returns.count_today > 0 ? `${s.product_returns.count_today} logged` : 'None') : '—'}

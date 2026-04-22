@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
         supabase.from('haccp_daily_diary').select('phase').eq('date', today),
         supabase.from('haccp_cleaning_log').select('submitted_at, issues').eq('date', today).order('submitted_at', { ascending: false }).limit(20),
         supabase.from('haccp_deliveries').select('temp_status').eq('date', today),
-        supabase.from('haccp_mince_log').select('id').eq('date', today),
+        supabase.from('haccp_mince_log').select('id, input_temp_pass, output_temp_pass, corrective_action').eq('date', today),
         supabase.from('haccp_returns').select('id').eq('date', today),
         supabase.from('haccp_corrective_actions').select('id').eq('resolved', false),
         supabase.from('haccp_weekly_review').select('id').gte('week_ending', getWeekStart()).limit(1),
@@ -100,7 +100,13 @@ export async function GET(req: NextRequest) {
         count_today: (deliveries.data ?? []).length,
         deviations:  (deliveries.data ?? []).filter((d) => d.temp_status !== 'pass').length,
       },
-      mince_runs:      { count_today: (mince.data ?? []).length },
+      mince_runs: {
+        count_today:    (mince.data ?? []).length,
+        has_deviations: (mince.data ?? []).some((r) => {
+          const row = r as { input_temp_pass?: boolean; output_temp_pass?: boolean; corrective_action?: string }
+          return row.input_temp_pass === false || row.output_temp_pass === false || !!row.corrective_action
+        }),
+      },
       product_returns: { count_today: (returns.data ?? []).length },
       corrective_actions: { open: (ccas.data ?? []).length },
       calibration_due:    (cal.data ?? []).length === 0,
