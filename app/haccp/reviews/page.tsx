@@ -289,8 +289,8 @@ function weekRange(offset: number): { from: string; to: string; label: string } 
   const mon     = new Date(now); mon.setDate(now.getDate() - dow + offset * 7)
   const fri     = new Date(mon); fri.setDate(mon.getDate() + 4)
   const fmt     = (d: Date) => d.toLocaleDateString('en-CA')
-  const lbl     = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
-  return { from: fmt(mon), to: fmt(fri), label: `${lbl(mon)} – ${lbl(fri)}` }
+  const lbl     = (d: Date, day: string) => `${day} ${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`
+  return { from: fmt(mon), to: fmt(fri), label: `${lbl(mon, 'Mon')} – ${lbl(fri, 'Fri')}` }
 }
 
 function monthRange(offset: number): { from: string; to: string; label: string } {
