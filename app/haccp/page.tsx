@@ -22,7 +22,7 @@ interface StaffMember { id: string; name: string; role: string }
 interface TodayStatus {
   cold_storage:       { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
   processing_room:    { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
-  daily_diary:        { opening: boolean; operational: boolean; closing: boolean }
+  daily_diary:        { opening: boolean; operational: boolean; closing: boolean; opening_overdue: boolean; operational_overdue: boolean; closing_overdue: boolean }
   cleaning:           { count_today: number; last_logged_at: string | null }
   deliveries:         { count_today: number; deviations: number }
   mince_runs:         { count_today: number }
@@ -276,13 +276,16 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     : 'neutral'
 
   const roomState: TileState = !s ? 'neutral'
-    : (s.processing_room.pm_overdue) ? 'overdue'
-    : (s.processing_room.am_done && s.processing_room.pm_done) ? 'complete'
-    : s.processing_room.am_done ? 'due'
+    : (s.processing_room.am_done && s.processing_room.pm_done &&
+       s.daily_diary.opening && s.daily_diary.closing) ? 'complete'
+    : (s.processing_room.pm_overdue || s.processing_room.am_overdue ||
+       s.daily_diary.opening_overdue || s.daily_diary.closing_overdue) ? 'overdue'
+    : (s.processing_room.am_done || s.daily_diary.opening) ? 'due'
     : 'neutral'
 
   const diaryState: TileState = !s ? 'neutral'
     : (s.daily_diary.opening && s.daily_diary.closing) ? 'complete'
+    : s.daily_diary.opening_overdue ? 'overdue'
     : s.daily_diary.opening ? 'due'
     : 'neutral'
 
@@ -297,8 +300,21 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     : s.cold_storage.am_overdue ? 'AM overdue'
     : s.cold_storage.am_done    ? 'PM due'
     : 'AM due'
-  const roomBadge = !s ? '—' : s.processing_room.pm_overdue ? 'Overdue' : (s.processing_room.am_done && s.processing_room.pm_done) ? 'Done' : s.processing_room.am_done ? 'PM due' : '—'
-  const diaryBadge = !s ? '—' : (s.daily_diary.opening && s.daily_diary.closing) ? 'Done' : s.daily_diary.opening ? 'Open ✓' : '—'
+  const roomBadge = !s ? '—'
+    : (s.processing_room.am_done && s.processing_room.pm_done && s.daily_diary.opening && s.daily_diary.closing) ? 'Done ✓'
+    : s.processing_room.pm_overdue    ? 'Temp PM overdue'
+    : s.daily_diary.closing_overdue   ? 'Closing overdue'
+    : s.processing_room.am_overdue    ? 'Temp AM overdue'
+    : s.daily_diary.opening_overdue   ? 'Opening overdue'
+    : s.processing_room.am_done       ? 'Temp PM due'
+    : s.daily_diary.opening           ? 'Opening ✓'
+    : 'Opening due'
+  const diaryBadge = !s ? '—'
+    : (s.daily_diary.opening && s.daily_diary.closing) ? 'Done ✓'
+    : s.daily_diary.closing_overdue   ? 'Closing overdue'
+    : s.daily_diary.opening_overdue   ? 'Opening overdue'
+    : s.daily_diary.opening           ? 'Open ✓ · Closing due'
+    : 'Opening due'
   const delivBadge = !s ? '—' : s.deliveries.count_today > 0 ? `${s.deliveries.count_today} logged` : 'None yet'
 
   const pct   = s ? Math.round((s.completed_checks / s.total_checks) * 100) : 0
@@ -306,9 +322,12 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   function signOut() { window.location.href = '/api/auth/logout' }
 
   const overdue: string[] = []
-  if (s?.cold_storage.am_overdue) overdue.push('Cold Storage AM')
-  if (s?.cold_storage.pm_overdue) overdue.push('Cold Storage PM')
-  if (s?.processing_room.pm_overdue) overdue.push('Process Room PM')
+  if (s?.cold_storage.am_overdue)         overdue.push('Cold Storage AM')
+  if (s?.cold_storage.pm_overdue)         overdue.push('Cold Storage PM')
+  if (s?.processing_room.am_overdue)      overdue.push('Process Room Temp AM')
+  if (s?.processing_room.pm_overdue)      overdue.push('Process Room Temp PM')
+  if (s?.daily_diary.opening_overdue)     overdue.push('Process Room Opening checks')
+  if (s?.daily_diary.closing_overdue)     overdue.push('Process Room Closing checks')
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col select-none">

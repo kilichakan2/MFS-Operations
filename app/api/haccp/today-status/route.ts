@@ -31,6 +31,9 @@ export async function GET(req: NextRequest) {
 
     const today = todayUK()
     const nowHour = new Date().getHours()
+    const openingOverdueCutoff   = 10  // Opening checks expected by 10:00
+    const operationalOverdueCutoff = 13  // Operational checks expected by 13:00
+    const closingOverdueCutoff   = 17  // Closing checks expected by 17:00
     const amOverdueCutoff = 10
     const pmOverdueCutoff = 14
 
@@ -80,9 +83,12 @@ export async function GET(req: NextRequest) {
         pm_overdue: !pmRoomDone && nowHour >= pmOverdueCutoff,
       },
       daily_diary: {
-        opening:     phases.includes('opening'),
-        operational: phases.includes('operational'),
-        closing:     phases.includes('closing'),
+        opening:              phases.includes('opening'),
+        operational:          phases.includes('operational'),
+        closing:              phases.includes('closing'),
+        opening_overdue:      !phases.includes('opening')     && nowHour >= openingOverdueCutoff,
+        operational_overdue:  !phases.includes('operational') && nowHour >= operationalOverdueCutoff,
+        closing_overdue:      !phases.includes('closing')     && nowHour >= closingOverdueCutoff,
       },
       cleaning: {
         count_today: (cleaning.data ?? []).length,
