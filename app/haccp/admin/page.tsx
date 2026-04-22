@@ -65,12 +65,12 @@ function fmtDateShort(iso: string) {
   })
 }
 
-function ageLabel(iso: string): { text: string; urgent: boolean } {
+function ageLabel(iso: string): { text: string; tone: 'grey' | 'amber' | 'red' } {
   const hrs = (Date.now() - new Date(iso).getTime()) / 3_600_000
-  if (hrs < 24)  return { text: 'Today',             urgent: false }
-  if (hrs < 48)  return { text: 'Yesterday',          urgent: false }
+  if (hrs < 24)  return { text: 'Today',             tone: 'grey'  }
+  if (hrs < 48)  return { text: 'Yesterday',          tone: 'amber' }
   const days = Math.floor(hrs / 24)
-  return { text: `${days} days ago`, urgent: true }
+  return { text: `${days} days ago`, tone: 'red' }
 }
 
 // ─── CA Card ─────────────────────────────────────────────────────────────────
@@ -82,9 +82,13 @@ function CACard({ ca, onVerify, verifying }: {
 }) {
   const [expanded, setExpanded] = useState(false)
   const age = ageLabel(ca.submitted_at)
+  const badgeClass = age.tone === 'red'   ? 'bg-red-100 text-red-600'
+                   : age.tone === 'amber' ? 'bg-amber-100 text-amber-700'
+                   :                        'bg-slate-100 text-slate-500'
+  const borderClass = age.tone === 'red' ? 'border-red-200' : 'border-red-100'
 
   return (
-    <div className={`bg-white rounded-xl overflow-hidden border ${age.urgent ? 'border-red-200' : 'border-red-100'}`}>
+    <div className={`bg-white rounded-xl overflow-hidden border ${borderClass}`}>
       {/* Header row */}
       <button
         onClick={() => setExpanded(e => !e)}
@@ -99,9 +103,7 @@ function CACard({ ca, onVerify, verifying }: {
             <span className="text-slate-400 text-[10px]">
               {SOURCE_LABELS[ca.source_table] ?? ca.source_table}
             </span>
-            <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
-              age.urgent ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'
-            }`}>
+            <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>
               {age.text}
             </span>
           </div>

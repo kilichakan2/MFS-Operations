@@ -13,7 +13,7 @@ const supabase = supabaseService
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const role   = req.cookies.get('mfs_role')?.value
@@ -23,7 +23,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
     const { error } = await supabase
