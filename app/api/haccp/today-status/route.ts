@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
         supabase.from('haccp_cold_storage_temps').select('session').eq('date', today),
         supabase.from('haccp_processing_temps').select('session').eq('date', today),
         supabase.from('haccp_daily_diary').select('phase').eq('date', today),
-        supabase.from('haccp_cleaning_log').select('submitted_at').eq('date', today).order('submitted_at', { ascending: false }).limit(1),
+        supabase.from('haccp_cleaning_log').select('submitted_at, issues').eq('date', today).order('submitted_at', { ascending: false }).limit(20),
         supabase.from('haccp_deliveries').select('temp_status').eq('date', today),
         supabase.from('haccp_mince_log').select('id').eq('date', today),
         supabase.from('haccp_returns').select('id').eq('date', today),
@@ -91,8 +91,10 @@ export async function GET(req: NextRequest) {
         closing_overdue:      !phases.includes('closing')     && nowHour >= closingOverdueCutoff,
       },
       cleaning: {
-        count_today: (cleaning.data ?? []).length,
-        last_logged_at: (cleaning.data?.[0] as {submitted_at?: string} | undefined)?.submitted_at ?? null,
+        count_today:     (cleaning.data ?? []).length,
+        has_issues_today:(cleaning.data ?? []).some((r) => (r as {issues?: boolean}).issues),
+        overdue:         (cleaning.data ?? []).length === 0 && nowHour >= 15,
+        last_logged_at:  (cleaning.data?.[0] as {submitted_at?: string} | undefined)?.submitted_at ?? null,
       },
       deliveries: {
         count_today: (deliveries.data ?? []).length,

@@ -23,7 +23,7 @@ interface TodayStatus {
   cold_storage:       { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
   processing_room:    { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
   daily_diary:        { opening: boolean; operational: boolean; closing: boolean; opening_overdue: boolean; operational_overdue: boolean; closing_overdue: boolean }
-  cleaning:           { count_today: number; last_logged_at: string | null }
+  cleaning:           { count_today: number; has_issues_today: boolean; overdue: boolean; last_logged_at: string | null }
   deliveries:         { count_today: number; deviations: number }
   mince_runs:         { count_today: number }
   product_returns:    { count_today: number }
@@ -283,6 +283,12 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     : (s.processing_room.am_done || s.daily_diary.opening) ? 'due'
     : 'neutral'
 
+  const cleaningState: TileState = !s ? 'neutral'
+    : s.cleaning.count_today > 0 && s.cleaning.has_issues_today ? 'deviation'
+    : s.cleaning.count_today > 0 ? 'complete'
+    : s.cleaning.overdue ? 'overdue'
+    : 'neutral'
+
   const diaryState: TileState = !s ? 'neutral'
     : (s.daily_diary.opening && s.daily_diary.closing) ? 'complete'
     : s.daily_diary.opening_overdue ? 'overdue'
@@ -316,6 +322,11 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     : s.daily_diary.opening           ? 'Open ✓ · Closing due'
     : 'Opening due'
   const delivBadge = !s ? '—' : s.deliveries.count_today > 0 ? `${s.deliveries.count_today} logged` : 'None yet'
+  const cleaningBadge = !s ? '—'
+    : s.cleaning.count_today > 0 && s.cleaning.has_issues_today ? `${s.cleaning.count_today} logged · issue`
+    : s.cleaning.count_today > 0 ? `${s.cleaning.count_today} logged`
+    : s.cleaning.overdue ? 'Overdue'
+    : 'None yet'
 
   const pct   = s ? Math.round((s.completed_checks / s.total_checks) * 100) : 0
 
@@ -328,6 +339,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   if (s?.processing_room.pm_overdue)      overdue.push('Process Room Temp PM')
   if (s?.daily_diary.opening_overdue)     overdue.push('Process Room Opening checks')
   if (s?.daily_diary.closing_overdue)     overdue.push('Process Room Closing checks')
+  if (s?.cleaning.overdue)                overdue.push('Cleaning log')
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col select-none">
@@ -386,7 +398,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <LargeTile id="processing_room" icon={Icon.room} label="Process Room" state={roomState} badge={roomBadge}
               sub={s ? `CCP 3 · Daily Diary${s.daily_diary.opening ? ' · Opening ✓' : ''}` : 'CCP 3 · Daily Diary'}
               onTap={() => { window.location.href = '/haccp/process-room' }} onHelp={() => setHelp('processing_room')} />
-            <LargeTile id="cleaning" icon={Icon.clean} label="Cleaning" state={diaryState} badge={s ? `${s.cleaning.count_today} logged` : '—'}
+            <LargeTile id="cleaning" icon={Icon.clean} label="Cleaning" state={cleaningState} badge={cleaningBadge}
               sub={s?.cleaning.last_logged_at ? `Last: ${fmtTime(s.cleaning.last_logged_at)}` : 'SOP 2 — log each clean'}
               onTap={() => { window.location.href = '/haccp/cleaning' }} onHelp={() => setHelp('cleaning')} />
             <LargeTile id="delivery" icon={Icon.delivery} label="Delivery" state={delivState} badge={delivBadge}
