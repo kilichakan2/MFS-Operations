@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('haccp_health_records')
-      .select('id, record_type, date, staff_name, visitor_name, visitor_company, fit_for_work, health_questions, exclusion_reason, illness_type, absence_from, absence_to, submitted_at, users!submitted_by(name)')
+      .select('id, record_type, date, staff_name, visitor_name, visitor_company, fit_for_work, health_questions, exclusion_reason, illness_type, absence_from, absence_to, manager_signed_name, submitted_at, users!submitted_by(name)')
       .order('submitted_at', { ascending: false })
       .limit(50)
 
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         health_questions,
         fit_for_work:       fit_for_work ?? true,
         exclusion_reason:   exclusion_reason?.trim() || null,
-        manager_signed_by:  manager_signed_by.trim(),
+        manager_signed_name: manager_signed_by.trim(),
         manager_signed_at:  new Date().toISOString(),
       })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         symptom_free_48h:            symptom_free_48h            ?? null,
         medical_certificate_provided:medical_certificate_provided ?? null,
         fit_for_work:                true,
-        manager_signed_by:           manager_signed_by.trim(),
+        manager_signed_name: manager_signed_by.trim(),
         manager_signed_at:           new Date().toISOString(),
       })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
         health_questions,
         visitor_declaration_confirmed: visitor_declaration_confirmed ?? false,
         fit_for_work:                  visitor_declaration_confirmed ?? false,
-        manager_signed_by:             manager_signed_by.trim(),
+        manager_signed_name: manager_signed_by.trim(),
         manager_signed_at:             new Date().toISOString(),
       })
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
