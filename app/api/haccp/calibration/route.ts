@@ -13,6 +13,8 @@ import { supabaseService }           from '@/lib/supabase'
 
 const supabase = supabaseService
 
+type CAPayload = { cause: string; disposition: string; recurrence: string; notes: string }
+
 function todayUK(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
 }
@@ -110,8 +112,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Manual test mode
-    const { thermometer_id, ice_water_result_c, boiling_water_result_c, action_taken, verified_by } = body
+    const { thermometer_id, ice_water_result_c, boiling_water_result_c, action_taken, verified_by, corrective_action } = body as {
+      thermometer_id:          string
+      ice_water_result_c:      number
+      boiling_water_result_c:  number
+      action_taken?:           string
+      verified_by:             string
+      corrective_action?:      CAPayload
+    }
     if (!thermometer_id?.trim())         return NextResponse.json({ error: 'Probe ID / name is required' }, { status: 400 })
     if (ice_water_result_c == null)      return NextResponse.json({ error: 'Ice water reading is required' }, { status: 400 })
     if (boiling_water_result_c == null)  return NextResponse.json({ error: 'Boiling water reading is required' }, { status: 400 })
@@ -121,11 +129,11 @@ export async function POST(req: NextRequest) {
     const boilPass    = boiling_water_result_c >= 99 && boiling_water_result_c <= 101
     const anyFail     = !icePass || !boilPass
 
-    if (anyFail && !action_taken?.trim()) {
-      return NextResponse.json({ error: 'Action taken is required when a test fails' }, { status: 400 })
+    if (anyFail && !corrective_action) {
+      return NextResponse.json({ error: 'Corrective action is required when a test fails' }, { status: 400 })
     }
 
-    const { error } = await supabase.from('haccp_calibration_log').insert({
+    const { data: inserted, error } = await supabase.from('haccp_calibration_log').insert({
       submitted_by:           userId,
       date:                   todayUK(),
       time_of_check:          nowTimeUK(),
@@ -138,9 +146,40 @@ export async function POST(req: NextRequest) {
       verified_by:            verified_by.trim(),
       action_taken:           action_taken?.trim() || null,
     })
+    .select('id')
+    .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true, ice_pass: icePass, boil_pass: boilPass, any_fail: anyFail })
+
+    // Write CA row if any test failed
+    let caWriteFailed = false
+    if (anyFail && corrective_action && inserted) {
+      const ca       = corrective_action
+      const recNotes = ca.notes ? `${ca.recurrence} | Notes: ${ca.notes}` : ca.recurrence
+      const failedTests = [
+        ...(!icePass  ? [`Ice water: ${ice_water_result_c}°C (pass -1 to +1°C)`]   : []),
+        ...(!boilPass ? [`Boiling water: ${boiling_water_result_c}°C (pass 99–101°C)`] : []),
+      ]
+
+      const { error: caErr } = await supabase.from('haccp_corrective_actions').insert({
+        actioned_by:   userId,
+        source_table:  'haccp_calibration_log',
+        source_id:     inserted.id,
+        ccp_ref:       'SOP3',
+        deviation_description: `Probe calibration failure (${thermometer_id.trim()}): ${failedTests.join('; ')}. Cause: ${ca.cause}`,
+        action_taken:  `${ca.disposition}. Protocol: Remove from service, switch to backup probe, send for professional calibration or dispose.`,
+        product_disposition:   'assess',
+        recurrence_prevention: recNotes,
+        management_verification_required: true,
+      })
+
+      if (caErr) {
+        console.error('[POST /api/haccp/calibration] CA insert failed:', caErr)
+        caWriteFailed = true
+      }
+    }
+
+    return NextResponse.json({ ok: true, ice_pass: icePass, boil_pass: boilPass, any_fail: anyFail, ca_write_failed: caWriteFailed })
 
   } catch (err) {
     console.error('[POST /api/haccp/calibration] Unhandled:', err)

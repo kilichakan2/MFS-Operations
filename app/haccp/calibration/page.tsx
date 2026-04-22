@@ -35,7 +35,151 @@ interface CalibrationRecord {
 
 const VERIFIED_BY_PRESETS = ['Daryl', 'Hakan', 'Ege']
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── CA constants (SOP 3 calibration failure) ─────────────────────────────────
+
+type CAPayload = { cause: string; disposition: string; recurrence: string; notes: string }
+
+const SOP3_CAUSES = [
+  'Probe drift — normal wear over time',
+  'Probe physically damaged',
+  'Probe exposed to extreme temperature',
+  'Incorrect test procedure followed',
+  'Ice slurry not prepared correctly',
+  'Other',
+]
+
+const SOP3_RECURRENCE_BY_CAUSE: Record<string, string[]> = {
+  'Probe drift — normal wear over time':      ['Replace probe on regular schedule', 'Increase calibration frequency to weekly', 'Purchase additional backup probe', 'Other'],
+  'Probe physically damaged':                 ['Handle probes with care — retrain staff', 'Store probes in protective case', 'Replace damaged probe immediately', 'Other'],
+  'Probe exposed to extreme temperature':     ['Do not leave probe in hot water / steam', 'Review probe usage procedure', 'Replace if accuracy not recoverable', 'Other'],
+  'Incorrect test procedure followed':        ['Retrain staff on calibration procedure', 'Post laminated SOP 3 steps at calibration point', 'Other'],
+  'Ice slurry not prepared correctly':        ['Post laminated ice slurry preparation guide', 'Use crushed ice not cubed ice', 'Wait full 2 minutes before taking reading', 'Other'],
+  'Other':                                    ['Review calibration procedure', 'Contact probe supplier', 'Schedule maintenance check', 'Other'],
+}
+
+const SOP3_DISPOSITIONS = ['Probe removed from service', 'Probe sent for professional calibration', 'Probe disposed — replaced with new', 'Backup probe in use']
+
+const SOP3_PROTOCOL = [
+  'Remove failed thermometer from service immediately — do not use',
+  'Label it clearly: "DO NOT USE — FAILED CALIBRATION"',
+  'Switch to backup calibrated thermometer',
+  'Review any temperature readings taken with the faulty probe today',
+  'Send failed unit for professional calibration, or dispose and replace',
+  'Record this action — do not clear until resolved',
+]
+
+// ─── CCA Popup ────────────────────────────────────────────────────────────────
+
+function CCAPopup({ failedTests, onSubmit, onBack }: {
+  failedTests: string[]
+  onSubmit:    (ca: CAPayload) => void
+  onBack:      () => void
+}) {
+  const [cause,       setCause]       = useState('')
+  const [disposition, setDisposition] = useState(SOP3_DISPOSITIONS[0])
+  const [recurrence,  setRecurrence]  = useState('')
+  const [notes,       setNotes]       = useState('')
+
+  const canSubmit = Boolean(cause && disposition && recurrence)
+
+  return (
+    <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{ position: 'fixed' }}>
+      <div className="bg-white rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
+        <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
+          <div>
+            <p className="text-red-600 text-xs font-bold tracking-widest uppercase">Calibration failure</p>
+            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action Required</h2>
+          </div>
+          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 active:scale-95 mt-1">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div className="px-6 pb-8 pt-4 space-y-5">
+
+          {/* Failed tests summary */}
+          <div className="space-y-1.5">
+            {failedTests.map((t) => (
+              <div key={t} className="bg-red-50 border border-red-300 rounded-xl px-4 py-2.5">
+                <p className="text-red-600 text-xs font-bold">✗ {t}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Protocol — read-only */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Required action — SOP 3 / CA-001</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+              {SOP3_PROTOCOL.map((step, i) => (
+                <div key={i} className="flex items-start gap-2.5">
+                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-red-100 text-red-600">{i + 1}</div>
+                  <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Cause */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused the failure?</p>
+            <div className="grid grid-cols-2 gap-2">
+              {SOP3_CAUSES.map((c) => (
+                <button key={c} onClick={() => { setCause(c); setRecurrence('') }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border text-left ${
+                    cause === c ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                  }`}>{c}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Disposition */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What was done with the probe?</p>
+            <div className="space-y-1.5">
+              {SOP3_DISPOSITIONS.map((d) => (
+                <button key={d} onClick={() => setDisposition(d)}
+                  className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                    disposition === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-400'
+                  }`}>{d}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Recurrence — cause-aware */}
+          {cause && (
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">How to prevent recurrence?</p>
+              <div className="space-y-1.5">
+                {(SOP3_RECURRENCE_BY_CAUSE[cause] ?? SOP3_RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                  <button key={r} onClick={() => setRecurrence(r)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                      recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
+                    }`}>{r}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes <span className="normal-case font-normal">(optional)</span></p>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              placeholder="Additional details…"
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none"/>
+          </div>
+
+          <p className="text-slate-400 text-xs">This record is immutable once submitted. Protocol per SOP 3 / CA-001 Table 3.</p>
+          <button onClick={() => onSubmit({ cause, disposition, recurrence, notes: notes.trim() })}
+            disabled={!canSubmit}
+            className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
+            Confirm &amp; submit
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -154,6 +298,7 @@ export default function CalibrationPage() {
   const [submitErr,    setSubmitErr]    = useState('')
   const [flash,        setFlash]        = useState(false)
   const [verifiedBy,   setVerifiedBy]   = useState('')
+  const [showCCA,      setShowCCA]      = useState(false)
 
   const loadData = useCallback(() => {
     fetch('/api/haccp/calibration')
@@ -181,18 +326,21 @@ export default function CalibrationPage() {
   const manualValid = probeId.trim() &&
     iceVal  !== '' && !isNaN(iceNum) &&
     boilVal !== '' && !isNaN(boilNum) &&
-    verifiedBy.trim() &&
-    (!anyFail || actionTaken.trim())
+    verifiedBy.trim()
 
   const certValid = probeId.trim() && certRef.trim() && purchaseDate && verifiedBy.trim()
 
-  async function handleSubmit() {
-    setSubmitErr('')
+  async function doSubmit(ca: CAPayload | null) {
+    setShowCCA(false); setSubmitErr(''); setSubmitting(true)
     const body = mode === 'certified_probe'
       ? { calibration_mode: 'certified_probe', thermometer_id: probeId, cert_reference: certRef, purchase_date: purchaseDate, notes: certNotes, verified_by: verifiedBy }
-      : { calibration_mode: 'manual', thermometer_id: probeId, ice_water_result_c: iceNum, boiling_water_result_c: boilNum, action_taken: actionTaken, verified_by: verifiedBy }
-
-    setSubmitting(true)
+      : {
+          calibration_mode: 'manual', thermometer_id: probeId,
+          ice_water_result_c: iceNum, boiling_water_result_c: boilNum,
+          verified_by: verifiedBy,
+          action_taken: ca ? `${ca.cause} | ${ca.disposition} | ${ca.recurrence}` : undefined,
+          corrective_action: ca ?? undefined,
+        }
     try {
       const res = await fetch('/api/haccp/calibration', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -206,6 +354,13 @@ export default function CalibrationPage() {
       }
     } catch { setSubmitErr('Connection error — try again') }
     finally { setSubmitting(false) }
+  }
+
+  function handleSubmit() {
+    setSubmitErr('')
+    if (mode === 'certified_probe') { doSubmit(null); return }
+    if (anyFail) { setShowCCA(true); return }
+    doSubmit(null)
   }
 
   return (
@@ -357,29 +512,11 @@ export default function CalibrationPage() {
                   </button>
                 </div>
 
-                {/* Action taken — required if any fail */}
+                {/* Failure info banner — popup opens on submit */}
                 {anyFail && (
-                  <div>
-                    <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3 mb-3">
-                      <p className="text-red-600 text-xs font-bold uppercase tracking-widest mb-1.5">Calibration failure — CA-001 required actions</p>
-                      <div className="space-y-1.5">
-                        {[
-                          'Remove thermometer from service immediately',
-                          'Use backup calibrated thermometer',
-                          'Send failed unit for professional calibration or dispose',
-                          'Review all temperature readings taken with the faulty probe',
-                        ].map((a) => (
-                          <div key={a} className="flex items-start gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-red-300 flex-shrink-0 mt-1.5"/>
-                            <p className="text-slate-600 text-xs">{a}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Action taken (required)</p>
-                    <textarea value={actionTaken} onChange={(e) => setActionTaken(e.target.value)} rows={2}
-                      placeholder="Describe what was done — e.g. probe removed from service, backup probe used, sent for calibration…"
-                      className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                  <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
+                    <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Calibration failure — corrective action required</p>
+                    <p className="text-slate-600 text-xs">Submit to open the corrective action form — you'll log the cause, what was done with the probe, and how to prevent recurrence.</p>
                   </div>
                 )}
               </>
@@ -507,6 +644,18 @@ export default function CalibrationPage() {
         </div>
 
       </div>
+
+      {/* CCA Popup */}
+      {showCCA && (
+        <CCAPopup
+          failedTests={[
+            ...(iceFail  ? [`Ice water test: ${iceNum}°C (pass range -1°C to +1°C)`]  : []),
+            ...(boilFail ? [`Boiling water test: ${boilNum}°C (pass range 99°C to 101°C)`] : []),
+          ]}
+          onSubmit={(ca) => doSubmit(ca)}
+          onBack={() => setShowCCA(false)}
+        />
+      )}
 
       {/* Numpad */}
       {numpad && (
