@@ -65,6 +65,14 @@ function fmtDateShort(iso: string) {
   })
 }
 
+function ageLabel(iso: string): { text: string; urgent: boolean } {
+  const hrs = (Date.now() - new Date(iso).getTime()) / 3_600_000
+  if (hrs < 24)  return { text: 'Today',             urgent: false }
+  if (hrs < 48)  return { text: 'Yesterday',          urgent: false }
+  const days = Math.floor(hrs / 24)
+  return { text: `${days} days ago`, urgent: true }
+}
+
 // ─── CA Card ─────────────────────────────────────────────────────────────────
 
 function CACard({ ca, onVerify, verifying }: {
@@ -73,9 +81,10 @@ function CACard({ ca, onVerify, verifying }: {
   verifying: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
+  const age = ageLabel(ca.submitted_at)
 
   return (
-    <div className="bg-white border border-red-100 rounded-xl overflow-hidden">
+    <div className={`bg-white rounded-xl overflow-hidden border ${age.urgent ? 'border-red-200' : 'border-red-100'}`}>
       {/* Header row */}
       <button
         onClick={() => setExpanded(e => !e)}
@@ -89,6 +98,11 @@ function CACard({ ca, onVerify, verifying }: {
             <span className="text-slate-300 text-[10px]">·</span>
             <span className="text-slate-400 text-[10px]">
               {SOURCE_LABELS[ca.source_table] ?? ca.source_table}
+            </span>
+            <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              age.urgent ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'
+            }`}>
+              {age.text}
             </span>
           </div>
           <p className="text-slate-800 text-sm font-medium leading-snug">
