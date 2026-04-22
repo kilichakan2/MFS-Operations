@@ -315,7 +315,6 @@ export default function ProductReturnPage() {
   const [product,       setProduct]       = useState('')
   const [tempVal,       setTempVal]       = useState('')
   const [disposition,   setDisposition]   = useState('')
-  const [caText,        setCaText]        = useState('')
   const [notes,         setNotes]         = useState('')
   const [verifiedBy,    setVerifiedBy]    = useState('')
   const [sourceBatch,   setSourceBatch]   = useState('')
@@ -360,8 +359,6 @@ export default function ProductReturnPage() {
     setChecked(new Array(CHECKLIST_BY_CODE[code]?.length ?? 0).fill(false))
     const ca = CA_ACTIONS[code]
     if (ca) {
-      setCaText(ca.steps.join('\n'))
-      // Only set suggested disposition if it's valid for this code
       const allowed = DISPOSITIONS_BY_CODE[code] ?? []
       setDisposition(allowed.includes(ca.suggestedDisposition) ? ca.suggestedDisposition : allowed[0] ?? '')
     }
@@ -370,7 +367,7 @@ export default function ProductReturnPage() {
   function resetForm() {
     setReturnCode(''); setRcNotes(''); setCustomer(''); setProduct('')
     setCustomerId(null); setCustomerSearch('')
-    setTempVal(''); setDisposition(''); setCaText(''); setNotes('')
+    setTempVal(''); setDisposition(''); setNotes('')
     setVerifiedBy(''); setSourceBatch(''); setSubmitErr(''); setChecked([])
   }
 
@@ -406,7 +403,7 @@ export default function ProductReturnPage() {
           product: product.trim(),
           return_code: returnCode, return_code_notes: rcNotes || undefined,
           temperature_c: returnCode === 'RC01' && tempVal ? tempNum : undefined,
-          disposition, corrective_action: caText || undefined,
+          disposition,
           verified_by: verifiedBy,
           source_batch_number: sourceBatch.trim() || undefined,
         }),
@@ -660,21 +657,18 @@ export default function ProductReturnPage() {
               </div>
             )}
 
-            {/* Corrective action — auto-loaded, editable */}
+            {/* Corrective action — protocol steps read-only per CA-001 */}
             {ca && returnCode && (
               <div>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Corrective action (CA-001 — {ca.title})</p>
-                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-2 space-y-1.5">
-                  {ca.steps.map((s) => (
-                    <div key={s} className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0 mt-1.5" />
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Required actions (CA-001 — {ca.title})</p>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-1.5">
+                  {ca.steps.map((s, i) => (
+                    <div key={s} className="flex items-start gap-2.5">
+                      <div className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-amber-200 text-amber-800">{i + 1}</div>
                       <p className="text-slate-700 text-xs leading-relaxed">{s}</p>
                     </div>
                   ))}
                 </div>
-                <textarea value={caText} onChange={(e) => setCaText(e.target.value)} rows={3}
-                  placeholder="Edit or add detail to the corrective action taken…"
-                  className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
               </div>
             )}
 
