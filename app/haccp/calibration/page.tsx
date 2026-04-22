@@ -34,6 +34,7 @@ interface CalibrationRecord {
 }
 
 const VERIFIED_BY_PRESETS = ['Daryl', 'Hakan', 'Ege']
+const PROBE_PRESETS       = ['Probe 1', 'Probe 2', 'Backup Probe']
 
 // ─── CA constants (SOP 3 calibration failure) ─────────────────────────────────
 
@@ -461,9 +462,25 @@ export default function CalibrationPage() {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
                 {mode === 'certified_probe' ? 'New probe ID / name' : 'Thermometer ID / name'}
               </p>
-              <input type="text" value={probeId} onChange={(e) => setProbeId(e.target.value)}
-                placeholder={mode === 'certified_probe' ? 'e.g. New Probe Apr 2026' : 'e.g. Probe 1, Backup Probe'}
-                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+              <div className="flex flex-wrap gap-2 mb-2">
+                {PROBE_PRESETS.map((name) => (
+                  <button key={name}
+                    onPointerDown={(e) => { e.preventDefault(); setProbeId(name) }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      probeId === name ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                    }`}>{name}</button>
+                ))}
+                <button
+                  onPointerDown={(e) => { e.preventDefault(); setProbeId('') }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                    probeId !== '' && !PROBE_PRESETS.includes(probeId) ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                  }`}>Other</button>
+              </div>
+              {!PROBE_PRESETS.includes(probeId) && (
+                <input type="text" value={probeId} onChange={(e) => setProbeId(e.target.value)}
+                  placeholder={mode === 'certified_probe' ? 'e.g. New Probe Apr 2026' : 'e.g. Probe 3, Lab Probe'}
+                  className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+              )}
             </div>
 
             {mode === 'manual' ? (
