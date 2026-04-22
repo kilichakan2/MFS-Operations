@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
 
     const today = todayUK()
     const nowHour = new Date().getHours()
+    const amOverdueCutoff = 10
     const pmOverdueCutoff = 14
 
     const [cold, room, diary, cleaning, deliveries, mince, returns, ccas, weekly, monthly, cal] =
@@ -67,13 +68,15 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       cold_storage: {
-        am_done: amColdDone,
-        pm_done: pmColdDone,
+        am_done:    amColdDone,
+        pm_done:    pmColdDone,
+        am_overdue: !amColdDone && nowHour >= amOverdueCutoff,
         pm_overdue: !pmColdDone && nowHour >= pmOverdueCutoff,
       },
       processing_room: {
-        am_done: amRoomDone,
-        pm_done: pmRoomDone,
+        am_done:    amRoomDone,
+        pm_done:    pmRoomDone,
+        am_overdue: !amRoomDone && nowHour >= amOverdueCutoff,
         pm_overdue: !pmRoomDone && nowHour >= pmOverdueCutoff,
       },
       daily_diary: {

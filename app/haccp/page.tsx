@@ -20,8 +20,8 @@ import MfsLogo    from '@/components/MfsLogo'
 interface StaffMember { id: string; name: string; role: string }
 
 interface TodayStatus {
-  cold_storage:       { am_done: boolean; pm_done: boolean; pm_overdue: boolean }
-  processing_room:    { am_done: boolean; pm_done: boolean; pm_overdue: boolean }
+  cold_storage:       { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
+  processing_room:    { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
   daily_diary:        { opening: boolean; operational: boolean; closing: boolean }
   cleaning:           { count_today: number; last_logged_at: string | null }
   deliveries:         { count_today: number; deviations: number }
@@ -270,8 +270,8 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   const s = status
 
   const coldState: TileState = !s ? 'neutral'
-    : (s.cold_storage.pm_overdue || (!s.cold_storage.am_done && new Date().getHours() >= 14)) ? 'overdue'
     : (s.cold_storage.am_done && s.cold_storage.pm_done) ? 'complete'
+    : (s.cold_storage.pm_overdue || s.cold_storage.am_overdue) ? 'overdue'
     : s.cold_storage.am_done ? 'due'
     : 'neutral'
 
@@ -291,7 +291,12 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     : s.deliveries.count_today > 0 ? 'complete'
     : 'neutral'
 
-  const coldBadge = !s ? '—' : s.cold_storage.pm_overdue ? 'Overdue' : (s.cold_storage.am_done && s.cold_storage.pm_done) ? 'Done' : s.cold_storage.am_done ? 'PM due' : '—'
+  const coldBadge = !s ? '—'
+    : (s.cold_storage.am_done && s.cold_storage.pm_done) ? 'Done ✓'
+    : s.cold_storage.pm_overdue ? 'PM overdue'
+    : s.cold_storage.am_overdue ? 'AM overdue'
+    : s.cold_storage.am_done    ? 'PM due'
+    : 'AM due'
   const roomBadge = !s ? '—' : s.processing_room.pm_overdue ? 'Overdue' : (s.processing_room.am_done && s.processing_room.pm_done) ? 'Done' : s.processing_room.am_done ? 'PM due' : '—'
   const diaryBadge = !s ? '—' : (s.daily_diary.opening && s.daily_diary.closing) ? 'Done' : s.daily_diary.opening ? 'Open ✓' : '—'
   const delivBadge = !s ? '—' : s.deliveries.count_today > 0 ? `${s.deliveries.count_today} logged` : 'None yet'
@@ -301,6 +306,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   function signOut() { window.location.href = '/api/auth/logout' }
 
   const overdue: string[] = []
+  if (s?.cold_storage.am_overdue) overdue.push('Cold Storage AM')
   if (s?.cold_storage.pm_overdue) overdue.push('Cold Storage PM')
   if (s?.processing_room.pm_overdue) overdue.push('Process Room PM')
 
