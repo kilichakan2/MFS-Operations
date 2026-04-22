@@ -93,6 +93,10 @@ export function middleware(req: NextRequest) {
   const sessionCookie = req.cookies.get('mfs_session')?.value
 
   if (!sessionCookie) {
+    // HACCP paths — redirect to /haccp (kiosk login), not the main app login
+    if (pathname.startsWith('/haccp')) {
+      return NextResponse.redirect(new URL('/haccp', req.url))
+    }
     const loginUrl = new URL('/login', req.url)
     loginUrl.searchParams.set('from', pathname)
     return NextResponse.redirect(loginUrl)
