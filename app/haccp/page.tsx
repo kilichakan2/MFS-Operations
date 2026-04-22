@@ -392,7 +392,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               onTap={() => { window.location.href = '/haccp/reviews' }} onHelp={() => setHelp('reviews')} />
             <SmallTile id="people" icon={Icon.people} label="People" sub="Health · Visitor · Training"
               badge="Event only" due={false}
-              onTap={() => {}} onHelp={() => setHelp('people')} />
+              onTap={() => { window.location.href = '/haccp/people' }} onHelp={() => setHelp('people')} />
           </div>
 
         </div>
