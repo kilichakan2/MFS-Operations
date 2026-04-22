@@ -1,7 +1,7 @@
 {
   "name": "MFS Operations",
   "short_name": "MFS Ops",
-  "start_url": "/haccp",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#16205B",
