@@ -321,7 +321,10 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     : s.daily_diary.opening_overdue   ? 'Opening overdue'
     : s.daily_diary.opening           ? 'Open ✓ · Closing due'
     : 'Opening due'
-  const delivBadge = !s ? '—' : s.deliveries.count_today > 0 ? `${s.deliveries.count_today} logged` : 'None yet'
+  const delivBadge = !s ? '—'
+    : s.deliveries.deviations > 0 ? `${s.deliveries.count_today} logged · ${s.deliveries.deviations} fail`
+    : s.deliveries.count_today > 0 ? `${s.deliveries.count_today} logged`
+    : 'None yet'
   const cleaningBadge = !s ? '—'
     : s.cleaning.count_today > 0 && s.cleaning.has_issues_today ? `${s.cleaning.count_today} logged · issue`
     : s.cleaning.count_today > 0 ? `${s.cleaning.count_today} logged`
