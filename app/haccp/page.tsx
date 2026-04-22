@@ -27,7 +27,6 @@ interface TodayStatus {
   deliveries:         { count_today: number; deviations: number }
   mince_runs:         { count_today: number }
   product_returns:    { count_today: number }
-  corrective_actions: { open: number }
   calibration_due:    boolean
   weekly_review_due:  boolean
   monthly_review_due: boolean
@@ -97,104 +96,6 @@ function Badge({ state, label }: { state: TileState; label: string }) {
     neutral:   'bg-blue-50 text-blue-600',
   }[state]
   return <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
-}
-
-// ─── Corrective Action Popup ──────────────────────────────────────────────────
-
-function CorrPopup({ onClose }: { onClose: () => void }) {
-  const [actionTaken, setActionTaken] = useState('')
-  const [disposition, setDisposition] = useState('')
-  const [notes, setNotes] = useState('')
-  const [pin, setPin] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
-
-  const handleSubmit = useCallback(() => {
-    if (!actionTaken || !disposition || pin.length < 4) return
-    setSubmitting(true)
-    setTimeout(() => { setSubmitted(true); setSubmitting(false) }, 800)
-  }, [actionTaken, disposition, pin])
-
-  if (submitted) {
-    return (
-      <div style={{minHeight:400,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <div className="bg-slate-100 rounded-3xl p-8 w-full max-w-sm text-center">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4 text-green-600">{Icon.tick}</div>
-          <p className="text-slate-900 font-bold text-lg">Logged</p>
-          <p className="text-slate-600 text-sm mt-1">Corrective action recorded</p>
-          <button onClick={onClose} className="mt-6 w-full bg-[#EB6619] text-white font-bold py-3 rounded-xl">Done</button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{minHeight:500,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'flex-end',justifyContent:'center',paddingBottom:0}}>
-      <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <p className="text-red-600 text-xs font-bold tracking-widest uppercase">CCP deviation</p>
-            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action</h2>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">{Icon.close}</button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">Action taken (CA-001)</label>
-            <select value={actionTaken} onChange={(e) => setActionTaken(e.target.value)}
-              className="w-full bg-white border border-blue-100 rounded-xl px-4 h-12 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]">
-              <option value="">Select action…</option>
-              <option value="urgent_chill">Placed immediately in coldest chiller (temp 5–8°C)</option>
-              <option value="rejected">Rejected — returned to supplier</option>
-              <option value="progressive_batches">Brought product progressively in small quantities</option>
-              <option value="transferred_backup">Transferred to backup refrigeration unit</option>
-              <option value="engineer_called">Refrigeration engineer called</option>
-              <option value="recalibrated">Thermometer removed, backup used, sent for calibration</option>
-              <option value="trimmed_disposed">Contaminated area trimmed, disposed as Cat 3 ABP</option>
-              <option value="other">Other (see notes)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">Product disposition</label>
-            <div className="grid grid-cols-3 gap-2">
-              {['Accept', 'Conditional accept', 'Reject', 'Dispose', 'Assess'].map((d) => (
-                <button key={d} onClick={() => setDisposition(d)}
-                  className={`py-2.5 rounded-xl text-xs font-bold transition-all ${disposition === d ? 'bg-[#EB6619] text-white' : 'bg-white text-slate-600 border border-slate-300'}`}>
-                  {d}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">Notes</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              placeholder="Additional details…"
-              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
-          </div>
-
-          <div>
-            <label className="block text-slate-600 text-xs font-bold uppercase tracking-widest mb-2">PIN to confirm</label>
-            <div className="flex gap-2">
-              {[0,1,2,3].map((i) => (
-                <div key={i} className={`w-10 h-10 rounded-full border-2 ${pin.length > i ? 'bg-[#EB6619] border-[#EB6619]' : 'border-slate-300 bg-transparent'}`} />
-              ))}
-              <input type="number" value={pin} onChange={(e) => setPin(e.target.value.slice(0,4))}
-                className="flex-1 bg-white border border-blue-100 rounded-xl px-4 text-slate-900 text-center text-xl tracking-[.5em] focus:outline-none focus:border-[#EB6619]"
-                placeholder="····" inputMode="numeric" />
-            </div>
-          </div>
-
-          <button onClick={handleSubmit} disabled={!actionTaken || !disposition || pin.length < 4 || submitting}
-            className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40 transition-opacity">
-            {submitting ? 'Submitting…' : 'Submit corrective action'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 // ─── Help Slideout ────────────────────────────────────────────────────────────
@@ -343,28 +244,6 @@ function SmallTile({
   )
 }
 
-// ─── Corrective Action Wide Tile ─────────────────────────────────────────────
-
-function CCATile({ open, onTap }: { open: number; onTap: () => void }) {
-  return (
-    <div
-      className="flex-[2] rounded-2xl p-4 flex items-center gap-4 cursor-pointer border-2 border-red-500 bg-red-50 transition-all active:scale-[0.97]"
-      onPointerDown={(e) => { e.preventDefault(); onTap() }}>
-      <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-100 text-red-600 flex-shrink-0">{Icon.warn}</div>
-      <div className="flex-1">
-        <p className="text-red-600 font-semibold text-sm">Corrective Action</p>
-        <p className="text-slate-600 text-[11px] mt-0.5">
-          {open > 0 ? `${open} open — requires resolution` : 'Manual CCP deviation log · CA-001'}
-        </p>
-      </div>
-      {open > 0 && (
-        <span className="bg-red-100 text-red-600 text-[11px] font-bold px-3 py-1 rounded-full flex-shrink-0">
-          {open} open
-        </span>
-      )}
-    </div>
-  )
-}
 
 // ─── Home Screen ─────────────────────────────────────────────────────────────
 
@@ -372,7 +251,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   const isAdmin     = userRole === 'admin'
   const now         = useLiveClock()
   const [status, setStatus]   = useState<TodayStatus | null>(null)
-  const [popup, setPopup]     = useState<'cca' | null>(null)
   const [helpSection, setHelp] = useState<string | null>(null)
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -419,7 +297,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   const delivBadge = !s ? '—' : s.deliveries.count_today > 0 ? `${s.deliveries.count_today} logged` : 'None yet'
 
   const pct   = s ? Math.round((s.completed_checks / s.total_checks) * 100) : 0
-  const ccaOpen = s?.corrective_actions.open ?? 0
 
   function signOut() { window.location.href = '/api/auth/logout' }
 
@@ -435,7 +312,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
         <div className="flex items-center gap-3">
           <MfsLogo className="h-6 w-auto text-white" />
           <div className="w-px h-6 bg-slate-600" />
-          <span className="text-slate-300 text-sm font-medium">HACCP — Process Room</span>
+          <span className="text-slate-300 text-sm font-medium">HACCP</span>
         </div>
         <div className="flex items-center gap-3">
           {/* Documents register link */}
@@ -500,7 +377,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <LargeTile id="product_return" icon={Icon.ret} label="Product Return" state="neutral" badge={s ? (s.product_returns.count_today > 0 ? `${s.product_returns.count_today} logged` : 'None') : '—'}
               sub="SOP 12 · RC01–RC08"
               onTap={() => { window.location.href = '/haccp/product-return' }} onHelp={() => setHelp('product_return')} />
-            <CCATile open={ccaOpen} onTap={() => setPopup('cca')} />
           </div>
 
           {/* Divider */}
@@ -574,11 +450,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
       </div>
 
       {/* Popups — faux viewport pattern (no position:fixed) */}
-      {popup === 'cca' && (
-        <div className="absolute inset-0 z-50" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <CorrPopup onClose={() => setPopup(null)} />
-        </div>
-      )}
 
       {helpSection && (
         <div className="absolute inset-0 z-50" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
