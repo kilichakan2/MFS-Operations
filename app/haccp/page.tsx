@@ -590,117 +590,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   )
 }
 
-// ─── Admin Password Keypad ────────────────────────────────────────────────────
-
-function AdminKeypad({ onBack }: { onBack: () => void }) {
-  const [digits,     setDigits]     = useState('')
-  const [error,      setError]      = useState('')
-  const [shake,      setShake]      = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-
-  async function submit(pwd: string) {
-    setSubmitting(true)
-    try {
-      const res = await fetch('/api/auth/haccp-admin', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd }),
-      })
-      if (res.ok) {
-        window.location.reload()
-      } else {
-        setShake(true)
-        setError('Incorrect password')
-        setTimeout(() => { setDigits(''); setShake(false); setSubmitting(false) }, 700)
-      }
-    } catch {
-      setShake(true)
-      setError('Connection error — try again')
-      setTimeout(() => { setDigits(''); setShake(false); setSubmitting(false) }, 700)
-    }
-  }
-
-  function press(k: string) {
-    if (submitting || digits.length >= 4) return
-    const next = digits + k
-    setDigits(next)
-    setError('')
-    if (next.length === 4) submit(next)
-  }
-
-  function del() { setDigits((d) => d.slice(0, -1)); setError('') }
-
-  const keys = ['1','2','3','4','5','6','7','8','9','','0','del']
-
-  return (
-    <div className="min-h-screen bg-slate-900 flex flex-col select-none">
-      {/* Back */}
-      <button onPointerDown={onBack}
-        className="absolute top-5 left-5 flex items-center gap-2 text-slate-400 hover:text-white transition-colors z-10">
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-        <span className="text-sm">Back</span>
-      </button>
-
-      <div className="flex-1 flex flex-col items-center justify-center px-8 gap-8">
-        {/* Lock icon */}
-        <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center">
-          <svg className="w-8 h-8 text-orange-400" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-          </svg>
-        </div>
-
-        <div className="text-center">
-          <p className="text-orange-400 text-xs font-bold tracking-widest uppercase mb-1">Admin access</p>
-          <h2 className="text-white text-2xl font-bold">Enter password</h2>
-        </div>
-
-        {/* Dot indicators */}
-        <div className={`flex gap-4 transition-all ${shake ? 'translate-x-2' : ''}`}
-          style={{ animation: shake ? 'shake 0.4s ease' : 'none' }}>
-          {[0,1,2,3].map((i) => (
-            <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${
-              digits.length > i
-                ? error ? 'border-red-400 bg-red-400' : submitting ? 'border-orange-300 bg-orange-300 animate-pulse' : 'border-orange-400 bg-orange-400'
-                : 'border-white/30 bg-transparent'
-            }`} />
-          ))}
-        </div>
-
-        {error && <p className="text-red-400 text-sm font-medium -mt-4">{error}</p>}
-
-        {/* Keypad */}
-        <div className="grid grid-cols-3 gap-3 w-full max-w-xs">
-          {keys.map((k, i) => {
-            if (!k) return <div key={i} />
-            if (k === 'del') return (
-              <button key="del" onPointerDown={(e) => { e.preventDefault(); del() }}
-                className="h-16 rounded-2xl bg-white/10 text-white/60 flex items-center justify-center active:bg-white/20 transition-all active:scale-95">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
-              </button>
-            )
-            return (
-              <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
-                className="h-16 rounded-2xl bg-white/10 text-white text-2xl font-semibold active:bg-orange-500 transition-all active:scale-95">
-                {k}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <style>{`
-        @keyframes shake {
-          0%,100%{transform:translateX(0)}
-          20%{transform:translateX(-8px)}
-          40%{transform:translateX(8px)}
-          60%{transform:translateX(-6px)}
-          80%{transform:translateX(6px)}
-        }
-      `}</style>
-    </div>
-  )
-}
-
 // ─── Login Door ───────────────────────────────────────────────────────────────
 
 function StaffCard({ member, onSelect }: { member: StaffMember; onSelect: (m: StaffMember) => void }) {
@@ -724,7 +613,6 @@ function LoginDoor() {
   const [staff,      setStaff]      = useState<StaffMember[]>([])
   const [loading,    setLoading]    = useState(true)
   const [selected,   setSelected]   = useState<StaffMember | null>(null)
-  const [adminMode,  setAdminMode]  = useState(false)
   const [pinError,   setPinError]   = useState<string | undefined>()
   const [reset,      setReset]      = useState(0)
 
@@ -748,10 +636,6 @@ function LoginDoor() {
       else { setPinError(data.error ?? 'Incorrect PIN — try again'); setReset((n) => n + 1) }
     } catch { setPinError('Connection error — try again'); setReset((n) => n + 1) }
   }, [selected])
-
-  if (adminMode) {
-    return <AdminKeypad onBack={() => setAdminMode(false)} />
-  }
 
   if (selected) {
     return (
@@ -789,25 +673,6 @@ function LoginDoor() {
           </div>
         )}
       </div>
-
-      {/* Admin tile — separated from staff grid */}
-      <div className="px-6 pb-6 flex justify-center">
-        <button
-          onPointerDown={(e) => { e.preventDefault(); setAdminMode(true) }}
-          className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all active:scale-95 select-none">
-          <div className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-slate-400">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-          </div>
-          <div className="text-left">
-            <p className="text-slate-300 text-sm font-semibold">Admin</p>
-            <p className="text-slate-500 text-xs">Password required</p>
-          </div>
-        </button>
-      </div>
-
       <div className="text-center pb-8 text-slate-300 text-xs tracking-widest uppercase">MFS Global Ltd · Sheffield</div>
     </div>
   )
