@@ -282,12 +282,14 @@ interface OverviewData {
 }
 
 function weekRange(offset: number): { from: string; to: string; label: string } {
-  const now  = new Date()
-  const dow  = now.getDay() === 0 ? 6 : now.getDay() - 1
-  const mon  = new Date(now); mon.setDate(now.getDate() - dow + offset * 7)
-  const fri  = new Date(mon); fri.setDate(mon.getDate() + 4)
-  const fmt  = (d: Date) => d.toLocaleDateString('en-CA')
-  const lbl  = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+  // Use UK date to avoid midnight UTC/BST boundary issues
+  const todayUK = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
+  const now     = new Date(todayUK + 'T00:00:00')
+  const dow     = now.getDay() === 0 ? 6 : now.getDay() - 1  // Mon=0 … Sun=6
+  const mon     = new Date(now); mon.setDate(now.getDate() - dow + offset * 7)
+  const fri     = new Date(mon); fri.setDate(mon.getDate() + 4)
+  const fmt     = (d: Date) => d.toLocaleDateString('en-CA')
+  const lbl     = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
   return { from: fmt(mon), to: fmt(fri), label: `${lbl(mon)} – ${lbl(fri)}` }
 }
 
@@ -332,13 +334,13 @@ function DayDots({ expectedDays, entriesByDate, missingDays }: {
 }
 
 function OverviewCard({ title, icon, children, warn }: {
-  title: string; icon: string; children: React.ReactNode; warn?: boolean
+  title: string; icon?: string; children: React.ReactNode; warn?: boolean
 }) {
   return (
     <div className={`bg-white rounded-xl border px-4 py-3 ${warn ? 'border-red-200' : 'border-blue-100'}`}>
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-base">{icon}</span>
         <p className="text-slate-700 text-xs font-bold uppercase tracking-widest">{title}</p>
+        {warn && <span className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />}
       </div>
       {children}
     </div>
@@ -404,7 +406,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
         {data && (
           <>
             {/* ── Mon-Fri expected sections ─────────────────────────── */}
-            <OverviewCard title="Cold Storage" icon="❄️" warn={data.cold_storage.missing_days.length > 0 || data.cold_storage.fails > 0}>
+            <OverviewCard title="Cold Storage" icon="" warn={data.cold_storage.missing_days.length > 0 || data.cold_storage.fails > 0}>
               <div className="flex items-center justify-between">
                 <div className="text-slate-500 text-xs">{data.cold_storage.total} readings</div>
                 <div className="flex gap-2">
@@ -417,7 +419,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
               {data.cold_storage.missing_days.length > 0 && <p className="text-red-500 text-[10px] mt-1">{data.cold_storage.missing_days.length} day{data.cold_storage.missing_days.length > 1 ? 's' : ''} not logged</p>}
             </OverviewCard>
 
-            <OverviewCard title="Process Room" icon="🔪" warn={data.process_room.missing_days.length > 0 || data.process_room.product_fails > 0 || data.process_room.room_fails > 0}>
+            <OverviewCard title="Process Room" icon="" warn={data.process_room.missing_days.length > 0 || data.process_room.product_fails > 0 || data.process_room.room_fails > 0}>
               <div className="flex items-center justify-between">
                 <div className="text-slate-500 text-xs">{data.process_room.total} checks</div>
                 <div className="flex gap-2 flex-wrap justify-end">
@@ -431,7 +433,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
               {data.process_room.missing_days.length > 0 && <p className="text-red-500 text-[10px] mt-1">{data.process_room.missing_days.length} day{data.process_room.missing_days.length > 1 ? 's' : ''} not logged</p>}
             </OverviewCard>
 
-            <OverviewCard title="Cleaning" icon="🧹" warn={data.cleaning.missing_days.length > 0 || data.cleaning.issues > 0}>
+            <OverviewCard title="Cleaning" icon="" warn={data.cleaning.missing_days.length > 0 || data.cleaning.issues > 0}>
               <div className="flex items-center justify-between">
                 <div className="text-slate-500 text-xs">{data.cleaning.total} entries</div>
                 <div className="flex gap-2">
@@ -444,7 +446,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
             </OverviewCard>
 
             {/* ── Variable sections ─────────────────────────────────── */}
-            <OverviewCard title="Goods In" icon="📦" warn={data.goods_in.temp_fails > 0}>
+            <OverviewCard title="Goods In" icon="" warn={data.goods_in.temp_fails > 0}>
               <div className="flex items-center justify-between">
                 <div className="text-slate-500 text-xs">{data.goods_in.total} deliveries · {data.goods_in.entries_by_date.length} days</div>
                 <div className="flex gap-2">
@@ -458,7 +460,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
             </OverviewCard>
 
             <div className="grid grid-cols-2 gap-3">
-              <OverviewCard title="Mince" icon="🥩" warn={data.mince.deviations > 0}>
+              <OverviewCard title="Mince" icon="" warn={data.mince.deviations > 0}>
                 <p className="text-slate-500 text-xs">{data.mince.total} run{data.mince.total !== 1 ? 's' : ''}</p>
                 {data.mince.deviations > 0 && <p className="text-red-500 text-[10px] mt-1">{data.mince.deviations} deviation{data.mince.deviations > 1 ? 's' : ''}</p>}
                 {Object.entries(data.mince.by_species).map(([sp, n]) => (
@@ -467,7 +469,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
                 {data.mince.total === 0 && <p className="text-slate-400 text-[10px] mt-1">No runs</p>}
               </OverviewCard>
 
-              <OverviewCard title="Meat Prep" icon="🍔" warn={data.meatprep.deviations > 0}>
+              <OverviewCard title="Meat Prep" icon="" warn={data.meatprep.deviations > 0}>
                 <p className="text-slate-500 text-xs">{data.meatprep.total} run{data.meatprep.total !== 1 ? 's' : ''}</p>
                 {data.meatprep.deviations > 0 && <p className="text-red-500 text-[10px] mt-1">{data.meatprep.deviations} deviation{data.meatprep.deviations > 1 ? 's' : ''}</p>}
                 {data.meatprep.total === 0 && <p className="text-slate-400 text-[10px] mt-1">No runs</p>}
@@ -475,7 +477,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <OverviewCard title="Returns" icon="↩️" warn={data.returns.total > 0}>
+              <OverviewCard title="Returns" icon="" warn={data.returns.total > 0}>
                 <p className="text-slate-500 text-xs">{data.returns.total} return{data.returns.total !== 1 ? 's' : ''}</p>
                 {Object.entries(data.returns.by_code).map(([code, n]) => (
                   <p key={code} className="text-slate-400 text-[10px]">{code}: {n}</p>
@@ -483,7 +485,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
                 {data.returns.total === 0 && <p className="text-slate-400 text-[10px] mt-1">None</p>}
               </OverviewCard>
 
-              <OverviewCard title="Calibration" icon="🌡️" warn={!data.calibration.done || data.calibration.any_fail}>
+              <OverviewCard title="Calibration" icon="" warn={!data.calibration.done || data.calibration.any_fail}>
                 {data.calibration.done
                   ? <p className={`text-xs font-bold ${data.calibration.any_fail ? 'text-red-600' : 'text-green-600'}`}>{data.calibration.any_fail ? 'Done — fail recorded' : '✓ Done — passed'}</p>
                   : <p className="text-amber-600 text-xs font-bold">Not done this period</p>
@@ -492,7 +494,7 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
             </div>
 
             {/* ── Corrective Actions summary ────────────────────────── */}
-            <OverviewCard title="Corrective Actions" icon="⚠️" warn={data.corrective_actions.unresolved > 0}>
+            <OverviewCard title="Corrective Actions" icon="" warn={data.corrective_actions.unresolved > 0}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-slate-500 text-xs">{data.corrective_actions.total} raised this period</span>
                 {data.corrective_actions.unresolved > 0
@@ -698,7 +700,7 @@ export default function ReviewsPage() {
             className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
               tab === t ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-slate-300 bg-white text-slate-600'
             }`}>
-            {t === 'weekly' ? '📋 Weekly Review' : '📅 Monthly Review'}
+            {t === 'weekly' ? 'Weekly Review' : 'Monthly Review'}
             {t === 'weekly' && !weeklyDone  && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">Due</span>}
             {t === 'monthly' && !monthlyDone && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">Due</span>}
           </button>

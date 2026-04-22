@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
         .gte('date', from).lte('date', to),
 
       supabase.from('haccp_corrective_actions')
-        .select('ccp_ref, management_verification_required, management_verified_at, source_table')
+        .select('ccp_ref, management_verification_required, verified_at, source_table')
         .gte('submitted_at', from + 'T00:00:00Z').lte('submitted_at', to + 'T23:59:59Z'),
     ])
 
@@ -203,7 +203,7 @@ export async function GET(req: NextRequest) {
     const caData = corrActions.data ?? []
     const corrective_actions = {
       total:      caData.length,
-      unresolved: caData.filter(r => r.management_verification_required && !r.management_verified_at).length,
+      unresolved: caData.filter(r => r.management_verification_required && !r.verified_at).length,
       by_ccp:     caData.reduce((acc, r) => {
         acc[r.ccp_ref] = (acc[r.ccp_ref] ?? 0) + 1; return acc
       }, {} as Record<string, number>),
