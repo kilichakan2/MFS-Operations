@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       .select(`
         id, date, time_of_return, customer, product,
         temperature_c, return_code, return_code_notes,
-        disposition, corrective_action, submitted_at,
+        disposition, corrective_action, verified_by, submitted_at,
         users!inner(name)
       `)
       .eq('date', today)
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const {
       customer, product, return_code, return_code_notes,
-      temperature_c, disposition, corrective_action,
+      temperature_c, disposition, corrective_action, verified_by,
     } = body as {
       customer:           string
       product:            string
@@ -76,12 +76,14 @@ export async function POST(req: NextRequest) {
       temperature_c?:     number | null
       disposition:        string
       corrective_action?: string
+      verified_by:        string
     }
 
-    if (!customer?.trim())   return NextResponse.json({ error: 'Customer is required' },          { status: 400 })
-    if (!product?.trim())    return NextResponse.json({ error: 'Product description is required' }, { status: 400 })
-    if (!return_code)        return NextResponse.json({ error: 'Select a return reason code' },    { status: 400 })
-    if (!disposition)        return NextResponse.json({ error: 'Select a disposition' },           { status: 400 })
+    if (!customer?.trim())    return NextResponse.json({ error: 'Customer is required' },             { status: 400 })
+    if (!product?.trim())     return NextResponse.json({ error: 'Product description is required' },  { status: 400 })
+    if (!return_code)         return NextResponse.json({ error: 'Select a return reason code' },      { status: 400 })
+    if (!disposition)         return NextResponse.json({ error: 'Select a disposition' },             { status: 400 })
+    if (!verified_by?.trim()) return NextResponse.json({ error: 'Verified by is required' },          { status: 400 })
     if (return_code === 'RC08' && !return_code_notes?.trim())
       return NextResponse.json({ error: 'Please specify the reason for RC08 Other' }, { status: 400 })
     if (return_code === 'RC01' && (temperature_c == null || isNaN(temperature_c)))
@@ -97,6 +99,7 @@ export async function POST(req: NextRequest) {
       return_code_notes: return_code_notes?.trim() || null,
       temperature_c:     temperature_c ?? null,
       disposition,
+      verified_by:       verified_by.trim(),
       corrective_action: corrective_action?.trim() || null,
     })
 

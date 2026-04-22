@@ -20,6 +20,7 @@ interface ReturnRecord {
   return_code_notes: string | null
   disposition:       string
   corrective_action: string | null
+  verified_by:       string | null
   submitted_at:      string
   users:             { name: string }
 }
@@ -142,6 +143,8 @@ const DISP_STYLE: Record<string, { active: string; badge: string }> = {
 
 const DISP_INACTIVE = 'border-slate-300 bg-white text-slate-600'
 
+const VERIFIED_BY_PRESETS = ['Daryl', 'Hakan', 'Ege']
+
 // ─── Acceptable return temps (HB-001 Table 11) ───────────────────────────────
 
 function tempAcceptable(temp: number): { pass: boolean; label: string } {
@@ -241,6 +244,7 @@ export default function ProductReturnPage() {
   const [disposition,   setDisposition]   = useState('')
   const [caText,        setCaText]        = useState('')
   const [notes,         setNotes]         = useState('')
+  const [verifiedBy,    setVerifiedBy]    = useState('')
 
   // Checklist state (5 assessment items from SOP 12)
   const [checked, setChecked] = useState<boolean[]>([false, false, false, false, false])
@@ -279,7 +283,8 @@ export default function ProductReturnPage() {
 
   function resetForm() {
     setReturnCode(''); setRcNotes(''); setCustomer(''); setProduct('')
-    setTempVal(''); setDisposition(''); setCaText(''); setNotes(''); setSubmitErr('')
+    setTempVal(''); setDisposition(''); setCaText(''); setNotes('')
+    setVerifiedBy(''); setSubmitErr('')
     setChecked([false, false, false, false, false])
   }
 
@@ -289,6 +294,7 @@ export default function ProductReturnPage() {
 
   const isValid =
     customer.trim() && product.trim() && returnCode && disposition &&
+    verifiedBy.trim() &&
     (returnCode !== 'RC08' || rcNotes.trim()) &&
     (returnCode !== 'RC01' || (tempVal !== '' && !isNaN(tempNum)))
 
@@ -303,6 +309,7 @@ export default function ProductReturnPage() {
           return_code: returnCode, return_code_notes: rcNotes || undefined,
           temperature_c: returnCode === 'RC01' && tempVal ? tempNum : undefined,
           disposition, corrective_action: caText || undefined,
+          verified_by: verifiedBy,
         }),
       })
       if (res.ok) {
@@ -518,6 +525,30 @@ export default function ProductReturnPage() {
               </div>
             )}
 
+            {/* Verified by — who authorised the disposition decision */}
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Disposition authorised by</p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {VERIFIED_BY_PRESETS.map((name) => (
+                  <button key={name}
+                    onPointerDown={(e) => { e.preventDefault(); setVerifiedBy(name) }}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      verifiedBy === name ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                    }`}>{name}</button>
+                ))}
+                <button
+                  onPointerDown={(e) => { e.preventDefault(); setVerifiedBy('') }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                    verifiedBy !== '' && !VERIFIED_BY_PRESETS.includes(verifiedBy) ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                  }`}>Other</button>
+              </div>
+              {!VERIFIED_BY_PRESETS.includes(verifiedBy) && (
+                <input type="text" value={verifiedBy} onChange={(e) => setVerifiedBy(e.target.value)}
+                  placeholder="Enter name…"
+                  className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+              )}
+            </div>
+
             {/* Additional notes */}
             <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Additional notes (optional)</p>
@@ -576,7 +607,7 @@ export default function ProductReturnPage() {
                         {r.temperature_c != null && (
                           <p className="text-slate-400 text-xs mt-0.5">Temp: {r.temperature_c}°C</p>
                         )}
-                        <p className="text-slate-300 text-xs mt-0.5">{r.users?.name} · {fmtTime(r.time_of_return)}</p>
+                        <p className="text-slate-300 text-xs mt-0.5">{r.users?.name}{r.verified_by ? ` · Auth: ${r.verified_by}` : ''} · {fmtTime(r.time_of_return)}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         <p className="text-slate-400 text-xs">{fmtDate(r.date)}</p>
