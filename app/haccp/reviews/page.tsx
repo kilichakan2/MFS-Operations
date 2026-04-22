@@ -117,17 +117,17 @@ const FACILITIES_ITEMS = [
 
 function defaultSystemReview() {
   return [
-    { id: 'limits_valid',      label: 'Critical limits scientifically valid and appropriate?',   result: '', notes: '', caHint: 'Convene HACCP team for full review. Update HACCP plan with revised limits based on scientific justification. Retrain all staff.' },
-    { id: 'ccps_same',         label: 'Do CCPs/CPs remain the same?',                            result: '', notes: '', caHint: 'Document any changes. Update hazard analysis. Retrain staff on any revised CCPs.' },
-    { id: 'limits_adequate',   label: 'Are critical/legal limits adequate?',                     result: '', notes: '', caHint: 'Review against current FSA guidance. Update limits if necessary. Document scientific justification.' },
-    { id: 'monitoring_ok',     label: 'Are monitoring procedures still effective?',              result: '', notes: '', caHint: 'Review monitoring frequency and methods. Update procedures if gaps identified.' },
-    { id: 'staff_competent',   label: 'Staff competency adequate for assigned tasks?',           result: '', notes: '', caHint: 'Schedule refresher training. Consider increased supervision until competency demonstrated. Update training records.' },
-    { id: 'calibration_ok',    label: 'Equipment calibration current and accurate?',             result: '', notes: '', caHint: 'Budget and schedule recalibration or replacement. Arrange temporary measures. Document interim controls.' },
-    { id: 'records_complete',  label: 'Records complete, accurate, and properly maintained?',   result: '', notes: '', caHint: 'Investigate gaps. Retrain relevant staff. Implement secondary sign-off for incomplete records.' },
-    { id: 'regulatory_ok',     label: 'Regulatory compliance maintained throughout month?',      result: '', notes: '', caHint: 'Identify specific compliance gaps. Seek legal/technical advice. Document remedial plan.' },
-    { id: 'plan_current',      label: 'HACCP plan remains current and effective?',               result: '', notes: '', caHint: 'Conduct full HACCP review. Update for any operational changes. Validate revised plan. FSA requires annual minimum review.' },
-    { id: 'procedures_revise', label: 'Monitoring procedures require revision?',                 result: '', notes: '', caHint: 'Document proposed revisions. Review with HACCP team. Implement and retrain before next production.' },
-    { id: 'equipment_upgrade', label: 'Equipment upgrades or replacements needed?',              result: '', notes: '', caHint: 'Budget and schedule replacement. Arrange temporary measures (increased monitoring, backup equipment). Document interim controls.' },
+    { id: 'limits_valid',      label: 'Critical limits scientifically valid and appropriate?',   result: '', notes: '', caHint: 'Convene HACCP team for full review. Update HACCP plan with revised limits based on scientific justification. Retrain all staff.',                                                                          invertFail: false },
+    { id: 'ccps_same',         label: 'Do CCPs/CPs remain the same?',                            result: '', notes: '', caHint: 'Document any changes. Update hazard analysis. Retrain staff on any revised CCPs.',                                                                                                                    invertFail: false },
+    { id: 'limits_adequate',   label: 'Are critical/legal limits adequate?',                     result: '', notes: '', caHint: 'Review against current FSA guidance. Update limits if necessary. Document scientific justification.',                                                                                                  invertFail: false },
+    { id: 'monitoring_ok',     label: 'Are monitoring procedures still effective?',              result: '', notes: '', caHint: 'Review monitoring frequency and methods. Update procedures if gaps identified.',                                                                                                                        invertFail: false },
+    { id: 'staff_competent',   label: 'Staff competency adequate for assigned tasks?',           result: '', notes: '', caHint: 'Schedule refresher training. Consider increased supervision until competency demonstrated. Update training records.',                                                                                  invertFail: false },
+    { id: 'calibration_ok',    label: 'Equipment calibration current and accurate?',             result: '', notes: '', caHint: 'Budget and schedule recalibration or replacement. Arrange temporary measures. Document interim controls.',                                                                                             invertFail: false },
+    { id: 'records_complete',  label: 'Records complete, accurate, and properly maintained?',   result: '', notes: '', caHint: 'Investigate gaps. Retrain relevant staff. Implement secondary sign-off for incomplete records.',                                                                                                        invertFail: false },
+    { id: 'regulatory_ok',     label: 'Regulatory compliance maintained throughout month?',      result: '', notes: '', caHint: 'Identify specific compliance gaps. Seek legal/technical advice. Document remedial plan.',                                                                                                              invertFail: false },
+    { id: 'plan_current',      label: 'HACCP plan remains current and effective?',               result: '', notes: '', caHint: 'Conduct full HACCP review. Update for any operational changes. Validate revised plan. FSA requires annual minimum review.',                                                                            invertFail: false },
+    { id: 'procedures_revise', label: 'Monitoring procedures require revision?',                 result: '', notes: '', caHint: 'Document proposed revisions. Review with HACCP team. Implement and retrain before next production.',                                                                                                   invertFail: true  },
+    { id: 'equipment_upgrade', label: 'Equipment upgrades or replacements needed?',              result: '', notes: '', caHint: 'Budget and schedule replacement. Arrange temporary measures (increased monitoring, backup equipment). Document interim controls.',                                                                     invertFail: true  },
   ]
 }
 
@@ -223,32 +223,39 @@ function SystemItem({ item, onChange }: {
   item:     ReturnType<typeof defaultSystemReview>[0]
   onChange: (id: string, result: string, notes?: string) => void
 }) {
+  const isProblematic = item.invertFail ? item.result === 'YES' : item.result === 'NO'
+  const isGood        = item.invertFail ? item.result === 'NO'  : item.result === 'YES'
+
   return (
-    <div className={`border-b border-slate-100 last:border-0 ${item.result === 'NO' ? 'bg-red-50' : item.result === 'YES' ? 'bg-green-50' : 'bg-white'}`}>
+    <div className={`border-b border-slate-100 last:border-0 ${isProblematic ? 'bg-red-50' : isGood ? 'bg-green-50' : 'bg-white'}`}>
       <div className="px-4 py-3">
         <p className="text-slate-700 text-sm mb-2">{item.label}</p>
         <div className="flex gap-2">
-          {['YES', 'NO', 'N/A'].map((opt) => (
-            <button key={opt} onClick={() => onChange(item.id, opt, item.notes)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
-                item.result === opt
-                  ? opt === 'YES' ? 'border-green-500 bg-green-100 text-green-700'
-                  : opt === 'NO'  ? 'border-red-500 bg-red-100 text-red-700'
-                  :                  'border-slate-400 bg-slate-100 text-slate-600'
-                  : 'border-slate-200 bg-white text-slate-500'
-              }`}>
-              {opt}
-            </button>
-          ))}
+          {['YES', 'NO', 'N/A'].map((opt) => {
+            const optProblematic = item.invertFail ? opt === 'YES' : opt === 'NO'
+            const optGood        = item.invertFail ? opt === 'NO'  : opt === 'YES'
+            return (
+              <button key={opt} onClick={() => onChange(item.id, opt, item.notes)}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold border-2 transition-all ${
+                  item.result === opt
+                    ? optGood        ? 'border-green-500 bg-green-100 text-green-700'
+                    : optProblematic ? 'border-red-500 bg-red-100 text-red-700'
+                    :                   'border-slate-400 bg-slate-100 text-slate-600'
+                    : 'border-slate-200 bg-white text-slate-500'
+                }`}>
+                {opt}
+              </button>
+            )
+          })}
         </div>
       </div>
-      {item.result === 'NO' && (
+      {isProblematic && (
         <div className="px-4 pb-3 space-y-2">
           <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">CA-001 action required</p>
             <p className="text-slate-600 text-xs leading-relaxed">{item.caHint}</p>
           </div>
-          <textarea value={item.notes ?? ''} onChange={(e) => onChange(item.id, 'NO', e.target.value)} rows={2}
+          <textarea value={item.notes ?? ''} onChange={(e) => onChange(item.id, item.result, e.target.value)} rows={2}
             placeholder="Notes / action planned…"
             className="w-full bg-white border border-red-200 rounded-lg px-3 py-2 text-slate-900 text-xs focus:outline-none focus:border-red-400 resize-none" />
         </div>
