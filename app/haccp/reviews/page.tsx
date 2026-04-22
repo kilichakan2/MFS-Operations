@@ -264,6 +264,260 @@ function SystemItem({ item, onChange }: {
   )
 }
 
+// ─── Overview types & helpers ─────────────────────────────────────────────────
+
+interface OverviewData {
+  from:              string
+  to:                string
+  expected_days:     string[]
+  goods_in:          { total: number; entries_by_date: string[]; temp_fails: number; temp_urgent: number; ca_raised: number }
+  cold_storage:      { total: number; entries_by_date: string[]; missing_days: string[]; fails: number; urgent: number }
+  process_room:      { total: number; entries_by_date: string[]; missing_days: string[]; product_fails: number; room_fails: number; diary_issues: number }
+  cleaning:          { total: number; entries_by_date: string[]; missing_days: string[]; issues: number }
+  mince:             { total: number; entries_by_date: string[]; deviations: number; by_species: Record<string, number> }
+  meatprep:          { total: number; entries_by_date: string[]; deviations: number }
+  returns:           { total: number; entries_by_date: string[]; by_code: Record<string, number>; dispositions: Record<string, number> }
+  calibration:       { done: boolean; total: number; any_fail: boolean }
+  corrective_actions:{ total: number; unresolved: number; by_ccp: Record<string, number> }
+}
+
+function weekRange(offset: number): { from: string; to: string; label: string } {
+  const now  = new Date()
+  const dow  = now.getDay() === 0 ? 6 : now.getDay() - 1
+  const mon  = new Date(now); mon.setDate(now.getDate() - dow + offset * 7)
+  const fri  = new Date(mon); fri.setDate(mon.getDate() + 4)
+  const fmt  = (d: Date) => d.toLocaleDateString('en-CA')
+  const lbl  = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+  return { from: fmt(mon), to: fmt(fri), label: `${lbl(mon)} – ${lbl(fri)}` }
+}
+
+function monthRange(offset: number): { from: string; to: string; label: string } {
+  const now  = new Date()
+  const d    = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  const fmt  = (x: Date) => x.toLocaleDateString('en-CA')
+  return {
+    from:  fmt(d),
+    to:    fmt(last),
+    label: d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
+  }
+}
+
+function DayDots({ expectedDays, entriesByDate, missingDays }: {
+  expectedDays: string[]
+  entriesByDate: string[]
+  missingDays:   string[]
+}) {
+  const DAY = ['M','T','W','T','F']
+  return (
+    <div className="flex gap-1.5 mt-2">
+      {expectedDays.map((d, i) => {
+        const missing = missingDays.includes(d)
+        const has     = entriesByDate.includes(d)
+        return (
+          <div key={d} className="flex flex-col items-center gap-0.5">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold ${
+              missing ? 'bg-red-100 text-red-600' :
+              has     ? 'bg-green-100 text-green-700' :
+                        'bg-slate-100 text-slate-400'
+            }`}>
+              {has ? '✓' : missing ? '✗' : '–'}
+            </div>
+            <span className="text-[9px] text-slate-400">{DAY[i % 5]}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function OverviewCard({ title, icon, children, warn }: {
+  title: string; icon: string; children: React.ReactNode; warn?: boolean
+}) {
+  return (
+    <div className={`bg-white rounded-xl border px-4 py-3 ${warn ? 'border-red-200' : 'border-blue-100'}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-base">{icon}</span>
+        <p className="text-slate-700 text-xs font-bold uppercase tracking-widest">{title}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClose: () => void }) {
+  const [offset,  setOffset]  = useState(0)
+  const [data,    setData]    = useState<OverviewData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+
+  const range = mode === 'weekly' ? weekRange(offset) : monthRange(offset)
+
+  useEffect(() => {
+    setLoading(true); setData(null); setError('')
+    fetch(`/api/haccp/overview?from=${range.from}&to=${range.to}`)
+      .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
+      .then(setData)
+      .catch((e) => setError(`Failed to load — ${e.message}`))
+      .finally(() => setLoading(false))
+  }, [range.from, range.to]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // For Mon-Fri sections, get only the expected days in this period
+  const expectedDays = data?.expected_days ?? []
+
+  return (
+    <div className="fixed inset-0 bg-black/75 z-50 flex flex-col" style={{ position: 'fixed' }}>
+      <div className="bg-[#1E293B] flex items-center gap-3 px-5 py-4 flex-shrink-0">
+        <button onClick={onClose} className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white/60 active:scale-95">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+        <div className="flex-1">
+          <p className="text-orange-400 text-[10px] font-bold tracking-widest uppercase">{mode === 'weekly' ? 'Weekly' : 'Monthly'} Overview</p>
+          <h2 className="text-white text-base font-bold leading-tight">{range.label}</h2>
+        </div>
+        {/* Period navigation */}
+        <div className="flex items-center gap-1">
+          <button onClick={() => setOffset(o => o - 1)} className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/60 active:bg-white/20">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <button onClick={() => setOffset(0)} disabled={offset === 0}
+            className="px-2 py-1 rounded-lg text-[10px] font-bold text-white/60 bg-white/10 disabled:opacity-40 active:bg-white/20">
+            Now
+          </button>
+          <button onClick={() => setOffset(o => o + 1)} disabled={offset >= 0}
+            className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/60 disabled:opacity-30 active:bg-white/20">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto bg-slate-100 px-4 py-4 space-y-3">
+        {loading && (
+          <div className="flex items-center justify-center py-16 gap-3 text-slate-500">
+            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+            Loading…
+          </div>
+        )}
+
+        {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3"><p className="text-red-600 text-sm">{error}</p></div>}
+
+        {data && (
+          <>
+            {/* ── Mon-Fri expected sections ─────────────────────────── */}
+            <OverviewCard title="Cold Storage" icon="❄️" warn={data.cold_storage.missing_days.length > 0 || data.cold_storage.fails > 0}>
+              <div className="flex items-center justify-between">
+                <div className="text-slate-500 text-xs">{data.cold_storage.total} readings</div>
+                <div className="flex gap-2">
+                  {data.cold_storage.fails   > 0 && <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{data.cold_storage.fails} fail{data.cold_storage.fails > 1 ? 's' : ''}</span>}
+                  {data.cold_storage.urgent  > 0 && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{data.cold_storage.urgent} amber</span>}
+                  {data.cold_storage.fails === 0 && data.cold_storage.urgent === 0 && data.cold_storage.total > 0 && <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">All pass</span>}
+                </div>
+              </div>
+              <DayDots expectedDays={expectedDays} entriesByDate={data.cold_storage.entries_by_date} missingDays={data.cold_storage.missing_days} />
+              {data.cold_storage.missing_days.length > 0 && <p className="text-red-500 text-[10px] mt-1">{data.cold_storage.missing_days.length} day{data.cold_storage.missing_days.length > 1 ? 's' : ''} not logged</p>}
+            </OverviewCard>
+
+            <OverviewCard title="Process Room" icon="🔪" warn={data.process_room.missing_days.length > 0 || data.process_room.product_fails > 0 || data.process_room.room_fails > 0}>
+              <div className="flex items-center justify-between">
+                <div className="text-slate-500 text-xs">{data.process_room.total} checks</div>
+                <div className="flex gap-2 flex-wrap justify-end">
+                  {data.process_room.product_fails > 0 && <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{data.process_room.product_fails} product fail</span>}
+                  {data.process_room.room_fails    > 0 && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{data.process_room.room_fails} room fail</span>}
+                  {data.process_room.diary_issues  > 0 && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{data.process_room.diary_issues} diary issue</span>}
+                  {data.process_room.product_fails === 0 && data.process_room.room_fails === 0 && data.process_room.total > 0 && <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">All pass</span>}
+                </div>
+              </div>
+              <DayDots expectedDays={expectedDays} entriesByDate={data.process_room.entries_by_date} missingDays={data.process_room.missing_days} />
+              {data.process_room.missing_days.length > 0 && <p className="text-red-500 text-[10px] mt-1">{data.process_room.missing_days.length} day{data.process_room.missing_days.length > 1 ? 's' : ''} not logged</p>}
+            </OverviewCard>
+
+            <OverviewCard title="Cleaning" icon="🧹" warn={data.cleaning.missing_days.length > 0 || data.cleaning.issues > 0}>
+              <div className="flex items-center justify-between">
+                <div className="text-slate-500 text-xs">{data.cleaning.total} entries</div>
+                <div className="flex gap-2">
+                  {data.cleaning.issues > 0 && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{data.cleaning.issues} issue{data.cleaning.issues > 1 ? 's' : ''}</span>}
+                  {data.cleaning.issues === 0 && data.cleaning.total > 0 && <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">No issues</span>}
+                </div>
+              </div>
+              <DayDots expectedDays={expectedDays} entriesByDate={data.cleaning.entries_by_date} missingDays={data.cleaning.missing_days} />
+              {data.cleaning.missing_days.length > 0 && <p className="text-red-500 text-[10px] mt-1">{data.cleaning.missing_days.length} day{data.cleaning.missing_days.length > 1 ? 's' : ''} not logged</p>}
+            </OverviewCard>
+
+            {/* ── Variable sections ─────────────────────────────────── */}
+            <OverviewCard title="Goods In" icon="📦" warn={data.goods_in.temp_fails > 0}>
+              <div className="flex items-center justify-between">
+                <div className="text-slate-500 text-xs">{data.goods_in.total} deliveries · {data.goods_in.entries_by_date.length} days</div>
+                <div className="flex gap-2">
+                  {data.goods_in.temp_fails  > 0 && <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{data.goods_in.temp_fails} temp fail</span>}
+                  {data.goods_in.temp_urgent > 0 && <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{data.goods_in.temp_urgent} amber</span>}
+                  {data.goods_in.ca_raised   > 0 && <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{data.goods_in.ca_raised} CA raised</span>}
+                  {data.goods_in.temp_fails === 0 && data.goods_in.total > 0 && <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">All pass</span>}
+                  {data.goods_in.total === 0 && <span className="text-[10px] text-slate-400">No deliveries</span>}
+                </div>
+              </div>
+            </OverviewCard>
+
+            <div className="grid grid-cols-2 gap-3">
+              <OverviewCard title="Mince" icon="🥩" warn={data.mince.deviations > 0}>
+                <p className="text-slate-500 text-xs">{data.mince.total} run{data.mince.total !== 1 ? 's' : ''}</p>
+                {data.mince.deviations > 0 && <p className="text-red-500 text-[10px] mt-1">{data.mince.deviations} deviation{data.mince.deviations > 1 ? 's' : ''}</p>}
+                {Object.entries(data.mince.by_species).map(([sp, n]) => (
+                  <p key={sp} className="text-slate-400 text-[10px]">{sp}: {n}</p>
+                ))}
+                {data.mince.total === 0 && <p className="text-slate-400 text-[10px] mt-1">No runs</p>}
+              </OverviewCard>
+
+              <OverviewCard title="Meat Prep" icon="🍔" warn={data.meatprep.deviations > 0}>
+                <p className="text-slate-500 text-xs">{data.meatprep.total} run{data.meatprep.total !== 1 ? 's' : ''}</p>
+                {data.meatprep.deviations > 0 && <p className="text-red-500 text-[10px] mt-1">{data.meatprep.deviations} deviation{data.meatprep.deviations > 1 ? 's' : ''}</p>}
+                {data.meatprep.total === 0 && <p className="text-slate-400 text-[10px] mt-1">No runs</p>}
+              </OverviewCard>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <OverviewCard title="Returns" icon="↩️" warn={data.returns.total > 0}>
+                <p className="text-slate-500 text-xs">{data.returns.total} return{data.returns.total !== 1 ? 's' : ''}</p>
+                {Object.entries(data.returns.by_code).map(([code, n]) => (
+                  <p key={code} className="text-slate-400 text-[10px]">{code}: {n}</p>
+                ))}
+                {data.returns.total === 0 && <p className="text-slate-400 text-[10px] mt-1">None</p>}
+              </OverviewCard>
+
+              <OverviewCard title="Calibration" icon="🌡️" warn={!data.calibration.done || data.calibration.any_fail}>
+                {data.calibration.done
+                  ? <p className={`text-xs font-bold ${data.calibration.any_fail ? 'text-red-600' : 'text-green-600'}`}>{data.calibration.any_fail ? 'Done — fail recorded' : '✓ Done — passed'}</p>
+                  : <p className="text-amber-600 text-xs font-bold">Not done this period</p>
+                }
+              </OverviewCard>
+            </div>
+
+            {/* ── Corrective Actions summary ────────────────────────── */}
+            <OverviewCard title="Corrective Actions" icon="⚠️" warn={data.corrective_actions.unresolved > 0}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-slate-500 text-xs">{data.corrective_actions.total} raised this period</span>
+                {data.corrective_actions.unresolved > 0
+                  ? <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{data.corrective_actions.unresolved} unresolved</span>
+                  : data.corrective_actions.total > 0
+                    ? <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">All resolved</span>
+                    : null
+                }
+              </div>
+              {Object.keys(data.corrective_actions.by_ccp).length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(data.corrective_actions.by_ccp).map(([ccp, n]) => (
+                    <span key={ccp} className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{ccp}: {n}</span>
+                  ))}
+                </div>
+              )}
+              {data.corrective_actions.total === 0 && <p className="text-slate-400 text-[10px]">No CAs this period</p>}
+            </OverviewCard>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ReviewsPage() {
@@ -294,6 +548,7 @@ export default function ReviewsPage() {
   const [submitting,    setSubmitting]   = useState(false)
   const [submitErr,     setSubmitErr]    = useState('')
   const [flash,         setFlash]        = useState('')
+  const [showOverview,  setShowOverview] = useState(false)
 
   const loadData = useCallback(() => {
     fetch('/api/haccp/reviews')
@@ -448,6 +703,11 @@ export default function ReviewsPage() {
             {t === 'monthly' && !monthlyDone && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">Due</span>}
           </button>
         ))}
+        <button onClick={() => setShowOverview(true)}
+          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold border-2 border-slate-300 bg-white text-slate-600 transition-all active:scale-95 flex-shrink-0">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          {tab === 'weekly' ? 'View Week' : 'View Month'}
+        </button>
       </div>
 
       <div className="flex-1 px-5 py-4 space-y-4 overflow-y-auto">
@@ -627,6 +887,12 @@ export default function ReviewsPage() {
         )}
 
       </div>
+
+      {/* Overview overlay */}
+      {showOverview && (
+        <OverviewOverlay mode={tab} onClose={() => setShowOverview(false)} />
+      )}
+
     </div>
   )
 }
