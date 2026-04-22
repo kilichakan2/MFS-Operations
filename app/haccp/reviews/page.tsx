@@ -79,10 +79,23 @@ const EQUIPMENT_ITEMS = [
   { id: 'chiller_seals',       section: 'Chillers / Freezers', label: 'Door seals intact' },
   { id: 'chiller_clean',       section: 'Chillers / Freezers', label: 'Interior cleanliness satisfactory' },
   { id: 'chiller_sounds',      section: 'Chillers / Freezers', label: 'No unusual sounds or performance issues' },
-  // Sterilizers
-  { id: 'steril_temp',         section: 'Sterilizers', label: 'Temperature verification reached ≥82°C' },
-  { id: 'steril_water',        section: 'Sterilizers', label: 'Water supply adequate' },
-  { id: 'steril_scale',        section: 'Sterilizers', label: 'No excessive mineral build-up' },
+  // Sterilisers
+  { id: 'steril_temp',         section: 'Sterilisers', label: 'Temperature verification reached ≥82°C' },
+  { id: 'steril_water',        section: 'Sterilisers', label: 'Water supply adequate' },
+  { id: 'steril_scale',        section: 'Sterilisers', label: 'No excessive mineral build-up' },
+  // Processing equipment
+  { id: 'mincer_condition',    section: 'Processing Equipment', label: 'Mincer — no visible damage, plates and worm intact' },
+  { id: 'mincer_clean',        section: 'Processing Equipment', label: 'Mincer — all food contact surfaces clean and hygienic' },
+  { id: 'bandsaw_condition',   section: 'Processing Equipment', label: 'Band saw — blade intact, guards in place, no damage' },
+  { id: 'bandsaw_clean',       section: 'Processing Equipment', label: 'Band saw — blade and table clean, no residue' },
+  { id: 'burger_condition',    section: 'Processing Equipment', label: 'Burger machine — no visible damage or wear' },
+  { id: 'burger_clean',        section: 'Processing Equipment', label: 'Burger machine — all food contact surfaces clean' },
+  { id: 'mixer_condition',     section: 'Processing Equipment', label: 'Mixer — bowl and attachments in good condition' },
+  { id: 'mixer_clean',         section: 'Processing Equipment', label: 'Mixer — bowl and attachments clean and hygienic' },
+  { id: 'vacpack_condition',   section: 'Processing Equipment', label: 'Vacuum packer / MAP machine — seals and chamber in good condition' },
+  { id: 'vacpack_clean',       section: 'Processing Equipment', label: 'Vacuum packer / MAP machine — clean, no residue or build-up' },
+  { id: 'scales_condition',    section: 'Processing Equipment', label: 'Weighing scales — display accurate, no damage' },
+  { id: 'scales_clean',        section: 'Processing Equipment', label: 'Weighing scales — food contact surfaces clean' },
 ]
 
 const FACILITIES_ITEMS = [
@@ -310,7 +323,7 @@ export default function ReviewsPage() {
   }
 
   const weeklyAllChecked  = weekItems.every((i) => i.state !== 'unchecked')
-  const monthlyAllChecked = sysReview.every((i) => i.result !== '')
+  const monthlyAllChecked = sysReview.every((i) => i.result !== '')  // equipment/facilities ticks are best-effort, not blockers
 
   async function submitWeekly() {
     setSubmitErr(''); setSubmitting(true)
@@ -527,7 +540,7 @@ export default function ReviewsPage() {
             {/* Equipment checks */}
             <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Equipment checks (MF-001 p.14)</p>
-              {['Thermometers', 'Chillers / Freezers', 'Sterilizers'].map((s) =>
+              {['Thermometers', 'Chillers / Freezers', 'Sterilisers', 'Processing Equipment'].map((s) =>
                 renderSection(s, EQUIPMENT_ITEMS, equipChecks, toggleEquip)
               )}
             </div>
