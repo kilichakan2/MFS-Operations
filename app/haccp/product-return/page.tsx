@@ -234,11 +234,15 @@ function fmtDate(iso: string) {
 export default function ProductReturnPage() {
   const [records, setRecords] = useState<ReturnRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
 
   // Form
   const [returnCode,    setReturnCode]    = useState('')
   const [rcNotes,       setRcNotes]       = useState('')
   const [customer,      setCustomer]      = useState('')
+  const [customerId,    setCustomerId]    = useState<string | null>(null)
+  const [customerSearch,setCustomerSearch]= useState('')
+  const [showCustPicker,setShowCustPicker]= useState(false)
   const [product,       setProduct]       = useState('')
   const [tempVal,       setTempVal]       = useState('')
   const [disposition,   setDisposition]   = useState('')
@@ -269,6 +273,13 @@ export default function ProductReturnPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  useEffect(() => {
+    fetch('/api/haccp/customers')
+      .then((r) => r.json())
+      .then((d) => setCustomers(d.customers ?? []))
+      .catch(() => {})
+  }, [])
+
   // When return code changes, pre-load CA action and suggest disposition
   function selectCode(code: string) {
     setReturnCode(code)
@@ -283,6 +294,7 @@ export default function ProductReturnPage() {
 
   function resetForm() {
     setReturnCode(''); setRcNotes(''); setCustomer(''); setProduct('')
+    setCustomerId(null); setCustomerSearch('')
     setTempVal(''); setDisposition(''); setCaText(''); setNotes('')
     setVerifiedBy(''); setSubmitErr('')
     setChecked([false, false, false, false, false])
@@ -305,7 +317,8 @@ export default function ProductReturnPage() {
       const res = await fetch('/api/haccp/product-return', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customer: customer.trim(), product: product.trim(),
+          customer: customer.trim(), customer_id: customerId ?? undefined,
+          product: product.trim(),
           return_code: returnCode, return_code_notes: rcNotes || undefined,
           temperature_c: returnCode === 'RC01' && tempVal ? tempNum : undefined,
           disposition, corrective_action: caText || undefined,
@@ -403,12 +416,57 @@ export default function ProductReturnPage() {
               )}
             </div>
 
-            {/* Customer */}
+            {/* Customer picker */}
             <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Customer</p>
-              <input type="text" value={customer} onChange={(e) => setCustomer(e.target.value)}
-                placeholder="Customer / account name"
-                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+
+              {/* Selected customer display */}
+              {customer && !showCustPicker ? (
+                <div className="flex items-center justify-between bg-orange-50 border-2 border-orange-400 rounded-xl px-4 py-3">
+                  <div>
+                    <p className="text-slate-900 text-sm font-semibold">{customer}</p>
+                    {!customerId && <p className="text-slate-400 text-xs mt-0.5">Other — manual entry</p>}
+                  </div>
+                  <button onPointerDown={(e) => { e.preventDefault(); setCustomer(''); setCustomerId(null); setCustomerSearch(''); setShowCustPicker(true) }}
+                    className="text-slate-400 text-xs font-bold px-2 py-1 rounded-lg hover:bg-orange-100">
+                    Change
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  {/* Search input */}
+                  <input
+                    type="text"
+                    value={customerSearch}
+                    onChange={(e) => { setCustomerSearch(e.target.value); setShowCustPicker(true) }}
+                    onFocus={() => setShowCustPicker(true)}
+                    placeholder="Search customer name…"
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 mb-2"
+                  />
+                  {/* Filtered list */}
+                  {showCustPicker && (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
+                      {customers
+                        .filter((c) => c.name.toLowerCase().includes(customerSearch.toLowerCase()))
+                        .slice(0, 20)
+                        .map((c) => (
+                          <button key={c.id}
+                            onPointerDown={(e) => { e.preventDefault(); setCustomer(c.name); setCustomerId(c.id); setCustomerSearch(''); setShowCustPicker(false) }}
+                            className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-orange-50 border-b border-slate-100 last:border-b-0">
+                            {c.name}
+                          </button>
+                        ))
+                      }
+                      {/* Other option */}
+                      <button
+                        onPointerDown={(e) => { e.preventDefault(); setCustomer(customerSearch || 'Other'); setCustomerId(null); setCustomerSearch(''); setShowCustPicker(false) }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-slate-400 font-bold hover:bg-slate-50 border-t border-slate-200">
+                        ＋ Other / not in list{customerSearch ? `: "${customerSearch}"` : ''}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Product */}

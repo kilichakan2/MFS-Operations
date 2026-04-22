@@ -66,10 +66,11 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const {
-      customer, product, return_code, return_code_notes,
+      customer, customer_id, product, return_code, return_code_notes,
       temperature_c, disposition, corrective_action, verified_by,
     } = body as {
       customer:           string
+      customer_id?:       string
       product:            string
       return_code:        string
       return_code_notes?: string
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest) {
       date:              todayUK(),
       time_of_return:    nowTimeUK(),
       customer:          customer.trim(),
+      customer_id:       customer_id ?? null,
       product:           product.trim(),
       return_code,
       return_code_notes: return_code_notes?.trim() || null,
