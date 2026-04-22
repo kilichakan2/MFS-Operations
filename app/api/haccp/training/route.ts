@@ -1,16 +1,11 @@
 /**
  * app/api/haccp/training/route.ts
  *
- * GET  — fetch all training records (staff + allergen)
- * POST — log a training record
- *
- * training_type values:
- *   'butchery_process_room' → haccp_staff_training
- *   'warehouse_operative'   → haccp_staff_training
- *   'allergen_awareness'    → haccp_allergen_training (Tab 3 — future)
- *
- * Document versions are stored so EHO can verify which version each
- * staff member signed — critical when document is updated.
+ * Actual haccp_staff_training columns:
+ *   id, submitted_at, logged_by, staff_user_id, staff_name,
+ *   training_type, completion_date, confirmation_items,
+ *   supervisor_signed_by (uuid — unused), supervisor_signed_at,
+ *   document_version, job_role, refresh_date, supervisor_name
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -28,7 +23,7 @@ export async function GET(req: NextRequest) {
     const [staff, allergen] = await Promise.all([
       supabase
         .from('haccp_staff_training')
-        .select('id, staff_name, job_role, training_completed, document_version, certification_date, refresh_date, reviewed_by, confirmation_items, submitted_at')
+        .select('id, staff_name, job_role, training_type, document_version, completion_date, refresh_date, supervisor_name, confirmation_items, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(100),
       supabase
@@ -74,23 +69,23 @@ export async function POST(req: NextRequest) {
         reviewed_by, confirmation_items,
       } = body
 
-      if (!staff_name?.trim())    return NextResponse.json({ error: 'Staff name required' },       { status: 400 })
-      if (!job_role?.trim())      return NextResponse.json({ error: 'Job role required' },          { status: 400 })
+      if (!staff_name?.trim())       return NextResponse.json({ error: 'Staff name required' },       { status: 400 })
+      if (!job_role?.trim())         return NextResponse.json({ error: 'Job role required' },          { status: 400 })
       if (!document_version?.trim()) return NextResponse.json({ error: 'Document version required' }, { status: 400 })
-      if (!certification_date)    return NextResponse.json({ error: 'Completion date required' },   { status: 400 })
-      if (!refresh_date)          return NextResponse.json({ error: 'Refresh date required' },      { status: 400 })
-      if (!reviewed_by?.trim())   return NextResponse.json({ error: 'Supervisor name required' },   { status: 400 })
+      if (!certification_date)       return NextResponse.json({ error: 'Completion date required' },  { status: 400 })
+      if (!refresh_date)             return NextResponse.json({ error: 'Refresh date required' },     { status: 400 })
+      if (!reviewed_by?.trim())      return NextResponse.json({ error: 'Supervisor name required' },  { status: 400 })
 
       const { error } = await supabase.from('haccp_staff_training').insert({
         logged_by:          userId,
         staff_name:         staff_name.trim(),
         job_role:           job_role.trim(),
-        training_completed: training_type,
+        training_type,                          // correct column name
         document_version:   document_version.trim(),
-        certification_date,
+        completion_date:    certification_date, // correct column name
         refresh_date,
-        reviewed_by:        reviewed_by.trim(),
-        review_date:        certification_date,
+        supervisor_name:    reviewed_by.trim(), // text column, not UUID
+        supervisor_signed_at: new Date().toISOString(),
         confirmation_items: confirmation_items ?? {},
       })
 

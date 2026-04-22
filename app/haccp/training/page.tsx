@@ -27,11 +27,11 @@ interface StaffTrainingRecord {
   id:                 string
   staff_name:         string
   job_role:           string
-  training_completed: string
+  training_type: string
   document_version:   string | null
-  certification_date: string
+  completion_date: string
   refresh_date:       string
-  reviewed_by:        string | null
+  supervisor_name:     string | null
   confirmation_items: Record<string, boolean> | null
   submitted_at:       string
 }
@@ -430,7 +430,7 @@ function TrainingHistoryCard({ record }: { record: StaffTrainingRecord }) {
   const acksCount = record.confirmation_items
     ? Object.values(record.confirmation_items).filter(Boolean).length
     : 0
-  const totalItems = record.training_completed === 'butchery_process_room' ? 7 : 8
+  const totalItems = record.training_type === 'butchery_process_room' ? 7 : 8
 
   return (
     <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
@@ -448,8 +448,8 @@ function TrainingHistoryCard({ record }: { record: StaffTrainingRecord }) {
             </span>
           </div>
           <p className="text-slate-900 text-sm font-semibold">{record.staff_name}</p>
-          <p className="text-slate-500 text-xs">{record.job_role} · Signed {fmtDate(record.certification_date)}</p>
-          <p className="text-slate-400 text-[10px] mt-0.5">Supervisor: {record.reviewed_by ?? '—'}</p>
+          <p className="text-slate-500 text-xs">{record.job_role} · Signed {fmtDate(record.completion_date)}</p>
+          <p className="text-slate-400 text-[10px] mt-0.5">Supervisor: {record.supervisor_name ?? '—'}</p>
         </div>
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <p className="text-slate-400 text-[10px]">{acksCount}/{totalItems} confirmed</p>
@@ -463,7 +463,7 @@ function TrainingHistoryCard({ record }: { record: StaffTrainingRecord }) {
         <div className="px-4 pb-3 border-t border-slate-100">
           <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-3 mb-2">Acknowledgments confirmed</p>
           {Object.entries(record.confirmation_items).map(([key, val]) => {
-            const items = record.training_completed === 'butchery_process_room' ? BUTCHERY_ACK_ITEMS : []
+            const items = record.training_type === 'butchery_process_room' ? BUTCHERY_ACK_ITEMS : []
             const item = items.find((i) => i.id === key)
             if (!item) return null
             return (
@@ -524,9 +524,9 @@ function ButcheryTab({ records, onSubmitted }: { records: StaffTrainingRecord[];
           staff_name:         staffName,
           job_role:           jobRole,
           document_version:   docVersion,
-          certification_date: completionDate,
+          completion_date: completionDate,
           refresh_date:       refreshDate,
-          reviewed_by:        supervisor,
+          supervisor:        supervisor,
           confirmation_items: ticked,
         }),
       })
@@ -544,7 +544,7 @@ function ButcheryTab({ records, onSubmitted }: { records: StaffTrainingRecord[];
     finally { setSubmitting(false) }
   }
 
-  const tabRecords = records.filter((r) => r.training_completed === 'butchery_process_room')
+  const tabRecords = records.filter((r) => r.training_type === 'butchery_process_room')
 
   return (
     <div className="space-y-4">
