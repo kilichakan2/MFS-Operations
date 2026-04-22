@@ -503,7 +503,12 @@ function LoginDoor() {
         body: JSON.stringify({ name: selected.name, credential: pin }),
       })
       const data = await res.json()
-      if (res.ok) { window.location.href = '/haccp' }
+      if (res.ok) {
+        // Mark this as a HACCP kiosk session so the main app
+        // doesn't redirect this user to /screen1 (dispatch log)
+        document.cookie = 'mfs_haccp_session=1; path=/; max-age=86400; samesite=lax'
+        window.location.href = '/haccp'
+      }
       else { setPinError(data.error ?? 'Incorrect PIN — try again'); setReset((n) => n + 1) }
     } catch { setPinError('Connection error — try again'); setReset((n) => n + 1) }
   }, [selected])

@@ -116,7 +116,13 @@ export function middleware(req: NextRequest) {
   const { role } = session
 
   // Root path — redirect to role home
+  // Exception: warehouse/butcher who logged in via the HACCP kiosk door
+  // should go back to /haccp, not /screen1 (dispatch log)
   if (pathname === '/') {
+    const isHaccpSession = req.cookies.get('mfs_haccp_session')?.value === '1'
+    if (isHaccpSession && ['warehouse', 'butcher'].includes(role)) {
+      return NextResponse.redirect(new URL('/haccp', req.url))
+    }
     return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/login', req.url))
   }
 
