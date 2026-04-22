@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     if (!record_type) return NextResponse.json({ error: 'record_type required' }, { status: 400 })
 
     // ── Health Declaration (new starter) ──────────────────────────────────────
-    if (record_type === 'health_declaration') {
+    if (record_type === 'new_staff_declaration') {
       const {
         staff_name, start_date, health_questions,
         fit_for_work, exclusion_reason, manager_signed_by,
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
       const { error } = await supabase.from('haccp_health_records').insert({
         submitted_by:       userId,
-        record_type:        'health_declaration',
+        record_type:        'new_staff_declaration',
         date:               todayUK(),
         staff_name:         staff_name.trim(),
         health_questions,
@@ -94,6 +94,14 @@ export async function POST(req: NextRequest) {
       if (!illness_type)        return NextResponse.json({ error: 'Illness type required' }, { status: 400 })
       if (!manager_signed_by)   return NextResponse.json({ error: 'Manager sign-off required' }, { status: 400 })
 
+      // Map page shorthand to DB constraint values
+      const illnessTypeMap: Record<string, string> = {
+        gi:      'gastrointestinal',
+        other:   'other_illness',
+        serious: 'serious_illness',
+      }
+      const illnessTypeDB = illnessTypeMap[illness_type] ?? illness_type
+
       const { error } = await supabase.from('haccp_health_records').insert({
         submitted_by:                userId,
         record_type:                 'return_to_work',
@@ -102,7 +110,7 @@ export async function POST(req: NextRequest) {
         absence_from:                absence_from || null,
         absence_to:                  absence_to   || null,
         return_date:                 todayUK(),
-        illness_type,
+        illness_type:                illnessTypeDB,
         health_questions,
         symptom_free_48h:            symptom_free_48h            ?? null,
         medical_certificate_provided:medical_certificate_provided ?? null,

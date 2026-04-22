@@ -192,7 +192,7 @@ function HealthDeclarationTab({ onSubmitted }: { onSubmitted: () => void }) {
       const res = await fetch('/api/haccp/people', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          record_type: 'health_declaration',
+          record_type: 'new_staff_declaration',
           staff_name: staffName, start_date: startDate,
           health_questions: questions,
           fit_for_work: fitForWork,
@@ -606,12 +606,12 @@ function RecordHistory({ records, loading }: { records: HealthRecord[]; loading:
   )
 
   const TYPE_LABELS: Record<string, string> = {
-    health_declaration: 'Health Declaration',
+    'new_staff_declaration': 'Health Declaration',
     return_to_work:     'Return to Work',
     visitor:            'Visitor Log',
   }
   const TYPE_COLOURS: Record<string, string> = {
-    health_declaration: 'bg-blue-100 text-blue-700',
+    'new_staff_declaration': 'bg-blue-100 text-blue-700',
     return_to_work:     'bg-amber-100 text-amber-700',
     visitor:            'bg-purple-100 text-purple-700',
   }
@@ -672,7 +672,7 @@ export default function PeoplePage() {
   }
 
   const tabCounts = {
-    declaration: records.filter(r => r.record_type === 'health_declaration').length,
+    declaration: records.filter(r => r.record_type === 'new_staff_declaration').length,
     rtw:         records.filter(r => r.record_type === 'return_to_work').length,
     visitor:     records.filter(r => r.record_type === 'visitor').length,
   }
@@ -734,7 +734,7 @@ export default function PeoplePage() {
           <RecordHistory
             loading={loading}
             records={records.filter(r =>
-              tab === 'declaration' ? r.record_type === 'health_declaration'
+              tab === 'declaration' ? r.record_type === 'new_staff_declaration'
             : tab === 'rtw'         ? r.record_type === 'return_to_work'
             :                         r.record_type === 'visitor'
             )}
