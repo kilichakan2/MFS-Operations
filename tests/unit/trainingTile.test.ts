@@ -152,3 +152,59 @@ describe('Document version tracking', () => {
     expect('v2.0' === CURRENT).toBe(false) // lowercase v
   })
 })
+
+// ─── API contract — field names page → route ──────────────────────────────────
+// These tests catch mismatches between what the page sends and what the route reads.
+// Both sides must use the SAME key names. Update both together.
+
+describe('Training API contract — butchery tab', () => {
+  // These are the exact keys the page sends in the POST body
+  const PAGE_SENDS_KEYS = [
+    'training_type',
+    'staff_name',
+    'job_role',
+    'document_version',
+    'completion_date',   // NOT certification_date
+    'refresh_date',
+    'supervisor',        // NOT reviewed_by
+    'confirmation_items',
+  ]
+
+  // These are the keys the route destructures from body
+  const ROUTE_READS_KEYS = [
+    'training_type',
+    'staff_name',
+    'job_role',
+    'document_version',
+    'completion_date',   // must match page
+    'refresh_date',
+    'supervisor',        // must match page
+    'confirmation_items',
+  ]
+
+  it('page and route use identical field names', () => {
+    expect(PAGE_SENDS_KEYS.sort()).toEqual(ROUTE_READS_KEYS.sort())
+  })
+
+  it('completion_date is used (not certification_date)', () => {
+    expect(PAGE_SENDS_KEYS).toContain('completion_date')
+    expect(PAGE_SENDS_KEYS).not.toContain('certification_date')
+    expect(ROUTE_READS_KEYS).toContain('completion_date')
+    expect(ROUTE_READS_KEYS).not.toContain('certification_date')
+  })
+
+  it('supervisor is used (not reviewed_by)', () => {
+    expect(PAGE_SENDS_KEYS).toContain('supervisor')
+    expect(PAGE_SENDS_KEYS).not.toContain('reviewed_by')
+    expect(ROUTE_READS_KEYS).toContain('supervisor')
+    expect(ROUTE_READS_KEYS).not.toContain('reviewed_by')
+  })
+
+  it('all required fields are present', () => {
+    const required = ['staff_name', 'job_role', 'completion_date', 'refresh_date', 'supervisor']
+    for (const field of required) {
+      expect(PAGE_SENDS_KEYS).toContain(field)
+      expect(ROUTE_READS_KEYS).toContain(field)
+    }
+  })
+})

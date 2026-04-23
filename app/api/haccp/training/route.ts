@@ -65,28 +65,28 @@ export async function POST(req: NextRequest) {
     if (training_type === 'butchery_process_room' || training_type === 'warehouse_operative') {
       const {
         staff_name, job_role, document_version,
-        certification_date, refresh_date,
-        reviewed_by, confirmation_items,
+        completion_date, refresh_date,
+        supervisor, confirmation_items,
       } = body
 
       if (!staff_name?.trim())       return NextResponse.json({ error: 'Staff name required' },       { status: 400 })
       if (!job_role?.trim())         return NextResponse.json({ error: 'Job role required' },          { status: 400 })
       if (!document_version?.trim()) return NextResponse.json({ error: 'Document version required' }, { status: 400 })
-      if (!certification_date)       return NextResponse.json({ error: 'Completion date required' },  { status: 400 })
+      if (!completion_date)          return NextResponse.json({ error: 'Completion date required' },  { status: 400 })
       if (!refresh_date)             return NextResponse.json({ error: 'Refresh date required' },     { status: 400 })
-      if (!reviewed_by?.trim())      return NextResponse.json({ error: 'Supervisor name required' },  { status: 400 })
+      if (!supervisor?.trim())       return NextResponse.json({ error: 'Supervisor name required' },  { status: 400 })
 
       const { error } = await supabase.from('haccp_staff_training').insert({
-        logged_by:          userId,
-        staff_name:         staff_name.trim(),
-        job_role:           job_role.trim(),
-        training_type,                          // correct column name
-        document_version:   document_version.trim(),
-        completion_date:    certification_date, // correct column name
+        logged_by:            userId,
+        staff_name:           staff_name.trim(),
+        job_role:             job_role.trim(),
+        training_type,
+        document_version:     document_version.trim(),
+        completion_date,
         refresh_date,
-        supervisor_name:    reviewed_by.trim(), // text column, not UUID
+        supervisor_name:      supervisor.trim(),
         supervisor_signed_at: new Date().toISOString(),
-        confirmation_items: confirmation_items ?? {},
+        confirmation_items:   confirmation_items ?? {},
       })
 
       if (error) {
