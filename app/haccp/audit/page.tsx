@@ -16,7 +16,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -751,10 +751,29 @@ export default function AuditPage() {
   const [heatmapOpen,  setHeatmapOpen]  = useState(true)
   const [exporting,    setExporting]    = useState(false)
   const [heatmapData,  setHeatmapData]  = useState<Record<string, Record<string, HeatmapDay>>>({})
+  const [heatmapReady, setHeatmapReady] = useState(false)
+
+  // Pre-fetch ALL sections' heatmap data on load — so the heatmap is fully
+  // populated immediately, regardless of which section tab is active.
+  const fetchHeatmap = useCallback((fromDate: string, toDate: string) => {
+    setHeatmapReady(false)
+    fetch(`/api/haccp/audit/heatmap?from=${fromDate}&to=${toDate}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.error) setHeatmapData(d)
+      })
+      .catch(() => {})
+      .finally(() => setHeatmapReady(true))
+  }, [])
+
+  // Fetch heatmap on mount and whenever date range changes
+  useEffect(() => { fetchHeatmap(from, to) }, [from, to, fetchHeatmap])
 
   function selectPreset(p: DatePreset) {
+    const range = presetToRange(p)
     setPreset(p)
-    setRange(presetToRange(p))
+    setRange(range)
+    // heatmap useEffect watches [from, to] so it will auto-refetch
   }
 
   // Generic stable heatmap callback — all sections pass pre-keyed updates
