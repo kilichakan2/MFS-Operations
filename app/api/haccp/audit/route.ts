@@ -301,6 +301,14 @@ export async function GET(req: NextRequest) {
         closing:     diaryRows.filter((r) => r.phase === 'closing').length,
       }
 
+      console.log('[audit/process_room] diary rows per phase:', {
+        total: diaryRows.length,
+        opening:     diaryRows.filter((r) => r.phase === 'opening').length,
+        operational: diaryRows.filter((r) => r.phase === 'operational').length,
+        closing:     diaryRows.filter((r) => r.phase === 'closing').length,
+        phases: diaryRows.map((r) => r.phase),
+      })
+
       // Heatmap
       const roomAmMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
       const roomPmMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
