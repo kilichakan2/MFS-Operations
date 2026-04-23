@@ -104,19 +104,103 @@ export async function GET(req: NextRequest) {
         unresolved: rows.filter((r) => r.ca !== null && !r.ca.resolved).length,
       }
 
-      // Heatmap data — group by date for this section
-      const heatmap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      // Heatmap data — pre-keyed so parent can merge generically
+      const deliveryHeatmap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
       for (const row of rows) {
-        if (!heatmap[row.date]) {
-          heatmap[row.date] = { has_records: false, has_deviations: false }
+        if (!deliveryHeatmap[row.date]) {
+          deliveryHeatmap[row.date] = { has_records: false, has_deviations: false }
         }
-        heatmap[row.date].has_records = true
+        deliveryHeatmap[row.date].has_records = true
         if (row.temp_status !== 'pass' || (row.ca && !row.ca.resolved)) {
-          heatmap[row.date].has_deviations = true
+          deliveryHeatmap[row.date].has_deviations = true
         }
       }
 
-      return NextResponse.json({ rows, summary, heatmap })
+      return NextResponse.json({ rows, summary, heatmap: { deliveries: deliveryHeatmap } })
+    }
+
+
+    // ── Cold Storage ──────────────────────────────────────────────────────────
+    if (section === 'cold_storage') {
+      const { data: temps, error: tErr } = await supabase
+        .from('haccp_cold_storage_temps')
+        .select(`
+          id, date, session, temperature_c, temp_status,
+          comments, corrective_action_required,
+          unit_id, submitted_at,
+          users!submitted_by ( name ),
+          haccp_cold_storage_units!unit_id ( name, unit_type, target_temp_c, max_temp_c )
+        `)
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: false })
+        .order('session', { ascending: true })
+
+      if (tErr) {
+        console.error('[audit/cold_storage]', tErr.message)
+        return NextResponse.json({ error: tErr.message }, { status: 500 })
+      }
+
+      // Fetch CAs
+      const tempIds = (temps ?? []).map((t) => t.id)
+      const casMap: Record<string, {
+        id: string; ccp_ref: string; deviation_description: string
+        action_taken: string; product_disposition: string | null
+        recurrence_prevention: string | null
+        management_verification_required: boolean
+        resolved: boolean; verified_at: string | null
+      }> = {}
+
+      if (tempIds.length > 0) {
+        const { data: caData } = await supabase
+          .from('haccp_corrective_actions')
+          .select(`
+            id, source_id, ccp_ref, deviation_description, action_taken,
+            product_disposition, recurrence_prevention,
+            management_verification_required, resolved, verified_at
+          `)
+          .eq('source_table', 'haccp_cold_storage_temps')
+          .in('source_id', tempIds)
+        for (const ca of caData ?? []) {
+          casMap[ca.source_id] = ca
+        }
+      }
+
+      type TempRow = typeof temps extends (infer T)[] | null ? T : never
+      const rows = (temps ?? []).map((t: TempRow) => ({
+        ...t,
+        submitted_by_name: (t.users as unknown as { name: string } | null)?.name ?? '—',
+        unit: t.haccp_cold_storage_units as unknown as {
+          name: string; unit_type: string; target_temp_c: number; max_temp_c: number
+        } | null,
+        ca: casMap[t.id] ?? null,
+      }))
+
+      const summary = {
+        total:      rows.length,
+        pass:       rows.filter((r) => r.temp_status === 'pass').length,
+        amber:      rows.filter((r) => r.temp_status === 'amber').length,
+        critical:   rows.filter((r) => r.temp_status === 'critical').length,
+        ca_count:   rows.filter((r) => r.ca !== null).length,
+        unresolved: rows.filter((r) => r.ca !== null && !(r.ca as {resolved:boolean}).resolved).length,
+      }
+
+      // Heatmap — two rows: cold_am and cold_pm
+      const amMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      const pmMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+
+      for (const row of rows) {
+        const isDeviation = row.temp_status !== 'pass' || (row.ca && !(row.ca as {resolved:boolean}).resolved)
+        const map = row.session === 'AM' ? amMap : pmMap
+        if (!map[row.date]) map[row.date] = { has_records: false, has_deviations: false }
+        map[row.date].has_records = true
+        if (isDeviation) map[row.date].has_deviations = true
+      }
+
+      return NextResponse.json({
+        rows, summary,
+        heatmap: { cold_am: amMap, cold_pm: pmMap },
+      })
     }
 
     return NextResponse.json({ error: `Unknown section: ${section}` }, { status: 400 })

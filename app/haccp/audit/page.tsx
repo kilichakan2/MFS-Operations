@@ -207,10 +207,10 @@ function HeatCell({ date, section, heatmapData }: {
     else if (hasRecord)       { cls = 'bg-green-200 border-green-300';  title = 'All pass' }
     else                      { cls = 'bg-slate-100 border-slate-200'; title = 'No deliveries' }
   } else {
-    // Expected Mon–Fri — no record is a gap
-    // Only deliveries section is built for now, others stub
-    cls = 'bg-slate-100 border-slate-200 opacity-40'
-    title = 'Coming soon'
+    // Expected Mon–Fri — no record is a gap (red)
+    if (hasRecord && hasDev)  { cls = 'bg-amber-200 border-amber-300'; title = 'Deviation' }
+    else if (hasRecord)       { cls = 'bg-green-200 border-green-300'; title = 'All pass' }
+    else                      { cls = 'bg-red-100 border-red-200'; title = 'Gap — no record' }
   }
 
   return <div className={`w-6 h-6 rounded border flex-shrink-0 ${cls}`} title={`${fmtDateShort(date)}: ${title}`} />
@@ -389,7 +389,7 @@ function DeliveryTableRow({ row }: { row: DeliveryRow }) {
 
 function DeliveriesSection({ from, to, onHeatmapData }: {
   from: string; to: string
-  onHeatmapData: (data: Record<string, HeatmapDay>) => void
+  onHeatmapData: (updates: Record<string, Record<string, HeatmapDay>>) => void
 }) {
   const [rows,     setRows]     = useState<DeliveryRow[]>([])
   const [summary,  setSummary]  = useState<DeliverySummary | null>(null)
@@ -404,7 +404,7 @@ function DeliveriesSection({ from, to, onHeatmapData }: {
         if (d.error) { setError(d.error); return }
         setRows(d.rows ?? [])
         setSummary(d.summary ?? null)
-        onHeatmapData(d.heatmap ?? {})
+        onHeatmapData(d.heatmap ?? { deliveries: {} })
       })
       .catch(() => setError('Failed to load'))
       .finally(() => setLoading(false))
@@ -498,6 +498,224 @@ function DeliveriesSection({ from, to, onHeatmapData }: {
   )
 }
 
+// ─── Cold Storage section ─────────────────────────────────────────────────────
+
+interface ColdStorageRow {
+  id:                         string
+  date:                       string
+  session:                    string
+  temperature_c:              number
+  temp_status:                string
+  comments:                   string | null
+  corrective_action_required: boolean
+  submitted_by_name:          string
+  unit:                       { name: string; unit_type: string; target_temp_c: number; max_temp_c: number } | null
+  ca:                         CA | null
+}
+
+interface ColdStorageSummary {
+  total: number; pass: number; amber: number
+  critical: number; ca_count: number; unresolved: number
+}
+
+function ColdTempBadge({ status }: { status: string }) {
+  const cls = status === 'pass'     ? 'bg-green-100 text-green-700'
+            : status === 'amber'    ? 'bg-amber-100 text-amber-700'
+            : 'bg-red-100 text-red-700'
+  const lbl = status === 'pass' ? 'Pass' : status === 'amber' ? 'Amber' : 'Critical'
+  return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{lbl}</span>
+}
+
+function ColdStorageTableRow({ row }: { row: ColdStorageRow }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const rowColour = row.temp_status === 'critical' || (row.ca && !row.ca.resolved)
+    ? 'bg-red-50 border-red-100'
+    : row.temp_status === 'amber'
+    ? 'bg-amber-50 border-amber-100'
+    : 'bg-white border-slate-100'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded((p) => !p)}>
+        <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap font-medium">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.session === 'AM' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+            {row.session}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 text-xs text-slate-700 max-w-32 truncate">{row.unit?.name ?? '—'}</td>
+        <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+          <span className={`font-mono font-bold ${
+            row.temp_status === 'critical' ? 'text-red-600'
+          : row.temp_status === 'amber'    ? 'text-amber-600'
+          : 'text-green-700'
+          }`}>{row.temperature_c}°C</span>
+        </td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><ColdTempBadge status={row.temp_status} /></td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 max-w-28 truncate">{row.comments ?? '—'}</td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><CABadge ca={row.ca} /></td>
+        <td className="px-3 py-2.5">
+          <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={8} className="px-4 pb-4 pt-1">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs ml-2">
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Unit details</p>
+                <div className="space-y-0.5">
+                  {row.unit && <>
+                    <p className="text-slate-600">Type: {row.unit.unit_type}</p>
+                    <p className="text-slate-600">Target: <span className="font-mono font-bold">{row.unit.target_temp_c}°C</span></p>
+                    <p className="text-slate-600">Max: <span className="font-mono font-bold">{row.unit.max_temp_c}°C</span></p>
+                  </>}
+                  <p className="text-slate-400 text-[10px] mt-1">Submitted by: {row.submitted_by_name}</p>
+                </div>
+              </div>
+              {row.comments && (
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Comments</p>
+                  <p className="text-slate-600">{row.comments}</p>
+                </div>
+              )}
+              {row.ca && (
+                <div className="col-span-2 mt-1">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective Action — {row.ca.ccp_ref}</p>
+                  <div className={`rounded-xl px-4 py-3 border space-y-1.5 ${row.ca.resolved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Deviation:</span> {row.ca.deviation_description}</p>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Action taken:</span> {row.ca.action_taken}</p>
+                    {row.ca.product_disposition && <p className="text-slate-700"><span className="font-bold text-slate-500">Disposition:</span> {row.ca.product_disposition}</p>}
+                    <div className="flex items-center gap-2 pt-0.5">
+                      {row.ca.management_verification_required && (
+                        <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Mgmt verification required</span>
+                      )}
+                      {row.ca.resolved
+                        ? <span className="text-[10px] font-bold bg-green-200 text-green-700 px-2 py-0.5 rounded-full">✓ Resolved</span>
+                        : <span className="text-[10px] font-bold bg-red-200 text-red-700 px-2 py-0.5 rounded-full">⚠ Unresolved</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function ColdStorageSection({ from, to, onHeatmapData }: {
+  from: string; to: string
+  onHeatmapData: (updates: Record<string, Record<string, HeatmapDay>>) => void
+}) {
+  const [rows,    setRows]    = useState<ColdStorageRow[]>([])
+  const [summary, setSummary] = useState<ColdStorageSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true); setError('')
+    fetch(`/api/haccp/audit?section=cold_storage&from=${from}&to=${to}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) { setError(d.error); return }
+        setRows(d.rows ?? [])
+        setSummary(d.summary ?? null)
+        onHeatmapData(d.heatmap ?? { cold_am: {}, cold_pm: {} })
+      })
+      .catch(() => setError('Failed to load'))
+      .finally(() => setLoading(false))
+  }, [from, to, onHeatmapData])
+
+  useEffect(() => { load() }, [load])
+
+  function exportCSV() {
+    const headers = [
+      'Date', 'Session', 'Unit', 'Unit Type', 'Target Temp °C', 'Max Temp °C',
+      'Temp °C', 'Status', 'Comments', 'Submitted by',
+      'CA logged', 'CA resolved', 'CA deviation', 'CA action taken', 'CA disposition',
+    ]
+    const csvRows = rows.map((r) => [
+      r.date, r.session, r.unit?.name ?? '', r.unit?.unit_type ?? '',
+      r.unit?.target_temp_c ?? '', r.unit?.max_temp_c ?? '',
+      r.temperature_c, r.temp_status, r.comments ?? '', r.submitted_by_name,
+      r.ca ? 'Yes' : 'No',
+      r.ca ? (r.ca.resolved ? 'Yes' : 'No') : '',
+      r.ca?.deviation_description ?? '', r.ca?.action_taken ?? '', r.ca?.product_disposition ?? '',
+    ])
+    downloadCSV(`MFS_ColdStorage_${from}_to_${to}.csv`, headers, csvRows)
+  }
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-slate-400 text-sm py-8">
+      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>Loading cold storage…
+    </div>
+  )
+
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {summary && (
+          <div className="flex items-center gap-3 flex-wrap">
+            {[
+              { label: 'Total',      val: summary.total,      cls: 'bg-slate-100 text-slate-700' },
+              { label: 'Pass',       val: summary.pass,       cls: 'bg-green-100 text-green-700' },
+              { label: 'Amber',      val: summary.amber,      cls: 'bg-amber-100 text-amber-700' },
+              { label: 'Critical',   val: summary.critical,   cls: 'bg-red-100 text-red-700' },
+              { label: 'CAs',        val: summary.ca_count,   cls: 'bg-blue-100 text-blue-700' },
+              { label: 'Unresolved', val: summary.unresolved, cls: summary.unresolved > 0 ? 'bg-red-200 text-red-800 font-bold' : 'bg-slate-100 text-slate-500' },
+            ].map((s) => (
+              <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}>
+                <span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={exportCSV}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+          </svg>Export CSV
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center">
+          <p className="text-slate-400 text-sm">No cold storage records in this date range</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse" style={{ minWidth: '620px' }}>
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Date','Session','Unit','Temp','Status','Comments','CA',''].map((h) => (
+                    <th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => <ColdStorageTableRow key={row.id} row={row} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Placeholder section ──────────────────────────────────────────────────────
 
 function PlaceholderSection({ label }: { label: string }) {
@@ -539,8 +757,10 @@ export default function AuditPage() {
     setRange(presetToRange(p))
   }
 
-  const handleDeliveryHeatmapData = useCallback((data: Record<string, HeatmapDay>) => {
-    setHeatmapData((prev) => ({ ...prev, deliveries: data }))
+  // Generic stable heatmap callback — all sections pass pre-keyed updates
+  // e.g. { deliveries: { date: {...} } } or { cold_am: {...}, cold_pm: {...} }
+  const handleSectionHeatmapData = useCallback((updates: Record<string, Record<string, HeatmapDay>>) => {
+    setHeatmapData((prev) => ({ ...prev, ...updates }))
   }, []) // stable — empty deps, never recreated
 
   async function exportAll() {
@@ -647,10 +867,10 @@ export default function AuditPage() {
         {section === 'deliveries' && (
           <DeliveriesSection
             from={from} to={to}
-            onHeatmapData={handleDeliveryHeatmapData}
+            onHeatmapData={handleSectionHeatmapData}
           />
         )}
-        {section === 'cold_storage'  && <PlaceholderSection label="Cold Storage" />}
+        {section === 'cold_storage'  && <ColdStorageSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'process_room'  && <PlaceholderSection label="Process Room" />}
         {section === 'cleaning'      && <PlaceholderSection label="Cleaning" />}
         {section === 'calibration'   && <PlaceholderSection label="Calibration" />}

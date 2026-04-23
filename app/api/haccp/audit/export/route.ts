@@ -112,6 +112,68 @@ async function fetchDeliveriesSheet(from: string, to: string) {
   return ws
 }
 
+
+async function fetchColdStorageSheet(from: string, to: string) {
+  const { data: temps } = await supabase
+    .from('haccp_cold_storage_temps')
+    .select(`
+      id, date, session, temperature_c, temp_status, comments, submitted_at,
+      users!submitted_by ( name ),
+      haccp_cold_storage_units!unit_id ( name, unit_type, target_temp_c, max_temp_c )
+    `)
+    .gte('date', from)
+    .lte('date', to)
+    .order('date', { ascending: false })
+
+  const tempIds = (temps ?? []).map((t) => t.id)
+  const casMap: Record<string, {
+    deviation_description: string; action_taken: string
+    product_disposition: string | null; resolved: boolean
+  }> = {}
+
+  if (tempIds.length > 0) {
+    const { data: caData } = await supabase
+      .from('haccp_corrective_actions')
+      .select('source_id, deviation_description, action_taken, product_disposition, resolved')
+      .eq('source_table', 'haccp_cold_storage_temps')
+      .in('source_id', tempIds)
+    for (const ca of caData ?? []) casMap[ca.source_id] = ca
+  }
+
+  const headers = [
+    'Date', 'Session', 'Unit', 'Unit Type', 'Target Temp °C', 'Max Temp °C',
+    'Temp °C', 'Status', 'Comments', 'Submitted by',
+    'CA logged', 'CA resolved', 'CA deviation', 'CA action taken', 'CA disposition',
+  ]
+
+  type TempRow = typeof temps extends (infer T)[] | null ? T : never
+  const rows = (temps ?? []).map((t: TempRow) => {
+    const ca   = casMap[t.id] ?? null
+    const user = (t.users as unknown as { name: string } | null)?.name ?? '—'
+    const unit = t.haccp_cold_storage_units as unknown as {
+      name: string; unit_type: string; target_temp_c: number; max_temp_c: number
+    } | null
+    return [
+      t.date, t.session, unit?.name ?? '—', unit?.unit_type ?? '—',
+      unit?.target_temp_c ?? '', unit?.max_temp_c ?? '',
+      t.temperature_c, t.temp_status, t.comments ?? '', user,
+      ca ? 'Yes' : 'No',
+      ca ? (ca.resolved ? 'Yes' : 'No') : '',
+      ca?.deviation_description ?? '',
+      ca?.action_taken ?? '',
+      ca?.product_disposition ?? '',
+    ]
+  })
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  ws['!cols'] = [
+    { wch: 12 }, { wch: 8 }, { wch: 16 }, { wch: 10 }, { wch: 14 }, { wch: 12 },
+    { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 14 },
+    { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 30 }, { wch: 20 },
+  ]
+  return ws
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -131,9 +193,8 @@ export async function GET(req: NextRequest) {
     const deliveriesSheet = await fetchDeliveriesSheet(from, to)
     XLSX.utils.book_append_sheet(wb, deliveriesSheet, '01 Deliveries')
 
-    // Future sections added here:
-    // const coldStorageSheet = await fetchColdStorageSheet(from, to)
-    // XLSX.utils.book_append_sheet(wb, coldStorageSheet, '02 Cold Storage')
+    const coldStorageSheet = await fetchColdStorageSheet(from, to)
+    XLSX.utils.book_append_sheet(wb, coldStorageSheet, '02 Cold Storage')
 
     // Generate binary buffer
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
