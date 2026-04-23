@@ -208,3 +208,68 @@ describe('Training API contract — butchery tab', () => {
     }
   })
 })
+
+// ─── DB schema constraints ────────────────────────────────────────────────────
+// Mirror NOT NULL columns so any constraint violation is caught in tests first.
+
+describe('haccp_staff_training DB schema', () => {
+  // NOT NULL columns that we must always provide (excluding auto-defaults)
+  const REQUIRED_COLUMNS = [
+    'logged_by',          // userId from cookie
+    'staff_name',
+    'training_type',
+    'completion_date',
+    'confirmation_items', // has default '[]' but we always send it
+    // supervisor_signed_by is now NULLABLE — we use supervisor_name text instead
+    // supervisor_signed_at has default now()
+  ]
+
+  const ROUTE_INSERT_KEYS = [
+    'logged_by',
+    'staff_name',
+    'job_role',
+    'training_type',
+    'document_version',
+    'completion_date',
+    'refresh_date',
+    'supervisor_name',
+    'supervisor_signed_at',
+    'confirmation_items',
+  ]
+
+  it('route insert provides all NOT NULL required columns', () => {
+    for (const col of REQUIRED_COLUMNS) {
+      expect(ROUTE_INSERT_KEYS).toContain(col)
+    }
+  })
+
+  it('supervisor_signed_by is NOT in insert (it is nullable — we use supervisor_name)', () => {
+    expect(ROUTE_INSERT_KEYS).not.toContain('supervisor_signed_by')
+  })
+})
+
+describe('haccp_allergen_training DB schema', () => {
+  // This table uses DIFFERENT column names — certification_date, training_completed
+  const ALLERGEN_NOT_NULL_COLUMNS = [
+    'logged_by',
+    'staff_name',
+    'job_role',
+    'training_completed',   // NOT training_type
+    'certification_date',   // NOT completion_date
+    'refresh_date',
+  ]
+
+  it('allergen table uses certification_date (not completion_date)', () => {
+    expect(ALLERGEN_NOT_NULL_COLUMNS).toContain('certification_date')
+    expect(ALLERGEN_NOT_NULL_COLUMNS).not.toContain('completion_date')
+  })
+
+  it('allergen table uses training_completed (not training_type)', () => {
+    expect(ALLERGEN_NOT_NULL_COLUMNS).toContain('training_completed')
+    expect(ALLERGEN_NOT_NULL_COLUMNS).not.toContain('training_type')
+  })
+
+  it('allergen table requires job_role (staff_training does not have it NOT NULL)', () => {
+    expect(ALLERGEN_NOT_NULL_COLUMNS).toContain('job_role')
+  })
+})

@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
         .limit(100),
       supabase
         .from('haccp_allergen_training')
-        .select('id, staff_name, training_type, completion_date, confirmation_items, submitted_at')
+        .select('id, staff_name, job_role, training_completed, certification_date, refresh_date, reviewed_by, confirmation_items, supervisor_name, document_version, submitted_at')
         .order('submitted_at', { ascending: false })
         .limit(100),
     ])
