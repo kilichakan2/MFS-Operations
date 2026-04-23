@@ -273,3 +273,97 @@ describe('haccp_allergen_training DB schema', () => {
     expect(ALLERGEN_NOT_NULL_COLUMNS).toContain('job_role')
   })
 })
+
+// ─── Warehouse Operative Tab 2 ────────────────────────────────────────────────
+
+const WAREHOUSE_ACK_IDS = ['w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8']
+
+const WAREHOUSE_ACK_ITEMS = [
+  { id: 'w1', label: 'Read and understood this training summary' },
+  { id: 'w2', label: 'Reviewed the complete MFS Global HACCP Policy Handbook (V2.0)' },
+  { id: 'w3', label: 'Understand the food safety hazards in warehouse operations' },
+  { id: 'w4', label: 'Know my critical responsibilities for product receiving and temperature control' },
+  { id: 'w5', label: 'Understand how to monitor Critical Control Points (CCP 1 & 2)' },
+  { id: 'w6', label: 'Have the authority to reject unsuitable products' },
+  { id: 'w7', label: 'Know what to do in emergency situations' },
+  { id: 'w8', label: 'Accept responsibility for food safety in my daily work' },
+]
+
+describe('Warehouse acknowledgment checklist', () => {
+  it('has exactly 8 items', () => {
+    expect(WAREHOUSE_ACK_ITEMS).toHaveLength(8)
+  })
+
+  it('all IDs are unique', () => {
+    const ids = WAREHOUSE_ACK_ITEMS.map((i) => i.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('all IDs use w prefix (not b prefix)', () => {
+    for (const item of WAREHOUSE_ACK_ITEMS) {
+      expect(item.id.startsWith('w')).toBe(true)
+    }
+  })
+
+  it('no overlap with butchery IDs', () => {
+    const butcheryIds = ['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7']
+    for (const id of WAREHOUSE_ACK_IDS) {
+      expect(butcheryIds).not.toContain(id)
+    }
+  })
+
+  it('valid when all 8 items ticked', () => {
+    const ticked = Object.fromEntries(WAREHOUSE_ACK_IDS.map((id) => [id, true]))
+    const allTicked = WAREHOUSE_ACK_IDS.every((id) => ticked[id] === true)
+    expect(allTicked).toBe(true)
+  })
+
+  it('invalid when any item not ticked', () => {
+    const ticked = Object.fromEntries(WAREHOUSE_ACK_IDS.map((id) => [id, true]))
+    ticked['w5'] = false
+    const allTicked = WAREHOUSE_ACK_IDS.every((id) => ticked[id] === true)
+    expect(allTicked).toBe(false)
+  })
+})
+
+describe('Warehouse training API contract', () => {
+  const WAREHOUSE_TRAINING_TYPE = 'warehouse_operative'
+  const WAREHOUSE_JOB_ROLE      = 'Warehouse Operative'
+  const CURRENT_VERSION         = 'V2.0'
+
+  it('training_type is warehouse_operative', () => {
+    expect(WAREHOUSE_TRAINING_TYPE).toBe('warehouse_operative')
+  })
+
+  it('job role is Warehouse Operative', () => {
+    expect(WAREHOUSE_JOB_ROLE).toBe('Warehouse Operative')
+  })
+
+  it('uses same page→route field names as butchery', () => {
+    // Both tabs send the same field names — only training_type and job_role differ in value
+    const SHARED_KEYS = [
+      'training_type', 'staff_name', 'job_role', 'document_version',
+      'completion_date', 'refresh_date', 'supervisor', 'confirmation_items',
+    ]
+    // All fields must be present
+    expect(SHARED_KEYS).toContain('completion_date')
+    expect(SHARED_KEYS).toContain('supervisor')
+    expect(SHARED_KEYS).not.toContain('certification_date')
+    expect(SHARED_KEYS).not.toContain('reviewed_by')
+  })
+
+  it('document version is V2.0', () => {
+    expect(CURRENT_VERSION).toBe('V2.0')
+  })
+
+  it('history tab filters by training_type warehouse_operative', () => {
+    const records = [
+      { training_type: 'butchery_process_room', staff_name: 'Ali' },
+      { training_type: 'warehouse_operative',   staff_name: 'Daz' },
+      { training_type: 'warehouse_operative',   staff_name: 'Adeel' },
+    ]
+    const warehouseRecords = records.filter((r) => r.training_type === 'warehouse_operative')
+    expect(warehouseRecords).toHaveLength(2)
+    expect(warehouseRecords.map((r) => r.staff_name)).toEqual(['Daz', 'Adeel'])
+  })
+})

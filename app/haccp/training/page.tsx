@@ -319,6 +319,188 @@ const BUTCHERY_ACK_ITEMS = [
   { id: 'b7', label: 'Accept responsibility for food safety in my daily work' },
 ]
 
+// ─── Warehouse Operative Training V2.0 — document content ─────────────────────
+// 12 sections from MFS Warehouse Operative Training V2.0 (Nov 2025)
+// Update when document version changes — see docs/DOCUMENT_CONTROL.md
+
+const WAREHOUSE_DOCUMENT_SECTIONS = [
+  {
+    title: 'Your Critical Responsibilities',
+    content: `Every day you must:
+• Inspect every delivery for condition and temperature
+• Accept only products meeting safety standards
+• Reject unsuitable products without hesitation
+• Maintain correct cold storage temperatures (0–4°C fresh, ≤-18°C frozen)
+• Monitor temperatures at least twice daily
+• Keep accurate records of all receiving and dispatching
+• Report any temperature deviations immediately
+• Manage stock rotation using FIFO (First In, First Out)
+• Prepare products for dispatch at correct temperature`,
+  },
+  {
+    title: 'Personal Hygiene & Protective Clothing',
+    content: `Before entering warehouse:
+1. Change into clean work overalls/coat (changed daily)
+2. Put on hair net or hat covering all hair
+3. Put on non-slip safety footwear
+4. Wash hands using 8-step procedure (wet, soap, scrub 20 seconds, rinse, dry, sanitizer, air dry)
+5. Put on disposable gloves
+
+During your shift — wash hands: before handling products, after raw meat contact, after toilet, after touching face/hair, after waste, between products.
+
+Keep fingernails short and clean (max 2mm). No jewellery, false nails, or nail polish. Cover any cuts with waterproof plaster + glove.
+
+Prohibited: No smoking, eating, or drinking in storage areas. No touching face while handling products. No loose clothing or personal items near product areas.`,
+  },
+  {
+    title: 'Receiving Products — The Complete Procedure',
+    content: `Step 1 — Delivery arrival: Confirm paperwork matches order. Visually check vehicle and products. Resolve discrepancies BEFORE unloading.
+
+Step 2 — Unloading: Work quickly — products warm during unloading. Handle carefully — damaged packaging = contamination entry. Keep receiving bay door closed between deliveries.
+
+Step 3 — Transfer to inspection area: Move in covered containers. Keep boxes covered to retain cold. Minimise time at room temperature.
+
+Step 4 — Acceptance inspection:
+Check 1 — Documentation: Supplier approved? Batch codes present? Documentation complete?
+Check 2 — Temperature (CRITICAL): Fresh meat ≤4°C, Frozen ≤-12°C, Offal ≤3°C. If temperature too high: REJECT ENTIRE DELIVERY.
+Check 3 — Visual: Package integrity, product appearance, use-by dates.
+
+ACCEPT if: all temperatures correct, packaging intact, no contamination, dates acceptable.
+REJECT if: temperature exceeds limits, packaging damaged, visible defects, dates expired, documentation incomplete.`,
+  },
+  {
+    title: 'Temperature Control in Cold Storage',
+    content: `Critical limits:
+• Fresh product storage: 0–4°C at all times
+• Frozen product storage: ≤-18°C at all times
+
+Daily monitoring:
+1. Check temperature display at least twice (start of shift, mid-shift)
+2. Record: storage area, temperature reading, date, time, your initials
+3. If outside limits: report to supervisor IMMEDIATELY, do NOT add new products
+
+If storage drifts above 4°C: report to supervisor immediately, check how long elevated, assess product safety, do NOT dispatch warm products.
+
+Stock rotation — FIFO: products arriving first must be used/dispatched first. Check use-by dates regularly. Never let old stock expire behind newer stock.`,
+  },
+  {
+    title: 'Product Dispatch & Traceability',
+    content: `Before dispatch:
+1. Verify product temperature ≤4°C
+2. Check packaging — intact and properly labelled
+3. Verify batch/lot codes match dispatch records
+4. Confirm customer details are correct
+
+Loading: use temperature-controlled vehicles ONLY. Load quickly. Verify vehicle is truly temperature-controlled.
+
+Traceability: record batch/lot codes in dispatch documentation. Link batch codes to customer orders. This creates forward traceability for recalls if needed.`,
+  },
+  {
+    title: 'Critical Control Points (CCPs) You Monitor',
+    content: `CCP 1 — Receipt Temperature Control:
+• Critical limits: Fresh ≤4°C, Frozen ≤-12°C, Offal ≤3°C
+• Monitor: temperature check every delivery
+• Record: temperature, product type, batch code, date, time, your initials
+• If limit exceeded: REJECT entire delivery, notify supplier, document rejection
+
+CCP 2 — Cold Storage Temperature:
+• Critical limits: Fresh 0–4°C, Frozen ≤-18°C
+• Monitor: check temperature display at least 2x daily
+• Record: storage area, temperature, date, time, your initials
+• If limit exceeded: report to supervisor immediately, assess product safety, may need to discard`,
+  },
+  {
+    title: 'Hazards in Warehouse Operations',
+    content: `Biological: Salmonella, E. coli, Campylobacter, Listeria present on raw meat. Cannot be seen or smelled. Multiply rapidly above 4°C. Prevention: keep temperature ≤4°C, reject warm products, monitor continuously.
+
+Physical: contaminated vehicles, damaged products, foreign objects, pest contamination, equipment failure. Prevention: inspect vehicles, reject damaged products, maintain clean storage, report pest evidence.
+
+Temperature hazards: products arriving too warm, equipment malfunction, cold chain breaks. Prevention: temperature check every product, monitor storage twice daily, report problems immediately.`,
+  },
+  {
+    title: 'Authority to Reject Products',
+    content: `You have the authority to reject ANY product if:
+• Temperature exceeds critical limits
+• Packaging is damaged or leaking
+• Shows signs of contamination or damage
+• Documentation is incomplete or incorrect
+• Use-by date is expired or too close
+• Supplier is not approved
+• Any food safety concern exists
+
+Rejecting a product:
+1. Stop accepting immediately
+2. Document reason clearly
+3. Notify supplier
+4. Report to supervisor
+5. Return to supplier or follow disposal procedures
+
+This is not negotiable — customer safety comes first.`,
+  },
+  {
+    title: 'Common Issues & Your Actions',
+    content: `Delivery arrives warm (above 4°C): REJECT entire delivery. Notify supplier. Document rejection. Report to supervisor.
+
+Packaging has holes or leaks: REJECT those products. Do NOT accept. Notify supplier. Document rejection.
+
+Cold storage reading 6°C: report to supervisor IMMEDIATELY. Check thermometer accuracy. Check product temperatures. Call maintenance.
+
+Products near use-by date: ensure FIFO working. Prioritise for dispatch. Alert supervisor if approaching expiry.
+
+Pest droppings found: tell supervisor IMMEDIATELY. Isolate area. Do NOT move products without guidance. Pest control will be called.
+
+Vehicle temperature system broken: tell supervisor IMMEDIATELY. Do NOT load products. Get alternative temperature-controlled vehicle.`,
+  },
+  {
+    title: 'Emergency Procedures',
+    content: `If emergency occurs:
+1. Stop normal work
+2. Tell supervisor immediately
+3. Follow supervisor's instructions
+4. Work calmly as a team
+5. Help document what happened
+
+Key emergencies:
+• Power/refrigeration failure: Tell supervisor, products may warm, may need discarding
+• Water supply loss: Cannot clean, stop operations, wait for restoration
+• Cold chain broken: Tell supervisor, products may need discarding
+• Pest activity: Tell supervisor, do NOT touch, let pest control handle
+• Injury: Tell supervisor/first aider immediately, do NOT move injured person`,
+  },
+  {
+    title: 'Health & Fitness to Work',
+    content: `Do NOT come to work if you have: diarrhoea or vomiting (symptom-free 48 hours required before returning), jaundice — MUST EXCLUDE, medical clearance required, open cuts that cannot be covered, skin infections or rashes, discharge from eyes, nose, or ears.
+
+If feeling unwell during shift: tell supervisor immediately, stop handling products, leave warehouse area, do NOT continue working.
+
+Return-to-work: gastrointestinal — symptom-free 48 hours minimum. Other illness — symptoms resolved. Serious illness — medical clearance required.`,
+  },
+  {
+    title: 'Key Rules — No Exceptions',
+    content: `1. If temperature is wrong, reject it. Don't risk customer safety.
+2. If packaging is damaged, reject it. Contamination can enter.
+3. If you're unsure, ask your supervisor. Never guess.
+4. Keep records accurate. They prove compliance.
+5. Work quickly with cold products. Minimise temperature rise.
+6. Maintain cold chain integrity. It's your job.
+7. Report problems immediately. Don't wait.
+
+YOUR DECISION MATTERS. CUSTOMER SAFETY DEPENDS ON YOU.`,
+  },
+]
+
+// 8 acknowledgment items — exact from MFS Warehouse Operative Training V2.0 page 10
+const WAREHOUSE_ACK_ITEMS = [
+  { id: 'w1', label: 'Read and understood this training summary' },
+  { id: 'w2', label: 'Reviewed the complete MFS Global HACCP Policy Handbook (V2.0)' },
+  { id: 'w3', label: 'Understand the food safety hazards in warehouse operations' },
+  { id: 'w4', label: 'Know my critical responsibilities for product receiving and temperature control' },
+  { id: 'w5', label: 'Understand how to monitor Critical Control Points (CCP 1 & 2)' },
+  { id: 'w6', label: 'Have the authority to reject unsuitable products' },
+  { id: 'w7', label: 'Know what to do in emergency situations' },
+  { id: 'w8', label: 'Accept responsibility for food safety in my daily work' },
+]
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function todayStr(): string {
@@ -430,7 +612,7 @@ function TrainingHistoryCard({ record }: { record: StaffTrainingRecord }) {
   const acksCount = record.confirmation_items
     ? Object.values(record.confirmation_items).filter(Boolean).length
     : 0
-  const totalItems = record.training_type === 'butchery_process_room' ? 7 : 8
+  const totalItems = record.training_type === 'warehouse_operative' ? 8 : 7
 
   return (
     <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
@@ -463,7 +645,9 @@ function TrainingHistoryCard({ record }: { record: StaffTrainingRecord }) {
         <div className="px-4 pb-3 border-t border-slate-100">
           <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-3 mb-2">Acknowledgments confirmed</p>
           {Object.entries(record.confirmation_items).map(([key, val]) => {
-            const items = record.training_type === 'butchery_process_room' ? BUTCHERY_ACK_ITEMS : []
+            const items = record.training_type === 'butchery_process_room' ? BUTCHERY_ACK_ITEMS
+                        : record.training_type === 'warehouse_operative'   ? WAREHOUSE_ACK_ITEMS
+                        : []
             const item = items.find((i) => i.id === key)
             if (!item) return null
             return (
@@ -692,6 +876,205 @@ function ButcheryTab({ records, onSubmitted }: { records: StaffTrainingRecord[];
 
 // ─── Placeholder tabs ─────────────────────────────────────────────────────────
 
+// ─── Tab 2 — Warehouse Operative ─────────────────────────────────────────────
+
+function WarehouseTab({ records, onSubmitted }: { records: StaffTrainingRecord[]; onSubmitted: () => void }) {
+  const today = todayStr()
+  const [staffName,      setStaffName]      = useState('')
+  const [docVersion,     setDocVersion]     = useState(CURRENT_VERSIONS.warehouse_operative)
+  const [completionDate, setCompletionDate] = useState(today)
+  const [refreshDate,    setRefreshDate]    = useState(addMonths(today, 12))
+  const [documentRead,   setDocumentRead]   = useState(false)
+  const [ticked,         setTicked]         = useState<Record<string, boolean>>(
+    Object.fromEntries(WAREHOUSE_ACK_ITEMS.map((i) => [i.id, false]))
+  )
+  const [supervisor,     setSupervisor]     = useState('')
+  const [submitting,     setSubmitting]     = useState(false)
+  const [error,          setError]          = useState('')
+
+  useEffect(() => {
+    if (completionDate) setRefreshDate(addMonths(completionDate, 12))
+  }, [completionDate])
+
+  const allTicked   = WAREHOUSE_ACK_ITEMS.every((i) => ticked[i.id])
+  const tickedCount = WAREHOUSE_ACK_ITEMS.filter((i) => ticked[i.id]).length
+  const isValid     = staffName.trim() && docVersion.trim() && completionDate && refreshDate && documentRead && allTicked && supervisor.trim()
+
+  function toggleTick(id: string) {
+    setTicked((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  async function handleSubmit() {
+    if (!isValid || submitting) return
+    setSubmitting(true); setError('')
+    try {
+      const res = await fetch('/api/haccp/training', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          training_type:      'warehouse_operative',
+          staff_name:         staffName,
+          job_role:           'Warehouse Operative',
+          document_version:   docVersion,
+          completion_date:    completionDate,
+          refresh_date:       refreshDate,
+          supervisor,
+          confirmation_items: ticked,
+        }),
+      })
+      if (res.ok) {
+        onSubmitted()
+        setStaffName(''); setSupervisor('')
+        setDocVersion(CURRENT_VERSIONS.warehouse_operative)
+        setDocumentRead(false)
+        setCompletionDate(today); setRefreshDate(addMonths(today, 12))
+        setTicked(Object.fromEntries(WAREHOUSE_ACK_ITEMS.map((i) => [i.id, false])))
+      } else {
+        const d = await res.json(); setError(d.error ?? 'Submission failed')
+      }
+    } catch { setError('Connection error — try again') }
+    finally { setSubmitting(false) }
+  }
+
+  const tabRecords = records.filter((r) => r.training_type === 'warehouse_operative')
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+        <svg className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+        <div>
+          <p className="text-amber-800 text-xs font-bold">Current document: MFS Warehouse Operative Training {CURRENT_VERSIONS.warehouse_operative}</p>
+          <p className="text-amber-700 text-xs mt-0.5">Staff must read the document before this record is logged. Refresh annually or when document is updated.</p>
+        </div>
+      </div>
+
+      <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+          <p className="text-slate-900 font-semibold text-sm">Log Training Completion</p>
+          <p className="text-slate-400 text-xs mt-0.5">Reg 852/2004 Annex II Ch X — food handler training record</p>
+        </div>
+
+        <div className="px-4 py-4 space-y-5">
+
+          {/* Staff name */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Staff name</p>
+            <input type="text" value={staffName} onChange={(e) => setStaffName(e.target.value)}
+              placeholder="Full name"
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+          </div>
+
+          {/* Job role — single value, displayed for reference */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Job role</p>
+            <div className="px-4 py-2.5 bg-slate-50 border border-blue-100 rounded-xl text-slate-600 text-sm">
+              Warehouse Operative
+            </div>
+          </div>
+
+          {/* Document version */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Document version signed</p>
+            <input type="text" value={docVersion} onChange={(e) => setDocVersion(e.target.value)}
+              placeholder="V2.0"
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm font-mono focus:outline-none focus:border-orange-500" />
+            {docVersion !== CURRENT_VERSIONS.warehouse_operative && (
+              <p className="text-amber-600 text-xs mt-1">
+                ⚠ Current version is {CURRENT_VERSIONS.warehouse_operative} — confirm staff signed the correct document
+              </p>
+            )}
+          </div>
+
+          {/* Document reader — must read before acknowledgment unlocks */}
+          <DocumentReader
+            sections={WAREHOUSE_DOCUMENT_SECTIONS}
+            docVersion={docVersion}
+            title="MFS Warehouse Operative Training"
+            onRead={() => setDocumentRead(true)}
+          />
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Completion date</p>
+              <input type="date" value={completionDate} onChange={(e) => setCompletionDate(e.target.value)}
+                className="w-full bg-white border border-blue-100 rounded-xl px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+            </div>
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Refresh date</p>
+              <input type="date" value={refreshDate} onChange={(e) => setRefreshDate(e.target.value)}
+                className="w-full bg-white border border-blue-100 rounded-xl px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+              <p className="text-slate-400 text-[10px] mt-1">Auto-set to +12 months</p>
+            </div>
+          </div>
+
+          {/* Acknowledgment checklist — locked until document is read */}
+          {!documentRead ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-4 text-center">
+              <svg className="w-6 h-6 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              <p className="text-slate-400 text-xs font-bold">Acknowledgment locked</p>
+              <p className="text-slate-400 text-[10px] mt-0.5">Read the training document above to unlock</p>
+            </div>
+          ) : (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Training acknowledgment</p>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  allTicked ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                }`}>{tickedCount}/{WAREHOUSE_ACK_ITEMS.length}</span>
+              </div>
+              <p className="text-slate-500 text-xs mb-3">
+                Confirm that the staff member acknowledges each point from the training booklet.
+              </p>
+              <AckChecklist items={WAREHOUSE_ACK_ITEMS} ticked={ticked} onToggle={toggleTick} />
+              {!allTicked && (
+                <p className="text-slate-400 text-xs mt-2">All {WAREHOUSE_ACK_ITEMS.length} items must be confirmed before submitting</p>
+              )}
+            </div>
+          )}
+
+          {/* Supervisor sign-off */}
+          <SupervisorSignOff value={supervisor} onChange={setSupervisor} />
+
+          {error && <p className="text-red-600 text-xs">{error}</p>}
+        </div>
+
+        <button onClick={handleSubmit} disabled={!isValid || submitting}
+          className="w-full bg-orange-600 text-white font-bold py-4 text-sm disabled:opacity-40 flex items-center justify-center gap-2 transition-opacity">
+          {submitting
+            ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>Saving…</>
+            : <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>Submit training record</>
+          }
+        </button>
+      </div>
+
+      {/* History */}
+      {tabRecords.length > 0 && (
+        <div>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Training records ({tabRecords.length})</p>
+          <div className="space-y-2">
+            {tabRecords.map((r) => <TrainingHistoryCard key={r.id} record={r} />)}
+          </div>
+        </div>
+      )}
+      {tabRecords.length === 0 && (
+        <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center">
+          <p className="text-slate-400 text-sm">No records yet</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PlaceholderTab({ label }: { label: string }) {
   return (
     <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center">
@@ -792,8 +1175,8 @@ export default function TrainingPage() {
           </div>
         ) : (
           <>
-            {tab === 'butchery'  && <ButcheryTab  records={staffRecs} onSubmitted={handleSubmitted} />}
-            {tab === 'warehouse' && <PlaceholderTab label="Warehouse Operative Training" />}
+            {tab === 'butchery'  && <ButcheryTab   records={staffRecs} onSubmitted={handleSubmitted} />}
+            {tab === 'warehouse' && <WarehouseTab  records={staffRecs} onSubmitted={handleSubmitted} />}
             {tab === 'allergen'  && <PlaceholderTab label="Allergen Awareness Training" />}
           </>
         )}
