@@ -1,0 +1,667 @@
+/**
+ * app/haccp/audit/page.tsx
+ *
+ * HACCP Audit View — admin only
+ *
+ * Structure:
+ * - Date range filter (7d / 30d / 90d)  — global, applies to all sections
+ * - Collapsible coverage heatmap         — day-by-day compliance grid
+ * - Section tabs                         — one per HACCP area
+ * - Master "Export All (XLSX)" button    — downloads all sections as one file
+ *
+ * Built section by section:
+ * ✅ Section 1: Deliveries
+ * 🔜 Sections 2–11: Coming
+ */
+
+'use client'
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type DatePreset = '7d' | '30d' | '90d'
+
+interface CA {
+  id:                            string
+  ccp_ref:                       string
+  deviation_description:         string
+  action_taken:                  string
+  product_disposition:           string | null
+  recurrence_prevention:         string | null
+  management_verification_required: boolean
+  resolved:                      boolean
+  verified_at:                   string | null
+}
+
+interface DeliveryRow {
+  id:                          string
+  date:                        string
+  time_of_delivery:            string | null
+  supplier:                    string
+  product:                     string
+  species:                     string | null
+  product_category:            string
+  temperature_c:               number
+  temp_status:                 string
+  covered_contaminated:        string
+  contamination_notes:         string | null
+  contamination_type:          string | null
+  corrective_action_required:  boolean
+  batch_number:                string | null
+  delivery_number:             number | null
+  born_in:                     string | null
+  reared_in:                   string | null
+  slaughter_site:              string | null
+  cut_site:                    string | null
+  notes:                       string | null
+  submitted_by_name:           string
+  ca:                          CA | null
+}
+
+interface DeliverySummary {
+  total: number; pass: number; urgent: number
+  fail: number;  ca_count: number; unresolved: number
+}
+
+interface HeatmapDay {
+  has_records: boolean
+  has_deviations: boolean
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function todayStr(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
+}
+
+function daysAgoStr(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  })
+}
+
+function fmtDateShort(iso: string) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short',
+  })
+}
+
+function fmtTime(t: string | null) {
+  if (!t) return '—'
+  return t.slice(0, 5)
+}
+
+function isWeekend(dateStr: string): boolean {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.getDay() === 0 || d.getDay() === 6
+}
+
+function getDaysInRange(from: string, to: string): string[] {
+  const days: string[] = []
+  const cur = new Date(from + 'T00:00:00')
+  const end = new Date(to   + 'T00:00:00')
+  while (cur <= end) {
+    days.push(cur.toLocaleDateString('en-CA'))
+    cur.setDate(cur.getDate() + 1)
+  }
+  return days
+}
+
+function presetToRange(preset: DatePreset): { from: string; to: string } {
+  const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90
+  return { from: daysAgoStr(days), to: todayStr() }
+}
+
+function escapeCSV(val: string | number | null | undefined): string {
+  if (val === null || val === undefined) return ''
+  const str = String(val)
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`
+  }
+  return str
+}
+
+function downloadCSV(filename: string, headers: string[], rows: (string | number | null | undefined)[][]) {
+  const lines = [
+    headers.map(escapeCSV).join(','),
+    ...rows.map((row) => row.map(escapeCSV).join(',')),
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ─── Status badges ────────────────────────────────────────────────────────────
+
+function TempBadge({ status }: { status: string }) {
+  const cls = status === 'pass'   ? 'bg-green-100 text-green-700'
+            : status === 'urgent' ? 'bg-amber-100 text-amber-700'
+            : 'bg-red-100 text-red-700'
+  const lbl = status === 'pass' ? 'Pass' : status === 'urgent' ? 'Urgent' : 'Fail'
+  return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{lbl}</span>
+}
+
+function CABadge({ ca }: { ca: CA | null }) {
+  if (!ca) return <span className="text-[10px] text-slate-300">—</span>
+  if (!ca.resolved) return (
+    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">⚠ Unresolved</span>
+  )
+  return (
+    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">✓ Resolved</span>
+  )
+}
+
+function ContamBadge({ val }: { val: string }) {
+  const isIssue = val !== 'covered_not_contaminated'
+  const lbl = val === 'covered_not_contaminated' ? 'Clean'
+            : val === 'uncovered_not_contaminated' ? 'Uncovered'
+            : 'Issue'
+  return (
+    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+      isIssue ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+    }`}>{lbl}</span>
+  )
+}
+
+// ─── Heatmap ──────────────────────────────────────────────────────────────────
+
+const HEATMAP_SECTIONS = [
+  { key: 'deliveries', label: 'CCP1 Deliveries', variable: true },
+  { key: 'cold_am',    label: 'CCP2 Cold AM',    variable: false },
+  { key: 'cold_pm',    label: 'CCP2 Cold PM',    variable: false },
+  { key: 'room_am',    label: 'CCP3 Room AM',    variable: false },
+  { key: 'room_pm',    label: 'CCP3 Room PM',    variable: false },
+  { key: 'diary_open', label: 'Diary Opening',   variable: false },
+  { key: 'diary_close',label: 'Diary Closing',   variable: false },
+  { key: 'cleaning',   label: 'Cleaning',         variable: false },
+  { key: 'mince',      label: 'Mince/Prep',       variable: true  },
+]
+
+function HeatCell({ date, section, heatmapData }: {
+  date: string
+  section: { key: string; variable: boolean }
+  heatmapData: Record<string, Record<string, HeatmapDay>>
+}) {
+  const weekend   = isWeekend(date)
+  const dayData   = heatmapData[section.key]?.[date]
+  const hasRecord = dayData?.has_records ?? false
+  const hasDev    = dayData?.has_deviations ?? false
+
+  if (weekend) return <div className="w-6 h-6 rounded bg-slate-100 border border-slate-200 flex-shrink-0" title="Weekend" />
+
+  let cls = 'bg-slate-50 border-slate-200' // none / not built yet
+  let title = 'No data'
+
+  if (section.key === 'deliveries') {
+    // Variable — no record is grey not red
+    if (hasRecord && hasDev)  { cls = 'bg-amber-200 border-amber-300';  title = 'Deviations' }
+    else if (hasRecord)       { cls = 'bg-green-200 border-green-300';  title = 'All pass' }
+    else                      { cls = 'bg-slate-100 border-slate-200'; title = 'No deliveries' }
+  } else {
+    // Expected Mon–Fri — no record is a gap
+    // Only deliveries section is built for now, others stub
+    cls = 'bg-slate-100 border-slate-200 opacity-40'
+    title = 'Coming soon'
+  }
+
+  return <div className={`w-6 h-6 rounded border flex-shrink-0 ${cls}`} title={`${fmtDateShort(date)}: ${title}`} />
+}
+
+function Heatmap({ from, to, heatmapData }: {
+  from: string; to: string
+  heatmapData: Record<string, Record<string, HeatmapDay>>
+}) {
+  const days = getDaysInRange(from, to)
+
+  return (
+    <div className="overflow-x-auto">
+      <div style={{ minWidth: `${days.length * 28 + 140}px` }}>
+        {/* Day headers */}
+        <div className="flex items-center mb-1">
+          <div className="w-36 flex-shrink-0" />
+          {days.map((d) => (
+            <div key={d} className={`w-6 flex-shrink-0 text-center ${isWeekend(d) ? 'opacity-30' : ''}`}>
+              <span className="text-[8px] text-slate-400 leading-none">
+                {new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric' })}
+              </span>
+            </div>
+          ))}
+        </div>
+        {/* Month markers */}
+        <div className="flex items-center mb-2">
+          <div className="w-36 flex-shrink-0" />
+          {days.map((d, i) => {
+            const isFirst = i === 0 || d.slice(5, 7) !== days[i - 1].slice(5, 7)
+            return (
+              <div key={d} className="w-6 flex-shrink-0 text-center">
+                {isFirst && <span className="text-[8px] text-slate-400 font-bold">
+                  {new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { month: 'short' })}
+                </span>}
+              </div>
+            )
+          })}
+        </div>
+        {/* Section rows */}
+        {HEATMAP_SECTIONS.map((section) => (
+          <div key={section.key} className="flex items-center mb-1">
+            <div className="w-36 flex-shrink-0 pr-2">
+              <span className="text-[10px] text-slate-500 font-medium truncate block">{section.label}</span>
+            </div>
+            {days.map((d) => (
+              <div key={d} className="w-6 flex-shrink-0 flex items-center justify-center">
+                <HeatCell date={d} section={section} heatmapData={heatmapData} />
+              </div>
+            ))}
+          </div>
+        ))}
+        {/* Legend */}
+        <div className="flex items-center gap-4 mt-3 ml-36">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-green-200 border border-green-300" />
+            <span className="text-[10px] text-slate-500">Pass</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-amber-200 border border-amber-300" />
+            <span className="text-[10px] text-slate-500">Deviation</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-red-200 border border-red-300" />
+            <span className="text-[10px] text-slate-500">Gap</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded bg-slate-100 border border-slate-200" />
+            <span className="text-[10px] text-slate-500">None / Weekend</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Delivery row ─────────────────────────────────────────────────────────────
+
+function DeliveryTableRow({ row }: { row: DeliveryRow }) {
+  const [expanded, setExpanded] = useState(false)
+
+  const rowColour = row.temp_status === 'fail' || (row.ca && !row.ca.resolved)
+    ? 'bg-red-50 border-red-100'
+    : row.temp_status === 'urgent' || (row.covered_contaminated !== 'covered_not_contaminated')
+    ? 'bg-amber-50 border-amber-100'
+    : 'bg-white border-slate-100'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded((p) => !p)}>
+        <td className="px-3 py-2.5 text-xs text-slate-700 whitespace-nowrap font-medium">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtTime(row.time_of_delivery)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-700 max-w-32 truncate">{row.supplier}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-700 max-w-36 truncate">
+          {row.product}{row.species ? ` (${row.species})` : ''}
+        </td>
+        <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+          <span className={`font-mono font-bold ${
+            row.temp_status === 'fail'   ? 'text-red-600'
+          : row.temp_status === 'urgent' ? 'text-amber-600'
+          : 'text-green-700'
+          }`}>{row.temperature_c}°C</span>
+        </td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><TempBadge status={row.temp_status} /></td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><ContamBadge val={row.covered_contaminated} /></td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><CABadge ca={row.ca} /></td>
+        <td className="px-3 py-2.5">
+          <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={9} className="px-4 pb-4 pt-1">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs ml-2">
+              {/* Traceability */}
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Traceability</p>
+                <div className="space-y-0.5">
+                  {row.batch_number    && <p className="text-slate-600">Batch: <span className="font-mono font-bold text-slate-800">{row.batch_number}</span></p>}
+                  {row.delivery_number && <p className="text-slate-600">Delivery #: {row.delivery_number}</p>}
+                  {row.born_in         && <p className="text-slate-600">Born in: {row.born_in}</p>}
+                  {row.reared_in       && <p className="text-slate-600">Reared in: {row.reared_in}</p>}
+                  {row.slaughter_site  && <p className="text-slate-600">Slaughter: {row.slaughter_site}</p>}
+                  {row.cut_site        && <p className="text-slate-600">Cut: {row.cut_site}</p>}
+                </div>
+              </div>
+              {/* Notes */}
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Notes</p>
+                <div className="space-y-0.5">
+                  {row.contamination_notes && <p className="text-slate-600">Contamination: {row.contamination_notes}</p>}
+                  {row.contamination_type  && <p className="text-slate-600">Type: {row.contamination_type}</p>}
+                  {row.notes               && <p className="text-slate-600">{row.notes}</p>}
+                  <p className="text-slate-400 text-[10px] mt-1">Submitted by: {row.submitted_by_name}</p>
+                </div>
+              </div>
+              {/* CA detail */}
+              {row.ca && (
+                <div className="col-span-2 mt-1">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective Action — {row.ca.ccp_ref}</p>
+                  <div className={`rounded-xl px-4 py-3 border space-y-1.5 ${
+                    row.ca.resolved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                  }`}>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Deviation:</span> {row.ca.deviation_description}</p>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Action taken:</span> {row.ca.action_taken}</p>
+                    {row.ca.product_disposition && (
+                      <p className="text-slate-700"><span className="font-bold text-slate-500">Disposition:</span> {row.ca.product_disposition}</p>
+                    )}
+                    {row.ca.recurrence_prevention && (
+                      <p className="text-slate-700"><span className="font-bold text-slate-500">Prevention:</span> {row.ca.recurrence_prevention}</p>
+                    )}
+                    <div className="flex items-center gap-2 pt-0.5">
+                      {row.ca.management_verification_required && (
+                        <span className="text-[10px] font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Mgmt verification required</span>
+                      )}
+                      {row.ca.resolved
+                        ? <span className="text-[10px] font-bold bg-green-200 text-green-700 px-2 py-0.5 rounded-full">✓ Resolved {row.ca.verified_at ? fmtDate(row.ca.verified_at.slice(0, 10)) : ''}</span>
+                        : <span className="text-[10px] font-bold bg-red-200 text-red-700 px-2 py-0.5 rounded-full">⚠ Unresolved — action required</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+// ─── Deliveries section ───────────────────────────────────────────────────────
+
+function DeliveriesSection({ from, to, onHeatmapData }: {
+  from: string; to: string
+  onHeatmapData: (data: Record<string, HeatmapDay>) => void
+}) {
+  const [rows,     setRows]     = useState<DeliveryRow[]>([])
+  const [summary,  setSummary]  = useState<DeliverySummary | null>(null)
+  const [loading,  setLoading]  = useState(true)
+  const [error,    setError]    = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true); setError('')
+    fetch(`/api/haccp/audit?section=deliveries&from=${from}&to=${to}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.error) { setError(d.error); return }
+        setRows(d.rows ?? [])
+        setSummary(d.summary ?? null)
+        onHeatmapData(d.heatmap ?? {})
+      })
+      .catch(() => setError('Failed to load'))
+      .finally(() => setLoading(false))
+  }, [from, to, onHeatmapData])
+
+  useEffect(() => { load() }, [load])
+
+  function exportCSV() {
+    const headers = [
+      'Date', 'Time', 'Supplier', 'Product', 'Species', 'Category',
+      'Temp °C', 'Status', 'Contamination', 'Batch No', 'Delivery No',
+      'Born in', 'Reared in', 'Slaughter site', 'Cut site', 'Notes',
+      'Submitted by', 'CA logged', 'CA resolved', 'CA deviation', 'CA action taken', 'CA disposition',
+    ]
+    const csvRows = rows.map((r) => [
+      r.date, r.time_of_delivery ?? '', r.supplier, r.product, r.species ?? '',
+      r.product_category, r.temperature_c, r.temp_status, r.covered_contaminated,
+      r.batch_number ?? '', r.delivery_number ?? '', r.born_in ?? '', r.reared_in ?? '',
+      r.slaughter_site ?? '', r.cut_site ?? '', r.notes ?? '', r.submitted_by_name,
+      r.ca ? 'Yes' : 'No',
+      r.ca ? (r.ca.resolved ? 'Yes' : 'No') : '',
+      r.ca?.deviation_description ?? '', r.ca?.action_taken ?? '', r.ca?.product_disposition ?? '',
+    ])
+    downloadCSV(`MFS_Deliveries_${from}_to_${to}.csv`, headers, csvRows)
+  }
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-slate-400 text-sm py-8">
+      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>Loading deliveries…
+    </div>
+  )
+
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      {/* Summary bar + CSV export */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {summary && (
+          <div className="flex items-center gap-3 flex-wrap">
+            {[
+              { label: 'Total', val: summary.total,      cls: 'bg-slate-100 text-slate-700' },
+              { label: 'Pass',  val: summary.pass,       cls: 'bg-green-100 text-green-700' },
+              { label: 'Urgent',val: summary.urgent,     cls: 'bg-amber-100 text-amber-700' },
+              { label: 'Fail',  val: summary.fail,       cls: 'bg-red-100 text-red-700' },
+              { label: 'CAs',   val: summary.ca_count,   cls: 'bg-blue-100 text-blue-700' },
+              { label: 'Unresolved', val: summary.unresolved, cls: summary.unresolved > 0 ? 'bg-red-200 text-red-800 font-bold' : 'bg-slate-100 text-slate-500' },
+            ].map((s) => (
+              <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}>
+                <span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={exportCSV}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+          </svg>
+          Export CSV
+        </button>
+      </div>
+
+      {/* Table */}
+      {rows.length === 0 ? (
+        <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center">
+          <p className="text-slate-400 text-sm">No deliveries in this date range</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse" style={{ minWidth: '700px' }}>
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Date','Time','Supplier','Product','Temp','Status','Contam','CA',''].map((h) => (
+                    <th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => <DeliveryTableRow key={row.id} row={row} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Placeholder section ──────────────────────────────────────────────────────
+
+function PlaceholderSection({ label }: { label: string }) {
+  return (
+    <div className="bg-white border border-blue-100 rounded-xl px-4 py-10 text-center">
+      <p className="text-slate-300 text-sm">{label} — coming soon</p>
+    </div>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+const SECTIONS = [
+  { key: 'deliveries',    label: 'Deliveries',    sub: 'CCP 1' },
+  { key: 'cold_storage',  label: 'Cold Storage',  sub: 'CCP 2' },
+  { key: 'process_room',  label: 'Process Room',  sub: 'CCP 3' },
+  { key: 'cleaning',      label: 'Cleaning',      sub: 'SOP 2' },
+  { key: 'calibration',   label: 'Calibration',   sub: 'SOP 3' },
+  { key: 'mince',         label: 'Mince & Prep',  sub: 'CCP-M' },
+  { key: 'returns',       label: 'Returns',        sub: 'SOP 12' },
+  { key: 'ccas',          label: 'Corrective Actions', sub: 'All' },
+  { key: 'reviews',       label: 'Reviews',        sub: 'W+M' },
+  { key: 'health',        label: 'Health',         sub: 'SOP 8' },
+  { key: 'training',      label: 'Training',       sub: 'FIR' },
+] as const
+
+type SectionKey = typeof SECTIONS[number]['key']
+
+export default function AuditPage() {
+  const [preset,       setPreset]       = useState<DatePreset>('30d')
+  const [{ from, to }, setRange]        = useState(presetToRange('30d'))
+  const [section,      setSection]      = useState<SectionKey>('deliveries')
+  const [heatmapOpen,  setHeatmapOpen]  = useState(true)
+  const [exporting,    setExporting]    = useState(false)
+  const [heatmapData,  setHeatmapData]  = useState<Record<string, Record<string, HeatmapDay>>>({})
+
+  function selectPreset(p: DatePreset) {
+    setPreset(p)
+    setRange(presetToRange(p))
+  }
+
+  function handleHeatmapData(sectionKey: string, data: Record<string, HeatmapDay>) {
+    setHeatmapData((prev) => ({ ...prev, [sectionKey]: data }))
+  }
+
+  async function exportAll() {
+    setExporting(true)
+    try {
+      const url = `/api/haccp/audit/export?from=${from}&to=${to}`
+      const res = await fetch(url)
+      if (!res.ok) { alert('Export failed'); return }
+      const blob = await res.blob()
+      const a    = document.createElement('a')
+      a.href     = URL.createObjectURL(blob)
+      a.download = `MFS_HACCP_Audit_${from}_to_${to}.xlsx`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch { alert('Export failed — try again') }
+    finally { setExporting(false) }
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
+
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B] flex-shrink-0">
+        <button onClick={() => { window.location.href = '/haccp' }}
+          className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-orange-400 text-[10px] font-bold tracking-widest uppercase">HACCP Record Audit</p>
+          <h1 className="text-white text-lg font-bold leading-tight">Audit View</h1>
+        </div>
+        {/* Export All button */}
+        <button onClick={exportAll} disabled={exporting}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition-colors disabled:opacity-50 flex-shrink-0">
+          {exporting
+            ? <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+            : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          }
+          Export All (XLSX)
+        </button>
+      </div>
+
+      {/* Date filter */}
+      <div className="px-5 py-3 bg-white border-b border-slate-200 flex items-center gap-3 flex-wrap">
+        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Date range:</p>
+        <div className="flex gap-2">
+          {(['7d', '30d', '90d'] as const).map((p) => (
+            <button key={p} onClick={() => selectPreset(p)}
+              className={`px-4 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                preset === p ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+              }`}>
+              {p === '7d' ? '7 days' : p === '30d' ? '30 days' : '90 days'}
+            </button>
+          ))}
+        </div>
+        <p className="text-slate-400 text-xs ml-2">{fmtDate(from)} — {fmtDate(to)}</p>
+      </div>
+
+      <div className="flex-1 px-5 py-4 space-y-4 overflow-y-auto">
+
+        {/* Collapsible heatmap */}
+        <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
+          <button onClick={() => setHeatmapOpen((p) => !p)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left">
+            <div>
+              <p className="text-slate-900 text-sm font-bold">Coverage heatmap</p>
+              <p className="text-slate-400 text-xs mt-0.5">{fmtDate(from)} — {fmtDate(to)} · {getDaysInRange(from, to).length} days</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400">
+                {heatmapOpen ? 'Collapse' : 'Expand'}
+              </span>
+              <svg className={`w-4 h-4 text-slate-400 transition-transform ${heatmapOpen ? 'rotate-180' : ''}`}
+                fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </button>
+          {heatmapOpen && (
+            <div className="px-4 pb-4 border-t border-slate-100">
+              <Heatmap from={from} to={to} heatmapData={heatmapData} />
+            </div>
+          )}
+        </div>
+
+        {/* Section tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {SECTIONS.map((s) => (
+            <button key={s.key} onClick={() => setSection(s.key)}
+              className={`flex-shrink-0 py-2 px-3 rounded-xl text-xs font-bold border-2 transition-all ${
+                section === s.key
+                  ? 'border-orange-500 bg-orange-50 text-orange-700'
+                  : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+              }`}>
+              <span>{s.label}</span>
+              <span className={`ml-1 text-[9px] ${section === s.key ? 'text-orange-400' : 'text-slate-400'}`}>{s.sub}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Section content */}
+        {section === 'deliveries' && (
+          <DeliveriesSection
+            from={from} to={to}
+            onHeatmapData={(data) => handleHeatmapData('deliveries', data)}
+          />
+        )}
+        {section === 'cold_storage'  && <PlaceholderSection label="Cold Storage" />}
+        {section === 'process_room'  && <PlaceholderSection label="Process Room" />}
+        {section === 'cleaning'      && <PlaceholderSection label="Cleaning" />}
+        {section === 'calibration'   && <PlaceholderSection label="Calibration" />}
+        {section === 'mince'         && <PlaceholderSection label="Mince & Prep" />}
+        {section === 'returns'       && <PlaceholderSection label="Product Returns" />}
+        {section === 'ccas'          && <PlaceholderSection label="Corrective Actions" />}
+        {section === 'reviews'       && <PlaceholderSection label="Reviews" />}
+        {section === 'health'        && <PlaceholderSection label="Health & People" />}
+        {section === 'training'      && <PlaceholderSection label="Training" />}
+
+      </div>
+    </div>
+  )
+}
