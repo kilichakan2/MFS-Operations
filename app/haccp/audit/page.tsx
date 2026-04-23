@@ -539,9 +539,9 @@ export default function AuditPage() {
     setRange(presetToRange(p))
   }
 
-  function handleHeatmapData(sectionKey: string, data: Record<string, HeatmapDay>) {
-    setHeatmapData((prev) => ({ ...prev, [sectionKey]: data }))
-  }
+  const handleDeliveryHeatmapData = useCallback((data: Record<string, HeatmapDay>) => {
+    setHeatmapData((prev) => ({ ...prev, deliveries: data }))
+  }, []) // stable — empty deps, never recreated
 
   async function exportAll() {
     setExporting(true)
@@ -647,7 +647,7 @@ export default function AuditPage() {
         {section === 'deliveries' && (
           <DeliveriesSection
             from={from} to={to}
-            onHeatmapData={(data) => handleHeatmapData('deliveries', data)}
+            onHeatmapData={handleDeliveryHeatmapData}
           />
         )}
         {section === 'cold_storage'  && <PlaceholderSection label="Cold Storage" />}
