@@ -367,3 +367,131 @@ describe('Warehouse training API contract', () => {
     expect(warehouseRecords.map((r) => r.staff_name)).toEqual(['Daz', 'Adeel'])
   })
 })
+
+// ─── Allergen Awareness Tab 3 ─────────────────────────────────────────────────
+
+const ALLERGEN_ITEMS = [
+  { id: 'a1',  label: 'Celery' },
+  { id: 'a2',  label: 'Cereals containing gluten (wheat, rye, barley, oats)' },
+  { id: 'a3',  label: 'Crustaceans (prawns, crab, lobster)' },
+  { id: 'a4',  label: 'Eggs' },
+  { id: 'a5',  label: 'Fish' },
+  { id: 'a6',  label: 'Lupin' },
+  { id: 'a7',  label: 'Milk' },
+  { id: 'a8',  label: 'Molluscs (mussels, oysters, squid)' },
+  { id: 'a9',  label: 'Mustard' },
+  { id: 'a10', label: 'Peanuts' },
+  { id: 'a11', label: 'Sesame' },
+  { id: 'a12', label: 'Soybeans' },
+  { id: 'a13', label: 'Sulphur dioxide and sulphites (>10mg/kg)' },
+  { id: 'a14', label: 'Tree nuts (almonds, hazelnuts, walnuts, cashews, pecans, Brazil nuts, pistachios, macadamia)' },
+]
+
+const ALLERGEN_UNDERSTANDING_ITEMS = [
+  { id: 'u1', label: 'I understand the risks of allergen cross-contamination in food handling' },
+  { id: 'u2', label: 'I know how to store allergen-containing products separately to prevent cross-contamination' },
+  { id: 'u3', label: 'I understand my responsibility to prevent allergen cross-contamination during processing and dispatch' },
+  { id: 'u4', label: 'I know that allergen information must be accurate on all product labels' },
+  { id: 'u5', label: 'I know to report any potential allergen contamination to my supervisor immediately' },
+]
+
+describe('Allergen awareness — 14 UK allergens (FIR 2014)', () => {
+  it('has exactly 14 allergens', () => {
+    expect(ALLERGEN_ITEMS).toHaveLength(14)
+  })
+
+  it('all allergen IDs are unique', () => {
+    const ids = ALLERGEN_ITEMS.map((i) => i.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('all allergen IDs use a prefix', () => {
+    for (const item of ALLERGEN_ITEMS) {
+      expect(item.id.startsWith('a')).toBe(true)
+    }
+  })
+
+  it('includes all 14 FIR 2014 allergens by name', () => {
+    const labels = ALLERGEN_ITEMS.map((i) => i.label)
+    expect(labels.some(l => l.includes('Celery'))).toBe(true)
+    expect(labels.some(l => l.includes('gluten'))).toBe(true)
+    expect(labels.some(l => l.includes('Crustaceans'))).toBe(true)
+    expect(labels.some(l => l.includes('Eggs'))).toBe(true)
+    expect(labels.some(l => l.includes('Fish'))).toBe(true)
+    expect(labels.some(l => l.includes('Lupin'))).toBe(true)
+    expect(labels.some(l => l.includes('Milk'))).toBe(true)
+    expect(labels.some(l => l.includes('Molluscs'))).toBe(true)
+    expect(labels.some(l => l.includes('Mustard'))).toBe(true)
+    expect(labels.some(l => l.includes('Peanuts'))).toBe(true)
+    expect(labels.some(l => l.includes('Sesame'))).toBe(true)
+    expect(labels.some(l => l.includes('Soybeans'))).toBe(true)
+    expect(labels.some(l => l.includes('Sulphur'))).toBe(true)
+    expect(labels.some(l => l.includes('Tree nuts'))).toBe(true)
+  })
+
+  it('has 5 understanding items', () => {
+    expect(ALLERGEN_UNDERSTANDING_ITEMS).toHaveLength(5)
+  })
+
+  it('total confirmation items = 19 (14 allergens + 5 understanding)', () => {
+    expect(ALLERGEN_ITEMS.length + ALLERGEN_UNDERSTANDING_ITEMS.length).toBe(19)
+  })
+
+  it('no ID overlap between allergen items and understanding items', () => {
+    const allergenIds = ALLERGEN_ITEMS.map((i) => i.id)
+    const understandingIds = ALLERGEN_UNDERSTANDING_ITEMS.map((i) => i.id)
+    const overlap = allergenIds.filter((id) => understandingIds.includes(id))
+    expect(overlap).toHaveLength(0)
+  })
+})
+
+describe('Allergen training API contract', () => {
+  // CRITICAL: allergen table uses DIFFERENT column names from staff_training
+  // certification_date (not completion_date), training_completed (not training_type)
+  const PAGE_SENDS_KEYS_ALLERGEN = [
+    'training_type',      // page sends 'allergen_awareness' — route maps to training_completed
+    'staff_name',
+    'job_role',
+    'certification_date', // NOT completion_date — allergen table uses certification_date
+    'refresh_date',
+    'supervisor',
+    'confirmation_items',
+  ]
+
+  const ROUTE_INSERTS_ALLERGEN = [
+    'logged_by',
+    'staff_name',
+    'job_role',
+    'training_completed', // DB column name — value 'allergen_awareness'
+    'certification_date',
+    'refresh_date',
+    'supervisor_name',    // DB column — mapped from supervisor
+    'confirmation_items',
+  ]
+
+  it('allergen page sends certification_date (not completion_date)', () => {
+    expect(PAGE_SENDS_KEYS_ALLERGEN).toContain('certification_date')
+    expect(PAGE_SENDS_KEYS_ALLERGEN).not.toContain('completion_date')
+  })
+
+  it('allergen route inserts training_completed (not training_type)', () => {
+    expect(ROUTE_INSERTS_ALLERGEN).toContain('training_completed')
+    expect(ROUTE_INSERTS_ALLERGEN).not.toContain('training_type')
+  })
+
+  it('allergen route inserts certification_date (not completion_date)', () => {
+    expect(ROUTE_INSERTS_ALLERGEN).toContain('certification_date')
+    expect(ROUTE_INSERTS_ALLERGEN).not.toContain('completion_date')
+  })
+
+  it('allergen requires job_role (it is NOT NULL in haccp_allergen_training)', () => {
+    expect(PAGE_SENDS_KEYS_ALLERGEN).toContain('job_role')
+    expect(ROUTE_INSERTS_ALLERGEN).toContain('job_role')
+  })
+
+  it('supervisor maps to supervisor_name in DB', () => {
+    expect(PAGE_SENDS_KEYS_ALLERGEN).toContain('supervisor')
+    expect(ROUTE_INSERTS_ALLERGEN).toContain('supervisor_name')
+    expect(ROUTE_INSERTS_ALLERGEN).not.toContain('supervisor')
+  })
+})

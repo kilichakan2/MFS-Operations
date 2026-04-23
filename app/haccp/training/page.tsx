@@ -1075,6 +1075,270 @@ function WarehouseTab({ records, onSubmitted }: { records: StaffTrainingRecord[]
   )
 }
 
+// ─── Allergen Awareness constants ────────────────────────────────────────────
+// 14 major allergens — UK Food Information Regulations 2014
+const ALLERGEN_ITEMS = [
+  { id: 'a1',  label: 'Celery' },
+  { id: 'a2',  label: 'Cereals containing gluten (wheat, rye, barley, oats)' },
+  { id: 'a3',  label: 'Crustaceans (prawns, crab, lobster)' },
+  { id: 'a4',  label: 'Eggs' },
+  { id: 'a5',  label: 'Fish' },
+  { id: 'a6',  label: 'Lupin' },
+  { id: 'a7',  label: 'Milk' },
+  { id: 'a8',  label: 'Molluscs (mussels, oysters, squid)' },
+  { id: 'a9',  label: 'Mustard' },
+  { id: 'a10', label: 'Peanuts' },
+  { id: 'a11', label: 'Sesame' },
+  { id: 'a12', label: 'Soybeans' },
+  { id: 'a13', label: 'Sulphur dioxide and sulphites (>10mg/kg)' },
+  { id: 'a14', label: 'Tree nuts (almonds, hazelnuts, walnuts, cashews, pecans, Brazil nuts, pistachios, macadamia)' },
+]
+
+const ALLERGEN_UNDERSTANDING_ITEMS = [
+  { id: 'u1', label: 'I understand the risks of allergen cross-contamination in food handling' },
+  { id: 'u2', label: 'I know how to store allergen-containing products separately to prevent cross-contamination' },
+  { id: 'u3', label: 'I understand my responsibility to prevent allergen cross-contamination during processing and dispatch' },
+  { id: 'u4', label: 'I know that allergen information must be accurate on all product labels' },
+  { id: 'u5', label: 'I know to report any potential allergen contamination to my supervisor immediately' },
+]
+
+const ALL_ALLERGEN_CONFIRMATION_ITEMS = [...ALLERGEN_ITEMS, ...ALLERGEN_UNDERSTANDING_ITEMS]
+
+// ─── Tab 3 — Allergen Awareness ───────────────────────────────────────────────
+
+interface AllergenRecord {
+  id:                 string
+  staff_name:         string
+  job_role:           string
+  training_completed: string
+  certification_date: string
+  refresh_date:       string
+  supervisor_name:    string | null
+  confirmation_items: Record<string, boolean> | null
+  submitted_at:       string
+}
+
+const ALLERGEN_JOB_ROLES = ['Butcher', 'Processing Worker', 'Warehouse Operative']
+
+function AllergenTab({ allergenRecords, onSubmitted }: { allergenRecords: AllergenRecord[]; onSubmitted: () => void }) {
+  const today = todayStr()
+  const [staffName,      setStaffName]      = useState('')
+  const [jobRole,        setJobRole]        = useState('')
+  const [completionDate, setCompletionDate] = useState(today)
+  const [refreshDate,    setRefreshDate]    = useState(addMonths(today, 12))
+  const [ticked,         setTicked]         = useState<Record<string, boolean>>(
+    Object.fromEntries(ALL_ALLERGEN_CONFIRMATION_ITEMS.map((i) => [i.id, false]))
+  )
+  const [supervisor,     setSupervisor]     = useState('')
+  const [submitting,     setSubmitting]     = useState(false)
+  const [error,          setError]          = useState('')
+
+  useEffect(() => {
+    if (completionDate) setRefreshDate(addMonths(completionDate, 12))
+  }, [completionDate])
+
+  const allTicked   = ALL_ALLERGEN_CONFIRMATION_ITEMS.every((i) => ticked[i.id])
+  const tickedCount = ALL_ALLERGEN_CONFIRMATION_ITEMS.filter((i) => ticked[i.id]).length
+  const isValid     = staffName.trim() && jobRole && completionDate && refreshDate && allTicked && supervisor.trim()
+
+  function toggleTick(id: string) {
+    setTicked((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  async function handleSubmit() {
+    if (!isValid || submitting) return
+    setSubmitting(true); setError('')
+    try {
+      const res = await fetch('/api/haccp/training', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          training_type:      'allergen_awareness',
+          staff_name:         staffName,
+          job_role:           jobRole,
+          certification_date: completionDate,
+          refresh_date:       refreshDate,
+          supervisor,
+          confirmation_items: ticked,
+        }),
+      })
+      if (res.ok) {
+        onSubmitted()
+        setStaffName(''); setJobRole(''); setSupervisor('')
+        setCompletionDate(today); setRefreshDate(addMonths(today, 12))
+        setTicked(Object.fromEntries(ALL_ALLERGEN_CONFIRMATION_ITEMS.map((i) => [i.id, false])))
+      } else {
+        const d = await res.json(); setError(d.error ?? 'Submission failed')
+      }
+    } catch { setError('Connection error — try again') }
+    finally { setSubmitting(false) }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3">
+        <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <div>
+          <p className="text-blue-800 text-xs font-bold">UK Food Information Regulations 2014 — 14 Major Allergens</p>
+          <p className="text-blue-700 text-xs mt-0.5">All food handlers must complete allergen awareness training annually. Supervisor works through each allergen with the staff member before confirming.</p>
+        </div>
+      </div>
+
+      <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+          <p className="text-slate-900 font-semibold text-sm">Log Allergen Awareness Training</p>
+          <p className="text-slate-400 text-xs mt-0.5">FIR 2014 — annual refresh required</p>
+        </div>
+
+        <div className="px-4 py-4 space-y-5">
+
+          {/* Staff name */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Staff name</p>
+            <input type="text" value={staffName} onChange={(e) => setStaffName(e.target.value)}
+              placeholder="Full name"
+              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+          </div>
+
+          {/* Job role */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Job role</p>
+            <div className="flex gap-2 flex-wrap">
+              {ALLERGEN_JOB_ROLES.map((role) => (
+                <button key={role} type="button"
+                  onPointerDown={(e) => { e.preventDefault(); setJobRole(role) }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                    jobRole === role ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-slate-200 bg-white text-slate-500'
+                  }`}>{role}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Completion date</p>
+              <input type="date" value={completionDate} onChange={(e) => setCompletionDate(e.target.value)}
+                className="w-full bg-white border border-blue-100 rounded-xl px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+            </div>
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Refresh date</p>
+              <input type="date" value={refreshDate} onChange={(e) => setRefreshDate(e.target.value)}
+                className="w-full bg-white border border-blue-100 rounded-xl px-3 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+              <p className="text-slate-400 text-[10px] mt-1">Auto-set to +12 months</p>
+            </div>
+          </div>
+
+          {/* 14 allergens checklist */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">14 major allergens — UK FIR 2014</p>
+            <p className="text-slate-500 text-xs mb-3">Supervisor confirms staff member can identify each allergen and understands cross-contamination risks.</p>
+            <div className="bg-slate-50 border border-blue-100 rounded-xl overflow-hidden">
+              {ALLERGEN_ITEMS.map((item, i) => (
+                <button key={item.id} type="button" onClick={() => toggleTick(item.id)}
+                  className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-slate-100 last:border-0 transition-all ${
+                    ticked[item.id] ? 'bg-green-50' : 'bg-white hover:bg-slate-50'
+                  }`}>
+                  <span className="text-slate-400 text-[10px] font-bold w-5 flex-shrink-0 mt-0.5 text-right">{i + 1}</span>
+                  <div className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                    ticked[item.id] ? 'border-green-500 bg-green-500' : 'border-slate-300'
+                  }`}>
+                    {ticked[item.id] && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
+                  <p className={`text-xs leading-relaxed flex-1 ${ticked[item.id] ? 'text-green-700 line-through decoration-green-400' : 'text-slate-700'}`}>
+                    {item.label}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Understanding acknowledgments */}
+          <div>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Understanding confirmation</p>
+            <p className="text-slate-500 text-xs mb-3">Staff member confirms understanding of responsibilities.</p>
+            <div className="bg-slate-50 border border-blue-100 rounded-xl overflow-hidden">
+              {ALLERGEN_UNDERSTANDING_ITEMS.map((item) => (
+                <button key={item.id} type="button" onClick={() => toggleTick(item.id)}
+                  className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-slate-100 last:border-0 transition-all ${
+                    ticked[item.id] ? 'bg-green-50' : 'bg-white hover:bg-slate-50'
+                  }`}>
+                  <div className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                    ticked[item.id] ? 'border-green-500 bg-green-500' : 'border-slate-300'
+                  }`}>
+                    {ticked[item.id] && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
+                  <p className={`text-xs leading-relaxed flex-1 ${ticked[item.id] ? 'text-green-700 line-through decoration-green-400' : 'text-slate-700'}`}>
+                    {item.label}
+                  </p>
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-slate-400 text-xs">{allTicked ? 'All items confirmed ✓' : `${tickedCount} / ${ALL_ALLERGEN_CONFIRMATION_ITEMS.length} confirmed`}</p>
+            </div>
+          </div>
+
+          {/* Supervisor sign-off */}
+          <SupervisorSignOff value={supervisor} onChange={setSupervisor} />
+
+          {error && <p className="text-red-600 text-xs">{error}</p>}
+        </div>
+
+        <button onClick={handleSubmit} disabled={!isValid || submitting}
+          className="w-full bg-orange-600 text-white font-bold py-4 text-sm disabled:opacity-40 flex items-center justify-center gap-2 transition-opacity">
+          {submitting
+            ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>Saving…</>
+            : <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>Submit allergen awareness record</>
+          }
+        </button>
+      </div>
+
+      {/* History */}
+      {allergenRecords.length > 0 && (
+        <div>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Allergen training records ({allergenRecords.length})</p>
+          <div className="space-y-2">
+            {allergenRecords.map((r) => (
+              <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${refreshStatus(r.refresh_date).colour}`}>
+                        {refreshStatus(r.refresh_date).label}
+                      </span>
+                    </div>
+                    <p className="text-slate-900 text-sm font-semibold">{r.staff_name}</p>
+                    <p className="text-slate-500 text-xs">{r.job_role} · Completed {fmtDate(r.certification_date)}</p>
+                    <p className="text-slate-400 text-[10px] mt-0.5">Supervisor: {r.supervisor_name ?? '—'}</p>
+                  </div>
+                  <p className="text-slate-400 text-xs flex-shrink-0">
+                    {r.confirmation_items
+                      ? `${Object.values(r.confirmation_items).filter(Boolean).length}/19`
+                      : '—'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {allergenRecords.length === 0 && (
+        <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center">
+          <p className="text-slate-400 text-sm">No allergen training records yet</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PlaceholderTab({ label }: { label: string }) {
   return (
     <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center">
@@ -1086,15 +1350,19 @@ function PlaceholderTab({ label }: { label: string }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TrainingPage() {
-  const [tab,        setTab]        = useState<'butchery' | 'warehouse' | 'allergen'>('butchery')
-  const [staffRecs,  setStaffRecs]  = useState<StaffTrainingRecord[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [flash,      setFlash]      = useState('')
+  const [tab,          setTab]          = useState<'butchery' | 'warehouse' | 'allergen'>('butchery')
+  const [staffRecs,    setStaffRecs]    = useState<StaffTrainingRecord[]>([])
+  const [allergenRecs, setAllergenRecs] = useState<AllergenRecord[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [flash,        setFlash]        = useState('')
 
   const loadData = useCallback(() => {
     fetch('/api/haccp/training')
       .then((r) => r.json())
-      .then((d) => setStaffRecs(d.staff ?? []))
+      .then((d) => {
+        setStaffRecs(d.staff ?? [])
+        setAllergenRecs(d.allergen ?? [])
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -1107,10 +1375,16 @@ export default function TrainingPage() {
     setTimeout(() => setFlash(''), 2500)
   }
 
-  // Summary counts for tab badges
+  // Summary counts — includes allergen records
   const today = new Date(todayStr())
-  const overdueCount = staffRecs.filter((r) => new Date(r.refresh_date) < today).length
-  const dueSoonCount = staffRecs.filter((r) => {
+  const overdueCount = [
+    ...staffRecs,
+    ...allergenRecs.map(r => ({ refresh_date: r.refresh_date })),
+  ].filter((r) => new Date(r.refresh_date) < today).length
+  const dueSoonCount = [
+    ...staffRecs,
+    ...allergenRecs.map(r => ({ refresh_date: r.refresh_date })),
+  ].filter((r) => {
     const d = new Date(r.refresh_date); const diff = (d.getTime() - today.getTime()) / 86400000
     return diff >= 0 && diff <= 30
   }).length
@@ -1175,9 +1449,9 @@ export default function TrainingPage() {
           </div>
         ) : (
           <>
-            {tab === 'butchery'  && <ButcheryTab   records={staffRecs} onSubmitted={handleSubmitted} />}
-            {tab === 'warehouse' && <WarehouseTab  records={staffRecs} onSubmitted={handleSubmitted} />}
-            {tab === 'allergen'  && <PlaceholderTab label="Allergen Awareness Training" />}
+            {tab === 'butchery'  && <ButcheryTab   records={staffRecs}      onSubmitted={handleSubmitted} />}
+            {tab === 'warehouse' && <WarehouseTab  records={staffRecs}      onSubmitted={handleSubmitted} />}
+            {tab === 'allergen'  && <AllergenTab   allergenRecords={allergenRecs} onSubmitted={handleSubmitted} />}
           </>
         )}
 

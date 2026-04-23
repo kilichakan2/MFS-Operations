@@ -97,6 +97,40 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
+    // ── Allergen Awareness ───────────────────────────────────────────────────
+    // Uses haccp_allergen_training (different table + different column names)
+    // certification_date, training_completed — NOT completion_date, training_type
+    if (training_type === 'allergen_awareness') {
+      const {
+        staff_name, job_role, certification_date, refresh_date,
+        supervisor, confirmation_items,
+      } = body
+
+      if (!staff_name?.trim())      return NextResponse.json({ error: 'Staff name required' },      { status: 400 })
+      if (!job_role?.trim())        return NextResponse.json({ error: 'Job role required' },         { status: 400 })
+      if (!certification_date)      return NextResponse.json({ error: 'Completion date required' }, { status: 400 })
+      if (!refresh_date)            return NextResponse.json({ error: 'Refresh date required' },    { status: 400 })
+      if (!supervisor?.trim())      return NextResponse.json({ error: 'Supervisor name required' }, { status: 400 })
+
+      const { error } = await supabase.from('haccp_allergen_training').insert({
+        logged_by:          userId,
+        staff_name:         staff_name.trim(),
+        job_role:           job_role.trim(),
+        training_completed: 'allergen_awareness',
+        certification_date,
+        refresh_date,
+        supervisor_name:    supervisor.trim(),
+        confirmation_items: confirmation_items ?? {},
+      })
+
+      if (error) {
+        console.error('[POST /api/haccp/training] allergen insert:', error.message)
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      return NextResponse.json({ ok: true })
+    }
+
     return NextResponse.json({ error: 'Invalid training_type' }, { status: 400 })
 
   } catch (err) {
