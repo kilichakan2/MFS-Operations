@@ -220,6 +220,42 @@ async function fetchProcessRoomSheets(from: string, to: string): Promise<{ temps
   return { temps: tempsWs, diary: diaryWs }
 }
 
+
+async function fetchCleaningSheet(from: string, to: string) {
+  const { data: cleans } = await supabase
+    .from('haccp_cleaning_log')
+    .select('id, date, time_of_clean, what_was_cleaned, issues, what_did_you_do, sanitiser_temp_c, verified_by, users!submitted_by(name)')
+    .gte('date', from).lte('date', to).order('date', { ascending: false })
+
+  const cleanIds = (cleans ?? []).map((c) => c.id)
+  const casMap: Record<string, { deviation_description: string; action_taken: string; resolved: boolean }> = {}
+  if (cleanIds.length > 0) {
+    const { data: caData } = await supabase
+      .from('haccp_corrective_actions')
+      .select('source_id, deviation_description, action_taken, resolved')
+      .eq('source_table', 'haccp_cleaning_log').in('source_id', cleanIds)
+    for (const ca of caData ?? []) casMap[ca.source_id] = ca
+  }
+
+  type CRow = typeof cleans extends (infer T)[] | null ? T : never
+  const headers = ['Date','Time','What was cleaned','Sanitiser °C','Sanitiser pass','Issues','Action taken','Verified by','CA logged','CA resolved','CA deviation','CA action taken']
+  const rows = (cleans ?? []).map((c: CRow) => {
+    const ca = casMap[c.id] ?? null
+    const temp = c.sanitiser_temp_c as unknown as number | null
+    return [
+      c.date, (c.time_of_clean as string)?.slice(0,5) ?? '',
+      c.what_was_cleaned, temp ?? '', temp !== null ? (temp >= 82 ? 'Yes' : 'No') : '',
+      c.issues ? 'Yes' : 'No', c.what_did_you_do ?? '',
+      c.verified_by ?? '',
+      ca ? 'Yes' : 'No', ca ? (ca.resolved ? 'Yes' : 'No') : '',
+      ca?.deviation_description ?? '', ca?.action_taken ?? '',
+    ]
+  })
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  ws['!cols'] = [{wch:12},{wch:8},{wch:40},{wch:12},{wch:14},{wch:8},{wch:30},{wch:12},{wch:10},{wch:12},{wch:30},{wch:30}]
+  return ws
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -245,6 +281,9 @@ export async function GET(req: NextRequest) {
     const processRoomSheets = await fetchProcessRoomSheets(from, to)
     XLSX.utils.book_append_sheet(wb, processRoomSheets.temps, '03a Process Room Temps')
     XLSX.utils.book_append_sheet(wb, processRoomSheets.diary, '03b Process Room Diary')
+
+    const cleaningSheet = await fetchCleaningSheet(from, to)
+    XLSX.utils.book_append_sheet(wb, cleaningSheet, '04 Cleaning')
 
     // Generate binary buffer
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })

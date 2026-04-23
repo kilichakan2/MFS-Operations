@@ -347,6 +347,73 @@ export async function GET(req: NextRequest) {
       })
     }
 
+
+    // ── Cleaning ──────────────────────────────────────────────────────────────
+    if (section === 'cleaning') {
+      const { data: cleans, error: cErr } = await supabase
+        .from('haccp_cleaning_log')
+        .select(`
+          id, date, time_of_clean, what_was_cleaned, issues,
+          what_did_you_do, sanitiser_temp_c, verified_by,
+          users!submitted_by ( name )
+        `)
+        .gte('date', from).lte('date', to)
+        .order('date', { ascending: false })
+        .order('time_of_clean', { ascending: false })
+
+      if (cErr) {
+        console.error('[audit/cleaning]', cErr.message)
+        return NextResponse.json({ error: cErr.message }, { status: 500 })
+      }
+
+      // CAs for cleaning records
+      const cleanIds = (cleans ?? []).map((c) => c.id)
+      const casMap: Record<string, {
+        id: string; ccp_ref: string; deviation_description: string
+        action_taken: string; product_disposition: string | null
+        management_verification_required: boolean
+        resolved: boolean; verified_at: string | null
+      }> = {}
+
+      if (cleanIds.length > 0) {
+        const { data: caData } = await supabase
+          .from('haccp_corrective_actions')
+          .select(`id, source_id, ccp_ref, deviation_description, action_taken,
+            product_disposition, management_verification_required, resolved, verified_at`)
+          .eq('source_table', 'haccp_cleaning_log')
+          .in('source_id', cleanIds)
+        for (const ca of caData ?? []) casMap[ca.source_id] = ca
+      }
+
+      type CRow = typeof cleans extends (infer T)[] | null ? T : never
+      const rows = (cleans ?? []).map((c: CRow) => ({
+        ...c,
+        submitted_by_name: (c.users as unknown as { name: string } | null)?.name ?? '—',
+        ca: casMap[c.id] ?? null,
+      }))
+
+      const summary = {
+        total:          rows.length,
+        no_issues:      rows.filter((r) => !r.issues).length,
+        with_issues:    rows.filter((r) => r.issues).length,
+        sanitiser_fail: rows.filter((r) => r.sanitiser_temp_c !== null && (r.sanitiser_temp_c as unknown as number) < 82).length,
+        ca_count:       rows.filter((r) => r.ca !== null).length,
+        unresolved:     rows.filter((r) => r.ca !== null && !(r.ca as {resolved:boolean}).resolved).length,
+      }
+
+      // Heatmap — single row: cleaning
+      const cleanMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      for (const r of rows) {
+        if (!cleanMap[r.date]) cleanMap[r.date] = { has_records: false, has_deviations: false }
+        cleanMap[r.date].has_records = true
+        if (r.issues || (r.ca && !(r.ca as {resolved:boolean}).resolved)) {
+          cleanMap[r.date].has_deviations = true
+        }
+      }
+
+      return NextResponse.json({ rows, summary, heatmap: { cleaning: cleanMap } })
+    }
+
     return NextResponse.json({ error: `Unknown section: ${section}` }, { status: 400 })
 
   } catch (err) {

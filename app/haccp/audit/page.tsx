@@ -1020,6 +1020,229 @@ function ProcessRoomSection({ from, to, onHeatmapData }: {
   )
 }
 
+// ─── Cleaning section ─────────────────────────────────────────────────────────
+
+interface CleaningRow {
+  id:               string
+  date:             string
+  time_of_clean:    string | null
+  what_was_cleaned: string
+  issues:           boolean
+  what_did_you_do:  string | null
+  sanitiser_temp_c: number | null
+  verified_by:      string | null
+  submitted_by_name:string
+  ca:               CA | null
+}
+
+interface CleaningSummary {
+  total: number; no_issues: number; with_issues: number
+  sanitiser_fail: number; ca_count: number; unresolved: number
+}
+
+function SanitiserBadge({ temp }: { temp: number | null }) {
+  if (temp === null) return <span className="text-[10px] text-slate-300">—</span>
+  const pass = temp >= 82
+  return (
+    <span className={`text-xs font-mono font-bold ${pass ? 'text-green-700' : 'text-red-600'}`}>
+      {temp}°C {pass ? '✓' : '✗'}
+    </span>
+  )
+}
+
+function formatCleanedItems(raw: string): string[] {
+  return raw.split(',').map((s) => s.trim()).filter(Boolean)
+}
+
+function truncateCleaned(raw: string, max = 3): string {
+  const items = formatCleanedItems(raw)
+  if (items.length <= max) return items.join(', ')
+  return `${items.slice(0, max).join(', ')} +${items.length - max} more`
+}
+
+function CleaningTableRow({ row }: { row: CleaningRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const rowColour =
+    (row.ca && !row.ca.resolved) || (row.issues && !row.what_did_you_do?.trim())
+      ? 'bg-red-50 border-red-100'
+      : row.issues ? 'bg-amber-50 border-amber-100'
+      : 'bg-white border-slate-100'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded(p => !p)}>
+        <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtTime(row.time_of_clean)}</td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><SanitiserBadge temp={row.sanitiser_temp_c} /></td>
+        <td className="px-3 py-2.5 text-xs text-slate-600 max-w-48 truncate">{truncateCleaned(row.what_was_cleaned)}</td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.issues ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+            {row.issues ? 'Yes' : 'No'}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 max-w-36 truncate">{row.what_did_you_do ?? '—'}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{row.verified_by ?? '—'}</td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><CABadge ca={row.ca} /></td>
+        <td className="px-3 py-2.5">
+          <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={9} className="px-4 pb-3 pt-1">
+            <div className="ml-2 space-y-3">
+              {/* Full items list */}
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">Items cleaned</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {formatCleanedItems(row.what_was_cleaned).map((item, i) => (
+                    <span key={i} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-medium">{item}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-6 text-xs">
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Sanitiser temp</p>
+                  {row.sanitiser_temp_c !== null ? (
+                    <p className={`font-mono font-bold ${row.sanitiser_temp_c >= 82 ? 'text-green-700' : 'text-red-600'}`}>
+                      {row.sanitiser_temp_c}°C {row.sanitiser_temp_c >= 82 ? '✓' : '✗ (limit ≥82°C)'}
+                    </p>
+                  ) : <p className="text-slate-400">Not recorded</p>}
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Verified by</p>
+                  <p className="text-slate-600">{row.verified_by ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Submitted by</p>
+                  <p className="text-slate-600">{row.submitted_by_name}</p>
+                </div>
+              </div>
+              {row.what_did_you_do && (
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-0.5">Action taken</p>
+                  <p className="text-slate-700 text-xs">{row.what_did_you_do}</p>
+                </div>
+              )}
+              {row.ca && (
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">CA — {row.ca.ccp_ref}</p>
+                  <div className={`rounded-xl px-3 py-2.5 border text-xs space-y-1 ${row.ca.resolved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Deviation:</span> {row.ca.deviation_description}</p>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Action:</span> {row.ca.action_taken}</p>
+                    {row.ca.product_disposition && <p className="text-slate-700"><span className="font-bold text-slate-500">Disposition:</span> {row.ca.product_disposition}</p>}
+                    <p className={`text-[10px] font-bold ${row.ca.resolved ? 'text-green-600' : 'text-red-600'}`}>
+                      {row.ca.resolved ? '✓ Resolved' : '⚠ Unresolved — action required'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function CleaningSection({ from, to, onHeatmapData }: {
+  from: string; to: string
+  onHeatmapData: (updates: Record<string, Record<string, HeatmapDay>>) => void
+}) {
+  const [rows,    setRows]    = useState<CleaningRow[]>([])
+  const [summary, setSummary] = useState<CleaningSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true); setError('')
+    fetch(`/api/haccp/audit?section=cleaning&from=${from}&to=${to}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setError(d.error); return }
+        setRows(d.rows ?? [])
+        setSummary(d.summary ?? null)
+        onHeatmapData(d.heatmap ?? { cleaning: {} })
+      })
+      .catch(() => setError('Failed to load'))
+      .finally(() => setLoading(false))
+  }, [from, to, onHeatmapData])
+
+  useEffect(() => { load() }, [load])
+
+  function exportCSV() {
+    const headers = ['Date','Time','What was cleaned','Sanitiser °C','Sanitiser pass','Issues','Action taken','Verified by','CA logged','CA resolved','CA deviation','CA action taken']
+    const csvRows = rows.map(r => {
+      const temp = r.sanitiser_temp_c
+      return [
+        r.date, fmtTime(r.time_of_clean), r.what_was_cleaned,
+        temp ?? '', temp !== null ? (temp >= 82 ? 'Yes' : 'No') : '',
+        r.issues ? 'Yes' : 'No', r.what_did_you_do ?? '', r.verified_by ?? '',
+        r.ca ? 'Yes' : 'No', r.ca ? (r.ca.resolved ? 'Yes' : 'No') : '',
+        r.ca?.deviation_description ?? '', r.ca?.action_taken ?? '',
+      ]
+    })
+    downloadCSV(`MFS_Cleaning_${from}_to_${to}.csv`, headers, csvRows)
+  }
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-slate-400 text-sm py-8">
+      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+      Loading cleaning records…
+    </div>
+  )
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {summary && (
+          <div className="flex items-center gap-3 flex-wrap">
+            {[
+              { label: 'Total',          val: summary.total,          cls: 'bg-slate-100 text-slate-700' },
+              { label: 'No issues',      val: summary.no_issues,      cls: 'bg-green-100 text-green-700' },
+              { label: 'Issues',         val: summary.with_issues,    cls: summary.with_issues > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500' },
+              { label: 'Sanitiser fail', val: summary.sanitiser_fail, cls: summary.sanitiser_fail > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500' },
+              { label: 'CAs',            val: summary.ca_count,       cls: 'bg-blue-100 text-blue-700' },
+              { label: 'Unresolved',     val: summary.unresolved,     cls: summary.unresolved > 0 ? 'bg-red-200 text-red-800 font-bold' : 'bg-slate-100 text-slate-500' },
+            ].map(s => (
+              <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}>
+                <span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center">
+          <p className="text-slate-400 text-sm">No cleaning records in this date range</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse" style={{ minWidth: '680px' }}>
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Date','Time','Sanitiser','What cleaned','Issues','Action','Verified','CA',''].map(h => (
+                    <th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => <CleaningTableRow key={row.id} row={row} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Placeholder section ──────────────────────────────────────────────────────
 
 function PlaceholderSection({ label }: { label: string }) {
@@ -1195,7 +1418,7 @@ export default function AuditPage() {
         )}
         {section === 'cold_storage'  && <ColdStorageSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'process_room'  && <ProcessRoomSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
-        {section === 'cleaning'      && <PlaceholderSection label="Cleaning" />}
+        {section === 'cleaning'      && <CleaningSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'calibration'   && <PlaceholderSection label="Calibration" />}
         {section === 'mince'         && <PlaceholderSection label="Mince & Prep" />}
         {section === 'returns'       && <PlaceholderSection label="Product Returns" />}
