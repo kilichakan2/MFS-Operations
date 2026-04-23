@@ -1077,21 +1077,78 @@ function WarehouseTab({ records, onSubmitted }: { records: StaffTrainingRecord[]
 
 // ─── Allergen Awareness constants ────────────────────────────────────────────
 // 14 major allergens — UK Food Information Regulations 2014
+// Each includes common food sources and relevance to MFS operations
 const ALLERGEN_ITEMS = [
-  { id: 'a1',  label: 'Celery' },
-  { id: 'a2',  label: 'Cereals containing gluten (wheat, rye, barley, oats)' },
-  { id: 'a3',  label: 'Crustaceans (prawns, crab, lobster)' },
-  { id: 'a4',  label: 'Eggs' },
-  { id: 'a5',  label: 'Fish' },
-  { id: 'a6',  label: 'Lupin' },
-  { id: 'a7',  label: 'Milk' },
-  { id: 'a8',  label: 'Molluscs (mussels, oysters, squid)' },
-  { id: 'a9',  label: 'Mustard' },
-  { id: 'a10', label: 'Peanuts' },
-  { id: 'a11', label: 'Sesame' },
-  { id: 'a12', label: 'Soybeans' },
-  { id: 'a13', label: 'Sulphur dioxide and sulphites (>10mg/kg)' },
-  { id: 'a14', label: 'Tree nuts (almonds, hazelnuts, walnuts, cashews, pecans, Brazil nuts, pistachios, macadamia)' },
+  {
+    id: 'a1', label: 'Celery',
+    found_in: 'Celery seeds, celeriac, soups, stocks, spice mixes, ready-made seasonings',
+    mfs_note: 'Can be present in pre-mixed seasoning blends or marinades used on products',
+  },
+  {
+    id: 'a2', label: 'Cereals containing gluten (wheat, rye, barley, oats)',
+    found_in: 'Bread, flour, pasta, coatings, marinades, soy sauce (often wheat-based), beer',
+    mfs_note: 'Breadcrumbs in burger patties, wheat-based coatings on poultry, soy sauce in marinades',
+  },
+  {
+    id: 'a3', label: 'Crustaceans (prawns, crab, lobster)',
+    found_in: 'Prawns, crab, lobster, shrimp paste, some Thai and Asian sauces',
+    mfs_note: 'Cross-contamination risk if handling any seafood products or shared equipment',
+  },
+  {
+    id: 'a4', label: 'Eggs',
+    found_in: 'Mayonnaise, egg wash, pasta, coatings, glazes, some sauces',
+    mfs_note: 'Egg-based marinades, glazes on poultry, coatings on QSR products',
+  },
+  {
+    id: 'a5', label: 'Fish',
+    found_in: 'Fish sauce, Worcestershire sauce, Caesar dressing, anchovy paste, some spice blends',
+    mfs_note: 'Worcestershire sauce is very commonly used in marinades and contains fish (anchovies)',
+  },
+  {
+    id: 'a6', label: 'Lupin',
+    found_in: 'Lupin flour in some breads, pastries, pasta, and gluten-free products',
+    mfs_note: 'Can appear in specialty burger buns or gluten-free coatings — check all packaging',
+  },
+  {
+    id: 'a7', label: 'Milk',
+    found_in: 'Butter, cream, cheese, milk powder, whey, yoghurt-based marinades, some seasonings',
+    mfs_note: 'Dairy marinades, butter basting, milk powder in some seasoning blends or patty recipes',
+  },
+  {
+    id: 'a8', label: 'Molluscs (mussels, oysters, squid)',
+    found_in: 'Oyster sauce, some Asian cooking sauces, mussels, clams, squid',
+    mfs_note: 'Oyster sauce is widely used in marinades — always check ingredients on sauce bottles',
+  },
+  {
+    id: 'a9', label: 'Mustard',
+    found_in: 'Mustard seeds, powder, paste, many spice blends, salad dressings, some marinades',
+    mfs_note: 'Very common in marinades and rubs — one of the most likely allergens to appear in seasoned meat products',
+  },
+  {
+    id: 'a10', label: 'Peanuts',
+    found_in: 'Peanut oil, satay sauce, peanut butter, some spice blends, groundnut oil',
+    mfs_note: 'Satay and Asian-style marinades, peanut oil used for cooking — high severity allergen',
+  },
+  {
+    id: 'a11', label: 'Sesame',
+    found_in: 'Sesame oil, tahini, hummus, sesame-coated products, some spice blends, some burger buns',
+    mfs_note: 'Sesame oil in marinades, sesame seeds on burger buns — increasingly common in food products',
+  },
+  {
+    id: 'a12', label: 'Soybeans',
+    found_in: 'Soy sauce, tofu, miso, edamame, some protein products, vegetable oils',
+    mfs_note: 'Soy sauce is the most common allergen source in meat marinades — present in most commercial marinades',
+  },
+  {
+    id: 'a13', label: 'Sulphur dioxide and sulphites (>10mg/kg)',
+    found_in: 'Processed meats (sausages, burgers), dried fruits, wine, vinegar, some seasonings',
+    mfs_note: 'Present in some processed meat products as a preservative — check all cured or processed meat specifications',
+  },
+  {
+    id: 'a14', label: 'Tree nuts (almonds, hazelnuts, walnuts, cashews, pecans, Brazil nuts, pistachios, macadamia)',
+    found_in: 'Nut oils, pesto, some sauces, nut-based coatings, some spice blends',
+    mfs_note: 'Nut oils occasionally used in marinades — all 8 tree nut varieties must be declared separately',
+  },
 ]
 
 const ALLERGEN_UNDERSTANDING_ITEMS = [
@@ -1103,6 +1160,61 @@ const ALLERGEN_UNDERSTANDING_ITEMS = [
 ]
 
 const ALL_ALLERGEN_CONFIRMATION_ITEMS = [...ALLERGEN_ITEMS, ...ALLERGEN_UNDERSTANDING_ITEMS]
+
+// ─── Allergen Card ────────────────────────────────────────────────────────────
+
+function AllergenCard({
+  item, index, ticked, onTick, isLast,
+}: {
+  item: { id: string; label: string; found_in: string; mfs_note: string }
+  index: number
+  ticked: boolean
+  onTick: () => void
+  isLast: boolean
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className={`border-b border-slate-100 ${isLast ? 'border-0' : ''} ${ticked ? 'bg-green-50' : 'bg-white'}`}>
+      {/* Main row */}
+      <div className="flex items-start gap-3 px-4 py-3">
+        <span className="text-slate-400 text-[10px] font-bold w-5 flex-shrink-0 mt-0.5 text-right">{index + 1}</span>
+        <button type="button"
+          onClick={onTick}
+          className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all ${
+            ticked ? 'border-green-500 bg-green-500' : 'border-slate-300'
+          }`}>
+          {ticked && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
+        </button>
+        <div className="flex-1 min-w-0">
+          <button type="button" onClick={() => setExpanded(p => !p)}
+            className="w-full text-left flex items-center justify-between gap-2">
+            <p className={`text-xs font-semibold leading-relaxed ${ticked ? 'text-green-700 line-through decoration-green-400' : 'text-slate-800'}`}>
+              {item.label}
+            </p>
+            <svg className={`w-3.5 h-3.5 flex-shrink-0 transition-transform ${expanded ? 'rotate-180' : ''} ${ticked ? 'text-green-500' : 'text-slate-400'}`}
+              fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      {/* Expanded details */}
+      {expanded && (
+        <div className="px-4 pb-3 ml-8 space-y-2">
+          <div className="bg-slate-50 rounded-xl px-3 py-2.5 border border-slate-100">
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Commonly found in</p>
+            <p className="text-slate-600 text-xs leading-relaxed">{item.found_in}</p>
+          </div>
+          <div className="bg-orange-50 rounded-xl px-3 py-2.5 border border-orange-100">
+            <p className="text-orange-500 text-[10px] font-bold uppercase tracking-widest mb-1">MFS relevance</p>
+            <p className="text-slate-700 text-xs leading-relaxed">{item.mfs_note}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Tab 3 — Allergen Awareness ───────────────────────────────────────────────
 
@@ -1234,23 +1346,17 @@ function AllergenTab({ allergenRecords, onSubmitted }: { allergenRecords: Allerg
           {/* 14 allergens checklist */}
           <div>
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">14 major allergens — UK FIR 2014</p>
-            <p className="text-slate-500 text-xs mb-3">Supervisor confirms staff member can identify each allergen and understands cross-contamination risks.</p>
+            <p className="text-slate-500 text-xs mb-3">Tap each allergen to expand details. Supervisor confirms staff member can identify it and understands cross-contamination risks before ticking.</p>
             <div className="bg-slate-50 border border-blue-100 rounded-xl overflow-hidden">
               {ALLERGEN_ITEMS.map((item, i) => (
-                <button key={item.id} type="button" onClick={() => toggleTick(item.id)}
-                  className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-slate-100 last:border-0 transition-all ${
-                    ticked[item.id] ? 'bg-green-50' : 'bg-white hover:bg-slate-50'
-                  }`}>
-                  <span className="text-slate-400 text-[10px] font-bold w-5 flex-shrink-0 mt-0.5 text-right">{i + 1}</span>
-                  <div className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                    ticked[item.id] ? 'border-green-500 bg-green-500' : 'border-slate-300'
-                  }`}>
-                    {ticked[item.id] && <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
-                  </div>
-                  <p className={`text-xs leading-relaxed flex-1 ${ticked[item.id] ? 'text-green-700 line-through decoration-green-400' : 'text-slate-700'}`}>
-                    {item.label}
-                  </p>
-                </button>
+                <AllergenCard
+                  key={item.id}
+                  item={item}
+                  index={i}
+                  ticked={ticked[item.id]}
+                  onTick={() => toggleTick(item.id)}
+                  isLast={i === ALLERGEN_ITEMS.length - 1}
+                />
               ))}
             </div>
           </div>
