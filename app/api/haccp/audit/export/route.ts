@@ -174,6 +174,52 @@ async function fetchColdStorageSheet(from: string, to: string) {
   return ws
 }
 
+
+async function fetchProcessRoomSheets(from: string, to: string): Promise<{ temps: XLSX.WorkSheet; diary: XLSX.WorkSheet }> {
+  const [{ data: temps }, { data: diary }] = await Promise.all([
+    supabase.from('haccp_processing_temps')
+      .select('id, date, session, product_temp_c, room_temp_c, product_within_limit, room_within_limit, within_limits, users!submitted_by(name)')
+      .gte('date', from).lte('date', to).order('date', { ascending: false }),
+    supabase.from('haccp_daily_diary')
+      .select('id, date, phase, check_results, issues, what_did_you_do, users!submitted_by(name)')
+      .gte('date', from).lte('date', to).order('date', { ascending: false }),
+  ])
+
+  // CAs for temps
+  const tempIds = (temps ?? []).map((t) => t.id)
+  const tempCasMap: Record<string, { deviation_description: string; action_taken: string; product_disposition: string | null; resolved: boolean }> = {}
+  if (tempIds.length > 0) {
+    const { data: caData } = await supabase
+      .from('haccp_corrective_actions')
+      .select('source_id, deviation_description, action_taken, product_disposition, resolved')
+      .eq('source_table', 'haccp_processing_temps').in('source_id', tempIds)
+    for (const ca of caData ?? []) tempCasMap[ca.source_id] = ca
+  }
+
+  type TRow = typeof temps extends (infer T)[] | null ? T : never
+  type DRow = typeof diary extends (infer T)[] | null ? T : never
+
+  const tempHeaders = ['Date','Session','Product Temp °C','Room Temp °C','Product Pass','Room Pass','Overall','CA logged','CA resolved','CA deviation','CA action taken','CA disposition','Submitted by']
+  const tempRows = (temps ?? []).map((t: TRow) => {
+    const ca = tempCasMap[t.id] ?? null
+    return [t.date, t.session, t.product_temp_c, t.room_temp_c, t.product_within_limit ? 'Yes' : 'No', t.room_within_limit ? 'Yes' : 'No', t.within_limits ? 'Pass' : 'Fail', ca ? 'Yes' : 'No', ca ? (ca.resolved ? 'Yes' : 'No') : '', ca?.deviation_description ?? '', ca?.action_taken ?? '', ca?.product_disposition ?? '', (t.users as unknown as {name:string}|null)?.name ?? '—']
+  })
+  const tempsWs = XLSX.utils.aoa_to_sheet([tempHeaders, ...tempRows])
+  tempsWs['!cols'] = [{wch:12},{wch:8},{wch:14},{wch:12},{wch:14},{wch:12},{wch:10},{wch:10},{wch:12},{wch:30},{wch:30},{wch:20},{wch:14}]
+
+  const diaryHeaders = ['Date','Phase','Checks Passed','Total Checks','Issues','Action Taken','Submitted by']
+  const diaryRows = (diary ?? []).map((d: DRow) => {
+    const checks = d.check_results as Record<string, boolean> | null ?? {}
+    const vals = Object.values(checks)
+    const passed = vals.filter(Boolean).length
+    return [d.date, d.phase, passed, vals.length, d.issues ? 'Yes' : 'No', d.what_did_you_do ?? '', (d.users as unknown as {name:string}|null)?.name ?? '—']
+  })
+  const diaryWs = XLSX.utils.aoa_to_sheet([diaryHeaders, ...diaryRows])
+  diaryWs['!cols'] = [{wch:12},{wch:14},{wch:14},{wch:14},{wch:8},{wch:30},{wch:14}]
+
+  return { temps: tempsWs, diary: diaryWs }
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -195,6 +241,10 @@ export async function GET(req: NextRequest) {
 
     const coldStorageSheet = await fetchColdStorageSheet(from, to)
     XLSX.utils.book_append_sheet(wb, coldStorageSheet, '02 Cold Storage')
+
+    const processRoomSheets = await fetchProcessRoomSheets(from, to)
+    XLSX.utils.book_append_sheet(wb, processRoomSheets.temps, '03a Process Room Temps')
+    XLSX.utils.book_append_sheet(wb, processRoomSheets.diary, '03b Process Room Diary')
 
     // Generate binary buffer
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })

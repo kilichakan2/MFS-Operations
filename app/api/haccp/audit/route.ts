@@ -203,6 +203,138 @@ export async function GET(req: NextRequest) {
       })
     }
 
+
+    // ── Process Room ──────────────────────────────────────────────────────────
+    if (section === 'process_room') {
+      const [{ data: temps, error: tErr }, { data: diary, error: dErr }] = await Promise.all([
+        supabase
+          .from('haccp_processing_temps')
+          .select(`
+            id, date, session, product_temp_c, room_temp_c,
+            product_within_limit, room_within_limit, within_limits,
+            corrective_action_required,
+            users!submitted_by ( name )
+          `)
+          .gte('date', from).lte('date', to)
+          .order('date', { ascending: false })
+          .order('session', { ascending: true }),
+
+        supabase
+          .from('haccp_daily_diary')
+          .select(`
+            id, date, phase, check_results, issues, what_did_you_do,
+            users!submitted_by ( name )
+          `)
+          .gte('date', from).lte('date', to)
+          .order('date', { ascending: false })
+          .order('phase',  { ascending: true }),
+      ])
+
+      if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 })
+      if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 })
+
+      // CAs for temperatures
+      const tempIds = (temps ?? []).map((t) => t.id)
+      const tempCasMap: Record<string, {
+        id: string; ccp_ref: string; deviation_description: string
+        action_taken: string; product_disposition: string | null
+        recurrence_prevention: string | null
+        management_verification_required: boolean
+        resolved: boolean; verified_at: string | null
+      }> = {}
+
+      if (tempIds.length > 0) {
+        const { data: caData } = await supabase
+          .from('haccp_corrective_actions')
+          .select(`id, source_id, ccp_ref, deviation_description, action_taken,
+            product_disposition, recurrence_prevention,
+            management_verification_required, resolved, verified_at`)
+          .eq('source_table', 'haccp_processing_temps')
+          .in('source_id', tempIds)
+        for (const ca of caData ?? []) tempCasMap[ca.source_id] = ca
+      }
+
+      // CAs for diary
+      const diaryIds = (diary ?? []).map((d) => d.id)
+      const diaryCasMap: Record<string, {
+        id: string; ccp_ref: string; deviation_description: string
+        action_taken: string; resolved: boolean
+      }> = {}
+
+      if (diaryIds.length > 0) {
+        const { data: caData } = await supabase
+          .from('haccp_corrective_actions')
+          .select('id, source_id, ccp_ref, deviation_description, action_taken, resolved')
+          .eq('source_table', 'haccp_daily_diary')
+          .in('source_id', diaryIds)
+        for (const ca of caData ?? []) diaryCasMap[ca.source_id] = ca
+      }
+
+      type TRow = typeof temps extends (infer T)[] | null ? T : never
+      type DRow = typeof diary extends (infer T)[] | null ? T : never
+
+      const tempRows = (temps ?? []).map((t: TRow) => ({
+        ...t,
+        submitted_by_name: (t.users as unknown as { name: string } | null)?.name ?? '—',
+        ca: tempCasMap[t.id] ?? null,
+      }))
+
+      const diaryRows = (diary ?? []).map((d: DRow) => ({
+        ...d,
+        submitted_by_name: (d.users as unknown as { name: string } | null)?.name ?? '—',
+        ca: diaryCasMap[d.id] ?? null,
+      }))
+
+      const tempSummary = {
+        total:      tempRows.length,
+        pass:       tempRows.filter((r) => r.within_limits).length,
+        fail:       tempRows.filter((r) => !r.within_limits).length,
+        ca_count:   tempRows.filter((r) => r.ca !== null).length,
+        unresolved: tempRows.filter((r) => r.ca !== null && !(r.ca as {resolved:boolean}).resolved).length,
+      }
+
+      const diarySummary = {
+        total:       diaryRows.length,
+        with_issues: diaryRows.filter((r) => r.issues).length,
+        opening:     diaryRows.filter((r) => r.phase === 'opening').length,
+        operational: diaryRows.filter((r) => r.phase === 'operational').length,
+        closing:     diaryRows.filter((r) => r.phase === 'closing').length,
+      }
+
+      // Heatmap
+      const roomAmMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      const roomPmMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      const diaryOpenMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      const diaryCloseMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+
+      for (const r of tempRows) {
+        const isDev = !r.within_limits || (r.ca && !(r.ca as {resolved:boolean}).resolved)
+        const map = r.session === 'AM' ? roomAmMap : roomPmMap
+        if (!map[r.date]) map[r.date] = { has_records: false, has_deviations: false }
+        map[r.date].has_records = true
+        if (isDev) map[r.date].has_deviations = true
+      }
+
+      for (const r of diaryRows) {
+        const isDev = r.issues
+        if (r.phase === 'opening') {
+          if (!diaryOpenMap[r.date])  diaryOpenMap[r.date]  = { has_records: false, has_deviations: false }
+          diaryOpenMap[r.date].has_records = true
+          if (isDev) diaryOpenMap[r.date].has_deviations = true
+        }
+        if (r.phase === 'closing') {
+          if (!diaryCloseMap[r.date]) diaryCloseMap[r.date] = { has_records: false, has_deviations: false }
+          diaryCloseMap[r.date].has_records = true
+          if (isDev) diaryCloseMap[r.date].has_deviations = true
+        }
+      }
+
+      return NextResponse.json({
+        tempRows, diaryRows, tempSummary, diarySummary,
+        heatmap: { room_am: roomAmMap, room_pm: roomPmMap, diary_open: diaryOpenMap, diary_close: diaryCloseMap },
+      })
+    }
+
     return NextResponse.json({ error: `Unknown section: ${section}` }, { status: 400 })
 
   } catch (err) {

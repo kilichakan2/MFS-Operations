@@ -716,6 +716,309 @@ function ColdStorageSection({ from, to, onHeatmapData }: {
   )
 }
 
+// ─── Process Room section ─────────────────────────────────────────────────────
+
+const CHECK_LABELS: Record<string, string> = {
+  ppe: 'PPE worn correctly', health: 'Health declaration confirmed',
+  no_food: 'No food or drink in area', hairnets: 'Hair nets in place',
+  handwash: 'Hands washed before entry', plasters: 'All cuts covered with blue plasters',
+  jewellery: 'No jewellery worn', room_temp: 'Room temperature checked',
+  steriliser: 'Steriliser checked (≥82°C)', handwashing: 'Hand washing facilities available',
+  hygiene: 'Personal hygiene maintained', cleaning: 'Equipment cleaned between products',
+  equipment: 'Equipment in good condition', temp_limits: 'Temperature limits maintained',
+  contamination: 'No cross-contamination observed',
+  waste: 'Waste disposed correctly', secured: 'Area secured',
+  equip_clean: 'All equipment cleaned', product_chilled: 'All products in cold storage',
+  steriliser_clean: 'Steriliser cleaned and stored',
+}
+
+interface ProcessTempRow {
+  id: string; date: string; session: string
+  product_temp_c: number; room_temp_c: number
+  product_within_limit: boolean; room_within_limit: boolean; within_limits: boolean
+  corrective_action_required: boolean; submitted_by_name: string; ca: CA | null
+}
+
+interface DiaryRow {
+  id: string; date: string; phase: string
+  check_results: Record<string, boolean>
+  issues: boolean; what_did_you_do: string | null
+  submitted_by_name: string; ca: CA | null
+}
+
+function PhaseBadge({ phase }: { phase: string }) {
+  const cls = phase === 'opening'     ? 'bg-blue-100 text-blue-700'
+            : phase === 'operational' ? 'bg-purple-100 text-purple-700'
+            : 'bg-slate-100 text-slate-600'
+  const lbl = phase === 'opening' ? 'Opening' : phase === 'operational' ? 'Operational' : 'Closing'
+  return <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{lbl}</span>
+}
+
+function ProcessTempTableRow({ row }: { row: ProcessTempRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const rowColour = !row.within_limits || (row.ca && !row.ca.resolved)
+    ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded(p => !p)}>
+        <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.session === 'AM' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>{row.session}</span>
+        </td>
+        <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+          <span className={`font-mono font-bold ${!row.product_within_limit ? 'text-red-600' : 'text-green-700'}`}>{row.product_temp_c}°C</span>
+          <span className={`ml-1 text-[10px] ${!row.product_within_limit ? 'text-red-500' : 'text-green-500'}`}>{row.product_within_limit ? '✓' : '✗'}</span>
+        </td>
+        <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+          <span className={`font-mono font-bold ${!row.room_within_limit ? 'text-red-600' : 'text-green-700'}`}>{row.room_temp_c}°C</span>
+          <span className={`ml-1 text-[10px] ${!row.room_within_limit ? 'text-red-500' : 'text-green-500'}`}>{row.room_within_limit ? '✓' : '✗'}</span>
+        </td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.within_limits ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {row.within_limits ? 'Pass' : 'Fail'}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><CABadge ca={row.ca} /></td>
+        <td className="px-3 py-2.5">
+          <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={7} className="px-4 pb-3 pt-1">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs ml-2">
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Limits</p>
+                <p className="text-slate-600">Product: ≤4°C · Room: ≤12°C</p>
+                <p className="text-slate-400 text-[10px] mt-1">Submitted by: {row.submitted_by_name}</p>
+              </div>
+              {row.ca && (
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">CA — {row.ca.ccp_ref}</p>
+                  <div className={`rounded-xl px-3 py-2 border ${row.ca.resolved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <p className="text-slate-700 text-xs">{row.ca.deviation_description}</p>
+                    <p className="text-slate-600 text-xs mt-1">Action: {row.ca.action_taken}</p>
+                    {row.ca.product_disposition && <p className="text-slate-600 text-xs">Disposition: {row.ca.product_disposition}</p>}
+                    <p className={`text-[10px] font-bold mt-1 ${row.ca.resolved ? 'text-green-600' : 'text-red-600'}`}>
+                      {row.ca.resolved ? '✓ Resolved' : '⚠ Unresolved'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function DiaryTableRow({ row }: { row: DiaryRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const checks = row.check_results ?? {}
+  const vals = Object.values(checks)
+  const passed = vals.filter(Boolean).length
+  const rowColour = row.issues && !row.what_did_you_do?.trim()
+    ? 'bg-red-50 border-red-100'
+    : row.issues ? 'bg-amber-50 border-amber-100'
+    : 'bg-white border-slate-100'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded(p => !p)}>
+        <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5"><PhaseBadge phase={row.phase} /></td>
+        <td className="px-3 py-2.5">
+          <span className={`text-xs font-bold ${passed < vals.length ? 'text-red-600' : 'text-green-700'}`}>{passed}/{vals.length}</span>
+        </td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.issues ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+            {row.issues ? 'Yes' : 'No'}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 max-w-40 truncate">{row.what_did_you_do ?? '—'}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-400">{row.submitted_by_name}</td>
+        <td className="px-3 py-2.5">
+          <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={7} className="px-4 pb-3 pt-1">
+            <div className="ml-2 space-y-1">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Check breakdown</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                {Object.entries(checks).map(([key, val]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold ${val ? 'text-green-500' : 'text-red-500'}`}>{val ? '✓' : '✗'}</span>
+                    <span className={`text-xs ${val ? 'text-slate-600' : 'text-red-700 font-semibold'}`}>{CHECK_LABELS[key] ?? key}</span>
+                  </div>
+                ))}
+              </div>
+              {row.what_did_you_do && (
+                <p className="text-slate-600 text-xs mt-2 pt-2 border-t border-slate-100">
+                  <span className="font-bold text-slate-500">Action taken: </span>{row.what_did_you_do}
+                </p>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function ProcessRoomSection({ from, to, onHeatmapData }: {
+  from: string; to: string
+  onHeatmapData: (updates: Record<string, Record<string, HeatmapDay>>) => void
+}) {
+  const [subTab,       setSubTab]       = useState<'temps' | 'diary'>('temps')
+  const [tempRows,     setTempRows]     = useState<ProcessTempRow[]>([])
+  const [diaryRows,    setDiaryRows]    = useState<DiaryRow[]>([])
+  const [tempSummary,  setTempSummary]  = useState<{ total:number; pass:number; fail:number; ca_count:number; unresolved:number } | null>(null)
+  const [diarySummary, setDiarySummary] = useState<{ total:number; with_issues:number; opening:number; operational:number; closing:number } | null>(null)
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true); setError('')
+    fetch(`/api/haccp/audit?section=process_room&from=${from}&to=${to}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setError(d.error); return }
+        setTempRows(d.tempRows ?? [])
+        setDiaryRows(d.diaryRows ?? [])
+        setTempSummary(d.tempSummary ?? null)
+        setDiarySummary(d.diarySummary ?? null)
+        onHeatmapData(d.heatmap ?? {})
+      })
+      .catch(() => setError('Failed to load'))
+      .finally(() => setLoading(false))
+  }, [from, to, onHeatmapData])
+
+  useEffect(() => { load() }, [load])
+
+  function exportTempCSV() {
+    const headers = ['Date','Session','Product Temp °C','Room Temp °C','Product Pass','Room Pass','Overall','CA logged','CA resolved','CA deviation','CA action taken','CA disposition','Submitted by']
+    const rows = tempRows.map(r => [r.date, r.session, r.product_temp_c, r.room_temp_c, r.product_within_limit?'Yes':'No', r.room_within_limit?'Yes':'No', r.within_limits?'Pass':'Fail', r.ca?'Yes':'No', r.ca?(r.ca.resolved?'Yes':'No'):'', r.ca?.deviation_description??'', r.ca?.action_taken??'', r.ca?.product_disposition??'', r.submitted_by_name])
+    downloadCSV(`MFS_ProcessRoom_Temps_${from}_to_${to}.csv`, headers, rows)
+  }
+
+  function exportDiaryCSV() {
+    const headers = ['Date','Phase','Checks Passed','Total Checks','Issues','Action Taken','Submitted by']
+    const rows = diaryRows.map(r => {
+      const vals = Object.values(r.check_results ?? {})
+      return [r.date, r.phase, vals.filter(Boolean).length, vals.length, r.issues?'Yes':'No', r.what_did_you_do??'', r.submitted_by_name]
+    })
+    downloadCSV(`MFS_ProcessRoom_Diary_${from}_to_${to}.csv`, headers, rows)
+  }
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-slate-400 text-sm py-8">
+      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+      Loading process room…
+    </div>
+  )
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      {/* Sub-tabs */}
+      <div className="flex gap-2">
+        {(['temps', 'diary'] as const).map(t => (
+          <button key={t} onClick={() => setSubTab(t)}
+            className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${subTab === t ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-slate-200 bg-white text-slate-500'}`}>
+            {t === 'temps' ? 'Temperatures' : 'Daily Diary'}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'temps' && (
+        <>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {tempSummary && (
+              <div className="flex items-center gap-3 flex-wrap">
+                {[
+                  { label: 'Total', val: tempSummary.total, cls: 'bg-slate-100 text-slate-700' },
+                  { label: 'Pass',  val: tempSummary.pass,  cls: 'bg-green-100 text-green-700' },
+                  { label: 'Fail',  val: tempSummary.fail,  cls: 'bg-red-100 text-red-700' },
+                  { label: 'CAs',   val: tempSummary.ca_count, cls: 'bg-blue-100 text-blue-700' },
+                  { label: 'Unresolved', val: tempSummary.unresolved, cls: tempSummary.unresolved > 0 ? 'bg-red-200 text-red-800 font-bold' : 'bg-slate-100 text-slate-500' },
+                ].map(s => (
+                  <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}>
+                    <span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={exportTempCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV
+            </button>
+          </div>
+          {tempRows.length === 0 ? (
+            <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No temperature records in this date range</p></div>
+          ) : (
+            <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse" style={{ minWidth: '580px' }}>
+                  <thead><tr className="bg-slate-50 border-b border-slate-200">
+                    {['Date','Session','Product','Room','Overall','CA',''].map(h => (
+                      <th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>{tempRows.map(r => <ProcessTempTableRow key={r.id} row={r} />)}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {subTab === 'diary' && (
+        <>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {diarySummary && (
+              <div className="flex items-center gap-3 flex-wrap">
+                {[
+                  { label: 'Total',       val: diarySummary.total,       cls: 'bg-slate-100 text-slate-700' },
+                  { label: 'Issues',      val: diarySummary.with_issues, cls: diarySummary.with_issues > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500' },
+                  { label: 'Opening',     val: diarySummary.opening,     cls: 'bg-blue-100 text-blue-700' },
+                  { label: 'Operational', val: diarySummary.operational, cls: 'bg-purple-100 text-purple-700' },
+                  { label: 'Closing',     val: diarySummary.closing,     cls: 'bg-slate-100 text-slate-600' },
+                ].map(s => (
+                  <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}>
+                    <span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={exportDiaryCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV
+            </button>
+          </div>
+          {diaryRows.length === 0 ? (
+            <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No diary entries in this date range</p></div>
+          ) : (
+            <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse" style={{ minWidth: '520px' }}>
+                  <thead><tr className="bg-slate-50 border-b border-slate-200">
+                    {['Date','Phase','Checks','Issues','Action','By',''].map(h => (
+                      <th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr></thead>
+                  <tbody>{diaryRows.map(r => <DiaryTableRow key={r.id} row={r} />)}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Placeholder section ──────────────────────────────────────────────────────
 
 function PlaceholderSection({ label }: { label: string }) {
@@ -890,7 +1193,7 @@ export default function AuditPage() {
           />
         )}
         {section === 'cold_storage'  && <ColdStorageSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
-        {section === 'process_room'  && <PlaceholderSection label="Process Room" />}
+        {section === 'process_room'  && <ProcessRoomSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'cleaning'      && <PlaceholderSection label="Cleaning" />}
         {section === 'calibration'   && <PlaceholderSection label="Calibration" />}
         {section === 'mince'         && <PlaceholderSection label="Mince & Prep" />}
