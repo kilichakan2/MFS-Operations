@@ -116,12 +116,14 @@ export async function GET(req: NextRequest) {
       else                    mark(roomPmMap, r.date, isDeviation)
     }
 
-    // ── Daily Diary — Opening and Closing separately ──────────────────────────
-    const diaryOpenMap:  DayMap = {}
-    const diaryCloseMap: DayMap = {}
+    // ── Daily Diary — Opening, Operational and Closing separately ────────────
+    const diaryOpenMap:        DayMap = {}
+    const diaryOperationalMap: DayMap = {}
+    const diaryCloseMap:       DayMap = {}
     for (const r of dailyDiary.data ?? []) {
-      if (r.phase === 'opening') mark(diaryOpenMap,  r.date, r.issues)
-      if (r.phase === 'closing') mark(diaryCloseMap, r.date, r.issues)
+      if (r.phase === 'opening')     mark(diaryOpenMap,        r.date, r.issues)
+      if (r.phase === 'operational') mark(diaryOperationalMap, r.date, r.issues)
+      if (r.phase === 'closing')     mark(diaryCloseMap,       r.date, r.issues)
     }
 
     // ── Cleaning ──────────────────────────────────────────────────────────────
@@ -143,8 +145,9 @@ export async function GET(req: NextRequest) {
       cold_pm:     coldPmMap,
       room_am:     roomAmMap,
       room_pm:     roomPmMap,
-      diary_open:  diaryOpenMap,
-      diary_close: diaryCloseMap,
+      diary_open:        diaryOpenMap,
+      diary_operational: diaryOperationalMap,
+      diary_close:       diaryCloseMap,
       cleaning:    cleanMap,
       mince:       minceMap,
     })

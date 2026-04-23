@@ -301,19 +301,12 @@ export async function GET(req: NextRequest) {
         closing:     diaryRows.filter((r) => r.phase === 'closing').length,
       }
 
-      console.log('[audit/process_room] diary rows per phase:', {
-        total: diaryRows.length,
-        opening:     diaryRows.filter((r) => r.phase === 'opening').length,
-        operational: diaryRows.filter((r) => r.phase === 'operational').length,
-        closing:     diaryRows.filter((r) => r.phase === 'closing').length,
-        phases: diaryRows.map((r) => r.phase),
-      })
-
-      // Heatmap
-      const roomAmMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
-      const roomPmMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
-      const diaryOpenMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
-      const diaryCloseMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      // Heatmap — three diary rows: opening, operational, closing
+      const roomAmMap:           Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      const roomPmMap:           Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      const diaryOpenMap:        Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      const diaryOperationalMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      const diaryCloseMap:       Record<string, { has_records: boolean; has_deviations: boolean }> = {}
 
       for (const r of tempRows) {
         const isDev = !r.within_limits || (r.ca && !(r.ca as {resolved:boolean}).resolved)
@@ -326,12 +319,17 @@ export async function GET(req: NextRequest) {
       for (const r of diaryRows) {
         const isDev = r.issues
         if (r.phase === 'opening') {
-          if (!diaryOpenMap[r.date])  diaryOpenMap[r.date]  = { has_records: false, has_deviations: false }
+          if (!diaryOpenMap[r.date])        diaryOpenMap[r.date]        = { has_records: false, has_deviations: false }
           diaryOpenMap[r.date].has_records = true
           if (isDev) diaryOpenMap[r.date].has_deviations = true
         }
+        if (r.phase === 'operational') {
+          if (!diaryOperationalMap[r.date]) diaryOperationalMap[r.date] = { has_records: false, has_deviations: false }
+          diaryOperationalMap[r.date].has_records = true
+          if (isDev) diaryOperationalMap[r.date].has_deviations = true
+        }
         if (r.phase === 'closing') {
-          if (!diaryCloseMap[r.date]) diaryCloseMap[r.date] = { has_records: false, has_deviations: false }
+          if (!diaryCloseMap[r.date])       diaryCloseMap[r.date]       = { has_records: false, has_deviations: false }
           diaryCloseMap[r.date].has_records = true
           if (isDev) diaryCloseMap[r.date].has_deviations = true
         }
@@ -339,7 +337,13 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({
         tempRows, diaryRows, tempSummary, diarySummary,
-        heatmap: { room_am: roomAmMap, room_pm: roomPmMap, diary_open: diaryOpenMap, diary_close: diaryCloseMap },
+        heatmap: {
+          room_am:           roomAmMap,
+          room_pm:           roomPmMap,
+          diary_open:        diaryOpenMap,
+          diary_operational: diaryOperationalMap,
+          diary_close:       diaryCloseMap,
+        },
       })
     }
 

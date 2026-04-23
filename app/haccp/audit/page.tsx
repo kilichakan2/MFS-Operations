@@ -180,8 +180,9 @@ const HEATMAP_SECTIONS = [
   { key: 'cold_pm',    label: 'CCP2 Cold PM',    variable: false },
   { key: 'room_am',    label: 'CCP3 Room AM',    variable: false },
   { key: 'room_pm',    label: 'CCP3 Room PM',    variable: false },
-  { key: 'diary_open', label: 'Diary Opening',   variable: false },
-  { key: 'diary_close',label: 'Diary Closing',   variable: false },
+  { key: 'diary_open',        label: 'Diary Opening',     variable: false },
+  { key: 'diary_operational', label: 'Diary Operational', variable: false },
+  { key: 'diary_close',       label: 'Diary Closing',     variable: false },
   { key: 'cleaning',   label: 'Cleaning',         variable: false },
   { key: 'mince',      label: 'Mince/Prep',       variable: true  },
 ]
