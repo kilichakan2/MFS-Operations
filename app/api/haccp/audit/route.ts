@@ -557,6 +557,182 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ rows, summary, heatmap: { mince: minceMap } })
     }
 
+
+    // ── Product Returns ───────────────────────────────────────────────────────
+    if (section === 'returns') {
+      const { data: returns, error: rErr } = await supabase
+        .from('haccp_returns')
+        .select(`
+          id, date, time_of_return, customer, product, return_code,
+          return_code_notes, temperature_c, disposition, never_resell_reason,
+          corrective_action, source_batch_number, verified_by,
+          users!submitted_by ( name )
+        `)
+        .gte('date', from).lte('date', to)
+        .order('date', { ascending: false })
+      if (rErr) return NextResponse.json({ error: rErr.message }, { status: 500 })
+
+      type RetRow = typeof returns extends (infer T)[] | null ? T : never
+      const rows = (returns ?? []).map((r: RetRow) => ({
+        ...r,
+        submitted_by_name: (r.users as unknown as { name: string } | null)?.name ?? '—',
+      }))
+
+      const SAFETY_CODES = ['RC01','RC02','RC04','RC05']
+      const summary = {
+        total:    rows.length,
+        safety:   rows.filter(r => SAFETY_CODES.includes(r.return_code)).length,
+        non_safety: rows.filter(r => !SAFETY_CODES.includes(r.return_code)).length,
+      }
+
+      return NextResponse.json({ rows, summary })
+    }
+
+    // ── Corrective Actions ────────────────────────────────────────────────────
+    if (section === 'ccas') {
+      const { data: cas, error: cErr } = await supabase
+        .from('haccp_corrective_actions')
+        .select(`
+          id, submitted_at, source_table, source_id, ccp_ref,
+          deviation_description, action_taken, product_disposition,
+          recurrence_prevention, management_verification_required,
+          resolved, verified_at,
+          actioned_by_user:users!actioned_by ( name ),
+          verified_by_user:users!verified_by ( name )
+        `)
+        .gte('submitted_at', from + 'T00:00:00')
+        .lte('submitted_at', to   + 'T23:59:59')
+        .order('submitted_at', { ascending: false })
+      if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
+
+      type CARow = typeof cas extends (infer T)[] | null ? T : never
+      const rows = (cas ?? []).map((c: CARow) => ({
+        ...c,
+        actioned_by_name: (c.actioned_by_user as unknown as { name: string } | null)?.name ?? '—',
+        verified_by_name: (c.verified_by_user as unknown as { name: string } | null)?.name ?? null,
+        date: (c.submitted_at as string).slice(0, 10),
+      }))
+
+      const summary = {
+        total:      rows.length,
+        resolved:   rows.filter(r => r.resolved).length,
+        unresolved: rows.filter(r => !r.resolved).length,
+        mgmt_req:   rows.filter(r => !r.resolved && r.management_verification_required).length,
+      }
+
+      return NextResponse.json({ rows, summary })
+    }
+
+    // ── Reviews ───────────────────────────────────────────────────────────────
+    if (section === 'reviews') {
+      const [{ data: weekly }, { data: monthly }] = await Promise.all([
+        supabase.from('haccp_weekly_review')
+          .select('id, week_ending, date, assessments, users!submitted_by ( name )')
+          .gte('date', from).lte('date', to)
+          .order('date', { ascending: false }),
+        supabase.from('haccp_monthly_review')
+          .select('id, month_year, date, equipment_checks, facilities_checks, haccp_system_review, further_notes, users!submitted_by ( name )')
+          .gte('date', from).lte('date', to)
+          .order('date', { ascending: false }),
+      ])
+
+      type WRow = typeof weekly extends (infer T)[] | null ? T : never
+      type MRow = typeof monthly extends (infer T)[] | null ? T : never
+
+      const weeklyRows = (weekly ?? []).map((w: WRow) => {
+        const assessments = (w.assessments as { state: string }[] | null) ?? []
+        const problems = assessments.filter(a => a.state === 'problem' || a.state === 'no').length
+        return {
+          ...w,
+          submitted_by_name: (w.users as unknown as { name: string } | null)?.name ?? '—',
+          problem_count: problems,
+          total_assessments: assessments.length,
+        }
+      })
+
+      const monthlyRows = (monthly ?? []).map((m: MRow) => {
+        const equip = m.equipment_checks as Record<string, boolean> | null ?? {}
+        const facil = m.facilities_checks as Record<string, boolean> | null ?? {}
+        const sys   = m.haccp_system_review as { result: string; invertFail: boolean }[] | null ?? []
+        const equipFail = Object.values(equip).filter(v => !v).length
+        const facilFail = Object.values(facil).filter(v => !v).length
+        const sysFail   = sys.filter(i => i.invertFail ? i.result === 'YES' : i.result !== 'YES').length
+        return {
+          ...m,
+          submitted_by_name: (m.users as unknown as { name: string } | null)?.name ?? '—',
+          equip_fail: equipFail, facil_fail: facilFail, sys_fail: sysFail,
+        }
+      })
+
+      return NextResponse.json({ weeklyRows, monthlyRows })
+    }
+
+    // ── Health & People ───────────────────────────────────────────────────────
+    if (section === 'health') {
+      const { data: records, error: hErr } = await supabase
+        .from('haccp_health_records')
+        .select(`
+          id, date, record_type, staff_name, visitor_name, visitor_company,
+          visitor_reason, fit_for_work, exclusion_reason, illness_type,
+          absence_from, absence_to, symptom_free_48h,
+          medical_certificate_provided, manager_signed_name,
+          users!submitted_by ( name )
+        `)
+        .gte('date', from).lte('date', to)
+        .order('date', { ascending: false })
+      if (hErr) return NextResponse.json({ error: hErr.message }, { status: 500 })
+
+      type HRow = typeof records extends (infer T)[] | null ? T : never
+      const rows = (records ?? []).map((h: HRow) => ({
+        ...h,
+        submitted_by_name: (h.users as unknown as { name: string } | null)?.name ?? '—',
+      }))
+
+      const summary = {
+        total:         rows.length,
+        declarations:  rows.filter(r => r.record_type === 'new_staff_declaration').length,
+        return_to_work:rows.filter(r => r.record_type === 'return_to_work').length,
+        visitors:      rows.filter(r => r.record_type === 'visitor').length,
+        excluded:      rows.filter(r => !r.fit_for_work).length,
+      }
+
+      return NextResponse.json({ rows, summary })
+    }
+
+    // ── Training ──────────────────────────────────────────────────────────────
+    if (section === 'training') {
+      const today = todayUK()
+      const [{ data: staff }, { data: allergen }] = await Promise.all([
+        supabase.from('haccp_staff_training')
+          .select('id, staff_name, job_role, training_type, document_version, completion_date, refresh_date, supervisor_name, confirmation_items, submitted_at')
+          .gte('completion_date', from).lte('completion_date', to)
+          .order('completion_date', { ascending: false }),
+        supabase.from('haccp_allergen_training')
+          .select('id, staff_name, job_role, training_completed, certification_date, refresh_date, supervisor_name, confirmation_items, submitted_at')
+          .gte('certification_date', from).lte('certification_date', to)
+          .order('certification_date', { ascending: false }),
+      ])
+
+      function refreshStatus(date: string): string {
+        const diff = (new Date(date).getTime() - new Date(today).getTime()) / 86400000
+        if (diff < 0)   return 'overdue'
+        if (diff <= 30) return 'due_soon'
+        return 'current'
+      }
+
+      const staffRows  = (staff   ?? []).map(r => ({ ...r, status: refreshStatus(r.refresh_date) }))
+      const allergenRows = (allergen ?? []).map(r => ({ ...r, status: refreshStatus(r.refresh_date) }))
+
+      const summary = {
+        staff_total:     staffRows.length,
+        allergen_total:  allergenRows.length,
+        overdue:  [...staffRows, ...allergenRows].filter(r => r.status === 'overdue').length,
+        due_soon: [...staffRows, ...allergenRows].filter(r => r.status === 'due_soon').length,
+      }
+
+      return NextResponse.json({ staffRows, allergenRows, summary })
+    }
+
     return NextResponse.json({ error: `Unknown section: ${section}` }, { status: 400 })
 
   } catch (err) {

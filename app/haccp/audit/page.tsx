@@ -1678,6 +1678,593 @@ function MinceSection({ from, to, onHeatmapData }: {
   )
 }
 
+// ─── Section 7 — Product Returns ──────────────────────────────────────────────
+
+const RETURN_CODE_LABELS: Record<string, string> = {
+  RC01: 'Temperature abuse', RC02: 'Quality / condition', RC03: 'Incorrect product',
+  RC04: 'Contamination',     RC05: 'Labelling / date',   RC06: 'Quantity discrepancy',
+  RC07: 'Packaging damage',  RC08: 'Other',
+}
+const SAFETY_RETURN_CODES = ['RC01','RC02','RC04','RC05']
+
+function isSafetyCritical(code: string) { return SAFETY_RETURN_CODES.includes(code) }
+
+interface ReturnRow {
+  id: string; date: string; time_of_return: string | null
+  customer: string; product: string; return_code: string
+  return_code_notes: string | null; temperature_c: number | null
+  disposition: string | null; never_resell_reason: string | null
+  corrective_action: string | null; source_batch_number: string | null
+  verified_by: string | null; submitted_by_name: string
+}
+
+function ReturnTableRow({ row }: { row: ReturnRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const safety    = isSafetyCritical(row.return_code)
+  const rowColour = safety ? 'bg-red-50 border-red-100' : 'bg-amber-50 border-amber-100'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded(p => !p)}>
+        <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtTime(row.time_of_return)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-700 max-w-28 truncate">{row.customer}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-700 max-w-28 truncate">{row.product}</td>
+        <td className="px-3 py-2.5 whitespace-nowrap">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${safety ? 'bg-red-200 text-red-800' : 'bg-amber-100 text-amber-700'}`}>
+            {row.return_code}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 max-w-32 truncate">{RETURN_CODE_LABELS[row.return_code] ?? row.return_code}</td>
+        <td className="px-3 py-2.5 whitespace-nowrap">
+          {safety
+            ? <span className="text-[10px] font-bold text-red-700">⚠ Safety</span>
+            : <span className="text-[10px] text-slate-400">Non-safety</span>}
+        </td>
+        <td className="px-3 py-2.5">
+          <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={8} className="px-4 pb-3 pt-1">
+            <div className="ml-2 grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Return details</p>
+                {row.temperature_c !== null && <p className="text-slate-600">Temperature: <span className="font-mono font-bold">{row.temperature_c}°C</span></p>}
+                {row.disposition && <p className="text-slate-600">Disposition: {row.disposition}</p>}
+                {row.never_resell_reason && <p className="text-red-700 font-medium">Cannot resell: {row.never_resell_reason}</p>}
+                {row.source_batch_number && <p className="text-slate-600">Source batch: <span className="font-mono">{row.source_batch_number}</span></p>}
+                {row.return_code_notes && <p className="text-slate-600">Notes: {row.return_code_notes}</p>}
+                <p className="text-slate-400 text-[10px] mt-1">Verified by: {row.verified_by ?? '—'} · Submitted: {row.submitted_by_name}</p>
+              </div>
+              {row.corrective_action && (
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective action</p>
+                  <p className="text-slate-700">{row.corrective_action}</p>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function ReturnsSection({ from, to }: { from: string; to: string }) {
+  const [rows, setRows]       = useState<ReturnRow[]>([])
+  const [summary, setSummary] = useState<{ total: number; safety: number; non_safety: number } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/haccp/audit?section=returns&from=${from}&to=${to}`)
+      .then(r => r.json()).then(d => { if (d.error) { setError(d.error); return }; setRows(d.rows ?? []); setSummary(d.summary ?? null) })
+      .catch(() => setError('Failed to load')).finally(() => setLoading(false))
+  }, [from, to])
+
+  function exportCSV() {
+    const headers = ['Date','Time','Customer','Product','Return code','Code description','Safety critical','Temp °C','Disposition','Batch number','Corrective action','Verified by']
+    const csvRows = rows.map(r => [r.date, fmtTime(r.time_of_return), r.customer, r.product, r.return_code, RETURN_CODE_LABELS[r.return_code] ?? r.return_code, isSafetyCritical(r.return_code) ? 'Yes' : 'No', r.temperature_c ?? '', r.disposition ?? '', r.source_batch_number ?? '', r.corrective_action ?? '', r.verified_by ?? ''])
+    downloadCSV(`MFS_Returns_${from}_to_${to}.csv`, headers, csvRows)
+  }
+
+  if (loading) return <div className="flex items-center gap-2 text-slate-400 text-sm py-8"><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Loading returns…</div>
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {summary && <div className="flex items-center gap-3 flex-wrap">
+          {[{label:'Total',val:summary.total,cls:'bg-slate-100 text-slate-700'},{label:'Safety critical',val:summary.safety,cls:summary.safety>0?'bg-red-100 text-red-700':'bg-slate-100 text-slate-500'},{label:'Non-safety',val:summary.non_safety,cls:'bg-amber-100 text-amber-700'}].map(s => (
+            <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}><span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span></div>
+          ))}
+        </div>}
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV</button>
+      </div>
+      {rows.length === 0 ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No returns in this date range</p></div> : (
+        <div className="bg-white border border-blue-100 rounded-xl overflow-hidden"><div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse" style={{minWidth:'680px'}}>
+            <thead><tr className="bg-slate-50 border-b border-slate-200">{['Date','Time','Customer','Product','Code','Description','Safety',''].map(h => <th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody>{rows.map(row => <ReturnTableRow key={row.id} row={row} />)}</tbody>
+          </table>
+        </div></div>
+      )}
+    </div>
+  )
+}
+
+// ─── Section 8 — Corrective Actions ───────────────────────────────────────────
+
+const SOURCE_LABELS: Record<string, string> = {
+  haccp_deliveries:'Deliveries', haccp_cold_storage_temps:'Cold Storage',
+  haccp_processing_temps:'Process Room', haccp_daily_diary:'Daily Diary',
+  haccp_cleaning_log:'Cleaning', haccp_calibration_log:'Calibration',
+  haccp_mince_log:'Mince & Prep', haccp_returns:'Product Returns',
+  haccp_weekly_review:'Weekly Review', haccp_monthly_review:'Monthly Review',
+}
+
+interface CAsRow {
+  id: string; date: string; source_table: string; ccp_ref: string
+  deviation_description: string; action_taken: string
+  product_disposition: string | null; recurrence_prevention: string | null
+  management_verification_required: boolean; resolved: boolean
+  verified_at: string | null; actioned_by_name: string; verified_by_name: string | null
+}
+
+function CATableRow({ row }: { row: CAsRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const rowColour = row.resolved ? 'bg-white border-slate-100'
+    : row.management_verification_required ? 'bg-red-50 border-red-100'
+    : 'bg-amber-50 border-amber-100'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded(p=>!p)}>
+        <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5"><span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{row.ccp_ref}</span></td>
+        <td className="px-3 py-2.5"><span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-medium">{SOURCE_LABELS[row.source_table] ?? row.source_table}</span></td>
+        <td className="px-3 py-2.5 text-xs text-slate-700 max-w-48 truncate">{row.deviation_description}</td>
+        <td className="px-3 py-2.5">
+          {row.management_verification_required && !row.resolved && <span className="text-[10px] font-bold text-red-600">Mgmt req.</span>}
+        </td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.resolved ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+            {row.resolved ? '✓ Resolved' : 'Open'}
+          </span>
+        </td>
+        <td className="px-3 py-2.5"><svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded?'rotate-180':''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={7} className="px-4 pb-3 pt-1">
+            <div className="ml-2 space-y-1.5 text-xs">
+              <p className="text-slate-700"><span className="font-bold text-slate-500">Deviation:</span> {row.deviation_description}</p>
+              <p className="text-slate-700"><span className="font-bold text-slate-500">Action taken:</span> {row.action_taken}</p>
+              {row.product_disposition && <p className="text-slate-700"><span className="font-bold text-slate-500">Disposition:</span> {row.product_disposition}</p>}
+              {row.recurrence_prevention && <p className="text-slate-700"><span className="font-bold text-slate-500">Prevention:</span> {row.recurrence_prevention}</p>}
+              <div className="flex gap-4 text-slate-400 text-[10px] pt-0.5">
+                <span>Actioned by: {row.actioned_by_name}</span>
+                {row.verified_by_name && <span>Verified by: {row.verified_by_name}</span>}
+                {row.verified_at && <span>Verified: {fmtDate(row.verified_at.slice(0,10))}</span>}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function CCAsSection({ from, to }: { from: string; to: string }) {
+  const [rows, setRows]       = useState<CAsRow[]>([])
+  const [summary, setSummary] = useState<{total:number;resolved:number;unresolved:number;mgmt_req:number}|null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/haccp/audit?section=ccas&from=${from}&to=${to}`)
+      .then(r=>r.json()).then(d=>{if(d.error){setError(d.error);return};setRows(d.rows??[]);setSummary(d.summary??null)})
+      .catch(()=>setError('Failed to load')).finally(()=>setLoading(false))
+  }, [from, to])
+
+  function exportCSV() {
+    const headers = ['Date','CCP ref','Source section','Deviation','Action taken','Product disposition','Recurrence prevention','Mgmt verification required','Resolved','Verified at','Actioned by']
+    const csvRows = rows.map(r => [r.date, r.ccp_ref, SOURCE_LABELS[r.source_table]??r.source_table, r.deviation_description, r.action_taken, r.product_disposition??'', r.recurrence_prevention??'', r.management_verification_required?'Yes':'No', r.resolved?'Yes':'No', r.verified_at?r.verified_at.slice(0,10):'', r.actioned_by_name])
+    downloadCSV(`MFS_CorrectiveActions_${from}_to_${to}.csv`, headers, csvRows)
+  }
+
+  if (loading) return <div className="flex items-center gap-2 text-slate-400 text-sm py-8"><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Loading corrective actions…</div>
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {summary && <div className="flex items-center gap-3 flex-wrap">
+          {[{label:'Total',val:summary.total,cls:'bg-slate-100 text-slate-700'},{label:'Resolved',val:summary.resolved,cls:'bg-green-100 text-green-700'},{label:'Unresolved',val:summary.unresolved,cls:summary.unresolved>0?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-500'},{label:'Mgmt required',val:summary.mgmt_req,cls:summary.mgmt_req>0?'bg-red-100 text-red-700':'bg-slate-100 text-slate-500'}].map(s => (
+            <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}><span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span></div>
+          ))}
+        </div>}
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV</button>
+      </div>
+      {rows.length === 0 ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No corrective actions in this date range</p></div> : (
+        <div className="bg-white border border-blue-100 rounded-xl overflow-hidden"><div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse" style={{minWidth:'660px'}}>
+            <thead><tr className="bg-slate-50 border-b border-slate-200">{['Date','CCP','Source','Deviation','Mgmt','Status',''].map(h=><th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody>{rows.map(row=><CATableRow key={row.id} row={row}/>)}</tbody>
+          </table>
+        </div></div>
+      )}
+    </div>
+  )
+}
+
+// ─── Section 9 — Reviews ──────────────────────────────────────────────────────
+
+interface WeeklyRow { id:string; week_ending:string; problem_count:number; total_assessments:number; assessments:{id:string;label:string;state:string}[]; submitted_by_name:string }
+interface MonthlyRow { id:string; month_year:string; equip_fail:number; facil_fail:number; sys_fail:number; further_notes:string|null; submitted_by_name:string }
+
+function ReviewsSection({ from, to }: { from: string; to: string }) {
+  const [subTab, setSubTab]     = useState<'weekly'|'monthly'>('weekly')
+  const [weekly, setWeekly]     = useState<WeeklyRow[]>([])
+  const [monthly, setMonthly]   = useState<MonthlyRow[]>([])
+  const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState('')
+  const [expanded, setExpanded] = useState<Record<string,boolean>>({})
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/haccp/audit?section=reviews&from=${from}&to=${to}`)
+      .then(r=>r.json()).then(d=>{if(d.error){setError(d.error);return};setWeekly(d.weeklyRows??[]);setMonthly(d.monthlyRows??[])})
+      .catch(()=>setError('Failed to load')).finally(()=>setLoading(false))
+  }, [from, to])
+
+  function exportWeeklyCSV() {
+    const headers = ['Week ending','Problems found','Total assessments','Issues detail','Submitted by']
+    const rows = weekly.map(w => [w.week_ending, w.problem_count, w.total_assessments, (w.assessments||[]).filter((a:{state:string})=>a.state==='problem'||a.state==='no').map((a:{label:string})=>a.label).join('; '), w.submitted_by_name])
+    downloadCSV(`MFS_WeeklyReviews_${from}_to_${to}.csv`, headers, rows)
+  }
+
+  function exportMonthlyCSV() {
+    const headers = ['Month','Equipment fails','Facilities fails','System review fails','Further notes','Submitted by']
+    const rows = monthly.map(m => [(m.month_year||'').slice(0,7), m.equip_fail, m.facil_fail, m.sys_fail, m.further_notes??'', m.submitted_by_name])
+    downloadCSV(`MFS_MonthlyReviews_${from}_to_${to}.csv`, headers, rows)
+  }
+
+  if (loading) return <div className="flex items-center gap-2 text-slate-400 text-sm py-8"><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Loading reviews…</div>
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2">
+        {(['weekly','monthly'] as const).map(t => (
+          <button key={t} onClick={()=>setSubTab(t)} className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${subTab===t?'border-orange-500 bg-orange-50 text-orange-700':'border-slate-200 bg-white text-slate-500'}`}>
+            {t === 'weekly' ? 'Weekly' : 'Monthly'}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'weekly' && (
+        <>
+          <div className="flex justify-end">
+            <button onClick={exportWeeklyCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV</button>
+          </div>
+          {weekly.length === 0 ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No weekly reviews in this date range</p></div> : (
+            <div className="space-y-2">
+              {weekly.map(w => {
+                const isExp = !!expanded[w.id]
+                const problems = (w.assessments||[]).filter((a:{state:string})=>a.state==='problem'||a.state==='no')
+                const rowCls = w.problem_count === 0 ? 'bg-green-50 border-green-200' : w.problem_count <= 2 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+                return (
+                  <div key={w.id} className={`border rounded-xl overflow-hidden ${rowCls}`}>
+                    <button type="button" onClick={()=>setExpanded(p=>({...p,[w.id]:!p[w.id]}))} className="w-full flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <p className="text-slate-700 text-xs font-semibold">Week ending {fmtDate(w.week_ending)}</p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${w.problem_count===0?'bg-green-200 text-green-800':w.problem_count<=2?'bg-amber-200 text-amber-800':'bg-red-200 text-red-800'}`}>{w.problem_count} problem{w.problem_count!==1?'s':''}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 text-[10px]">{w.submitted_by_name}</span>
+                        <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isExp?'rotate-180':''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                      </div>
+                    </button>
+                    {isExp && problems.length > 0 && (
+                      <div className="px-4 pb-3 border-t border-slate-100 space-y-1 pt-2">
+                        {problems.map((p:{id:string;label:string}) => (
+                          <div key={p.id} className="flex items-start gap-2">
+                            <span className="text-red-500 text-[10px] font-bold mt-0.5">⚠</span>
+                            <p className="text-xs text-slate-700">{p.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {subTab === 'monthly' && (
+        <>
+          <div className="flex justify-end">
+            <button onClick={exportMonthlyCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV</button>
+          </div>
+          {monthly.length === 0 ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No monthly reviews in this date range</p></div> : (
+            <div className="space-y-2">
+              {monthly.map(m => {
+                const totalFails = m.equip_fail + m.facil_fail + m.sys_fail
+                const rowCls = totalFails === 0 ? 'bg-green-50 border-green-200' : totalFails <= 3 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+                return (
+                  <div key={m.id} className={`border rounded-xl px-4 py-3 ${rowCls}`}>
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <p className="text-slate-700 text-xs font-semibold">{(m.month_year||'').slice(0,7)}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {[{l:'Equipment',v:m.equip_fail},{l:'Facilities',v:m.facil_fail},{l:'System',v:m.sys_fail}].map(s => (
+                          <span key={s.l} className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${s.v>0?'bg-red-200 text-red-800':'bg-green-100 text-green-700'}`}>{s.l}: {s.v} fail{s.v!==1?'s':''}</span>
+                        ))}
+                        <span className="text-slate-400 text-[10px]">{m.submitted_by_name}</span>
+                      </div>
+                    </div>
+                    {m.further_notes && <p className="text-slate-600 text-xs mt-1.5 pt-1.5 border-t border-slate-100">{m.further_notes}</p>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Section 10 — Health & People ────────────────────────────────────────────
+
+const RECORD_TYPE_LABELS: Record<string, string> = {
+  new_staff_declaration: 'Health Declaration',
+  return_to_work:        'Return to Work',
+  visitor:               'Visitor Log',
+}
+
+interface HealthRow {
+  id: string; date: string; record_type: string
+  staff_name: string | null; visitor_name: string | null; visitor_company: string | null
+  fit_for_work: boolean; exclusion_reason: string | null; illness_type: string | null
+  absence_from: string | null; absence_to: string | null
+  manager_signed_name: string | null; submitted_by_name: string
+}
+
+function HealthTableRow({ row }: { row: HealthRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const name = row.staff_name ?? row.visitor_name ?? '—'
+  const rowColour = !row.fit_for_work ? 'bg-red-50 border-red-100'
+    : row.record_type === 'new_staff_declaration' ? 'bg-amber-50 border-amber-100'
+    : 'bg-white border-slate-100'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={()=>setExpanded(p=>!p)}>
+        <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5"><span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{RECORD_TYPE_LABELS[row.record_type]??row.record_type}</span></td>
+        <td className="px-3 py-2.5 text-xs text-slate-700">{name}</td>
+        {row.visitor_company && <td className="px-3 py-2.5 text-xs text-slate-500">{row.visitor_company}</td>}
+        {!row.visitor_company && <td className="px-3 py-2.5 text-xs text-slate-300">—</td>}
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${row.fit_for_work?'bg-green-100 text-green-700':'bg-red-200 text-red-800'}`}>
+            {row.fit_for_work?'Fit':'Excluded'}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 max-w-36 truncate">{row.exclusion_reason??'—'}</td>
+        <td className="px-3 py-2.5"><svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded?'rotate-180':''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={7} className="px-4 pb-3 pt-1">
+            <div className="ml-2 grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+              <div>
+                {row.illness_type && <p className="text-slate-600">Illness type: {row.illness_type.replace(/_/g,' ')}</p>}
+                {row.absence_from && <p className="text-slate-600">Absent: {fmtDate(row.absence_from)}{row.absence_to ? ` – ${fmtDate(row.absence_to)}` : ''}</p>}
+                {row.manager_signed_name && <p className="text-slate-600">Manager sign-off: {row.manager_signed_name}</p>}
+                <p className="text-slate-400 text-[10px] mt-1">Submitted by: {row.submitted_by_name}</p>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function HealthSection({ from, to }: { from: string; to: string }) {
+  const [rows, setRows]       = useState<HealthRow[]>([])
+  const [summary, setSummary] = useState<{total:number;declarations:number;return_to_work:number;visitors:number;excluded:number}|null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/haccp/audit?section=health&from=${from}&to=${to}`)
+      .then(r=>r.json()).then(d=>{if(d.error){setError(d.error);return};setRows(d.rows??[]);setSummary(d.summary??null)})
+      .catch(()=>setError('Failed to load')).finally(()=>setLoading(false))
+  }, [from, to])
+
+  function exportCSV() {
+    const headers = ['Date','Type','Name','Company (visitor)','Fit for work','Exclusion reason','Illness type','Absence from','Absence to','Manager signed by']
+    const csvRows = rows.map(r => [r.date, RECORD_TYPE_LABELS[r.record_type]??r.record_type, r.staff_name??r.visitor_name??'', r.visitor_company??'', r.fit_for_work?'Yes':'No', r.exclusion_reason??'', r.illness_type??'', r.absence_from??'', r.absence_to??'', r.manager_signed_name??''])
+    downloadCSV(`MFS_Health_${from}_to_${to}.csv`, headers, csvRows)
+  }
+
+  if (loading) return <div className="flex items-center gap-2 text-slate-400 text-sm py-8"><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Loading health records…</div>
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {summary && <div className="flex items-center gap-3 flex-wrap">
+          {[{label:'Total',val:summary.total,cls:'bg-slate-100 text-slate-700'},{label:'Declarations',val:summary.declarations,cls:'bg-amber-100 text-amber-700'},{label:'Return to work',val:summary.return_to_work,cls:'bg-blue-100 text-blue-700'},{label:'Visitors',val:summary.visitors,cls:'bg-slate-100 text-slate-600'},{label:'Excluded',val:summary.excluded,cls:summary.excluded>0?'bg-red-100 text-red-700':'bg-slate-100 text-slate-500'}].map(s => (
+            <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}><span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span></div>
+          ))}
+        </div>}
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV</button>
+      </div>
+      {rows.length === 0 ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No health records in this date range</p></div> : (
+        <div className="bg-white border border-blue-100 rounded-xl overflow-hidden"><div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse" style={{minWidth:'600px'}}>
+            <thead><tr className="bg-slate-50 border-b border-slate-200">{['Date','Type','Name','Company','Status','Exclusion reason',''].map(h=><th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>)}</tr></thead>
+            <tbody>{rows.map(row=><HealthTableRow key={row.id} row={row}/>)}</tbody>
+          </table>
+        </div></div>
+      )}
+    </div>
+  )
+}
+
+// ─── Section 11 — Training ────────────────────────────────────────────────────
+
+const TRAINING_TYPE_LABELS: Record<string, string> = {
+  butchery_process_room: 'Butchery & Process Room',
+  warehouse_operative:   'Warehouse Operative',
+  allergen_awareness:    'Allergen Awareness',
+}
+
+function trainingStatus(refreshDate: string): 'overdue' | 'due_soon' | 'current' {
+  const diff = (new Date(refreshDate).getTime() - new Date(todayStr()).getTime()) / 86400000
+  if (diff < 0)   return 'overdue'
+  if (diff <= 30) return 'due_soon'
+  return 'current'
+}
+
+interface StaffTrainRow { id:string; staff_name:string; job_role:string|null; training_type:string; document_version:string|null; completion_date:string; refresh_date:string; supervisor_name:string|null; status:string }
+interface AllergenTrainRow { id:string; staff_name:string; job_role:string|null; training_completed:string; certification_date:string; refresh_date:string; supervisor_name:string|null; confirmation_items:Record<string,boolean>|null; status:string }
+
+function TrainingSection({ from, to }: { from: string; to: string }) {
+  const [subTab, setSubTab]       = useState<'staff'|'allergen'>('staff')
+  const [staffRows, setStaffRows] = useState<StaffTrainRow[]>([])
+  const [allergenRows, setAllergenRows] = useState<AllergenTrainRow[]>([])
+  const [summary, setSummary]     = useState<{staff_total:number;allergen_total:number;overdue:number;due_soon:number}|null>(null)
+  const [loading, setLoading]     = useState(true)
+  const [error, setError]         = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/haccp/audit?section=training&from=${from}&to=${to}`)
+      .then(r=>r.json()).then(d=>{if(d.error){setError(d.error);return};setStaffRows(d.staffRows??[]);setAllergenRows(d.allergenRows??[]);setSummary(d.summary??null)})
+      .catch(()=>setError('Failed to load')).finally(()=>setLoading(false))
+  }, [from, to])
+
+  function statusCls(s:string) {
+    return s==='overdue' ? 'bg-red-100 text-red-700' : s==='due_soon' ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+  }
+  function statusLabel(s:string) {
+    return s==='overdue' ? 'Overdue' : s==='due_soon' ? 'Due soon' : 'Current'
+  }
+
+  function exportStaffCSV() {
+    const headers = ['Staff name','Job role','Training type','Document version','Completed','Refresh due','Status','Supervisor']
+    const rows = staffRows.map(r => [r.staff_name, r.job_role??'', TRAINING_TYPE_LABELS[r.training_type]??r.training_type, r.document_version??'', r.completion_date, r.refresh_date, statusLabel(r.status), r.supervisor_name??''])
+    downloadCSV(`MFS_StaffTraining_${from}_to_${to}.csv`, headers, rows)
+  }
+
+  function exportAllergenCSV() {
+    const headers = ['Staff name','Job role','Completed','Refresh due','Status','Supervisor','Allergens confirmed','Understanding confirmed']
+    const rows = allergenRows.map(r => {
+      const items = r.confirmation_items ?? {}
+      const aCount = Object.entries(items).filter(([k,v])=>k.startsWith('a')&&v).length
+      const uCount = Object.entries(items).filter(([k,v])=>k.startsWith('u')&&v).length
+      return [r.staff_name, r.job_role??'', r.certification_date, r.refresh_date, statusLabel(r.status), r.supervisor_name??'', `${aCount}/14`, `${uCount}/5`]
+    })
+    downloadCSV(`MFS_AllergenTraining_${from}_to_${to}.csv`, headers, rows)
+  }
+
+  if (loading) return <div className="flex items-center gap-2 text-slate-400 text-sm py-8"><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Loading training records…</div>
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex gap-2">
+          {(['staff','allergen'] as const).map(t => (
+            <button key={t} onClick={()=>setSubTab(t)} className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all ${subTab===t?'border-orange-500 bg-orange-50 text-orange-700':'border-slate-200 bg-white text-slate-500'}`}>
+              {t==='staff' ? 'Staff Training' : 'Allergen Awareness'}
+            </button>
+          ))}
+        </div>
+        {summary && <div className="flex items-center gap-2 flex-wrap">
+          {[{label:'Overdue',val:summary.overdue,cls:summary.overdue>0?'bg-red-100 text-red-700':'bg-slate-100 text-slate-500'},{label:'Due soon',val:summary.due_soon,cls:summary.due_soon>0?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-500'}].map(s => (
+            <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}><span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span></div>
+          ))}
+        </div>}
+      </div>
+
+      {subTab === 'staff' && (
+        <>
+          <div className="flex justify-end">
+            <button onClick={exportStaffCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV</button>
+          </div>
+          {staffRows.length === 0 ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No staff training records in this date range</p></div> : (
+            <div className="bg-white border border-blue-100 rounded-xl overflow-hidden"><div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse" style={{minWidth:'600px'}}>
+                <thead><tr className="bg-slate-50 border-b border-slate-200">{['Staff','Role','Training','Version','Completed','Refresh due','Status','Supervisor'].map(h=><th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>)}</tr></thead>
+                <tbody>
+                  {staffRows.map(r => (
+                    <tr key={r.id} className={`border-b ${r.status==='overdue'?'bg-red-50':r.status==='due_soon'?'bg-amber-50':'bg-white'}`}>
+                      <td className="px-3 py-2.5 text-xs font-medium text-slate-700">{r.staff_name}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500">{r.job_role??'—'}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-600">{TRAINING_TYPE_LABELS[r.training_type]??r.training_type}</td>
+                      <td className="px-3 py-2.5 text-xs font-mono text-slate-500">{r.document_version??'—'}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtDate(r.completion_date)}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtDate(r.refresh_date)}</td>
+                      <td className="px-3 py-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusCls(r.status)}`}>{statusLabel(r.status)}</span></td>
+                      <td className="px-3 py-2.5 text-xs text-slate-500">{r.supervisor_name??'—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div></div>
+          )}
+        </>
+      )}
+
+      {subTab === 'allergen' && (
+        <>
+          <div className="flex justify-end">
+            <button onClick={exportAllergenCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV</button>
+          </div>
+          {allergenRows.length === 0 ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center"><p className="text-slate-400 text-sm">No allergen training records in this date range</p></div> : (
+            <div className="bg-white border border-blue-100 rounded-xl overflow-hidden"><div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse" style={{minWidth:'580px'}}>
+                <thead><tr className="bg-slate-50 border-b border-slate-200">{['Staff','Role','Completed','Refresh due','Status','Allergens','Understanding','Supervisor'].map(h=><th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>)}</tr></thead>
+                <tbody>
+                  {allergenRows.map(r => {
+                    const items = r.confirmation_items ?? {}
+                    const aCount = Object.entries(items).filter(([k,v])=>k.startsWith('a')&&v).length
+                    const uCount = Object.entries(items).filter(([k,v])=>k.startsWith('u')&&v).length
+                    return (
+                      <tr key={r.id} className={`border-b ${r.status==='overdue'?'bg-red-50':r.status==='due_soon'?'bg-amber-50':'bg-white'}`}>
+                        <td className="px-3 py-2.5 text-xs font-medium text-slate-700">{r.staff_name}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-500">{r.job_role??'—'}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtDate(r.certification_date)}</td>
+                        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtDate(r.refresh_date)}</td>
+                        <td className="px-3 py-2.5"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusCls(r.status)}`}>{statusLabel(r.status)}</span></td>
+                        <td className="px-3 py-2.5"><span className={`text-xs font-bold ${aCount===14?'text-green-700':'text-amber-600'}`}>{aCount}/14</span></td>
+                        <td className="px-3 py-2.5"><span className={`text-xs font-bold ${uCount===5?'text-green-700':'text-amber-600'}`}>{uCount}/5</span></td>
+                        <td className="px-3 py-2.5 text-xs text-slate-500">{r.supervisor_name??'—'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div></div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Placeholder section ──────────────────────────────────────────────────────
 
 function PlaceholderSection({ label }: { label: string }) {
@@ -1856,11 +2443,11 @@ export default function AuditPage() {
         {section === 'cleaning'      && <CleaningSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'calibration'   && <CalibrationSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'mince'         && <MinceSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
-        {section === 'returns'       && <PlaceholderSection label="Product Returns" />}
-        {section === 'ccas'          && <PlaceholderSection label="Corrective Actions" />}
-        {section === 'reviews'       && <PlaceholderSection label="Reviews" />}
-        {section === 'health'        && <PlaceholderSection label="Health & People" />}
-        {section === 'training'      && <PlaceholderSection label="Training" />}
+        {section === 'returns'       && <ReturnsSection       from={from} to={to} />}
+        {section === 'ccas'          && <CCAsSection          from={from} to={to} />}
+        {section === 'reviews'       && <ReviewsSection       from={from} to={to} />}
+        {section === 'health'        && <HealthSection        from={from} to={to} />}
+        {section === 'training'      && <TrainingSection      from={from} to={to} />}
 
       </div>
     </div>
