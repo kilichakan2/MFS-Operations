@@ -3,23 +3,22 @@
  *
  * Renders label data as styled HTML for browser/AirPrint printing (Phase 1/2).
  *
- * The HTML is designed to print at 100mm × 60mm — staff set this paper size
- * once in iOS Settings → Printers → Custom Paper Size, or select it in the
- * print dialog.
+ * Label size: 100mm × 50mm — confirmed across all phases.
+ *   Phase 1: custom paper size in iOS print dialog
+ *   Phase 2: TSC TE310 (max 104mm width) ✓
+ *   Phase 3: Zebra ZD421d (max 104mm width) ✓
  *
- * Uses JsBarcode-style SVG barcode generation inline — no external library
- * needed on client, all generated server-side as static SVG.
- *
- * The `copies` param repeats the label block — each one is a separate page
- * via `page-break-after: always` in print CSS.
+ * Layout (top to bottom):
+ *   Header: MFS GLOBAL + label type
+ *   Batch code: large bold monospace (primary human reference)
+ *   Barcode: Code 128 bars + human-readable number underneath
+ *   Divider
+ *   Fields: larger text, fills remaining space
  */
 
 import type { DeliveryLabelData, MinceLabelData } from './types'
-import { fmtDisplayDate } from './zpl'
 
-// ── Minimal Code 128 SVG barcode generator ────────────────────────────────────
-// Encodes printable ASCII using Code 128B subset.
-// Sufficient for our batch code format (GI-2104-LAMB-003 etc).
+// ── Code 128B barcode generator ───────────────────────────────────────────────
 
 const CODE128B_START = 104
 const CODE128_STOP   = 106
@@ -51,116 +50,130 @@ const SPECIAL: Record<number, string> = {
 }
 
 function code128Pattern(code: number): string {
-  if (SPECIAL[code]) return SPECIAL[code]
-  if (CODE128B_PATTERNS[code]) return CODE128B_PATTERNS[code]
-  return '10101010101' // fallback
+  return SPECIAL[code] ?? CODE128B_PATTERNS[code] ?? '10101010101'
 }
 
-function generateBarcodeSVG(text: string, width = 280, height = 60): string {
+/**
+ * Generates an inline SVG Code 128B barcode with human-readable text below.
+ *
+ * @param text       String to encode (batch code)
+ * @param barsWidth  Width of bar area in px
+ * @param barsHeight Height of bars in px
+ * @param fontSize   Font size for number below in px
+ */
+function generateBarcodeSVG(
+  text:      string,
+  barsWidth  = 260,
+  barsHeight = 44,
+  fontSize   = 9,
+): string {
   const chars  = text.split('').map(c => c.charCodeAt(0))
   const values = [CODE128B_START, ...chars]
 
-  // Calculate checksum
   let checksum = CODE128B_START
   chars.forEach((v, i) => { checksum += v * (i + 1) })
   checksum = checksum % 103
   values.push(checksum, CODE128_STOP)
 
   const pattern = values.map(code128Pattern).join('')
-  const barWidth = width / pattern.length
+  const barW    = barsWidth / pattern.length
 
-  const bars = pattern.split('').map((bit, i) => {
-    if (bit === '1') {
-      return `<rect x="${(i * barWidth).toFixed(2)}" y="0" width="${barWidth.toFixed(2)}" height="${height}" fill="black"/>`
-    }
-    return ''
-  }).filter(Boolean).join('')
+  const bars = pattern.split('').map((bit, i) =>
+    bit === '1'
+      ? `<rect x="${(i * barW).toFixed(2)}" y="0" width="${barW.toFixed(2)}" height="${barsHeight}" fill="black"/>`
+      : ''
+  ).filter(Boolean).join('')
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${bars}</svg>`
+  const textGap = 2
+  const textY   = barsHeight + textGap + fontSize  // SVG text y = baseline
+  const svgH    = barsHeight + textGap + fontSize + 1
+
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${barsWidth}" height="${svgH}" viewBox="0 0 ${barsWidth} ${svgH}">` +
+    bars +
+    `<text x="${barsWidth / 2}" y="${textY}" text-anchor="middle" ` +
+    `font-family="Courier New,Courier,monospace" font-size="${fontSize}" letter-spacing="1.5" fill="black">` +
+    text +
+    `</text></svg>`
+  )
 }
 
-// ── HTML label template ───────────────────────────────────────────────────────
+// ── Shared print CSS ──────────────────────────────────────────────────────────
 
 function labelCSS(): string {
-  return `
-    @page { size: 100mm 60mm; margin: 0; }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
-    body { background: white; }
-    .label {
-      width: 100mm; height: 60mm;
-      padding: 2mm 3mm;
-      border: 0.5mm solid #ccc;
-      page-break-after: always;
-      overflow: hidden;
-    }
-    .label:last-child { page-break-after: auto; }
-    .header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 0.3mm solid #333; padding-bottom: 1mm; margin-bottom: 1.5mm; }
-    .company { font-size: 8pt; font-weight: bold; }
-    .type { font-size: 7pt; font-weight: bold; color: #555; }
-    .batch { font-size: 11pt; font-weight: bold; font-family: monospace; letter-spacing: 0.5px; margin-bottom: 0.5mm; }
-    .barcode { margin-bottom: 1.5mm; }
-    .fields { font-size: 6pt; line-height: 1.35; }
-    .field { display: flex; gap: 2mm; }
-    .label-key { color: #555; min-width: 14mm; }
-    .divider { border-top: 0.3mm solid #333; margin: 1mm 0; }
-  `.replace(/\s+/g, ' ')
+  return (
+    `@page{size:100mm 50mm;margin:0}` +
+    `*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}` +
+    `body{background:white}` +
+    `.label{width:100mm;height:50mm;padding:1.5mm 3mm;page-break-after:always;overflow:hidden;display:flex;flex-direction:column}` +
+    `.label:last-child{page-break-after:auto}` +
+    `.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:0.8mm;border-bottom:0.5mm solid #000;margin-bottom:0.8mm;flex-shrink:0}` +
+    `.co{font-size:9pt;font-weight:bold}` +
+    `.tp{font-size:8pt;font-weight:bold;color:#333}` +
+    `.bc{font-size:14pt;font-weight:bold;font-family:'Courier New',Courier,monospace;letter-spacing:1px;line-height:1;margin-bottom:0.8mm;flex-shrink:0}` +
+    `.br{flex-shrink:0;margin-bottom:1mm;line-height:0}` +
+    `.br svg{display:block;max-width:100%}` +
+    `.dv{border-top:0.3mm solid #aaa;margin:0.8mm 0;flex-shrink:0}` +
+    `.fl{font-size:8pt;line-height:1.35;flex-grow:1}` +
+    `.fw{display:flex;gap:2mm}` +
+    `.fk{color:#444;min-width:15mm;flex-shrink:0;font-size:7.5pt}` +
+    `.fv{font-size:8pt}`
+  )
 }
+
+// ── Delivery label ────────────────────────────────────────────────────────────
 
 export function renderDeliveryHTML(data: DeliveryLabelData, copies = 1): string {
+  const origin     = [data.born_in, data.slaughter_site].filter(Boolean).join(' / ')
   const tempColour = data.temp_status === 'pass' ? '#166534' : '#991b1b'
-  const origin = [data.born_in, data.slaughter_site].filter(Boolean).join(' / ')
-  const barcode = generateBarcodeSVG(data.batch_code, 240, 36)
+  const barcode    = generateBarcodeSVG(data.batch_code, 260, 42, 8)
 
-  const labelHTML = `
-    <div class="label">
-      <div class="header">
-        <span class="company">MFS GLOBAL</span>
-        <span class="type">GOODS IN</span>
-      </div>
-      <div class="batch">${data.batch_code}</div>
-      <div class="barcode">${barcode}</div>
-      <div class="fields">
-        <div class="field"><span class="label-key">Supplier:</span><span>${data.supplier}</span></div>
-        <div class="field"><span class="label-key">Product:</span><span>${data.product} (${data.species})</span></div>
-        <div class="field"><span class="label-key">Date in:</span><span>${data.date_received}</span></div>
-        ${origin ? `<div class="field"><span class="label-key">Origin:</span><span>${origin}</span></div>` : ''}
-        <div class="field"><span class="label-key">Received:</span><span style="color:${tempColour};font-weight:bold">${data.temperature_c}°C</span></div>
-      </div>
-    </div>
-  `
+  const lbl = [
+    `<div class="label">`,
+    `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">GOODS IN</span></div>`,
+    `<div class="bc">${data.batch_code}</div>`,
+    `<div class="br">${barcode}</div>`,
+    `<div class="dv"></div>`,
+    `<div class="fl">`,
+    `<div class="fw"><span class="fk">Supplier:</span><span class="fv">${data.supplier}</span></div>`,
+    `<div class="fw"><span class="fk">Product:</span><span class="fv">${data.product} (${data.species})</span></div>`,
+    `<div class="fw"><span class="fk">Date in:</span><span class="fv">${data.date_received}</span></div>`,
+    origin ? `<div class="fw"><span class="fk">Origin:</span><span class="fv">${origin}</span></div>` : '',
+    `<div class="fw"><span class="fk">Temp:</span><span class="fv" style="color:${tempColour};font-weight:bold">${data.temperature_c}°C</span></div>`,
+    `</div>`,
+    `</div>`,
+  ].filter(Boolean).join('')
 
-  const body = Array.from({ length: copies }, () => labelHTML).join('')
-
+  const body = Array.from({ length: copies }, () => lbl).join('')
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${labelCSS()}</style></head><body>${body}</body></html>`
 }
+
+// ── Mince / Prep production label ─────────────────────────────────────────────
 
 export function renderMinceHTML(data: MinceLabelData, copies = 1): string {
   const mode    = data.output_mode.toUpperCase()
   const sources = data.source_batch_numbers.slice(0, 3).join(', ')
-  const barcode = generateBarcodeSVG(data.batch_code, 240, 36)
-  const killStr = data.kill_date && data.days_from_kill !== null
+  const killStr = (data.kill_date && data.days_from_kill !== null)
     ? `${data.kill_date} (${data.days_from_kill} days)`
     : null
+  const barcode = generateBarcodeSVG(data.batch_code, 260, 42, 8)
 
-  const labelHTML = `
-    <div class="label">
-      <div class="header">
-        <span class="company">MFS GLOBAL</span>
-        <span class="type">PRODUCTION · ${mode}</span>
-      </div>
-      <div class="batch">${data.batch_code}</div>
-      <div class="barcode">${barcode}</div>
-      <div class="fields">
-        <div class="field"><span class="label-key">Species:</span><span>${data.product_species}</span></div>
-        <div class="field"><span class="label-key">Prod date:</span><span>${data.date}</span></div>
-        ${killStr ? `<div class="field"><span class="label-key">Kill date:</span><span>${killStr}</span></div>` : ''}
-        ${sources ? `<div class="field"><span class="label-key">Source:</span><span style="font-family:monospace;font-size:5.5pt">${sources}</span></div>` : ''}
-        <div class="field"><span class="label-key">Use by:</span><span style="font-weight:bold">${data.use_by}</span></div>
-      </div>
-    </div>
-  `
+  const lbl = [
+    `<div class="label">`,
+    `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">PRODUCTION · ${mode}</span></div>`,
+    `<div class="bc">${data.batch_code}</div>`,
+    `<div class="br">${barcode}</div>`,
+    `<div class="dv"></div>`,
+    `<div class="fl">`,
+    `<div class="fw"><span class="fk">Species:</span><span class="fv">${data.product_species}</span></div>`,
+    `<div class="fw"><span class="fk">Prod date:</span><span class="fv">${data.date}</span></div>`,
+    killStr ? `<div class="fw"><span class="fk">Kill date:</span><span class="fv">${killStr}</span></div>` : '',
+    sources ? `<div class="fw"><span class="fk">Source:</span><span class="fv" style="font-family:'Courier New',monospace;font-size:7pt">${sources}</span></div>` : '',
+    `<div class="fw"><span class="fk">Use by:</span><span class="fv" style="font-weight:bold">${data.use_by}</span></div>`,
+    `</div>`,
+    `</div>`,
+  ].filter(Boolean).join('')
 
-  const body = Array.from({ length: copies }, () => labelHTML).join('')
-
+  const body = Array.from({ length: copies }, () => lbl).join('')
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${labelCSS()}</style></head><body>${body}</body></html>`
 }

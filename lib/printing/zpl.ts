@@ -3,7 +3,7 @@
  *
  * ZPL (Zebra Programming Language) generation for MFS Global labels.
  *
- * Label size: 100mm × 60mm at 203dpi = 800 × 480 dots
+ * Label size: 100mm × 50mm at 203dpi = 800 × 400 dots
  *
  * Used in:
  * - Phase 1/2: generated but not directly sent (HTML render used instead)
@@ -16,7 +16,7 @@ import type { DeliveryLabelData, MinceLabelData } from './types'
 
 // Label dimensions at 203dpi
 const W = 800  // 100mm = 800 dots
-const H = 480  // 60mm  = 480 dots
+const H = 400  // 50mm  = 400 dots
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
