@@ -19,6 +19,22 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
+/**
+ * Opens a label URL in a new tab/Safari window.
+ * Uses a programmatic <a> click instead of window.open() because
+ * window.open() is silently blocked in iOS PWA standalone mode.
+ * A temporary anchor element click is NOT blocked and opens in Safari.
+ */
+function openLabelUrl(url: string) {
+  const a = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TempStatus = 'pass' | 'urgent' | 'fail' | null
@@ -636,7 +652,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
                   type="button"
                   onPointerDown={(e) => {
                     e.preventDefault()
-                    window.open(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`, '_blank')
+                    openLabelUrl(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`)
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold transition-colors flex-shrink-0"
                 >

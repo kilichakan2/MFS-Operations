@@ -8,6 +8,21 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
+/**
+ * Opens a label URL in a new tab/Safari window.
+ * Uses a programmatic <a> click — NOT window.open() because
+ * window.open() is silently blocked in iOS PWA standalone mode.
+ */
+function openLabelUrl(url: string) {
+  const a = document.createElement('a')
+  a.href = url
+  a.target = '_blank'
+  a.rel = 'noopener noreferrer'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TabType = 'mince' | 'meatprep' | 'timesep'
@@ -763,9 +778,8 @@ export default function MincePage() {
                     type="button"
                     onPointerDown={(e) => {
                       e.preventDefault()
-                      window.open(
-                        `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}`,
-                        '_blank'
+                      openLabelUrl(
+                        `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}`
                       )
                       setPrintTarget(null)
                     }}

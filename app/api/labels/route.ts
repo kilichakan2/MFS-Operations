@@ -71,8 +71,8 @@ function validateParams(params: URLSearchParams): {
 
 export async function GET(req: NextRequest) {
   try {
-    // Auth check
-    const role = req.cookies.get('mfs_role')?.value
+    // Auth check — role injected by middleware from session
+    const role = req.headers.get('x-mfs-user-role')
     if (!role || !ALLOWED_ROLES.includes(role)) {
       return new NextResponse('Unauthorised', { status: 401 })
     }
