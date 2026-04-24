@@ -626,11 +626,26 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
 
         <div className="px-5 py-4 space-y-4 pb-8">
 
-          {/* Batch number */}
+          {/* Batch number + Print label */}
           {d.batch_number && (
             <div className="bg-slate-900 rounded-xl px-4 py-3">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
-              <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
+                <button
+                  type="button"
+                  onPointerDown={(e) => {
+                    e.preventDefault()
+                    window.open(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`, '_blank')
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold transition-colors flex-shrink-0"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+                  </svg>
+                  Print label
+                </button>
+              </div>
             </div>
           )}
 

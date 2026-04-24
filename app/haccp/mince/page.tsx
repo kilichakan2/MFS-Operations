@@ -954,7 +954,7 @@ export default function MincePage() {
                             <p className="text-slate-400 text-[10px] mt-0.5">From: {r.source_batch_numbers.join(' · ')}</p>
                           )}
                         </div>
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                           <p className="text-slate-400 text-xs">{fmtTime(r.time_of_production)}</p>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                             r.kill_date_within_limit && r.input_temp_pass && r.output_temp_pass
@@ -962,6 +962,19 @@ export default function MincePage() {
                           }`}>
                             {r.kill_date_within_limit && r.input_temp_pass && r.output_temp_pass ? 'All pass' : 'Deviation'}
                           </span>
+                          <button
+                            type="button"
+                            onPointerDown={(e) => {
+                              e.preventDefault()
+                              window.open(`/api/labels?type=mince&id=${r.id}&format=html&copies=1`, '_blank')
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-600 text-white text-[10px] font-bold"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+                            </svg>
+                            Print
+                          </button>
                         </div>
                       </div>
                     </div>
