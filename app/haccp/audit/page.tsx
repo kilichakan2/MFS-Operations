@@ -203,11 +203,11 @@ function HeatCell({ date, section, heatmapData }: {
   let cls = 'bg-slate-50 border-slate-200' // none / not built yet
   let title = 'No data'
 
-  if (section.key === 'deliveries') {
-    // Variable — no record is grey not red
-    if (hasRecord && hasDev)  { cls = 'bg-amber-200 border-amber-300';  title = 'Deviations' }
-    else if (hasRecord)       { cls = 'bg-green-200 border-green-300';  title = 'All pass' }
-    else                      { cls = 'bg-slate-100 border-slate-200'; title = 'No deliveries' }
+  if (section.variable) {
+    // Variable frequency (deliveries, mince, calibration) — no record = grey, not red
+    if (hasRecord && hasDev)  { cls = 'bg-amber-200 border-amber-300'; title = 'Deviations' }
+    else if (hasRecord)       { cls = 'bg-green-200 border-green-300'; title = 'All pass' }
+    else                      { cls = 'bg-slate-100 border-slate-200'; title = 'None logged' }
   } else {
     // Expected Mon–Fri — no record is a gap (red)
     if (hasRecord && hasDev)  { cls = 'bg-amber-200 border-amber-300'; title = 'Deviation' }
