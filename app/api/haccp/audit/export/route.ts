@@ -295,6 +295,44 @@ async function fetchCalibrationSheet(from: string, to: string) {
   return ws
 }
 
+
+async function fetchMinceSheet(from: string, to: string) {
+  const { data: runs } = await supabase
+    .from('haccp_mince_log')
+    .select('id, date, time_of_production, batch_code, product_species, output_mode, kill_date, days_from_kill, kill_date_within_limit, input_temp_c, output_temp_c, input_temp_pass, output_temp_pass, corrective_action, source_batch_numbers, users!submitted_by(name)')
+    .gte('date', from).lte('date', to).order('date', { ascending: false })
+
+  const runIds = (runs ?? []).map((r) => r.id)
+  const casMap: Record<string, { deviation_description: string; action_taken: string; resolved: boolean }> = {}
+  if (runIds.length > 0) {
+    const { data: caData } = await supabase
+      .from('haccp_corrective_actions')
+      .select('source_id, deviation_description, action_taken, resolved')
+      .eq('source_table', 'haccp_mince_log').in('source_id', runIds)
+    for (const ca of caData ?? []) casMap[ca.source_id] = ca
+  }
+
+  type MRow = typeof runs extends (infer T)[] | null ? T : never
+  const headers = ['Date','Time','Species','Batch code','Mode','Input temp °C','Input pass','Output temp °C','Output pass','Kill date','Days from kill','Kill limit pass','CA note','Source batches','Linked CA','CA resolved']
+  const rows = (runs ?? []).map((r: MRow) => {
+    const ca = casMap[r.id] ?? null
+    const batches = (r.source_batch_numbers as string[] | null) ?? []
+    return [
+      r.date, (r.time_of_production as string)?.slice(0,5) ?? '',
+      r.product_species, r.batch_code, r.output_mode,
+      r.input_temp_c, r.input_temp_pass ? 'Yes' : 'No',
+      r.output_temp_c, r.output_temp_pass ? 'Yes' : 'No',
+      r.kill_date ?? '', r.days_from_kill ?? '', r.kill_date_within_limit ? 'Yes' : 'No',
+      (r.corrective_action as string | null) ?? '',
+      batches.join(', '),
+      ca ? 'Yes' : 'No', ca ? (ca.resolved ? 'Yes' : 'No') : '',
+    ]
+  })
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  ws['!cols'] = [{wch:12},{wch:8},{wch:8},{wch:20},{wch:10},{wch:14},{wch:12},{wch:14},{wch:12},{wch:12},{wch:14},{wch:14},{wch:30},{wch:20},{wch:10},{wch:12}]
+  return ws
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -326,6 +364,9 @@ export async function GET(req: NextRequest) {
 
     const calibrationSheet = await fetchCalibrationSheet(from, to)
     XLSX.utils.book_append_sheet(wb, calibrationSheet, '05 Calibration')
+
+    const minceSheet = await fetchMinceSheet(from, to)
+    XLSX.utils.book_append_sheet(wb, minceSheet, '06 Mince & Prep')
 
     // Generate binary buffer
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })

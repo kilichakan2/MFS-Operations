@@ -488,6 +488,75 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ rows, summary, heatmap: { calibration: calMap } })
     }
 
+
+    // ── Mince & Prep ──────────────────────────────────────────────────────────
+    if (section === 'mince') {
+      const { data: runs, error: mErr } = await supabase
+        .from('haccp_mince_log')
+        .select(`
+          id, date, time_of_production, batch_code, product_species, output_mode,
+          kill_date, days_from_kill, kill_date_within_limit,
+          input_temp_c, output_temp_c, input_temp_pass, output_temp_pass,
+          corrective_action, source_batch_numbers,
+          users!submitted_by ( name )
+        `)
+        .gte('date', from).lte('date', to)
+        .order('date', { ascending: false })
+        .order('time_of_production', { ascending: false })
+
+      if (mErr) {
+        console.error('[audit/mince]', mErr.message)
+        return NextResponse.json({ error: mErr.message }, { status: 500 })
+      }
+
+      const runIds = (runs ?? []).map((r) => r.id)
+      const casMap: Record<string, {
+        id: string; ccp_ref: string; deviation_description: string
+        action_taken: string; product_disposition: string | null
+        management_verification_required: boolean
+        resolved: boolean; verified_at: string | null
+      }> = {}
+
+      if (runIds.length > 0) {
+        const { data: caData } = await supabase
+          .from('haccp_corrective_actions')
+          .select(`id, source_id, ccp_ref, deviation_description, action_taken,
+            product_disposition, management_verification_required, resolved, verified_at`)
+          .eq('source_table', 'haccp_mince_log')
+          .in('source_id', runIds)
+        for (const ca of caData ?? []) casMap[ca.source_id] = ca
+      }
+
+      type MRow = typeof runs extends (infer T)[] | null ? T : never
+      const rows = (runs ?? []).map((r: MRow) => ({
+        ...r,
+        submitted_by_name: (r.users as unknown as { name: string } | null)?.name ?? '—',
+        ca: casMap[r.id] ?? null,
+      }))
+
+      const summary = {
+        total:        rows.length,
+        all_pass:     rows.filter(r => r.input_temp_pass && r.output_temp_pass && r.kill_date_within_limit).length,
+        temp_fails:   rows.filter(r => !r.input_temp_pass || !r.output_temp_pass).length,
+        kill_fails:   rows.filter(r => !r.kill_date_within_limit).length,
+        with_ca_note: rows.filter(r => !!(r.corrective_action as string | null)?.trim()).length,
+        linked_cas:   rows.filter(r => r.ca !== null).length,
+        unresolved:   rows.filter(r => r.ca !== null && !(r.ca as {resolved:boolean}).resolved).length,
+      }
+
+      // Heatmap — variable: green/amber on days logged, grey otherwise
+      const minceMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      for (const r of rows) {
+        if (!minceMap[r.date]) minceMap[r.date] = { has_records: false, has_deviations: false }
+        minceMap[r.date].has_records = true
+        const isDev = !r.input_temp_pass || !r.output_temp_pass || !r.kill_date_within_limit ||
+          !!(r.corrective_action as string | null) || (r.ca && !(r.ca as {resolved:boolean}).resolved)
+        if (isDev) minceMap[r.date].has_deviations = true
+      }
+
+      return NextResponse.json({ rows, summary, heatmap: { mince: minceMap } })
+    }
+
     return NextResponse.json({ error: `Unknown section: ${section}` }, { status: 400 })
 
   } catch (err) {

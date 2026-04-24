@@ -1474,6 +1474,210 @@ function CalibrationSection({ from, to, onHeatmapData }: {
   )
 }
 
+// ─── Mince & Prep section ─────────────────────────────────────────────────────
+
+interface MinceRow {
+  id:                     string
+  date:                   string
+  time_of_production:     string | null
+  batch_code:             string
+  product_species:        string
+  output_mode:            string
+  kill_date:              string | null
+  days_from_kill:         number | null
+  kill_date_within_limit: boolean
+  input_temp_c:           number
+  output_temp_c:          number
+  input_temp_pass:        boolean
+  output_temp_pass:       boolean
+  corrective_action:      string | null
+  source_batch_numbers:   string[] | null
+  submitted_by_name:      string
+  ca:                     CA | null
+}
+
+interface MinceSummary {
+  total: number; all_pass: number; temp_fails: number
+  kill_fails: number; with_ca_note: number; linked_cas: number; unresolved: number
+}
+
+function MinceTableRow({ row }: { row: MinceRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const allPass  = row.input_temp_pass && row.output_temp_pass && row.kill_date_within_limit
+  const rowColour = (!allPass || (row.ca && !row.ca.resolved))
+    ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'
+
+  const overallLabel = allPass ? 'Pass'
+    : [!row.input_temp_pass && 'Input', !row.output_temp_pass && 'Output', !row.kill_date_within_limit && 'Kill']
+        .filter(Boolean).join(', ') + ' fail'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded(p => !p)}>
+        <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtTime(row.time_of_production)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-700 capitalize">{row.product_species}</td>
+        <td className="px-3 py-2.5 text-xs font-mono text-slate-600 max-w-32 truncate">{row.batch_code}</td>
+        <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+          <span className={`font-mono font-bold ${!row.input_temp_pass ? 'text-red-600' : 'text-green-700'}`}>{row.input_temp_c}°C</span>
+          <span className={`ml-1 text-[10px] ${!row.input_temp_pass ? 'text-red-500' : 'text-green-500'}`}>{row.input_temp_pass ? '✓' : '✗'}</span>
+        </td>
+        <td className="px-3 py-2.5 text-xs whitespace-nowrap">
+          <span className={`font-mono font-bold ${!row.output_temp_pass ? 'text-red-600' : 'text-green-700'}`}>{row.output_temp_c}°C</span>
+          <span className={`ml-1 text-[10px] ${!row.output_temp_pass ? 'text-red-500' : 'text-green-500'}`}>{row.output_temp_pass ? '✓' : '✗'}</span>
+        </td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${allPass ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {overallLabel}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><CABadge ca={row.ca} /></td>
+        <td className="px-3 py-2.5">
+          <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={9} className="px-4 pb-3 pt-1">
+            <div className="ml-2 grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch details</p>
+                <p className="text-slate-600">Mode: <span className="font-medium capitalize">{row.output_mode}</span></p>
+                {row.kill_date && <p className="text-slate-600">Kill date: {fmtDate(row.kill_date)}</p>}
+                {row.days_from_kill !== null && (
+                  <p className={`${!row.kill_date_within_limit ? 'text-red-600 font-bold' : 'text-slate-600'}`}>
+                    Days from kill: {row.days_from_kill} {row.kill_date_within_limit ? '✓' : '✗ (exceeds limit)'}
+                  </p>
+                )}
+                {row.source_batch_numbers && row.source_batch_numbers.length > 0 && (
+                  <p className="text-slate-600">Source batches: <span className="font-mono">{row.source_batch_numbers.join(', ')}</span></p>
+                )}
+                <p className="text-slate-400 text-[10px] mt-1">Submitted by: {row.submitted_by_name}</p>
+              </div>
+              {row.corrective_action && (
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective action note</p>
+                  <p className="text-slate-700">{row.corrective_action}</p>
+                </div>
+              )}
+              {row.ca && (
+                <div className="col-span-2">
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Linked CA — {row.ca.ccp_ref}</p>
+                  <div className={`rounded-xl px-3 py-2.5 border text-xs space-y-1 ${row.ca.resolved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Deviation:</span> {row.ca.deviation_description}</p>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Action:</span> {row.ca.action_taken}</p>
+                    {row.ca.product_disposition && <p className="text-slate-700"><span className="font-bold text-slate-500">Disposition:</span> {row.ca.product_disposition}</p>}
+                    <p className={`text-[10px] font-bold ${row.ca.resolved ? 'text-green-600' : 'text-red-600'}`}>
+                      {row.ca.resolved ? '✓ Resolved' : '⚠ Unresolved'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function MinceSection({ from, to, onHeatmapData }: {
+  from: string; to: string
+  onHeatmapData: (updates: Record<string, Record<string, HeatmapDay>>) => void
+}) {
+  const [rows,    setRows]    = useState<MinceRow[]>([])
+  const [summary, setSummary] = useState<MinceSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true); setError('')
+    fetch(`/api/haccp/audit?section=mince&from=${from}&to=${to}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setError(d.error); return }
+        setRows(d.rows ?? [])
+        setSummary(d.summary ?? null)
+        onHeatmapData(d.heatmap ?? { mince: {} })
+      })
+      .catch(() => setError('Failed to load'))
+      .finally(() => setLoading(false))
+  }, [from, to, onHeatmapData])
+
+  useEffect(() => { load() }, [load])
+
+  function exportCSV() {
+    const headers = ['Date','Time','Species','Batch code','Mode','Input temp °C','Input pass','Output temp °C','Output pass','Kill date','Days from kill','Kill limit pass','CA note','Source batches','Linked CA','CA resolved']
+    const csvRows = rows.map(r => [
+      r.date, fmtTime(r.time_of_production), r.product_species, r.batch_code, r.output_mode,
+      r.input_temp_c, r.input_temp_pass ? 'Yes' : 'No',
+      r.output_temp_c, r.output_temp_pass ? 'Yes' : 'No',
+      r.kill_date ?? '', r.days_from_kill ?? '', r.kill_date_within_limit ? 'Yes' : 'No',
+      r.corrective_action ?? '', (r.source_batch_numbers ?? []).join(', '),
+      r.ca ? 'Yes' : 'No', r.ca ? (r.ca.resolved ? 'Yes' : 'No') : '',
+    ])
+    downloadCSV(`MFS_Mince_${from}_to_${to}.csv`, headers, csvRows)
+  }
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-slate-400 text-sm py-8">
+      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+      Loading mince & prep records…
+    </div>
+  )
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {summary && (
+          <div className="flex items-center gap-3 flex-wrap">
+            {[
+              { label: 'Total',       val: summary.total,       cls: 'bg-slate-100 text-slate-700' },
+              { label: 'All pass',    val: summary.all_pass,    cls: 'bg-green-100 text-green-700' },
+              { label: 'Temp fails',  val: summary.temp_fails,  cls: summary.temp_fails > 0  ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500' },
+              { label: 'Kill fails',  val: summary.kill_fails,  cls: summary.kill_fails > 0  ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500' },
+              { label: 'CA notes',    val: summary.with_ca_note,cls: summary.with_ca_note > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500' },
+              { label: 'Unresolved',  val: summary.unresolved,  cls: summary.unresolved > 0  ? 'bg-red-200 text-red-800 font-bold' : 'bg-slate-100 text-slate-500' },
+            ].map(s => (
+              <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}>
+                <span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center">
+          <p className="text-slate-400 text-sm">No mince & prep records in this date range</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse" style={{ minWidth: '680px' }}>
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Date','Time','Species','Batch','Input','Output','Overall','CA',''].map(h => (
+                    <th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => <MinceTableRow key={row.id} row={row} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Placeholder section ──────────────────────────────────────────────────────
 
 function PlaceholderSection({ label }: { label: string }) {
@@ -1651,7 +1855,7 @@ export default function AuditPage() {
         {section === 'process_room'  && <ProcessRoomSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'cleaning'      && <CleaningSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'calibration'   && <CalibrationSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
-        {section === 'mince'         && <PlaceholderSection label="Mince & Prep" />}
+        {section === 'mince'         && <MinceSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'returns'       && <PlaceholderSection label="Product Returns" />}
         {section === 'ccas'          && <PlaceholderSection label="Corrective Actions" />}
         {section === 'reviews'       && <PlaceholderSection label="Reviews" />}
