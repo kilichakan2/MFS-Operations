@@ -95,7 +95,7 @@ Current format: `MINCE-2104-BEEF-4` / `PREP-2104-LAMB-1`
 
 **Fields on label (confirmed):**
 - MFS Global name
-- "PRODUCTION" header + mode (MINCE / PREP + CHILLED / FROZEN)
+- "PRODUCTION" header + mode — e.g. "PRODUCTION · MINCE/CHILLED" or "PRODUCTION · PREP/FROZEN" ✓ confirmed
 - Batch code (large, bold, monospace)
 - Code 128 barcode
 - Product + Species
@@ -122,7 +122,7 @@ The chosen date is shown on the label but NOT stored in the database record
 **Label layout (100mm × 50mm):**
 ```
 ┌──────────────────────────────────────┐
-│ MFS GLOBAL              MINCE/CHILLED│
+│ MFS GLOBAL     PRODUCTION · MINCE/CHILLED│
 ├──────────────────────────────────────┤
 │  MINCE-2104-BEEF-4                   │
 │  ▐▌▐▐▌▌▐▐▌▐▐▌▌▐▌  (Code 128)       │
@@ -227,6 +227,7 @@ CREATE TABLE IF NOT EXISTS printer_config (
 | 2026-04-24 | Storage instruction assumed for goods-in | Removed — not FSA required for goods-in |
 | 2026-04-24 | Batch code format change proposed unnecessarily | Keep existing formats — confirmed by Hakan |
 | 2026-04-24 | Label size assumed | Confirmed 100mm × 50mm — works across all 3 phases |
+| 2026-04-24 | CHILLED/FROZEN on mince label | Confirmed — shown in header e.g. "PRODUCTION · MINCE/CHILLED" |
 
 ---
 

@@ -413,6 +413,7 @@ export default function MincePage() {
   const [deliveries,setDeliveries]    = useState<DeliveryOption[]>([])
   const [minceBatches, setMinceBatches] = useState<{ id: string; batch_code: string; species: string; kill_date: string; output_mode: string }[]>([])
   const [loading,   setLoading]       = useState(true)
+  const [printTarget, setPrintTarget] = useState<{ id: string; batchCode: string; outputMode: string } | null>(null)
 
   // ── Mince form state ────────────────────────────────────────────────────────
   const [mSpecies,       setMSpecies]       = useState('')
@@ -738,6 +739,60 @@ export default function MincePage() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col select-none">
 
+      {/* Use-by selection dialog */}
+      {printTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div className="px-5 pt-5 pb-3">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Print label</p>
+              <p className="text-slate-900 font-bold text-base font-mono">{printTarget.batchCode}</p>
+              <p className="text-slate-500 text-xs mt-0.5 capitalize">{printTarget.outputMode}</p>
+            </div>
+            <div className="px-5 pb-2">
+              <p className="text-slate-600 text-xs font-semibold mb-3">Select use-by date:</p>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Fresh 7 days',    days: 7   },
+                  { label: 'Fresh 10 days',   days: 10  },
+                  { label: 'Fresh 14 days',   days: 14  },
+                  { label: 'Frozen 3 months', days: 90  },
+                  { label: 'Frozen 6 months', days: 182 },
+                ].map(opt => (
+                  <button
+                    key={opt.days}
+                    type="button"
+                    onPointerDown={(e) => {
+                      e.preventDefault()
+                      window.open(
+                        `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}`,
+                        '_blank'
+                      )
+                      setPrintTarget(null)
+                    }}
+                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border-2 transition-all text-left ${
+                      opt.label.startsWith('Frozen')
+                        ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="px-5 pb-5 pt-2">
+              <button
+                type="button"
+                onPointerDown={(e) => { e.preventDefault(); setPrintTarget(null) }}
+                className="w-full py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-500 hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B]">
         <button onClick={() => { window.location.href = '/haccp' }}
@@ -966,7 +1021,7 @@ export default function MincePage() {
                             type="button"
                             onPointerDown={(e) => {
                               e.preventDefault()
-                              window.open(`/api/labels?type=mince&id=${r.id}&format=html&copies=1`, '_blank')
+                              setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode })
                             }}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-600 text-white text-[10px] font-bold"
                           >

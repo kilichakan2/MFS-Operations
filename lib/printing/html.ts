@@ -136,7 +136,6 @@ export function renderDeliveryHTML(data: DeliveryLabelData, copies = 1): string 
 
 export function renderMinceHTML(data: MinceLabelData, copies = 1): string {
   const mode    = data.output_mode.toUpperCase()
-  const storage = data.output_mode === 'frozen' ? 'STORE AT ≤-18°C' : 'STORE AT ≤4°C'
   const sources = data.source_batch_numbers.slice(0, 3).join(', ')
   const barcode = generateBarcodeSVG(data.batch_code, 240, 36)
   const killStr = data.kill_date && data.days_from_kill !== null
