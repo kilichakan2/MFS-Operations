@@ -185,6 +185,7 @@ const HEATMAP_SECTIONS = [
   { key: 'diary_close',       label: 'Diary Closing',     variable: false },
   { key: 'cleaning',   label: 'Cleaning',         variable: false },
   { key: 'mince',      label: 'Mince/Prep',       variable: true  },
+  { key: 'calibration', label: 'Calibration',      variable: true  },
 ]
 
 function HeatCell({ date, section, heatmapData }: {
@@ -1243,6 +1244,236 @@ function CleaningSection({ from, to, onHeatmapData }: {
   )
 }
 
+// ─── Calibration section ──────────────────────────────────────────────────────
+
+interface CalibrationRow {
+  id:                    string
+  date:                  string
+  time_of_check:         string | null
+  thermometer_id:        string
+  calibration_mode:      string
+  ice_water_result_c:    number | null
+  ice_water_pass:        boolean | null
+  boiling_water_result_c:number | null
+  boiling_water_pass:    boolean | null
+  action_taken:          string | null
+  cert_reference:        string | null
+  purchase_date:         string | null
+  verified_by:           string | null
+  submitted_by_name:     string
+  ca:                    CA | null
+}
+
+interface CalibrationSummary {
+  total: number; manual: number; certified: number
+  pass: number; fail: number; ca_count: number; unresolved: number
+}
+
+function CalibResultCell({ val, pass }: { val: number | null; pass: boolean | null }) {
+  if (val === null) return <span className="text-slate-300 text-xs">—</span>
+  return (
+    <span className={`text-xs font-mono font-bold ${pass ? 'text-green-700' : 'text-red-600'}`}>
+      {val}°C {pass ? '✓' : '✗'}
+    </span>
+  )
+}
+
+function CalibrationTableRow({ row }: { row: CalibrationRow }) {
+  const [expanded, setExpanded] = useState(false)
+  const isCertified = row.calibration_mode === 'certified_probe'
+  const hasFailure  = !isCertified && (row.ice_water_pass === false || row.boiling_water_pass === false)
+  const rowColour   = (hasFailure || (row.ca && !row.ca.resolved))
+    ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'
+
+  const overallLabel = isCertified ? 'Certified ✓'
+    : (row.ice_water_pass && row.boiling_water_pass) ? 'Pass' : 'Fail'
+  const overallCls = isCertified ? 'bg-blue-100 text-blue-700'
+    : (row.ice_water_pass && row.boiling_water_pass)
+      ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+
+  return (
+    <>
+      <tr className={`border-b ${rowColour} cursor-pointer`} onClick={() => setExpanded(p => !p)}>
+        <td className="px-3 py-2.5 text-xs font-medium text-slate-700 whitespace-nowrap">{fmtDateShort(row.date)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-500 whitespace-nowrap">{fmtTime(row.time_of_check)}</td>
+        <td className="px-3 py-2.5 text-xs text-slate-700 max-w-28 truncate font-medium">{row.thermometer_id}</td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isCertified ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+            {isCertified ? 'Certified' : 'Manual'}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 whitespace-nowrap">
+          {isCertified
+            ? <span className="text-slate-400 text-xs italic">n/a</span>
+            : <CalibResultCell val={row.ice_water_result_c} pass={row.ice_water_pass} />
+          }
+        </td>
+        <td className="px-3 py-2.5 whitespace-nowrap">
+          {isCertified
+            ? <span className="text-slate-400 text-xs italic">n/a</span>
+            : <CalibResultCell val={row.boiling_water_result_c} pass={row.boiling_water_pass} />
+          }
+        </td>
+        <td className="px-3 py-2.5">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${overallCls}`}>{overallLabel}</span>
+        </td>
+        <td className="px-3 py-2.5 whitespace-nowrap"><CABadge ca={row.ca} /></td>
+        <td className="px-3 py-2.5">
+          <svg className={`w-3.5 h-3.5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className={`border-b ${rowColour}`}>
+          <td colSpan={9} className="px-4 pb-3 pt-1">
+            <div className="ml-2 space-y-2 text-xs">
+              {isCertified ? (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 space-y-1.5">
+                  <p className="text-blue-800 text-[10px] font-bold uppercase tracking-widest">Certified probe — manufacturer calibration</p>
+                  <p className="text-slate-700">No manual ice/boiling water test required — calibration is certified by the manufacturer to a traceable standard.</p>
+                  {row.cert_reference && <p className="text-slate-700"><span className="font-bold text-slate-500">Cert reference:</span> <span className="font-mono">{row.cert_reference}</span></p>}
+                  {row.purchase_date  && <p className="text-slate-700"><span className="font-bold text-slate-500">Purchase date:</span> {fmtDate(row.purchase_date)}</p>}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Test limits</p>
+                    <p className="text-slate-600">Ice water: 0°C ±1°C</p>
+                    <p className="text-slate-600">Boiling water: 100°C ±1°C</p>
+                  </div>
+                  {row.action_taken && (
+                    <div>
+                      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Action taken</p>
+                      <p className="text-slate-700">{row.action_taken}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-4 text-xs pt-1">
+                {row.verified_by && <p className="text-slate-500">Verified by: <span className="font-medium text-slate-700">{row.verified_by}</span></p>}
+                <p className="text-slate-400">Submitted by: {row.submitted_by_name}</p>
+              </div>
+              {row.ca && (
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">CA — {row.ca.ccp_ref}</p>
+                  <div className={`rounded-xl px-3 py-2.5 border space-y-1 ${row.ca.resolved ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Deviation:</span> {row.ca.deviation_description}</p>
+                    <p className="text-slate-700"><span className="font-bold text-slate-500">Action:</span> {row.ca.action_taken}</p>
+                    <p className={`text-[10px] font-bold ${row.ca.resolved ? 'text-green-600' : 'text-red-600'}`}>
+                      {row.ca.resolved ? '✓ Resolved' : '⚠ Unresolved'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  )
+}
+
+function CalibrationSection({ from, to, onHeatmapData }: {
+  from: string; to: string
+  onHeatmapData: (updates: Record<string, Record<string, HeatmapDay>>) => void
+}) {
+  const [rows,    setRows]    = useState<CalibrationRow[]>([])
+  const [summary, setSummary] = useState<CalibrationSummary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+
+  const load = useCallback(() => {
+    setLoading(true); setError('')
+    fetch(`/api/haccp/audit?section=calibration&from=${from}&to=${to}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setError(d.error); return }
+        setRows(d.rows ?? [])
+        setSummary(d.summary ?? null)
+        onHeatmapData(d.heatmap ?? { calibration: {} })
+      })
+      .catch(() => setError('Failed to load'))
+      .finally(() => setLoading(false))
+  }, [from, to, onHeatmapData])
+
+  useEffect(() => { load() }, [load])
+
+  function exportCSV() {
+    const headers = ['Date','Time','Probe ID','Mode','Ice water °C','Ice pass','Boiling water °C','Boiling pass','Overall','Cert reference','Purchase date','Action taken','Verified by','CA logged','CA resolved','CA deviation','CA action taken']
+    const csvRows = rows.map(r => {
+      const isCert = r.calibration_mode === 'certified_probe'
+      const overall = isCert ? 'Certified' : (r.ice_water_pass && r.boiling_water_pass ? 'Pass' : 'Fail')
+      return [
+        r.date, fmtTime(r.time_of_check), r.thermometer_id, r.calibration_mode,
+        r.ice_water_result_c ?? '', r.ice_water_pass !== null ? (r.ice_water_pass ? 'Yes' : 'No') : '',
+        r.boiling_water_result_c ?? '', r.boiling_water_pass !== null ? (r.boiling_water_pass ? 'Yes' : 'No') : '',
+        overall, r.cert_reference ?? '', r.purchase_date ?? '',
+        r.action_taken ?? '', r.verified_by ?? '',
+        r.ca ? 'Yes' : 'No', r.ca ? (r.ca.resolved ? 'Yes' : 'No') : '',
+        r.ca?.deviation_description ?? '', r.ca?.action_taken ?? '',
+      ]
+    })
+    downloadCSV(`MFS_Calibration_${from}_to_${to}.csv`, headers, csvRows)
+  }
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-slate-400 text-sm py-8">
+      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+      Loading calibration records…
+    </div>
+  )
+  if (error) return <p className="text-red-600 text-sm py-4">{error}</p>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        {summary && (
+          <div className="flex items-center gap-3 flex-wrap">
+            {[
+              { label: 'Total',       val: summary.total,      cls: 'bg-slate-100 text-slate-700' },
+              { label: 'Manual pass', val: summary.pass,       cls: 'bg-green-100 text-green-700' },
+              { label: 'Manual fail', val: summary.fail,       cls: summary.fail > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500' },
+              { label: 'Certified',   val: summary.certified,  cls: 'bg-blue-100 text-blue-700' },
+              { label: 'CAs',         val: summary.ca_count,   cls: 'bg-blue-100 text-blue-700' },
+              { label: 'Unresolved',  val: summary.unresolved, cls: summary.unresolved > 0 ? 'bg-red-200 text-red-800 font-bold' : 'bg-slate-100 text-slate-500' },
+            ].map(s => (
+              <div key={s.label} className={`px-3 py-1.5 rounded-xl text-xs ${s.cls}`}>
+                <span className="opacity-70">{s.label}: </span><span className="font-bold">{s.val}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Export CSV
+        </button>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center">
+          <p className="text-slate-400 text-sm">No calibration records in this date range</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse" style={{ minWidth: '700px' }}>
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  {['Date','Time','Probe','Mode','Ice','Boiling','Overall','CA',''].map(h => (
+                    <th key={h} className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => <CalibrationTableRow key={row.id} row={row} />)}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Placeholder section ──────────────────────────────────────────────────────
 
 function PlaceholderSection({ label }: { label: string }) {
@@ -1419,7 +1650,7 @@ export default function AuditPage() {
         {section === 'cold_storage'  && <ColdStorageSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'process_room'  && <ProcessRoomSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'cleaning'      && <CleaningSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
-        {section === 'calibration'   && <PlaceholderSection label="Calibration" />}
+        {section === 'calibration'   && <CalibrationSection from={from} to={to} onHeatmapData={handleSectionHeatmapData} />}
         {section === 'mince'         && <PlaceholderSection label="Mince & Prep" />}
         {section === 'returns'       && <PlaceholderSection label="Product Returns" />}
         {section === 'ccas'          && <PlaceholderSection label="Corrective Actions" />}

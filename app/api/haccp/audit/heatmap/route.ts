@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
       dailyDiary,
       cleaningLog,
       minceLog,
+      calibrationLog,
     ] = await Promise.all([
       supabase.from('haccp_deliveries')
         .select('date, temp_status, corrective_action_required')
@@ -89,6 +90,10 @@ export async function GET(req: NextRequest) {
 
       supabase.from('haccp_mince_log')
         .select('date, input_temp_pass, output_temp_pass, corrective_action')
+        .gte('date', from).lte('date', to),
+
+      supabase.from('haccp_calibration_log')
+        .select('date, calibration_mode, ice_water_pass, boiling_water_pass')
         .gte('date', from).lte('date', to),
     ])
 
@@ -139,6 +144,14 @@ export async function GET(req: NextRequest) {
       mark(minceMap, r.date, isDeviation)
     }
 
+    // ── Calibration — monthly: green/amber on days logged, grey otherwise ─────
+    const calibrationMap: DayMap = {}
+    for (const r of calibrationLog.data ?? []) {
+      const isDev = r.calibration_mode === 'manual' &&
+        (r.ice_water_pass === false || r.boiling_water_pass === false)
+      mark(calibrationMap, r.date, isDev)
+    }
+
     return NextResponse.json({
       deliveries:  delivMap,
       cold_am:     coldAmMap,
@@ -148,8 +161,9 @@ export async function GET(req: NextRequest) {
       diary_open:        diaryOpenMap,
       diary_operational: diaryOperationalMap,
       diary_close:       diaryCloseMap,
-      cleaning:    cleanMap,
-      mince:       minceMap,
+      cleaning:          cleanMap,
+      mince:             minceMap,
+      calibration:       calibrationMap,
     })
 
   } catch (err) {

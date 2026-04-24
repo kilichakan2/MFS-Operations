@@ -414,6 +414,80 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ rows, summary, heatmap: { cleaning: cleanMap } })
     }
 
+
+    // ── Calibration ───────────────────────────────────────────────────────────
+    if (section === 'calibration') {
+      const { data: cals, error: cErr } = await supabase
+        .from('haccp_calibration_log')
+        .select(`
+          id, date, time_of_check, thermometer_id, calibration_mode,
+          ice_water_result_c, ice_water_pass,
+          boiling_water_result_c, boiling_water_pass,
+          action_taken, cert_reference, purchase_date, verified_by,
+          users!submitted_by ( name )
+        `)
+        .gte('date', from).lte('date', to)
+        .order('date', { ascending: false })
+        .order('time_of_check', { ascending: false })
+
+      if (cErr) {
+        console.error('[audit/calibration]', cErr.message)
+        return NextResponse.json({ error: cErr.message }, { status: 500 })
+      }
+
+      const calIds = (cals ?? []).map((c) => c.id)
+      const casMap: Record<string, {
+        id: string; ccp_ref: string; deviation_description: string
+        action_taken: string; product_disposition: string | null
+        management_verification_required: boolean
+        resolved: boolean; verified_at: string | null
+      }> = {}
+
+      if (calIds.length > 0) {
+        const { data: caData } = await supabase
+          .from('haccp_corrective_actions')
+          .select(`id, source_id, ccp_ref, deviation_description, action_taken,
+            product_disposition, management_verification_required, resolved, verified_at`)
+          .eq('source_table', 'haccp_calibration_log')
+          .in('source_id', calIds)
+        for (const ca of caData ?? []) casMap[ca.source_id] = ca
+      }
+
+      type CalRow = typeof cals extends (infer T)[] | null ? T : never
+      const rows = (cals ?? []).map((c: CalRow) => ({
+        ...c,
+        submitted_by_name: (c.users as unknown as { name: string } | null)?.name ?? '—',
+        ca: casMap[c.id] ?? null,
+      }))
+
+      const manual    = rows.filter((r) => r.calibration_mode === 'manual')
+      const certified = rows.filter((r) => r.calibration_mode === 'certified_probe')
+
+      const summary = {
+        total:      rows.length,
+        manual:     manual.length,
+        certified:  certified.length,
+        pass:       manual.filter((r) => r.ice_water_pass && r.boiling_water_pass).length,
+        fail:       manual.filter((r) => r.ice_water_pass === false || r.boiling_water_pass === false).length,
+        ca_count:   rows.filter((r) => r.ca !== null).length,
+        unresolved: rows.filter((r) => r.ca !== null && !(r.ca as {resolved:boolean}).resolved).length,
+      }
+
+      // Heatmap — monthly: green/amber on days logged, grey otherwise (not red)
+      const calMap: Record<string, { has_records: boolean; has_deviations: boolean }> = {}
+      for (const r of rows) {
+        if (!calMap[r.date]) calMap[r.date] = { has_records: false, has_deviations: false }
+        calMap[r.date].has_records = true
+        const isDev = r.calibration_mode === 'manual' &&
+          (r.ice_water_pass === false || r.boiling_water_pass === false)
+        if (isDev || (r.ca && !(r.ca as {resolved:boolean}).resolved)) {
+          calMap[r.date].has_deviations = true
+        }
+      }
+
+      return NextResponse.json({ rows, summary, heatmap: { calibration: calMap } })
+    }
+
     return NextResponse.json({ error: `Unknown section: ${section}` }, { status: 400 })
 
   } catch (err) {

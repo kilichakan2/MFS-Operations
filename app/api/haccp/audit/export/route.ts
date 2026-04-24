@@ -256,6 +256,45 @@ async function fetchCleaningSheet(from: string, to: string) {
   return ws
 }
 
+
+async function fetchCalibrationSheet(from: string, to: string) {
+  const { data: cals } = await supabase
+    .from('haccp_calibration_log')
+    .select('id, date, time_of_check, thermometer_id, calibration_mode, ice_water_result_c, ice_water_pass, boiling_water_result_c, boiling_water_pass, action_taken, cert_reference, purchase_date, verified_by, users!submitted_by(name)')
+    .gte('date', from).lte('date', to).order('date', { ascending: false })
+
+  const calIds = (cals ?? []).map((c) => c.id)
+  const casMap: Record<string, { deviation_description: string; action_taken: string; resolved: boolean }> = {}
+  if (calIds.length > 0) {
+    const { data: caData } = await supabase
+      .from('haccp_corrective_actions')
+      .select('source_id, deviation_description, action_taken, resolved')
+      .eq('source_table', 'haccp_calibration_log').in('source_id', calIds)
+    for (const ca of caData ?? []) casMap[ca.source_id] = ca
+  }
+
+  type CalRow = typeof cals extends (infer T)[] | null ? T : never
+  const headers = ['Date','Time','Probe ID','Mode','Ice water °C','Ice pass','Boiling water °C','Boiling pass','Overall','Cert reference','Purchase date','Action taken','Verified by','CA logged','CA resolved','CA deviation','CA action taken']
+  const rows = (cals ?? []).map((c: CalRow) => {
+    const ca = casMap[c.id] ?? null
+    const isCert = c.calibration_mode === 'certified_probe'
+    const overall = isCert ? 'Certified' : (c.ice_water_pass && c.boiling_water_pass ? 'Pass' : 'Fail')
+    return [
+      c.date, (c.time_of_check as string)?.slice(0,5) ?? '',
+      c.thermometer_id, c.calibration_mode,
+      c.ice_water_result_c ?? '', c.ice_water_pass !== null ? (c.ice_water_pass ? 'Yes' : 'No') : '',
+      c.boiling_water_result_c ?? '', c.boiling_water_pass !== null ? (c.boiling_water_pass ? 'Yes' : 'No') : '',
+      overall, c.cert_reference ?? '', c.purchase_date ?? '',
+      c.action_taken ?? '', c.verified_by ?? '',
+      ca ? 'Yes' : 'No', ca ? (ca.resolved ? 'Yes' : 'No') : '',
+      ca?.deviation_description ?? '', ca?.action_taken ?? '',
+    ]
+  })
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  ws['!cols'] = [{wch:12},{wch:8},{wch:16},{wch:12},{wch:14},{wch:10},{wch:16},{wch:12},{wch:10},{wch:20},{wch:14},{wch:30},{wch:14},{wch:10},{wch:12},{wch:30},{wch:30}]
+  return ws
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
@@ -284,6 +323,9 @@ export async function GET(req: NextRequest) {
 
     const cleaningSheet = await fetchCleaningSheet(from, to)
     XLSX.utils.book_append_sheet(wb, cleaningSheet, '04 Cleaning')
+
+    const calibrationSheet = await fetchCalibrationSheet(from, to)
+    XLSX.utils.book_append_sheet(wb, calibrationSheet, '05 Calibration')
 
     // Generate binary buffer
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
