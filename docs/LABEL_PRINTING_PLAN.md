@@ -1,219 +1,158 @@
 # MFS Global — Label Printing & Barcode Traceability Plan
 **Created:** 2026-04-24
-**Last updated:** 2026-04-24 (confirmed decisions from Hakan applied)
-**Status:** Stage 1 (Goods In label) — In build
+**Last updated:** 2026-04-25
+**Status:** Phase 1 complete. In-app print (no new tab) in build.
 **Owner:** Hakan Kilic
 
 ---
 
-## Overview
+## Summary of current state
 
-Three-phase label printing system for batch traceability across Goods In,
-Mince/Prep, and production runs. Labels include a Code 128 barcode so scanners
-can auto-populate source batch fields — closing the traceability loop from
-delivery → production → dispatch.
-
----
-
-## Hardware Decision
-
-| Phase | Hardware | Cost | Print method |
-|---|---|---|---|
-| 1 | None | £0 | HTML → Safari AirPrint → any printer |
-| 2 | TSC TE310 WiFi | ~£160 | HTML → Safari AirPrint → TSC (dedicated) |
-| 3 | Zebra ZD421d WiFi | ~£500 | ZPL → Cloud Connect WebSocket → Zebra |
-| 3 | + Zebra DS2278 BT scanner | ~£110 | Bluetooth → iPad keyboard emulation |
-
-**Why Phase 2 stays browser/AirPrint:** Vercel runs in the cloud and cannot
-open TCP connections to a printer on the local facility network. AirPrint from
-iPad → TSC TE310 WiFi requires no server involvement. Both devices are on the
-same facility WiFi.
-
-**Phase 3 (Zebra Cloud Connect):** The printer initiates an outbound WebSocket
-to our server. Server keeps the connection open. Print job is pushed down it.
-NAT is not an issue because the connection is outbound from the printer.
+Phase 1 is fully built and working. Both label types (Goods In and Mince/Prep)
+print correctly. The remaining Phase 1 item is removing the "new tab" step so
+staff tap Print and the iOS print sheet appears directly.
 
 ---
 
-## Label Size — Standard Across All Phases
+## Hardware Phases
 
-**100mm × 50mm** (confirmed — works on all three hardware phases)
+| Phase | Hardware | Cost | Print method | Status |
+|---|---|---|---|---|
+| 1 | None | £0 | iframe → window.print() → AirPrint | ✅ Complete (in-app print in build) |
+| 2 | TSC TE310 WiFi | ~£160 | Same as Phase 1, dedicated label printer | 🔲 Buy hardware |
+| 3 | Zebra ZD421d WiFi + DS2278 scanner | ~£610 | ZPL → Cloud Connect WebSocket | 🔲 Future |
 
-- Phase 1: Set as custom paper size once in iOS Settings
-- Phase 2: TSC TE310 supports up to 104mm width ✓
-- Phase 3: Zebra ZD421d supports up to 104mm width ✓
-- Standard 100mm rolls are widely available and cheap
+**Phase 1 → Phase 2 upgrade:** Buy TSC TE310 WiFi, connect to facility WiFi,
+select as AirPrint printer in iOS print sheet. Zero code changes.
 
----
-
-## Batch Code Format
-
-### Goods In
-**Keep existing format** — confirmed by Hakan. No change.
-Current format in DB: `2104-GB-10` (date + origin + sequence)
-
-### Mince / Prep
-**Keep existing format** — confirmed by Hakan. No change.
-Current format: `MINCE-2104-BEEF-4` / `PREP-2104-LAMB-1`
+**Phase 2 → Phase 3 upgrade:** Add Zebra Cloud Connect WebSocket endpoint.
+Change one config. ZPL templates unchanged.
 
 ---
 
-## Stage 1 — Goods In Label (confirmed)
+## Label Size
 
-**Fields on label (confirmed):**
-- MFS Global name
-- "GOODS IN" header
-- Batch code (large, bold, monospace)
-- Code 128 barcode (encodes the batch code)
-- Supplier
-- Product + Species
-- Date received
-- Origin: Born in + Slaughter site (when available)
+**100mm × 50mm** — confirmed, works on all phases.
+- TSC TE310 max width: 104mm ✓
+- Zebra ZD421d max width: 104mm ✓
 
-**NOT on label (confirmed):**
-- Storage instruction — not an FSA requirement for goods-in, not needed
-- Delivery temperature — not needed on the label
+---
 
-**Label layout (100mm × 50mm):**
+## Batch Code Formats — unchanged
+
+| Type | Format | Example |
+|---|---|---|
+| Goods In | `DDMM-ORIGIN-NNN` | `2104-GB-10` |
+| Mince | `MINCE-DDMM-SPECIES-NNN` | `MINCE-2104-BEEF-4` |
+| Prep | `PREP-DDMM-SPECIES-NNN` | `PREP-2104-LAMB-1` |
+
+---
+
+## Label Designs — confirmed
+
+### Goods In label
+Fields: MFS Global · GOODS IN · Batch code · Code 128 barcode (with number) ·
+Supplier · Product + Species · Date received · Origin (born/slaughter)
+
+NOT on label: storage instruction, delivery temperature
+
+### Mince / Prep label
+Fields: MFS Global · PRODUCTION · MODE (e.g. MINCE/CHILLED) · Batch code ·
+Code 128 barcode (with number) · Species · Production date · Kill date + days ·
+Source batches · Use-by date
+
+Use-by: staff picks at print time — Fresh 7d / 10d / 14d, Frozen 3mo / 6mo.
+Not stored in DB — label only.
+
+NOT on label: storage instruction
+
+---
+
+## In-app Print — Phase 1 (no new tab)
+
+**How it works:**
 ```
-┌──────────────────────────────────────┐
-│ MFS GLOBAL                 GOODS IN  │
-├──────────────────────────────────────┤
-│  2104-GB-10                          │
-│  ▐▌▐▐▌▌▐▐▌▐▐▌▌▐▌  (Code 128)       │
-├──────────────────────────────────────┤
-│ Supplier:  Euro Quality Lambs        │
-│ Product:   Lamb carcass (Lamb)       │
-│ Date:      21 Apr 2026               │
-│ Origin:    UK / Leeds                │
-└──────────────────────────────────────┘
+Staff taps Print
+  → App fetches /api/labels?... (background fetch, no navigation)
+  → Response HTML injected into hidden <iframe>
+  → iframe.contentWindow.print() called
+  → iOS native AirPrint sheet appears
+  → Staff selects printer, prints
+  → iframe removed from DOM
 ```
 
----
+Works on: desktop browser, iOS Safari, iOS PWA standalone mode.
+No new tab. No navigation away from the app.
 
-## Stage 2 — Mince / Prep Production Label (confirmed)
-
-**Fields on label (confirmed):**
-- MFS Global name
-- "PRODUCTION" header + mode — e.g. "PRODUCTION · MINCE/CHILLED" or "PRODUCTION · PREP/FROZEN" ✓ confirmed
-- Batch code (large, bold, monospace)
-- Code 128 barcode
-- Product + Species
-- Production date
-- Kill date + Days from kill
-- Source batch numbers
-
-**Use-by date — picked at print time (confirmed):**
-Staff select use-by policy when they tap Print. Quick-select buttons:
-- Fresh 7 days
-- Fresh 10 days
-- Fresh 14 days
-- Frozen 3 months
-- Frozen 6 months
-
-The chosen date is shown on the label but NOT stored in the database record
-(FSA requires use-by on the label, not on the system record).
-
-**Same buttons apply for Prep cuts.**
-
-**NOT on label:**
-- Storage instruction — removed per Hakan
-
-**Label layout (100mm × 50mm):**
-```
-┌──────────────────────────────────────┐
-│ MFS GLOBAL     PRODUCTION · MINCE/CHILLED│
-├──────────────────────────────────────┤
-│  MINCE-2104-BEEF-4                   │
-│  ▐▌▐▐▌▌▐▐▌▐▐▌▌▐▌  (Code 128)       │
-├──────────────────────────────────────┤
-│ Species:   Beef                      │
-│ Prod date: 21 Apr 2026               │
-│ Kill date: 17 Apr 2026 (4 days)      │
-│ Source:    2104-GB-3, 2104-GB-5      │
-│ Use by:    28 Apr 2026               │
-└──────────────────────────────────────┘
-```
+**Shared utility:** `printLabelInApp(url: string)` in each page — handles
+fetch, iframe creation, print trigger, cleanup.
 
 ---
 
-## Stage 3 — Print button placement
+## Print Button Placement — confirmed
 
-Location on delivery and mince pages TBC — Hakan to confirm.
-Currently added next to batch code in delivery detail and on mince history cards.
+| Page | Location | Status |
+|---|---|---|
+| Goods In | Right column of each delivery card in list | ✅ Done |
+| Goods In | Also next to batch code in detail view | ✅ Done |
+| Mince/Prep | Right column of each run card | ✅ Done — use-by dialog first |
 
 ---
 
-## Stage 4 — Scanner integration (Phase 3 only)
+## Scanner Integration — Phase 3 only
 
-When Zebra ZD421d + DS2278 BT scanner is live:
+When Zebra ZD421d + DS2278 BT scanner purchased:
 - Source batch field in mince/prep form gets scan mode
-- Scanner acts as Bluetooth keyboard, types batch code into focused field
+- DS2278 pairs to iPad via Bluetooth as keyboard
+- Scan barcode on box → batch code typed into field
 - Each scan appends to source_batch_numbers array
-- Visual confirmation (green flash) per scan
-- Duplicate detection — warns if same batch already added
+- Green flash confirmation, duplicate detection
 
 ---
 
 ## Architecture
 
-### Files
 ```
-lib/
-  printing/
-    types.ts    — interfaces (LabelType, LabelData, PrintConfig etc)
-    zpl.ts      — ZPL generation for Phase 3
-    html.ts     — HTML label renderer for Phase 1/2 browser print
-    index.ts    — printLabel() abstraction
+lib/printing/
+  types.ts   — LabelType, DeliveryLabelData, MinceLabelData, PrintConfig
+  zpl.ts     — ZPL generation (Phase 3) + calculateUseByFromDays + fmtDisplayDate
+  html.ts    — HTML label renderer, Code 128 SVG barcode with human-readable text
+  index.ts   — generateLabel() abstraction (html Phase 1/2, zpl Phase 3)
 
-app/
-  api/
-    labels/
-      route.ts  — GET /api/labels?type=delivery|mince&id=UUID&format=html|zpl&copies=1
+app/api/labels/route.ts
+  GET /api/labels?type=delivery|mince&id=UUID&format=html|zpl&copies=1
+  Mince only: &usebydays=7|10|14|90|182
+  Auth: x-mfs-user-role header (injected by middleware)
+  Roles: warehouse | butcher | admin
 ```
-
-### API contract
-```
-GET /api/labels?type=delivery&id=<UUID>&format=html&copies=1
-
-For mince with use-by:
-GET /api/labels?type=mince&id=<UUID>&format=html&copies=1&usebydays=7
-
-Auth:    mfs_role cookie (warehouse | butcher | admin)
-Returns: HTML (Phase 1/2) or ZPL text (Phase 3)
-Errors:  400 bad params, 401 unauth, 404 not found
-```
-
-**`usebydays` param (mince/prep only):**
-Passed from the print dialog when staff select a use-by option.
-The API calculates the date (production date + N days) and includes it on the label.
-Not stored in the database.
 
 ---
 
 ## DB Changes
 
-### Phase 1 — No DB changes required
-All label data comes from existing fields.
+### Phase 1 — none required ✅
 
-### Phase 2+ (future)
+### Phase 2+ — optional
 ```sql
--- Optional: track print count per record
-ALTER TABLE haccp_deliveries
-  ADD COLUMN IF NOT EXISTS labels_printed integer DEFAULT 0;
-ALTER TABLE haccp_mince_log
-  ADD COLUMN IF NOT EXISTS labels_printed integer DEFAULT 0;
+ALTER TABLE haccp_deliveries ADD COLUMN IF NOT EXISTS labels_printed integer DEFAULT 0;
+ALTER TABLE haccp_mince_log  ADD COLUMN IF NOT EXISTS labels_printed integer DEFAULT 0;
 
--- Printer config (when network printing needed)
 CREATE TABLE IF NOT EXISTS printer_config (
-  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  name           text NOT NULL,
-  method         text NOT NULL DEFAULT 'browser',
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name            text NOT NULL,
+  method          text NOT NULL DEFAULT 'browser',
   zebra_device_id text,
-  active         boolean DEFAULT true,
-  updated_at     timestamptz DEFAULT now()
+  active          boolean DEFAULT true,
+  updated_at      timestamptz DEFAULT now()
 );
 ```
+
+---
+
+## Avery Berkel Scale — deferred
+
+Revisit after Phase 3. Model number needed from Hakan before any
+integration work begins. PLU file export is the likely approach.
 
 ---
 
@@ -221,15 +160,15 @@ CREATE TABLE IF NOT EXISTS printer_config (
 
 | Date | Issue | Fix |
 |---|---|---|
-| 2026-04-24 | Phase 2 TCP cloud→local printer impossible | Phase 2 stays AirPrint; TSC → TE310 WiFi |
+| 2026-04-24 | Phase 2 TCP cloud→local printer impossible | Phase 2 stays AirPrint |
 | 2026-04-24 | Weight field on mince label — column doesn't exist | Removed |
-| 2026-04-24 | Use-by dates assumed without asking Hakan | Removed from auto-calc. Staff pick at print time |
-| 2026-04-24 | Storage instruction assumed for goods-in | Removed — not FSA required for goods-in |
-| 2026-04-24 | Batch code format change proposed unnecessarily | Keep existing formats — confirmed by Hakan |
-| 2026-04-24 | Label size assumed | Confirmed 100mm × 50mm — works across all 3 phases |
-| 2026-04-24 | CHILLED/FROZEN on mince label | Confirmed — shown in header e.g. "PRODUCTION · MINCE/CHILLED" |
-
----
-
-*Stack: Next.js 15, Supabase (uqgecljspgtevoylwkep), Vercel (prj_84NlryZjHcGlA6R2O6zQ57aWkOFZ)*
-*See also: docs/DOCUMENT_CONTROL.md*
+| 2026-04-24 | Use-by dates assumed | Staff picks at print time |
+| 2026-04-24 | Storage instruction assumed | Removed — not FSA required |
+| 2026-04-24 | Batch code format change proposed | Keep existing — confirmed |
+| 2026-04-24 | Label size assumed | Confirmed 100mm × 50mm |
+| 2026-04-24 | CHILLED/FROZEN on mince label | Confirmed — in header |
+| 2026-04-24 | Label size in CSS was 60mm | Corrected to 50mm |
+| 2026-04-24 | window.open() blocked in iOS PWA | Replaced with anchor click |
+| 2026-04-24 | /api/labels missing from middleware | Added to SHARED_API_PATHS |
+| 2026-04-24 | Auth read mfs_role cookie (wrong) | Fixed to x-mfs-user-role header |
+| 2026-04-25 | New tab print — poor UX, blocked in some PWA contexts | iframe in-app print |

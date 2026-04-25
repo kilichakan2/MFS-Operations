@@ -9,18 +9,36 @@
 import { useState, useEffect, useCallback } from 'react'
 
 /**
- * Opens a label URL in a new tab/Safari window.
- * Uses a programmatic <a> click — NOT window.open() because
- * window.open() is silently blocked in iOS PWA standalone mode.
+ * Prints a label without opening a new tab.
+ * Fetches label HTML, injects into hidden iframe, triggers native print sheet.
+ * Works on desktop browser, iOS Safari, and iOS PWA standalone mode.
  */
-function openLabelUrl(url: string) {
-  const a = document.createElement('a')
-  a.href = url
-  a.target = '_blank'
-  a.rel = 'noopener noreferrer'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
+async function printLabelInApp(url: string): Promise<void> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) { console.error('[printLabelInApp]', res.status); return }
+    const html = await res.text()
+
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none'
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentDocument ?? iframe.contentWindow?.document
+    if (!doc) { document.body.removeChild(iframe); return }
+
+    doc.open(); doc.write(html); doc.close()
+
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.print()
+        setTimeout(() => {
+          if (document.body.contains(iframe)) document.body.removeChild(iframe)
+        }, 2000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('[printLabelInApp]', err)
+  }
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -776,12 +794,12 @@ export default function MincePage() {
                   <button
                     key={opt.days}
                     type="button"
-                    onPointerDown={(e) => {
+                    onPointerDown={async (e) => {
                       e.preventDefault()
-                      openLabelUrl(
+                      setPrintTarget(null)
+                      await printLabelInApp(
                         `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}`
                       )
-                      setPrintTarget(null)
                     }}
                     className={`px-3 py-2.5 rounded-xl text-xs font-bold border-2 transition-all text-left ${
                       opt.label.startsWith('Frozen')

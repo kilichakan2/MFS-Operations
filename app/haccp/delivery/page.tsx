@@ -20,19 +20,46 @@
 import { useState, useEffect, useCallback } from 'react'
 
 /**
- * Opens a label URL in a new tab/Safari window.
- * Uses a programmatic <a> click instead of window.open() because
- * window.open() is silently blocked in iOS PWA standalone mode.
- * A temporary anchor element click is NOT blocked and opens in Safari.
+ * Prints a label without opening a new tab.
+ *
+ * Fetches the label HTML from the API, injects it into a hidden iframe,
+ * triggers the native print dialog (AirPrint on iOS), then removes the iframe.
+ *
+ * Works on: desktop browser, iOS Safari, iOS PWA standalone mode.
  */
-function openLabelUrl(url: string) {
-  const a = document.createElement('a')
-  a.href = url
-  a.target = '_blank'
-  a.rel = 'noopener noreferrer'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
+async function printLabelInApp(url: string): Promise<void> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) {
+      console.error('[printLabelInApp] API error', res.status)
+      return
+    }
+    const html = await res.text()
+
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none'
+    document.body.appendChild(iframe)
+
+    const doc = iframe.contentDocument ?? iframe.contentWindow?.document
+    if (!doc) { document.body.removeChild(iframe); return }
+
+    doc.open()
+    doc.write(html)
+    doc.close()
+
+    // Wait for iframe content (including SVG barcodes) to render before printing
+    iframe.onload = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.print()
+        // Clean up after print dialog closes (or after timeout on iOS)
+        setTimeout(() => {
+          if (document.body.contains(iframe)) document.body.removeChild(iframe)
+        }, 2000)
+      }, 300)
+    }
+  } catch (err) {
+    console.error('[printLabelInApp]', err)
+  }
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -652,7 +679,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
                   type="button"
                   onPointerDown={(e) => {
                     e.preventDefault()
-                    openLabelUrl(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`)
+                    printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`)
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold transition-colors flex-shrink-0"
                 >
@@ -1390,7 +1417,7 @@ export default function DeliveryPage() {
                           onPointerDown={(e) => {
                             e.stopPropagation()
                             e.preventDefault()
-                            openLabelUrl(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`)
+                            printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`)
                           }}
                           className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-600 text-white text-[10px] font-bold"
                         >
