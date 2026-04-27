@@ -3,7 +3,8 @@
  *
  * ZPL (Zebra Programming Language) generation for MFS Global labels.
  *
- * Label size: 100mm × 50mm at 203dpi = 800 × 400 dots
+ * Label size: 100mm × 75mm at 203dpi = 800 × 600 dots
+ * Updated from 50mm — required to fit all BLS compulsory fields.
  *
  * Used in:
  * - Phase 1/2: generated but not directly sent (HTML render used instead)
@@ -16,7 +17,7 @@ import type { DeliveryLabelData, MinceLabelData } from './types'
 
 // Label dimensions at 203dpi
 const W = 800  // 100mm = 800 dots
-const H = 400  // 50mm  = 400 dots
+const H = 600  // 75mm  = 600 dots
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -106,6 +107,8 @@ export function generateDeliveryZPL(data: DeliveryLabelData, copies = 1): string
 
   const lines = [
     '^XA',
+    `^PW${W}`,       // print width: 800 dots (100mm)
+    `^LL${H}`,       // label length: 600 dots (75mm)
     `^PQ${copies}`,
     `^FO20,20^A0N,28,28^FDMFS GLOBAL^FS`,
     `^FO460,20^A0N,20,20^FDGOODS IN · ${sanitise(data.species.toUpperCase(), 10)}^FS`,
@@ -132,6 +135,8 @@ export function generateMinceZPL(data: MinceLabelData, copies = 1): string {
 
   const lines = [
     '^XA',
+    `^PW${W}`,       // print width: 800 dots (100mm)
+    `^LL${H}`,       // label length: 600 dots (75mm)
     `^PQ${copies}`,
     // Header
     `^FO20,20^A0N,26,26^FDMFS GLOBAL^FS`,

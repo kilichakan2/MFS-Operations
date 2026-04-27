@@ -32,7 +32,7 @@ Change one config. ZPL templates unchanged.
 
 ## Label Size
 
-**100mm × 50mm** — confirmed, works on all phases.
+**100mm × 75mm** — updated for BLS compliance (was 50mm, insufficient for all required fields).
 - TSC TE310 max width: 104mm ✓
 - Zebra ZD421d max width: 104mm ✓
 

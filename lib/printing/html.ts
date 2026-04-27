@@ -3,10 +3,10 @@
  *
  * Renders label data as styled HTML for browser/AirPrint printing (Phase 1/2).
  *
- * Label size: 100mm × 50mm — confirmed across all phases.
+ * Label size: 100mm × 75mm — updated for BLS fields (was 50mm, too short for all required fields).
  *   Phase 1: custom paper size in iOS print dialog
  *   Phase 2: TSC TE310 (max 104mm width) ✓
- *   Phase 3: Zebra ZD421d (max 104mm width) ✓
+ *   Phase 3: Zebra ZD420 (max 104mm width) ✓  — label stock: 100mm × 75mm roll
  *
  * Layout (top to bottom):
  *   Header: MFS GLOBAL + label type
@@ -125,22 +125,22 @@ function countryName(code: string | null): string {
 
 function labelCSS(): string {
   return (
-    `@page{size:100mm 50mm;margin:0}` +
+    `@page{size:100mm 75mm;margin:0}` +
     `*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}` +
     `body{background:white}` +
-    `.label{width:100mm;height:50mm;padding:1.5mm 3mm;page-break-after:always;overflow:hidden;display:flex;flex-direction:column}` +
+    `.label{width:100mm;height:75mm;padding:1.5mm 2.5mm;page-break-after:always;overflow:hidden;display:flex;flex-direction:column}` +
     `.label:last-child{page-break-after:auto}` +
-    `.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:0.8mm;border-bottom:0.5mm solid #000;margin-bottom:0.8mm;flex-shrink:0}` +
-    `.co{font-size:9pt;font-weight:bold}` +
-    `.tp{font-size:8pt;font-weight:bold;color:#333}` +
-    `.bc{font-size:14pt;font-weight:bold;font-family:'Courier New',Courier,monospace;letter-spacing:1px;line-height:1;margin-bottom:0.8mm;flex-shrink:0}` +
-    `.br{flex-shrink:0;margin-bottom:1mm;line-height:0}` +
+    `.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:0.6mm;border-bottom:0.5mm solid #000;margin-bottom:0.6mm;flex-shrink:0}` +
+    `.co{font-size:8pt;font-weight:bold}` +
+    `.tp{font-size:7pt;font-weight:bold;color:#333}` +
+    `.bc{font-size:12pt;font-weight:bold;font-family:'Courier New',Courier,monospace;letter-spacing:1px;line-height:1;margin-bottom:0.6mm;flex-shrink:0}` +
+    `.br{flex-shrink:0;margin-bottom:0.8mm;line-height:0}` +
     `.br svg{display:block;max-width:100%}` +
-    `.dv{border-top:0.3mm solid #aaa;margin:0.8mm 0;flex-shrink:0}` +
-    `.fl{font-size:8pt;line-height:1.35;flex-grow:1}` +
-    `.fw{display:flex;gap:2mm}` +
-    `.fk{color:#444;min-width:15mm;flex-shrink:0;font-size:7.5pt}` +
-    `.fv{font-size:8pt}`
+    `.dv{border-top:0.3mm solid #aaa;margin:0.6mm 0;flex-shrink:0}` +
+    `.fl{font-size:7.5pt;line-height:1.3;flex-grow:1}` +
+    `.fw{display:flex;gap:1.5mm;margin-bottom:0.2mm}` +
+    `.fk{color:#444;min-width:22mm;flex-shrink:0;font-size:6.5pt}` +
+    `.fv{font-size:7.5pt;font-weight:500}`
   )
 }
 
