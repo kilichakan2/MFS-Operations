@@ -3,10 +3,6 @@
     {
       "path": "/api/routes/compute-road-times",
       "schedule": "0 2 * * 0"
-    },
-    {
-      "path": "/api/cron/haccp-alarm",
-      "schedule": "*/5 8-16 * * *"
     }
   ]
 }
