@@ -16,7 +16,7 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('push', (event) => {
-  let data = { title: '⚠️ MFS HACCP Alert', body: 'Overdue check — please open the app', url: '/haccp' }
+  let data = { title: '⚠️ MFS HACCP Alert', body: 'Overdue check — please open the app', url: '/haccp', tag: 'haccp-alarm', requireInteraction: true }
   try {
     if (event.data) data = { ...data, ...event.data.json() }
   } catch (e) {
@@ -28,9 +28,9 @@ self.addEventListener('push', (event) => {
       body:               data.body,
       icon:               '/icons/icon-192.png',
       badge:              '/icons/icon-192.png',
-      tag:                'haccp-alarm',
+      tag:                data.tag,
       renotify:           true,
-      requireInteraction: false,
+      requireInteraction: data.requireInteraction,
       data:               { url: data.url ?? '/haccp' },
     })
   )

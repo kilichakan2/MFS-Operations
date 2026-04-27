@@ -29,9 +29,11 @@ function initWebPush() {
 }
 
 export interface PushPayload {
-  title: string
-  body:  string
-  url?:  string  // where to navigate on tap (default: /haccp)
+  title:              string
+  body:               string
+  url?:               string    // where to navigate on tap (default: /haccp)
+  tag?:               string    // notification tag — same tag replaces previous; unique tag stacks
+  requireInteraction?: boolean  // keep notification on screen until tapped
 }
 
 export interface PushSubscription {
@@ -51,9 +53,11 @@ export async function sendPushNotification(
   initWebPush()
 
   const data = JSON.stringify({
-    title: payload.title,
-    body:  payload.body,
-    url:   payload.url ?? '/haccp',
+    title:              payload.title,
+    body:               payload.body,
+    url:                payload.url ?? '/haccp',
+    tag:                payload.tag ?? 'haccp-alarm',
+    requireInteraction: payload.requireInteraction ?? true,
   })
 
   try {

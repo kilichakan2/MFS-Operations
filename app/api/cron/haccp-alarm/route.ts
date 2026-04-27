@@ -120,25 +120,32 @@ export async function GET(req: NextRequest) {
         sessionId = newSession?.id ?? ''
       }
 
-      const { title, body } = getNotificationText(overdueItems, count)
+      // Send one notification per overdue item — each fires a separate alert sound
+      let subFailed = false
+      for (const item of overdueItems) {
+        const { title, body } = getNotificationText([item], count)
+        const success = await sendPushNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          { title, body, url: '/haccp', tag: `haccp-${item.key}`, requireInteraction: true },
+        )
+        if (success) {
+          sent++
+        } else {
+          subFailed = true
+          break  // subscription dead — no point sending more to it
+        }
+      }
 
-      const success = await sendPushNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-        { title, body, url: '/haccp' },
-      )
-
-      if (success) {
-        sent++
-        // Update alarm session count
+      if (subFailed) {
+        expiredEndpoints.push(sub.endpoint)
+      } else {
+        // Update alarm session count after all items sent
         if (sessionId) {
           await supabase
             .from('alarm_sessions')
             .update({ notification_count: count, last_sent_at: new Date().toISOString() })
             .eq('id', sessionId)
         }
-      } else {
-        // Push failed — subscription likely expired, mark for deletion
-        expiredEndpoints.push(sub.endpoint)
       }
     }
 
