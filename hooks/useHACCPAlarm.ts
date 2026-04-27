@@ -23,11 +23,40 @@ const ALARM_INTERVAL_MS = 5 * 60 * 1000  // 5 minutes
 const BEEP_DURATION_MS  = 180             // each beep is 180ms
 const BEEP_GAP_MS       = 120             // gap between beeps
 
+// ── Shared AudioContext with iOS unlock ───────────────────────────────────────
+// iOS blocks Web Audio until a user gesture. We create the context once and
+// resume it on the first touchstart. Subsequent playBeeps() calls reuse it.
+
+let sharedCtx: AudioContext | null = null
+
+function getAudioContext(): AudioContext {
+  if (!sharedCtx || sharedCtx.state === 'closed') {
+    sharedCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+  }
+  return sharedCtx
+}
+
+function unlockAudio() {
+  try {
+    const ctx = getAudioContext()
+    if (ctx.state === 'suspended') ctx.resume()
+  } catch { /* ignore */ }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('touchstart', unlockAudio, { passive: true, capture: true })
+  window.addEventListener('touchend',   unlockAudio, { passive: true, capture: true })
+  window.addEventListener('click',      unlockAudio, { capture: true })
+}
+
 // ── Web Audio beep player ─────────────────────────────────────────────────────
 
 async function playBeeps(count: number, frequency: number, volume: number): Promise<void> {
   try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    const ctx = getAudioContext()
+    // Resume in case iOS suspended it (e.g. after a phone call or background)
+    if (ctx.state === 'suspended') await ctx.resume()
+    if (ctx.state !== 'running') return  // still blocked — no user gesture yet
 
     for (let i = 0; i < count; i++) {
       const oscillator = ctx.createOscillator()
@@ -49,10 +78,9 @@ async function playBeeps(count: number, frequency: number, volume: number): Prom
       oscillator.stop(start + BEEP_DURATION_MS / 1000 + 0.01)
     }
 
-    // Keep context alive for the duration of all beeps
+    // Wait for all beeps to finish
     const totalDuration = count * (BEEP_DURATION_MS + BEEP_GAP_MS)
     await new Promise((resolve) => setTimeout(resolve, totalDuration + 100))
-    ctx.close()
 
   } catch (err) {
     console.warn('[useHACCPAlarm] Web Audio not available:', err)

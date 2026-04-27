@@ -69,10 +69,10 @@ export function getOverdueItems(status: {
  * Escalates with each 5-minute interval.
  */
 export function getAlarmLevel(notificationCount: number): AlarmLevel {
-  if (notificationCount <= 1) return { beepCount: 1, volume: 0.3, frequency: 880  }
-  if (notificationCount === 2) return { beepCount: 2, volume: 0.5, frequency: 880  }
-  if (notificationCount === 3) return { beepCount: 3, volume: 0.7, frequency: 1100 }
-  if (notificationCount === 4) return { beepCount: 4, volume: 0.9, frequency: 1100 }
+  if (notificationCount <= 1) return { beepCount: 2, volume: 0.7, frequency: 880  }
+  if (notificationCount === 2) return { beepCount: 3, volume: 0.85, frequency: 880  }
+  if (notificationCount === 3) return { beepCount: 4, volume: 0.95, frequency: 1100 }
+  if (notificationCount === 4) return { beepCount: 5, volume: 1.0, frequency: 1100 }
   return                               { beepCount: 5, volume: 1.0, frequency: 1320 }
 }
 
