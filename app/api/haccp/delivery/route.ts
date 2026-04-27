@@ -177,18 +177,30 @@ export async function GET(req: NextRequest) {
     }
 
     const today = todayUK()
+    const range = req.nextUrl.searchParams.get('range') ?? 'today'
+
+    // Week = Monday of current ISO week through today
+    const weekStart = (() => {
+      const d   = new Date(today + 'T00:00:00')
+      const day = d.getDay() === 0 ? 7 : d.getDay()  // Sunday = 7
+      d.setDate(d.getDate() - (day - 1))
+      return d.toLocaleDateString('en-CA')
+    })()
+
+    const baseQuery = supabase
+      .from('haccp_deliveries')
+      .select(`
+        id, date, time_of_delivery, supplier, product, product_category, species,
+        temperature_c, temp_status, covered_contaminated, contamination_notes, notes,
+        born_in, reared_in, slaughter_site, cut_site, batch_number, delivery_number,
+        submitted_at, users!inner(name)
+      `)
 
     const [deliveries, suppliers] = await Promise.all([
-      supabase
-        .from('haccp_deliveries')
-        .select(`
-          id, date, time_of_delivery, supplier, product, product_category, species,
-          temperature_c, temp_status, covered_contaminated, contamination_notes, notes,
-          born_in, reared_in, slaughter_site, cut_site, batch_number, delivery_number,
-          submitted_at, users!inner(name)
-        `)
-        .eq('date', today)
-        .order('delivery_number', { ascending: true }),
+      (range === 'week'
+        ? baseQuery.gte('date', weekStart).lte('date', today)
+        : baseQuery.eq('date', today)
+      ).order('date', { ascending: false }).order('delivery_number', { ascending: false }),
       supabase
         .from('haccp_suppliers')
         .select('id, name')
@@ -199,12 +211,12 @@ export async function GET(req: NextRequest) {
     if (deliveries.error) return NextResponse.json({ error: deliveries.error.message }, { status: 500 })
     if (suppliers.error)  return NextResponse.json({ error: suppliers.error.message  }, { status: 500 })
 
-    const todayDeliveries = deliveries.data ?? []
-    const nextNumber      = todayDeliveries.length + 1
+    const allDeliveries = deliveries.data ?? []
+    const nextNumber    = allDeliveries.filter(d => d.date === today).length + 1
 
     return NextResponse.json({
       date:        today,
-      deliveries:  todayDeliveries,
+      deliveries:  allDeliveries,
       suppliers:   suppliers.data ?? [],
       next_number: nextNumber,
     })

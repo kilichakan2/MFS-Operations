@@ -77,6 +77,7 @@ type CAPayload = {
 interface Supplier  { id: string; name: string }
 interface Delivery  {
   id:                   string
+  date:                 string
   time_of_delivery:     string
   supplier:             string
   product:              string
@@ -877,6 +878,7 @@ export default function DeliveryPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading,    setLoading]    = useState(true)
   const [nextNumber, setNextNumber] = useState(1)
+  const [dateFilter, setDateFilter] = useState<'today' | 'week'>('today')
 
   // Form state
   const [supplierSel,   setSupplierSel]   = useState('')
@@ -911,7 +913,8 @@ export default function DeliveryPage() {
   }, [])
 
   const loadData = useCallback(() => {
-    fetch('/api/haccp/delivery')
+    setLoading(true)
+    fetch(`/api/haccp/delivery?range=${dateFilter}`)
       .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
       .then((d) => {
         setSuppliers(d.suppliers ?? [])
@@ -920,7 +923,7 @@ export default function DeliveryPage() {
       })
       .catch((e) => setSubmitErr(`Could not load data — ${e.message}`))
       .finally(() => setLoading(false))
-  }, [])
+  }, [dateFilter])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -1357,12 +1360,28 @@ export default function DeliveryPage() {
         {/* Today's log */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Today&apos;s deliveries</p>
-            {deliveries.length > 0 && (
-              <span className="bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs font-bold text-green-600">
-                {deliveries.length} logged
-              </span>
-            )}
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
+              {dateFilter === 'today' ? "Today's deliveries" : "This week's deliveries"}
+            </p>
+            <div className="flex items-center gap-2">
+              {deliveries.length > 0 && (
+                <span className="bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs font-bold text-green-600">
+                  {deliveries.length} logged
+                </span>
+              )}
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                <button
+                  onClick={() => setDateFilter('today')}
+                  className={`px-3 py-1 text-xs font-bold transition-colors ${dateFilter === 'today' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
+                  Today
+                </button>
+                <button
+                  onClick={() => setDateFilter('week')}
+                  className={`px-3 py-1 text-xs font-bold transition-colors border-l border-slate-200 ${dateFilter === 'week' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
+                  This week
+                </button>
+              </div>
+            </div>
           </div>
           {loading ? (
             <div className="flex items-center gap-3 text-slate-400 text-sm py-4">
@@ -1371,7 +1390,7 @@ export default function DeliveryPage() {
             </div>
           ) : deliveries.length === 0 ? (
             <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-5 text-center">
-              <p className="text-slate-400 text-sm">No deliveries logged today</p>
+              <p className="text-slate-400 text-sm">No deliveries logged {dateFilter === 'today' ? 'today' : 'this week'}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -1382,6 +1401,11 @@ export default function DeliveryPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
+                        {dateFilter === 'week' && (
+                          <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                            {new Date(d.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
                         {d.delivery_number && (
                           <span className="text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono flex-shrink-0">#{d.delivery_number}</span>
                         )}

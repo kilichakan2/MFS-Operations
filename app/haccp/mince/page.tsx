@@ -447,6 +447,7 @@ export default function MincePage() {
   const [minceBatches, setMinceBatches] = useState<{ id: string; batch_code: string; species: string; kill_date: string; output_mode: string }[]>([])
   const [loading,   setLoading]       = useState(true)
   const [printTarget, setPrintTarget] = useState<{ id: string; batchCode: string; outputMode: string } | null>(null)
+  const [dateFilter, setDateFilter]   = useState<'today' | 'week'>('today')
 
   // ── Mince form state ────────────────────────────────────────────────────────
   const [mSpecies,       setMSpecies]       = useState('')
@@ -490,7 +491,8 @@ export default function MincePage() {
   const [pendingTab,  setPendingTab]  = useState<'mince' | 'meatprep' | null>(null)
 
   const loadData = useCallback(() => {
-    fetch('/api/haccp/mince-prep')
+    setLoading(true)
+    fetch(`/api/haccp/mince-prep?range=${dateFilter}`)
       .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
       .then((d) => {
         setMinceRecs(d.mince ?? [])
@@ -501,7 +503,7 @@ export default function MincePage() {
       })
       .catch((e) => setSubmitErr(`Load error — ${e.message}`))
       .finally(() => setLoading(false))
-  }, [])
+  }, [dateFilter])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -1025,16 +1027,37 @@ export default function MincePage() {
 
             {/* Mince history */}
             <div>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Today's mince runs</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
+                  {dateFilter === 'today' ? "Today's mince runs" : "This week's mince runs"}
+                </p>
+                <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                  <button
+                    onClick={() => setDateFilter('today')}
+                    className={`px-3 py-1 text-xs font-bold transition-colors ${dateFilter === 'today' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
+                    Today
+                  </button>
+                  <button
+                    onClick={() => setDateFilter('week')}
+                    className={`px-3 py-1 text-xs font-bold transition-colors border-l border-slate-200 ${dateFilter === 'week' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
+                    This week
+                  </button>
+                </div>
+              </div>
               {loading ? <p className="text-slate-400 text-sm">Loading…</p>
               : minceRecs.length === 0
-              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No mince runs logged today</p></div>
+              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No mince runs logged {dateFilter === 'today' ? 'today' : 'this week'}</p></div>
               : (
                 <div className="space-y-2">
                   {minceRecs.map((r) => (
                     <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0">
+                          {dateFilter === 'week' && (
+                            <span className="inline-block text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded mb-0.5">
+                              {new Date(r.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                            </span>
+                          )}
                           <p className="text-slate-900 font-semibold text-sm font-mono">{r.batch_code}</p>
                           <p className="text-slate-500 text-xs mt-0.5">{r.product_species} · {r.days_from_kill}d from kill</p>
                           {r.source_batch_numbers?.length > 0 && (
@@ -1229,15 +1252,22 @@ export default function MincePage() {
 
             {/* Meatprep history */}
             <div>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Today's prep runs</p>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">
+                {dateFilter === 'today' ? "Today's prep runs" : "This week's prep runs"}
+              </p>
               {prepRecs.length === 0
-              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No prep runs logged today</p></div>
+              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No prep runs logged {dateFilter === 'today' ? 'today' : 'this week'}</p></div>
               : (
                 <div className="space-y-2">
                   {prepRecs.map((r) => (
                     <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
+                          {dateFilter === 'week' && (
+                            <span className="inline-block text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded mb-0.5">
+                              {new Date(r.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+                            </span>
+                          )}
                           <p className="text-slate-900 font-semibold text-sm font-mono">{r.batch_code}</p>
                           <p className="text-slate-500 text-xs mt-0.5">{r.product_name}</p>
                           {r.allergens_present?.length > 0 && (
