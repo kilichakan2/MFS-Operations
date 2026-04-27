@@ -69,6 +69,8 @@ const SHARED_API_PATHS = [
   '/api/routes',
   '/api/haccp',
   '/api/labels',
+  '/api/notifications',
+  '/api/cron',
 ]
 
 export function middleware(req: NextRequest) {

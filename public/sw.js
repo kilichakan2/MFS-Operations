@@ -1,14 +1,54 @@
-// Service worker: clear all caches and self-deregister.
-// This replaces a stale pre-built SW that was caching outdated assets.
-self.addEventListener('install', () => self.skipWaiting())
+/**
+ * public/sw.js
+ * Service worker for MFS Operations PWA.
+ * Handles push notifications for HACCP overdue alarms.
+ *
+ * Requirements:
+ * - PWA must be installed to Home Screen
+ * - User must grant notification permission once
+ * - iOS 16.4+ required for Web Push
+ */
 
-self.addEventListener('activate', async () => {
-  // Delete every cache
-  const keys = await caches.keys()
-  await Promise.all(keys.map(k => caches.delete(k)))
-  // Unregister this SW so the browser goes back to network-only
-  await self.registration.unregister()
-  // Force all open tabs to reload with fresh assets
-  const clients = await self.clients.matchAll({ type: 'window' })
-  clients.forEach(c => c.navigate(c.url))
+self.addEventListener('install', () => { self.skipWaiting() })
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim())
+})
+
+self.addEventListener('push', (event) => {
+  let data = { title: '⚠️ MFS HACCP Alert', body: 'Overdue check — please open the app', url: '/haccp' }
+  try {
+    if (event.data) data = { ...data, ...event.data.json() }
+  } catch (e) {
+    console.error('[sw] Push parse error:', e)
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body:               data.body,
+      icon:               '/icons/icon-192.png',
+      badge:              '/icons/icon-192.png',
+      tag:                'haccp-alarm',
+      renotify:           true,
+      requireInteraction: false,
+      data:               { url: data.url ?? '/haccp' },
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = event.notification.data?.url ?? '/haccp'
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.focus()
+          if ('navigate' in client) client.navigate(url)
+          return
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url)
+    })
+  )
 })

@@ -14,6 +14,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import AuthKeypad from '@/components/AuthKeypad'
 import MfsLogo    from '@/components/MfsLogo'
+import { useHACCPAlarm }          from '@/hooks/useHACCPAlarm'
+import { usePushNotifications }   from '@/hooks/usePushNotifications'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -262,6 +264,10 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   const [helpSection, setHelp] = useState<string | null>(null)
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // ── Alarm hooks ─────────────────────────────────────────────────────────────
+  const alarm = useHACCPAlarm(status)
+  const push  = usePushNotifications()
+
   const loadStatus = useCallback(() => {
     fetch('/api/haccp/today-status')
       .then((r) => r.json())
@@ -346,12 +352,17 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col select-none">
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-700 bg-[#1E293B] flex-shrink-0">
+      {/* Header — turns red when alarming */}
+      <div className={`flex items-center justify-between px-5 py-3 border-b flex-shrink-0 transition-colors duration-500 ${alarm.isAlarming ? 'bg-red-700 border-red-800' : 'bg-[#1E293B] border-slate-700'}`}>
         <div className="flex items-center gap-3">
           <MfsLogo className="h-6 w-auto text-white" />
-          <div className="w-px h-6 bg-slate-600" />
+          <div className={`w-px h-6 ${alarm.isAlarming ? 'bg-red-400' : 'bg-slate-600'}`} />
           <span className="text-slate-300 text-sm font-medium">HACCP</span>
+          {alarm.isAlarming && (
+            <span className="animate-pulse text-white text-xs font-bold bg-red-500 px-2 py-0.5 rounded-full">
+              🚨 {alarm.overdueCount} OVERDUE
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {/* Documents register link */}
@@ -371,6 +382,43 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
           </div>
         </div>
       </div>
+
+      {/* Overdue alarm banner */}
+      {alarm.isAlarming && (
+        <div className="bg-red-600 px-4 py-2.5 flex items-center gap-2 flex-shrink-0">
+          <svg className="w-4 h-4 text-white flex-shrink-0 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+          </svg>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-xs font-bold">Overdue checks — action required now</p>
+            <p className="text-red-100 text-[10px] truncate">{alarm.overdueLabels.join(' · ')}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Push notification permission banner */}
+      {push.supported && push.permission === 'default' && !push.subscribed && (
+        <div className="bg-slate-800 px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
+          <span className="text-lg">🔔</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-xs font-bold">Enable overdue alarms</p>
+            <p className="text-slate-400 text-[10px]">Get notified even when the iPad is locked</p>
+          </div>
+          <button
+            onPointerDown={async (e) => { e.preventDefault(); await push.subscribe() }}
+            className="flex-shrink-0 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-lg transition-colors"
+          >
+            Enable
+          </button>
+        </div>
+      )}
+
+      {push.supported && push.subscribed && !alarm.isAlarming && (
+        <div className="bg-green-900/30 px-4 py-1.5 flex items-center gap-2 flex-shrink-0">
+          <span className="text-xs">🔔</span>
+          <p className="text-green-400 text-[10px]">Overdue alarms active on this device</p>
+        </div>
+      )}
 
       {/* Admin panel strip — only visible when logged in as admin */}
       {isAdmin && (
