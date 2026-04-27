@@ -405,7 +405,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <p className="text-slate-400 text-[10px]">Get notified even when the iPad is locked</p>
           </div>
           <button
-            onPointerDown={async (e) => { e.preventDefault(); await push.subscribe() }}
+            onClick={async () => { await push.subscribe() }}
             className="flex-shrink-0 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-lg transition-colors"
           >
             Enable
