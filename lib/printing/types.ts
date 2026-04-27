@@ -36,6 +36,10 @@ export interface MinceLabelData {
   days_from_kill:       number | null
   source_batch_numbers: string[]
   use_by:               string   // human-readable — passed from print dialog (staff pick at print time)
+  // BLS fields — aggregated from source delivery records
+  origins:              string[] // country names e.g. ["United Kingdom", "Ireland"]
+  slaughtered_in:       string[] // country codes e.g. ["GB"] — country only per Danny, not plant number
+  minced_in:            string   // always "GB" — MFS is Sheffield
 }
 
 export type LabelData = DeliveryLabelData | MinceLabelData

@@ -201,6 +201,10 @@ export function renderMinceHTML(data: MinceLabelData, copies = 1): string {
     : null
   const barcode = generateBarcodeSVG(data.batch_code, 260, 42, 8)
 
+  // BLS fields
+  const originsStr      = data.origins.length > 0 ? data.origins.join(', ')       : '—'
+  const slaughteredStr  = data.slaughtered_in.length > 0 ? data.slaughtered_in.join(', ') : '—'
+
   const lbl = [
     `<div class="label">`,
     `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">PRODUCTION · ${mode}</span></div>`,
@@ -211,8 +215,12 @@ export function renderMinceHTML(data: MinceLabelData, copies = 1): string {
     `<div class="fw"><span class="fk">Species:</span><span class="fv">${data.product_species}</span></div>`,
     `<div class="fw"><span class="fk">Prod date:</span><span class="fv">${data.date}</span></div>`,
     killStr ? `<div class="fw"><span class="fk">Kill date:</span><span class="fv">${killStr}</span></div>` : '',
-    sources ? `<div class="fw"><span class="fk">Source:</span><span class="fv" style="font-family:'Courier New',monospace;font-size:7pt">${sources}</span></div>` : '',
+    sources ? `<div class="fw"><span class="fk">Source:</span><span class="fv" style="font-family:'Courier New',monospace;font-size:6.5pt">${sources}</span></div>` : '',
     `<div class="fw"><span class="fk">Use by:</span><span class="fv" style="font-weight:bold">${data.use_by}</span></div>`,
+    `<div class="dv"></div>`,
+    `<div class="fw"><span class="fk">Born in:</span><span class="fv">${originsStr}</span></div>`,
+    `<div class="fw"><span class="fk">Slaughtered in:</span><span class="fv">${slaughteredStr}</span></div>`,
+    `<div class="fw"><span class="fk">Minced in:</span><span class="fv">${data.minced_in}</span></div>`,
     `</div>`,
     `</div>`,
   ].filter(Boolean).join('')

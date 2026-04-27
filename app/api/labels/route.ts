@@ -144,12 +144,51 @@ export async function GET(req: NextRequest) {
     if (type === 'mince') {
       const { data, error } = await supabase
         .from('haccp_mince_log')
-        .select('id, date, batch_code, product_species, output_mode, kill_date, days_from_kill, source_batch_numbers')
+        .select('id, date, batch_code, product_species, output_mode, kill_date, days_from_kill, source_batch_numbers, source_delivery_ids')
         .eq('id', id)
         .single()
 
       if (error || !data) {
         return NextResponse.json({ error: 'Mince/prep record not found' }, { status: 404 })
+      }
+
+      // ── BLS: look up source delivery records to get origin data ──────────────
+      const deliveryIds = (data.source_delivery_ids as string[] | null) ?? []
+      let origins:       string[] = []
+      let slaughteredIn: string[] = []
+
+      if (deliveryIds.length > 0) {
+        const { data: deliveries } = await supabase
+          .from('haccp_deliveries')
+          .select('born_in, reared_in, slaughter_site')
+          .in('id', deliveryIds)
+
+        if (deliveries && deliveries.length > 0) {
+          // Collect unique born_in country codes → map to country names
+          const bornCodes = [...new Set(
+            deliveries.map(d => (d.born_in as string | null) ?? '').filter(Boolean)
+          )]
+          origins = bornCodes.map(code => {
+            const COUNTRY_NAMES: Record<string, string> = {
+              GB:'United Kingdom', UK:'United Kingdom', IE:'Ireland',
+              AU:'Australia', NZ:'New Zealand', FR:'France', DE:'Germany',
+              NL:'Netherlands', BE:'Belgium', ES:'Spain', IT:'Italy',
+              PL:'Poland', BR:'Brazil', AR:'Argentina', UY:'Uruguay',
+              US:'United States', CA:'Canada', ZA:'South Africa',
+              NA:'Namibia', BW:'Botswana', IN:'India', PK:'Pakistan',
+            }
+            return COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
+          })
+
+          // Extract country code prefix from slaughter_site (e.g. "GB" from "GB1234")
+          slaughteredIn = [...new Set(
+            deliveries
+              .map(d => (d.slaughter_site as string | null) ?? '')
+              .filter(Boolean)
+              .map(site => site.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())
+              .filter(Boolean)
+          )]
+        }
       }
 
       const outputMode = (data.output_mode ?? 'chilled') as OutputMode
@@ -165,6 +204,9 @@ export async function GET(req: NextRequest) {
         days_from_kill:       data.days_from_kill ?? null,
         source_batch_numbers: (data.source_batch_numbers as string[]) ?? [],
         use_by:               fmtDisplayDate(useby),
+        origins:              origins,
+        slaughtered_in:       slaughteredIn,
+        minced_in:            'GB',
       }
 
       const output = generateLabel('mince', labelData, config)

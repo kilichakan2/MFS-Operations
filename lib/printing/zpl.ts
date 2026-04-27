@@ -146,12 +146,17 @@ export function generateMinceZPL(data: MinceLabelData, copies = 1): string {
     `^FO20,65^A0N,38,38^FD${batch}^FS`,
     // Code 128 barcode
     `^FO20,115^BCN,55,Y,N,N^FD${batch}^FS`,
-    // Fields
-    `^FO20,196^A0N,22,22^FDSpecies:   ${sanitise(data.product_species, 20)}^FS`,
-    `^FO20,224^A0N,22,22^FDProd date: ${sanitise(data.date, 20)}^FS`,
-    killInfo ? `^FO20,252^A0N,22,22^FD${sanitise(killInfo, 36)}^FS` : null,
-    sources  ? `^FO20,280^A0N,18,18^FDSource: ${sources}^FS` : null,
-    `^FO20,308^A0N,22,22^FDUse by:   ${sanitise(data.use_by, 20)}^FS`,
+    // Production fields
+    `^FO20,196^A0N,20,20^FDSpecies:   ${sanitise(data.product_species, 20)}^FS`,
+    `^FO20,220^A0N,20,20^FDProd date: ${sanitise(data.date, 20)}^FS`,
+    killInfo ? `^FO20,244^A0N,20,20^FD${sanitise(killInfo, 36)}^FS` : null,
+    sources  ? `^FO20,268^A0N,18,18^FDSource: ${sources}^FS` : null,
+    `^FO20,292^A0N,22,22^FDUse by: ${sanitise(data.use_by, 20)}^FS`,
+    // BLS divider + fields
+    `^FO20,320^GB${W - 40},2,2^FS`,
+    `^FO20,330^A0N,20,20^FDBorn in: ${sanitise(data.origins.join(', ') || '-', 30)}^FS`,
+    `^FO20,354^A0N,20,20^FDSlaughtered in: ${sanitise(data.slaughtered_in.join(', ') || '-', 15)}^FS`,
+    `^FO20,378^A0N,20,20^FDMinced in: ${sanitise(data.minced_in, 5)}^FS`,
     // Footer
     '^XZ',
   ].filter((l): l is string => l !== null)
