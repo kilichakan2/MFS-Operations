@@ -18,7 +18,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Paths that are public (no auth required)
-const PUBLIC_PATHS = ['/login', '/haccp', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team', '/api/auth/haccp-team', '/api/auth/haccp-admin']
+// /api/cron/* is included here because external cron services (e.g. cron-job.org) have no
+// session cookie. The individual cron routes validate their own auth via CRON_SECRET.
+const PUBLIC_PATHS = ['/login', '/haccp', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team', '/api/auth/haccp-team', '/api/auth/haccp-admin', '/api/cron']
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -70,7 +72,6 @@ const SHARED_API_PATHS = [
   '/api/haccp',
   '/api/labels',
   '/api/notifications',
-  '/api/cron',
 ]
 
 export function middleware(req: NextRequest) {
