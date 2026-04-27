@@ -878,7 +878,7 @@ export default function DeliveryPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading,    setLoading]    = useState(true)
   const [nextNumber, setNextNumber] = useState(1)
-  const [dateFilter, setDateFilter] = useState<'today' | 'week'>('today')
+  const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'last_week'>('today')
 
   // Form state
   const [supplierSel,   setSupplierSel]   = useState('')
@@ -1361,7 +1361,7 @@ export default function DeliveryPage() {
         <div>
           <div className="flex items-center justify-between mb-3">
             <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
-              {dateFilter === 'today' ? "Today's deliveries" : "This week's deliveries"}
+              {dateFilter === 'today' ? "Today's deliveries" : dateFilter === 'week' ? "This week's deliveries" : "Last week's deliveries"}
             </p>
             <div className="flex items-center gap-2">
               {deliveries.length > 0 && (
@@ -1380,6 +1380,11 @@ export default function DeliveryPage() {
                   className={`px-3 py-1 text-xs font-bold transition-colors border-l border-slate-200 ${dateFilter === 'week' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
                   This week
                 </button>
+                <button
+                  onClick={() => setDateFilter('last_week')}
+                  className={`px-3 py-1 text-xs font-bold transition-colors border-l border-slate-200 ${dateFilter === 'last_week' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
+                  Last week
+                </button>
               </div>
             </div>
           </div>
@@ -1390,7 +1395,7 @@ export default function DeliveryPage() {
             </div>
           ) : deliveries.length === 0 ? (
             <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-5 text-center">
-              <p className="text-slate-400 text-sm">No deliveries logged {dateFilter === 'today' ? 'today' : 'this week'}</p>
+              <p className="text-slate-400 text-sm">No deliveries logged {dateFilter === 'today' ? 'today' : dateFilter === 'week' ? 'this week' : 'last week'}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -1401,7 +1406,7 @@ export default function DeliveryPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        {dateFilter === 'week' && (
+                        {dateFilter !== 'today' && (
                           <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">
                             {new Date(d.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                           </span>

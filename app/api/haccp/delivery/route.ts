@@ -179,11 +179,25 @@ export async function GET(req: NextRequest) {
     const today = todayUK()
     const range = req.nextUrl.searchParams.get('range') ?? 'today'
 
-    // Week = Monday of current ISO week through today
+    // This week = Monday of current ISO week through today
     const weekStart = (() => {
       const d   = new Date(today + 'T00:00:00')
       const day = d.getDay() === 0 ? 7 : d.getDay()  // Sunday = 7
       d.setDate(d.getDate() - (day - 1))
+      return d.toLocaleDateString('en-CA')
+    })()
+
+    // Last week = Mon–Sun of previous ISO week
+    const lastWeekStart = (() => {
+      const d   = new Date(today + 'T00:00:00')
+      const day = d.getDay() === 0 ? 7 : d.getDay()
+      d.setDate(d.getDate() - (day - 1) - 7)
+      return d.toLocaleDateString('en-CA')
+    })()
+    const lastWeekEnd = (() => {
+      const d   = new Date(today + 'T00:00:00')
+      const day = d.getDay() === 0 ? 7 : d.getDay()
+      d.setDate(d.getDate() - day)          // previous Sunday
       return d.toLocaleDateString('en-CA')
     })()
 
@@ -197,9 +211,9 @@ export async function GET(req: NextRequest) {
       `)
 
     const [deliveries, suppliers] = await Promise.all([
-      (range === 'week'
-        ? baseQuery.gte('date', weekStart).lte('date', today)
-        : baseQuery.eq('date', today)
+      (range === 'week'      ? baseQuery.gte('date', weekStart).lte('date', today)
+       : range === 'last_week' ? baseQuery.gte('date', lastWeekStart).lte('date', lastWeekEnd)
+       : baseQuery.eq('date', today)
       ).order('date', { ascending: false }).order('delivery_number', { ascending: false }),
       supabase
         .from('haccp_suppliers')

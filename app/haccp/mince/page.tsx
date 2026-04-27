@@ -447,7 +447,7 @@ export default function MincePage() {
   const [minceBatches, setMinceBatches] = useState<{ id: string; batch_code: string; species: string; kill_date: string; output_mode: string }[]>([])
   const [loading,   setLoading]       = useState(true)
   const [printTarget, setPrintTarget] = useState<{ id: string; batchCode: string; outputMode: string } | null>(null)
-  const [dateFilter, setDateFilter]   = useState<'today' | 'week'>('today')
+  const [dateFilter, setDateFilter]   = useState<'today' | 'week' | 'last_week'>('today')
 
   // ── Mince form state ────────────────────────────────────────────────────────
   const [mSpecies,       setMSpecies]       = useState('')
@@ -1029,7 +1029,7 @@ export default function MincePage() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
-                  {dateFilter === 'today' ? "Today's mince runs" : "This week's mince runs"}
+                  {dateFilter === 'today' ? "Today's mince runs" : dateFilter === 'week' ? "This week's mince runs" : "Last week's mince runs"}
                 </p>
                 <div className="flex rounded-lg border border-slate-200 overflow-hidden">
                   <button
@@ -1042,18 +1042,23 @@ export default function MincePage() {
                     className={`px-3 py-1 text-xs font-bold transition-colors border-l border-slate-200 ${dateFilter === 'week' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
                     This week
                   </button>
+                  <button
+                    onClick={() => setDateFilter('last_week')}
+                    className={`px-3 py-1 text-xs font-bold transition-colors border-l border-slate-200 ${dateFilter === 'last_week' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
+                    Last week
+                  </button>
                 </div>
               </div>
               {loading ? <p className="text-slate-400 text-sm">Loading…</p>
               : minceRecs.length === 0
-              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No mince runs logged {dateFilter === 'today' ? 'today' : 'this week'}</p></div>
+              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No mince runs logged {dateFilter === 'today' ? 'today' : dateFilter === 'week' ? 'this week' : 'last week'}</p></div>
               : (
                 <div className="space-y-2">
                   {minceRecs.map((r) => (
                     <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                          {dateFilter === 'week' && (
+                          {dateFilter !== 'today' && (
                             <span className="inline-block text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded mb-0.5">
                               {new Date(r.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                             </span>
@@ -1253,17 +1258,17 @@ export default function MincePage() {
             {/* Meatprep history */}
             <div>
               <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">
-                {dateFilter === 'today' ? "Today's prep runs" : "This week's prep runs"}
+                {dateFilter === 'today' ? "Today's prep runs" : dateFilter === 'week' ? "This week's prep runs" : "Last week's prep runs"}
               </p>
               {prepRecs.length === 0
-              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No prep runs logged {dateFilter === 'today' ? 'today' : 'this week'}</p></div>
+              ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No prep runs logged {dateFilter === 'today' ? 'today' : dateFilter === 'week' ? 'this week' : 'last week'}</p></div>
               : (
                 <div className="space-y-2">
                   {prepRecs.map((r) => (
                     <div key={r.id} className="bg-white border border-blue-100 rounded-xl px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          {dateFilter === 'week' && (
+                          {dateFilter !== 'today' && (
                             <span className="inline-block text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded mb-0.5">
                               {new Date(r.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                             </span>

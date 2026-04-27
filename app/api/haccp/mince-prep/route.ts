@@ -177,7 +177,7 @@ export async function GET(req: NextRequest) {
     const since16 = nDaysAgoUK(16)
     const range   = req.nextUrl.searchParams.get('range') ?? 'today'
 
-    // Week = Monday of current ISO week through today
+    // This week = Monday of current ISO week through today
     const weekStart = (() => {
       const d   = new Date(today + 'T00:00:00')
       const day = d.getDay() === 0 ? 7 : d.getDay()  // Sunday = 7
@@ -185,50 +185,53 @@ export async function GET(req: NextRequest) {
       return d.toLocaleDateString('en-CA')
     })()
 
+    // Last week = Mon–Sun of previous ISO week
+    const lastWeekStart = (() => {
+      const d   = new Date(today + 'T00:00:00')
+      const day = d.getDay() === 0 ? 7 : d.getDay()
+      d.setDate(d.getDate() - (day - 1) - 7)
+      return d.toLocaleDateString('en-CA')
+    })()
+    const lastWeekEnd = (() => {
+      const d   = new Date(today + 'T00:00:00')
+      const day = d.getDay() === 0 ? 7 : d.getDay()
+      d.setDate(d.getDate() - day)
+      return d.toLocaleDateString('en-CA')
+    })()
+
+    const minceSelect    = `id, date, time_of_production, batch_code, product_species, kill_date,
+                     days_from_kill, kill_date_within_limit, input_temp_c, output_temp_c,
+                     input_temp_pass, output_temp_pass, output_mode,
+                     source_batch_numbers, corrective_action, submitted_at, users!inner(name)`
+    const meatprepSelect = `id, date, time_of_production, batch_code, product_name, product_species,
+                     kill_date, days_from_kill, input_temp_c, output_temp_c,
+                     input_temp_pass, output_temp_pass, output_mode,
+                     allergens_present, label_check_completed,
+                     source_batch_numbers, corrective_action, submitted_at, users!inner(name)`
+    const timesepSelect  = `id, date, time_of_entry, plain_products_end_time, clean_completed_time,
+                     allergen_products_start_time, clean_verified_by, allergens_in_production,
+                     corrective_action, submitted_at, users!inner(name)`
+
     const [mince, meatprep, timesep, deliveries] = await Promise.all([
       (range === 'week'
-        ? supabase.from('haccp_mince_log')
-            .select(`id, date, time_of_production, batch_code, product_species, kill_date,
-                     days_from_kill, kill_date_within_limit, input_temp_c, output_temp_c,
-                     input_temp_pass, output_temp_pass, output_mode,
-                     source_batch_numbers, corrective_action, submitted_at, users!inner(name)`)
-            .gte('date', weekStart).lte('date', today)
-        : supabase.from('haccp_mince_log')
-            .select(`id, date, time_of_production, batch_code, product_species, kill_date,
-                     days_from_kill, kill_date_within_limit, input_temp_c, output_temp_c,
-                     input_temp_pass, output_temp_pass, output_mode,
-                     source_batch_numbers, corrective_action, submitted_at, users!inner(name)`)
-            .eq('date', today)
+        ? supabase.from('haccp_mince_log').select(minceSelect).gte('date', weekStart).lte('date', today)
+        : range === 'last_week'
+        ? supabase.from('haccp_mince_log').select(minceSelect).gte('date', lastWeekStart).lte('date', lastWeekEnd)
+        : supabase.from('haccp_mince_log').select(minceSelect).eq('date', today)
       ).order('date', { ascending: false }).order('submitted_at', { ascending: false }),
 
       (range === 'week'
-        ? supabase.from('haccp_meatprep_log')
-            .select(`id, date, time_of_production, batch_code, product_name, product_species,
-                     kill_date, days_from_kill, input_temp_c, output_temp_c,
-                     input_temp_pass, output_temp_pass, output_mode,
-                     allergens_present, label_check_completed,
-                     source_batch_numbers, corrective_action, submitted_at, users!inner(name)`)
-            .gte('date', weekStart).lte('date', today)
-        : supabase.from('haccp_meatprep_log')
-            .select(`id, date, time_of_production, batch_code, product_name, product_species,
-                     kill_date, days_from_kill, input_temp_c, output_temp_c,
-                     input_temp_pass, output_temp_pass, output_mode,
-                     allergens_present, label_check_completed,
-                     source_batch_numbers, corrective_action, submitted_at, users!inner(name)`)
-            .eq('date', today)
+        ? supabase.from('haccp_meatprep_log').select(meatprepSelect).gte('date', weekStart).lte('date', today)
+        : range === 'last_week'
+        ? supabase.from('haccp_meatprep_log').select(meatprepSelect).gte('date', lastWeekStart).lte('date', lastWeekEnd)
+        : supabase.from('haccp_meatprep_log').select(meatprepSelect).eq('date', today)
       ).order('date', { ascending: false }).order('submitted_at', { ascending: false }),
 
       (range === 'week'
-        ? supabase.from('haccp_time_separation_log')
-            .select(`id, date, time_of_entry, plain_products_end_time, clean_completed_time,
-                     allergen_products_start_time, clean_verified_by, allergens_in_production,
-                     corrective_action, submitted_at, users!inner(name)`)
-            .gte('date', weekStart).lte('date', today)
-        : supabase.from('haccp_time_separation_log')
-            .select(`id, date, time_of_entry, plain_products_end_time, clean_completed_time,
-                     allergen_products_start_time, clean_verified_by, allergens_in_production,
-                     corrective_action, submitted_at, users!inner(name)`)
-            .eq('date', today)
+        ? supabase.from('haccp_time_separation_log').select(timesepSelect).gte('date', weekStart).lte('date', today)
+        : range === 'last_week'
+        ? supabase.from('haccp_time_separation_log').select(timesepSelect).gte('date', lastWeekStart).lte('date', lastWeekEnd)
+        : supabase.from('haccp_time_separation_log').select(timesepSelect).eq('date', today)
       ).order('date', { ascending: false }).order('submitted_at', { ascending: false }),
 
       supabase
