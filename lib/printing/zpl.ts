@@ -75,31 +75,46 @@ export function fmtDisplayDate(isoDate: string): string {
 // ── ZPL label generators ──────────────────────────────────────────────────────
 
 export function generateDeliveryZPL(data: DeliveryLabelData, copies = 1): string {
-  const batch   = sanitise(data.batch_code, 30)
-  const parts   = [data.born_in, data.slaughter_site].filter(Boolean)
-  const origin  = parts.map(p => sanitise(p!, 20)).join(' / ')
-  const tempLbl = `Received at: ${data.temperature_c}C ${data.temp_status === 'pass' ? '' : '(!)'}`
+  const batch    = sanitise(data.batch_code, 30)
+  const tempLbl  = `${data.temperature_c}C ${data.temp_status === 'pass' ? '' : '(!)'}`
+
+  // Born & reared
+  const sameOrigin = data.born_in && data.reared_in && data.born_in === data.reared_in
+  const bornLine   = sameOrigin
+    ? `Born & reared in: ${sanitise(data.born_in!, 20)}`
+    : data.born_in ? `Born in: ${sanitise(data.born_in, 20)}` : null
+  const rearedLine = (!sameOrigin && data.reared_in) ? `Reared in: ${sanitise(data.reared_in, 20)}` : null
+
+  // Slaughter / cut sites
+  const sameSite   = data.slaughter_site && data.cut_site && data.slaughter_site === data.cut_site
+  const slauxLine  = sameSite
+    ? `Slaughtered & cut in: ${sanitise(data.slaughter_site!, 15)}`
+    : data.slaughter_site ? `Slaughtered in: ${sanitise(data.slaughter_site, 15)}` : null
+  const cutLine    = (!sameSite && data.cut_site) ? `Cut in: ${sanitise(data.cut_site, 15)}` : null
+
+  // Build dynamic field list (y positions start at 196, step 26)
+  const fields: string[] = [
+    `${sanitise(data.supplier, 20)} — ${sanitise(data.product, 20)}`,
+    `Date in: ${sanitise(data.date_received, 20)}`,
+    `Temp: ${tempLbl}`,
+    ...[bornLine, rearedLine, slauxLine, cutLine, `Further cut in: ${data.mfs_plant}`].filter((l): l is string => l !== null),
+  ]
+
+  const fieldZpl = fields.map((f, i) =>
+    `^FO20,${196 + i * 24}^A0N,20,20^FD${f}^FS`
+  )
 
   const lines = [
     '^XA',
     `^PQ${copies}`,
-    // Header
     `^FO20,20^A0N,28,28^FDMFS GLOBAL^FS`,
-    `^FO500,20^A0N,20,20^FDGOODS IN^FS`,
+    `^FO460,20^A0N,20,20^FDGOODS IN · ${sanitise(data.species.toUpperCase(), 10)}^FS`,
     `^FO20,55^GB${W - 40},3,3^FS`,
-    // Batch code text
     `^FO20,70^A0N,38,38^FD${batch}^FS`,
-    // Code 128 barcode — height 55 dots, with human readable, no check digit
     `^FO20,120^BCN,55,Y,N,N^FD${batch}^FS`,
-    // Fields
-    `^FO20,200^A0N,22,22^FDSupplier: ${sanitise(data.supplier)}^FS`,
-    `^FO20,228^A0N,22,22^FDProduct:  ${sanitise(data.product)} (${sanitise(data.species, 10)})^FS`,
-    `^FO20,256^A0N,22,22^FDDate in:  ${sanitise(data.date_received, 20)}^FS`,
-    origin ? `^FO20,284^A0N,18,18^FDOrigin: ${origin}^FS` : null,
-    `^FO20,310^A0N,22,22^FD${sanitise(tempLbl, 38)}^FS`,
-    // Footer
+    ...fieldZpl,
     '^XZ',
-  ].filter((l): l is string => l !== null)
+  ]
 
   return lines.join('\n')
 }

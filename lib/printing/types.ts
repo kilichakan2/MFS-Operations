@@ -18,8 +18,11 @@ export interface DeliveryLabelData {
   product:        string
   species:        string
   date_received:  string  // human-readable e.g. "21 Apr 2026"
-  born_in:        string | null
-  slaughter_site: string | null
+  born_in:        string | null  // ISO country code e.g. "GB"
+  reared_in:      string | null  // ISO country code — null if same as born_in
+  slaughter_site: string | null  // plant code e.g. "GB1234"
+  cut_site:       string | null  // plant code — null if same as slaughter_site
+  mfs_plant:      string         // MFS FSA approval number — always "UK2946"
   temperature_c:  number
   temp_status:    string  // 'pass' | 'urgent' | 'fail'
 }

@@ -98,6 +98,29 @@ function generateBarcodeSVG(
   )
 }
 
+// ── Country code → display name ───────────────────────────────────────────────
+// Covers the main beef origin countries seen in UK trade.
+// Falls back to the raw code if not found.
+
+const COUNTRY_NAMES: Record<string, string> = {
+  GB: 'United Kingdom', UK: 'United Kingdom',
+  IE: 'Ireland',        AU: 'Australia',
+  NZ: 'New Zealand',    FR: 'France',
+  DE: 'Germany',        NL: 'Netherlands',
+  BE: 'Belgium',        ES: 'Spain',
+  IT: 'Italy',          PL: 'Poland',
+  BR: 'Brazil',         AR: 'Argentina',
+  UY: 'Uruguay',        US: 'United States',
+  CA: 'Canada',         ZA: 'South Africa',
+  NA: 'Namibia',        BW: 'Botswana',
+  IN: 'India',          PK: 'Pakistan',
+}
+
+function countryName(code: string | null): string {
+  if (!code) return '—'
+  return COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
+}
+
 // ── Shared print CSS ──────────────────────────────────────────────────────────
 
 function labelCSS(): string {
@@ -124,22 +147,42 @@ function labelCSS(): string {
 // ── Delivery label ────────────────────────────────────────────────────────────
 
 export function renderDeliveryHTML(data: DeliveryLabelData, copies = 1): string {
-  const origin     = [data.born_in, data.slaughter_site].filter(Boolean).join(' / ')
   const tempColour = data.temp_status === 'pass' ? '#166534' : '#991b1b'
   const barcode    = generateBarcodeSVG(data.batch_code, 260, 42, 8)
 
+  // Born & reared — combine if same country to save label space
+  const bornName   = countryName(data.born_in)
+  const rearedName = countryName(data.reared_in)
+  const sameOrigin = data.born_in && data.reared_in && data.born_in === data.reared_in
+  const originLine = sameOrigin
+    ? `<div class="fw"><span class="fk">Born &amp; reared in:</span><span class="fv">${bornName}</span></div>`
+    : [
+        data.born_in   ? `<div class="fw"><span class="fk">Born in:</span><span class="fv">${bornName}</span></div>` : '',
+        data.reared_in ? `<div class="fw"><span class="fk">Reared in:</span><span class="fv">${rearedName}</span></div>` : '',
+      ].join('')
+
+  // Slaughter / cut sites — combine if same plant
+  const sameSite = data.slaughter_site && data.cut_site && data.slaughter_site === data.cut_site
+  const siteLine = sameSite
+    ? `<div class="fw"><span class="fk">Slaughtered &amp; cut in:</span><span class="fv">${data.slaughter_site}</span></div>`
+    : [
+        data.slaughter_site ? `<div class="fw"><span class="fk">Slaughtered in:</span><span class="fv">${data.slaughter_site}</span></div>` : '',
+        data.cut_site       ? `<div class="fw"><span class="fk">Cut in:</span><span class="fv">${data.cut_site}</span></div>` : '',
+      ].join('')
+
   const lbl = [
     `<div class="label">`,
-    `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">GOODS IN</span></div>`,
+    `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">GOODS IN · ${data.species.toUpperCase()}</span></div>`,
     `<div class="bc">${data.batch_code}</div>`,
     `<div class="br">${barcode}</div>`,
     `<div class="dv"></div>`,
     `<div class="fl">`,
-    `<div class="fw"><span class="fk">Supplier:</span><span class="fv">${data.supplier}</span></div>`,
-    `<div class="fw"><span class="fk">Product:</span><span class="fv">${data.product} (${data.species})</span></div>`,
+    `<div class="fw"><span class="fk">Supplier:</span><span class="fv">${data.supplier} — ${data.product}</span></div>`,
     `<div class="fw"><span class="fk">Date in:</span><span class="fv">${data.date_received}</span></div>`,
-    origin ? `<div class="fw"><span class="fk">Origin:</span><span class="fv">${origin}</span></div>` : '',
     `<div class="fw"><span class="fk">Temp:</span><span class="fv" style="color:${tempColour};font-weight:bold">${data.temperature_c}°C</span></div>`,
+    originLine,
+    siteLine,
+    `<div class="fw"><span class="fk">Further cut in:</span><span class="fv">${data.mfs_plant}</span></div>`,
     `</div>`,
     `</div>`,
   ].filter(Boolean).join('')
