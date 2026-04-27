@@ -101,6 +101,7 @@ interface UseHACCPAlarmResult {
   overdueCount:  number
   alarmLevel:    number   // 1-5, increases every 5 min
   overdueLabels: string[] // human-readable list for display
+  fireAlarm:     () => void  // call from tap handler to play sound immediately
 }
 
 export function useHACCPAlarm(status: HACCPAlarmStatus | null): UseHACCPAlarmResult {
@@ -174,5 +175,6 @@ export function useHACCPAlarm(status: HACCPAlarmStatus | null): UseHACCPAlarmRes
     overdueCount:  overdueItems.length,
     alarmLevel,
     overdueLabels: overdueItems.map((i) => i.label),
+    fireAlarm,
   }
 }
