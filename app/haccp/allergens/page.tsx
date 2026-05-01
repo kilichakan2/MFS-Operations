@@ -141,14 +141,13 @@ export default function AllergenAssessmentPage() {
 
   const loadAssessment = useCallback(() => {
     setLoading(true)
+    // Read role from client-readable cookie (set by login/haccp-admin routes)
+    const role = document.cookie.split(';').find(c => c.trim().startsWith('mfs_role='))?.split('=')[1]
+    setIsAdmin(role === 'admin')
     fetch('/api/haccp/allergen-assessment')
       .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
       .then(d => {
         setAssessment(d.assessment ?? null)
-        fetch('/api/auth/type')
-          .then(r => r.json())
-          .then(p => setIsAdmin(p.role === 'admin'))
-          .catch(() => {})
       })
       .catch(e => setError(`Could not load — ${e.message}`))
       .finally(() => setLoading(false))
