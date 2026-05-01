@@ -30,6 +30,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   mince_meat_prep:   'Mince & Meat Prep',
   health_monitoring: 'Health Monitoring',
   training:          'Training',
+  salsa:             'SALSA Compliance',
+  allergen:          'Allergen Management',
 }
 
 const CATEGORY_COLOUR: Record<string, string> = {
@@ -39,6 +41,8 @@ const CATEGORY_COLOUR: Record<string, string> = {
   mince_meat_prep:   'bg-pink-100 text-pink-600',
   health_monitoring: 'bg-blue-50 text-blue-600',
   training:          'bg-slate-100 text-slate-500',
+  salsa:             'bg-purple-50 text-purple-700',
+  allergen:          'bg-green-50 text-green-700',
 }
 
 function reviewStatus(reviewDue: string): 'ok' | 'soon' | 'overdue' {
