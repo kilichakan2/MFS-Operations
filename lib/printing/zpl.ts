@@ -98,7 +98,7 @@ export function generateDeliveryZPL(data: DeliveryLabelData, copies = 1): string
     `${sanitise(data.supplier, 20)} — ${sanitise(data.product, 20)}`,
     `Date in: ${sanitise(data.date_received, 20)}`,
     `Temp: ${tempLbl}`,
-    ...[bornLine, rearedLine, slauxLine, cutLine, `Further cut in: ${data.mfs_plant}`].filter((l): l is string => l !== null),
+    ...[bornLine, rearedLine, slauxLine, cutLine, `Further cut in: ${data.mfs_plant}`, `Allergens: None`].filter((l): l is string => l !== null),
   ]
 
   const fieldZpl = fields.map((f, i) =>
@@ -157,6 +157,7 @@ export function generateMinceZPL(data: MinceLabelData, copies = 1): string {
     `^FO20,330^A0N,20,20^FDBorn in: ${sanitise(data.origins.join(', ') || '-', 30)}^FS`,
     `^FO20,354^A0N,20,20^FDSlaughtered in: ${sanitise(data.slaughtered_in.join(', ') || '-', 15)}^FS`,
     `^FO20,378^A0N,20,20^FDMinced in: ${sanitise(data.minced_in, 5)}^FS`,
+    `^FO20,402^A0N,20,20^FDAllergens: ${sanitise(data.allergens_present.length === 0 ? 'None' : data.allergens_present.join(', '), 30)}^FS`,
     // Footer
     '^XZ',
   ].filter((l): l is string => l !== null)

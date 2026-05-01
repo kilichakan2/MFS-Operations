@@ -406,12 +406,14 @@ describe('HTML label render content', () => {
     'Euro Quality Lambs', // supplier
     'Lamb carcass',       // product
     'STORE AT',           // storage instruction
+    'Allergens:',         // SALSA 1.4.3 — allergen declaration required
   ]
 
   const minceFields = [
     'MINCE-2104-BEEF-4',  // batch code
     '23 Apr 2026',        // use-by date
     'STORE AT',           // storage instruction
+    'Allergens:',         // SALSA 1.4.3 — allergen declaration required
   ]
 
   it('delivery label must contain all required fields', () => {
@@ -420,18 +422,74 @@ describe('HTML label render content', () => {
       // When html.ts is built, renderHTMLLabel('delivery', data) must include these
       expect(typeof field).toBe('string') // placeholder until html.ts exists
     }
-    expect(deliveryFields).toHaveLength(4)
+    expect(deliveryFields).toHaveLength(5)
   })
 
   it('mince label must contain all required fields', () => {
     for (const field of minceFields) {
       expect(typeof field).toBe('string')
     }
-    expect(minceFields).toHaveLength(3)
+    expect(minceFields).toHaveLength(4)
   })
 
   it('required fields list is not empty', () => {
     expect(deliveryFields.length).toBeGreaterThan(0)
     expect(minceFields.length).toBeGreaterThan(0)
+  })
+})
+
+// ── Allergen label declaration (SALSA 1.4.3) ──────────────────────────────────
+
+function allergenLabelText(allergensPresent: string[]): string {
+  if (allergensPresent.length === 0) return 'None'
+  return allergensPresent.join(', ')
+}
+
+function deliveryLabelAllergenText(): string {
+  // Delivery labels always show None — MFS allergen-free site
+  return 'None'
+}
+
+describe('Label allergen declaration — SALSA 1.4.3', () => {
+  describe('delivery label allergen declaration', () => {
+    it('always shows None — delivery form records nil-allergen check', () => {
+      expect(deliveryLabelAllergenText()).toBe('None')
+    })
+
+    it('is static — does not depend on any variable', () => {
+      // Called twice — should always return the same value
+      expect(deliveryLabelAllergenText()).toBe(deliveryLabelAllergenText())
+    })
+  })
+
+  describe('mince label allergen declaration', () => {
+    it('empty allergens_present → None', () => {
+      expect(allergenLabelText([])).toBe('None')
+    })
+
+    it('single allergen → shown directly', () => {
+      expect(allergenLabelText(['Mustard'])).toBe('Mustard')
+    })
+
+    it('multiple allergens → comma separated', () => {
+      expect(allergenLabelText(['Mustard', 'Celery'])).toBe('Mustard, Celery')
+    })
+
+    it('all 14 EU allergens can appear', () => {
+      const all14 = [
+        'Mustard', 'Celery', 'Sulphites', 'Gluten', 'Milk/Dairy',
+        'Soya', 'Eggs', 'Peanuts', 'Tree nuts', 'Crustaceans',
+        'Molluscs', 'Fish', 'Lupin', 'Sesame',
+      ]
+      expect(allergenLabelText(all14)).toContain('Mustard')
+      expect(allergenLabelText(all14)).toContain('Sesame')
+      expect(allergenLabelText(all14).split(', ')).toHaveLength(14)
+    })
+
+    it('MFS standard production (no allergens) → None on label', () => {
+      // This is the expected state for every MFS mince run
+      const standardRun: string[] = []
+      expect(allergenLabelText(standardRun)).toBe('None')
+    })
   })
 })

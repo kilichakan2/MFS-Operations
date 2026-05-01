@@ -144,7 +144,7 @@ export async function GET(req: NextRequest) {
     if (type === 'mince') {
       const { data, error } = await supabase
         .from('haccp_mince_log')
-        .select('id, date, batch_code, product_species, output_mode, kill_date, days_from_kill, source_batch_numbers, source_delivery_ids')
+        .select('id, date, batch_code, product_species, output_mode, kill_date, days_from_kill, source_batch_numbers, source_delivery_ids, allergens_present')
         .eq('id', id)
         .single()
 
@@ -207,6 +207,7 @@ export async function GET(req: NextRequest) {
         origins:              origins,
         slaughtered_in:       slaughteredIn,
         minced_in:            'GB',
+        allergens_present:    (data.allergens_present as string[] | null) ?? [],
       }
 
       const output = generateLabel('mince', labelData, config)

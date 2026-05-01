@@ -40,6 +40,7 @@ export interface MinceLabelData {
   origins:              string[] // country names e.g. ["United Kingdom", "Ireland"]
   slaughtered_in:       string[] // country codes e.g. ["GB"] — country only per Danny, not plant number
   minced_in:            string   // always "GB" — MFS is Sheffield
+  allergens_present:    string[] // allergens from CCP-MP2 check — empty = none
 }
 
 export type LabelData = DeliveryLabelData | MinceLabelData

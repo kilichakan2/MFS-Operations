@@ -183,6 +183,7 @@ export function renderDeliveryHTML(data: DeliveryLabelData, copies = 1): string 
     originLine,
     siteLine,
     `<div class="fw"><span class="fk">Further cut in:</span><span class="fv">${data.mfs_plant}</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#166534;font-weight:bold">None</span></div>`,
     `</div>`,
     `</div>`,
   ].filter(Boolean).join('')
@@ -205,6 +206,11 @@ export function renderMinceHTML(data: MinceLabelData, copies = 1): string {
   const originsStr      = data.origins.length > 0 ? data.origins.join(', ')       : '—'
   const slaughteredStr  = data.slaughtered_in.length > 0 ? data.slaughtered_in.join(', ') : '—'
 
+  // SALSA 1.4.3 — allergen declaration
+  const allergenStr = data.allergens_present.length === 0
+    ? '<span style="color:#166534;font-weight:bold">None</span>'
+    : `<span style="color:#991b1b;font-weight:bold">${data.allergens_present.join(', ')}</span>`
+
   const lbl = [
     `<div class="label">`,
     `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">PRODUCTION · ${mode}</span></div>`,
@@ -221,6 +227,7 @@ export function renderMinceHTML(data: MinceLabelData, copies = 1): string {
     `<div class="fw"><span class="fk">Born in:</span><span class="fv">${originsStr}</span></div>`,
     `<div class="fw"><span class="fk">Slaughtered in:</span><span class="fv">${slaughteredStr}</span></div>`,
     `<div class="fw"><span class="fk">Minced in:</span><span class="fv">${data.minced_in}</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv">${allergenStr}</span></div>`,
     `</div>`,
     `</div>`,
   ].filter(Boolean).join('')
