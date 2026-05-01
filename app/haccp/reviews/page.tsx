@@ -523,11 +523,12 @@ function OverviewOverlay({ mode, onClose }: { mode: 'weekly' | 'monthly'; onClos
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ReviewsPage() {
-  const [tab,           setTab]          = useState<'weekly' | 'monthly'>('weekly')
+  const [tab,           setTab]          = useState<'weekly' | 'monthly' | 'annual'>('weekly')
   const [weeklyRecs,    setWeeklyRecs]   = useState<WeeklyRecord[]>([])
   const [monthlyRecs,   setMonthlyRecs]  = useState<MonthlyRecord[]>([])
   const [weeklyDone,    setWeeklyDone]   = useState(false)
   const [monthlyDone,   setMonthlyDone]  = useState(false)
+  const [annualReviews, setAnnualReviews] = useState<{id:string;review_year:string;review_period_from:string;review_period_to:string;locked:boolean;signer:{name:string}|null}[]>([])
   const [loading,       setLoading]      = useState(true)
   const [unauthorized,  setUnauthorized] = useState(false)
 
@@ -568,6 +569,11 @@ export default function ReviewsPage() {
       })
       .catch((e) => setSubmitErr(`Could not load data — ${e.message}`))
       .finally(() => setLoading(false))
+    // Also fetch annual reviews
+    fetch('/api/haccp/annual-review')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setAnnualReviews(d.reviews ?? []) })
+      .catch(() => {})
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
@@ -695,21 +701,23 @@ export default function ReviewsPage() {
 
       {/* Tab selector */}
       <div className="px-5 pt-4 pb-0 flex gap-2">
-        {(['weekly', 'monthly'] as const).map((t) => (
+        {(['weekly', 'monthly', 'annual'] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`flex-1 py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
               tab === t ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-slate-300 bg-white text-slate-600'
             }`}>
-            {t === 'weekly' ? 'Weekly Review' : 'Monthly Review'}
-            {t === 'weekly' && !weeklyDone  && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">Due</span>}
+            {t === 'weekly' ? 'Weekly' : t === 'monthly' ? 'Monthly' : 'Annual'}
+            {t === 'weekly'  && !weeklyDone  && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">Due</span>}
             {t === 'monthly' && !monthlyDone && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">Due</span>}
           </button>
         ))}
-        <button onClick={() => setShowOverview(true)}
-          className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold border-2 border-slate-300 bg-white text-slate-600 transition-all active:scale-95 flex-shrink-0">
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          {tab === 'weekly' ? 'View Week' : 'View Month'}
-        </button>
+        {tab !== 'annual' && (
+          <button onClick={() => setShowOverview(true)}
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold border-2 border-slate-300 bg-white text-slate-600 transition-all active:scale-95 flex-shrink-0">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            {tab === 'weekly' ? 'View Week' : 'View Month'}
+          </button>
+        )}
       </div>
 
       <div className="flex-1 px-5 py-4 space-y-4 overflow-y-auto">
@@ -888,10 +896,62 @@ export default function ReviewsPage() {
           </>
         )}
 
+        {/* ── ANNUAL TAB ─────────────────────────────────────────────────── */}
+        {tab === 'annual' && (
+          <>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-3">
+              <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <p className="text-blue-800 text-xs leading-relaxed"><strong>SALSA 3.1 requirement.</strong> An annual review covering all food safety system requirements must be completed and signed off by management.</p>
+            </div>
+
+            <button
+              onClick={() => { window.location.href = '/haccp/annual-review' }}
+              className="w-full bg-slate-900 text-white text-sm font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-[0.99]">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Open Annual Review
+            </button>
+
+            {annualReviews.length === 0 ? (
+              <div className="bg-white border border-blue-100 rounded-xl px-4 py-6 text-center">
+                <p className="text-slate-400 text-sm">No annual reviews yet</p>
+                <p className="text-slate-400 text-xs mt-1">Tap above to start the first one</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {annualReviews.map(r => (
+                  <button key={r.id}
+                    onClick={() => { window.location.href = '/haccp/annual-review' }}
+                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-left flex items-center justify-between gap-3 active:scale-[0.99]">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-slate-900 font-bold text-sm">{r.review_year}</p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          r.locked ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {r.locked ? 'Signed off' : 'Draft'}
+                        </span>
+                      </div>
+                      <p className="text-slate-400 text-xs mt-0.5">
+                        {new Date(r.review_period_from).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+                        {' → '}
+                        {new Date(r.review_period_to).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+                      </p>
+                      {r.locked && r.signer && (
+                        <p className="text-slate-400 text-[10px]">Signed off by {r.signer.name}</p>
+                      )}
+                    </div>
+                    <svg className="w-4 h-4 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
       </div>
 
       {/* Overview overlay */}
-      {showOverview && (
+      {showOverview && tab !== 'annual' && (
         <OverviewOverlay mode={tab} onClose={() => setShowOverview(false)} />
       )}
 

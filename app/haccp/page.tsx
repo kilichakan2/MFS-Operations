@@ -488,7 +488,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               }
               due={s?.calibration_due ?? false}
               onTap={() => { window.location.href = '/haccp/calibration' }} onHelp={() => setHelp('calibration')} />
-            <SmallTile id="reviews" icon={Icon.review} label="Reviews" sub="Weekly + Monthly"
+            <SmallTile id="reviews" icon={Icon.review} label="Reviews" sub="Weekly · Monthly · Annual"
               badge={
                 !s ? '—'
                 : s.weekly_review_overdue  ? 'Weekly overdue'
@@ -517,9 +517,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <SmallTile id="recall" icon={Icon.audit} label="Recall Contacts" sub="SALSA 3.4"
               badge="View contacts" due={false}
               onTap={() => { window.location.href = '/haccp/recall' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="annual-review" icon={Icon.review} label="Annual Review" sub="SALSA 3.1"
-              badge="View reviews" due={false}
-              onTap={() => { window.location.href = '/haccp/annual-review' }} onHelp={() => setHelp('people')} />
             {isAdmin && (
               <SmallTile id="audit" icon={Icon.audit} label="Audit" sub="Records · Export"
                 badge="View all records" due={false}
