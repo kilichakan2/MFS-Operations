@@ -148,6 +148,20 @@ const CATEGORY_LABELS: Record<string, string> = {
   chilled_other: 'Chilled Other', dry_goods: 'Dry Goods',
 }
 
+const CATEGORY_COLOUR: Record<string, string> = {
+  lamb:             'bg-red-100 text-red-700',
+  beef:             'bg-red-100 text-red-700',
+  red_meat:         'bg-red-100 text-red-700',
+  offal:            'bg-rose-100 text-rose-700',
+  mince_prep:       'bg-pink-100 text-pink-700',
+  frozen:           'bg-cyan-100 text-cyan-700',
+  frozen_beef_lamb: 'bg-cyan-100 text-cyan-700',
+  poultry:          'bg-amber-100 text-amber-700',
+  dairy:            'bg-blue-100 text-blue-700',
+  chilled_other:    'bg-teal-100 text-teal-700',
+  dry_goods:        'bg-stone-100 text-stone-600',
+}
+
 // ─── Countries ────────────────────────────────────────────────────────────────
 
 // Curated 14 — shown as chips. ISO 3166-1 alpha-2.
@@ -750,7 +764,14 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
                 {STATUS_LABEL[d.temp_status]}
               </span>
             </div>
-            {catLabel && <p className="text-slate-500 text-xs mt-1">{catLabel.label} · limit {catLabel.limit}</p>}
+            {catLabel && (
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${CATEGORY_COLOUR[d.product_category] ?? 'bg-slate-100 text-slate-500'}`}>
+                  {catLabel.label}
+                </span>
+                <p className="text-slate-400 text-[10px]">Temp limit: {catLabel.limit}</p>
+              </div>
+            )}
           </div>
 
           {/* Two-column grid */}
@@ -802,7 +823,9 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
           <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-3">
             <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Product</p>
             <p className="text-slate-900 text-sm font-medium">{d.product}</p>
-            <p className="text-slate-500 text-xs mt-0.5">{catLabel?.label ?? d.product_category}</p>
+            <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded mt-1 ${CATEGORY_COLOUR[d.product_category] ?? 'bg-slate-100 text-slate-500'}`}>
+              {catLabel?.label ?? d.product_category}
+            </span>
           </div>
 
           {/* Contamination */}
@@ -1577,7 +1600,12 @@ export default function DeliveryPage() {
                         )}
                         <p className="text-slate-900 font-semibold text-sm truncate">{d.supplier}</p>
                       </div>
-                      <p className="text-slate-500 text-xs mt-0.5 truncate">{d.product} · {CATEGORY_LABELS[d.product_category] ?? d.product_category}</p>
+                      <p className="text-slate-500 text-xs mt-0.5 truncate">
+                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mr-1.5 ${CATEGORY_COLOUR[d.product_category] ?? 'bg-slate-100 text-slate-500'}`}>
+                          {CATEGORY_LABELS[d.product_category] ?? d.product_category}
+                        </span>
+                        {d.product}
+                      </p>
                       {d.batch_number && (
                         <p className="text-slate-800 text-xs mt-0.5 font-mono font-bold tracking-wider">{d.batch_number}</p>
                       )}
