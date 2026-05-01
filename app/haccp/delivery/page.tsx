@@ -100,7 +100,14 @@ interface Delivery  {
   users:                { name: string }
 }
 
-// ─── Product categories ───────────────────────────────────────────────────────
+// SALSA 1.4 — 14 EU/UK regulated allergens
+const ALLERGENS = [
+  'Mustard', 'Celery', 'Sulphites', 'Gluten', 'Milk/Dairy',
+  'Soya', 'Eggs', 'Peanuts', 'Tree nuts', 'Crustaceans',
+  'Molluscs', 'Fish', 'Lupin', 'Sesame',
+]
+
+
 
 const CATEGORIES: { key: string; label: string; limit: string; detail: string }[] = [
   { key: 'lamb',       label: 'Lamb',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
@@ -916,6 +923,7 @@ export default function DeliveryPage() {
   const [notes,         setNotes]         = useState('')
   // SALSA 1.4.2 — allergen check at intake
   const [allergensIdentified, setAllergensIdentified] = useState(false)
+  const [allergenTypes,       setAllergenTypes]       = useState<string[]>([])
   const [allergenNotes,       setAllergenNotes]       = useState('')
 
   // UI state
@@ -960,8 +968,8 @@ export default function DeliveryPage() {
                    allergensIdentified
 
   // C8: all 4 traceability fields mandatory
-  // C9: if allergens identified, notes are required
-  const allergenValid = !allergensIdentified || allergenNotes.trim().length > 0
+  // C9: if allergens identified, at least one type must be selected
+  const allergenValid = !allergensIdentified || allergenTypes.length > 0
   const isValid =
     supplierChosen &&
     product.trim() &&
@@ -979,7 +987,7 @@ export default function DeliveryPage() {
     setSupplierSel(''); setSupplierOther(''); setProduct('')
     setCategory(''); setTempVal(''); setContam('')
     setContamType(''); setContamNote(''); setNotes(''); setSubmitErr('')
-    setAllergensIdentified(false); setAllergenNotes('')
+    setAllergensIdentified(false); setAllergenTypes([]); setAllergenNotes('')
     setBornIn(''); setRearedIn(''); setRearedSame(false)
     setSlaughter(''); setCutSite(''); setCutSameAs(false)
   }
@@ -1004,7 +1012,9 @@ export default function DeliveryPage() {
           slaughter_site:       slaughter || undefined,
           cut_site:             cutSite   || undefined,
           allergens_identified: allergensIdentified,
-          allergen_notes:       allergensIdentified ? (allergenNotes || undefined) : undefined,
+          allergen_notes:       allergensIdentified
+            ? [allergenTypes.join(', '), allergenNotes.trim()].filter(Boolean).join(' — ')
+            : undefined,
           corrective_action_temp:   caTemp   ?? undefined,
           corrective_action_contam: caContam ?? undefined,
         }),
@@ -1371,7 +1381,7 @@ export default function DeliveryPage() {
               <p className="text-slate-600 text-xs mb-3">Did this delivery contain any allergen-containing products?</p>
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setAllergensIdentified(false); setAllergenNotes('') }}
+                  onClick={() => { setAllergensIdentified(false); setAllergenTypes([]); setAllergenNotes('') }}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
                     !allergensIdentified
                       ? 'bg-green-600 text-white border-green-600'
@@ -1390,16 +1400,40 @@ export default function DeliveryPage() {
                 </button>
               </div>
               {allergensIdentified && (
-                <div className="mt-3">
-                  <p className="text-red-700 text-xs font-bold mb-1">Describe allergens identified (required):</p>
-                  <textarea
-                    value={allergenNotes}
-                    onChange={(e) => setAllergenNotes(e.target.value)}
-                    rows={2}
-                    placeholder="e.g. Delivery contained product with milk allergen — not in spec…"
-                    className="w-full border border-red-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-red-500 resize-none"
-                  />
-                  <p className="text-red-600 text-[10px] mt-1 font-bold">
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <p className="text-red-700 text-xs font-bold mb-2">Select allergens identified (select all that apply):</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ALLERGENS.map(a => (
+                        <button
+                          key={a}
+                          onClick={() => setAllergenTypes(prev =>
+                            prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]
+                          )}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                            allergenTypes.includes(a)
+                              ? 'bg-red-600 text-white border-red-600'
+                              : 'bg-white text-red-600 border-red-200'
+                          }`}>
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                    {allergenTypes.length === 0 && (
+                      <p className="text-red-500 text-[10px] mt-1.5">Select at least one allergen to continue</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-red-700 text-xs font-bold mb-1">Additional notes (optional):</p>
+                    <textarea
+                      value={allergenNotes}
+                      onChange={(e) => setAllergenNotes(e.target.value)}
+                      rows={2}
+                      placeholder="e.g. Product code, box count, supplier confirmation…"
+                      className="w-full border border-red-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-red-500 resize-none"
+                    />
+                  </div>
+                  <p className="text-red-600 text-[10px] font-bold">
                     ⚠️ A corrective action will be raised automatically. Do not process this delivery until resolved.
                   </p>
                 </div>

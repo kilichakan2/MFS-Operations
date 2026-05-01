@@ -11,8 +11,9 @@
 import { describe, it, expect } from 'vitest'
 
 // ── Mirrors allergenValid from delivery page ──────────────────────────────────
-function allergenValid(identified: boolean, notes: string): boolean {
-  return !identified || notes.trim().length > 0
+// allergenTypes replaces allergenNotes as the required field
+function allergenValid(identified: boolean, types: string[]): boolean {
+  return !identified || types.length > 0
 }
 
 // ── Mirrors corrective_action_required from delivery route ────────────────────
@@ -66,28 +67,29 @@ function buildAllergenCA(notes: string | undefined): AllergenCA {
 
 // ── allergenValid — form submission gate ─────────────────────────────────────
 describe('allergenValid — form submission gate', () => {
-  it('no allergens, no notes → valid (normal delivery)', () => {
-    expect(allergenValid(false, '')).toBe(true)
+  it('no allergens identified, empty types → valid (normal delivery)', () => {
+    expect(allergenValid(false, [])).toBe(true)
   })
 
-  it('no allergens, notes entered → valid (notes optional when no allergens)', () => {
-    expect(allergenValid(false, 'some note')).toBe(true)
+  it('no allergens identified, types populated → valid (ignored when not identified)', () => {
+    expect(allergenValid(false, ['Mustard'])).toBe(true)
   })
 
-  it('allergens found, no notes → INVALID (notes required)', () => {
-    expect(allergenValid(true, '')).toBe(false)
+  it('allergens found, no types selected → INVALID (must select at least one)', () => {
+    expect(allergenValid(true, [])).toBe(false)
   })
 
-  it('allergens found, whitespace-only notes → INVALID', () => {
-    expect(allergenValid(true, '   ')).toBe(false)
+  it('allergens found, one type selected → valid', () => {
+    expect(allergenValid(true, ['Milk/Dairy'])).toBe(true)
   })
 
-  it('allergens found, notes provided → valid', () => {
-    expect(allergenValid(true, 'Milk allergen in product X')).toBe(true)
+  it('allergens found, multiple types selected → valid', () => {
+    expect(allergenValid(true, ['Mustard', 'Celery', 'Gluten'])).toBe(true)
   })
 
-  it('allergens found, minimal single char notes → valid', () => {
-    expect(allergenValid(true, 'A')).toBe(true)
+  it('allergens found, all 14 selected → valid', () => {
+    const all14 = ['Mustard','Celery','Sulphites','Gluten','Milk/Dairy','Soya','Eggs','Peanuts','Tree nuts','Crustaceans','Molluscs','Fish','Lupin','Sesame']
+    expect(allergenValid(true, all14)).toBe(true)
   })
 })
 
@@ -187,9 +189,9 @@ describe('buildAllergenCA — auto-generated corrective action', () => {
     expect(buildAllergenCA('Milk in product').resolved).toBe(false)
   })
 
-  it('includes allergen notes in deviation description when provided', () => {
-    const ca = buildAllergenCA('Milk allergen in lamb shoulder box')
-    expect(ca.deviation_description).toContain('Milk allergen in lamb shoulder box')
+  it('includes allergen types in deviation description when provided', () => {
+    const ca = buildAllergenCA('Milk/Dairy, Mustard')
+    expect(ca.deviation_description).toContain('Milk/Dairy, Mustard')
   })
 
   it('handles missing notes gracefully', () => {
@@ -219,12 +221,12 @@ describe('buildAllergenCA — auto-generated corrective action', () => {
 // ── Default form state ────────────────────────────────────────────────────────
 describe('allergen check default state', () => {
   it('default allergensIdentified is false (no allergens)', () => {
-    const defaultState = { allergensIdentified: false, allergenNotes: '' }
+    const defaultState = { allergensIdentified: false, allergenTypes: [] as string[], allergenNotes: '' }
     expect(defaultState.allergensIdentified).toBe(false)
   })
 
   it('default state is valid for form submission', () => {
-    expect(allergenValid(false, '')).toBe(true)
+    expect(allergenValid(false, [])).toBe(true)
   })
 
   it('default state does not trigger CA', () => {
@@ -238,31 +240,43 @@ describe('allergen check default state', () => {
 
 // ── Edge cases ────────────────────────────────────────────────────────────────
 describe('allergen check edge cases', () => {
-  it('allergenValid trims whitespace in notes before checking length', () => {
-    expect(allergenValid(true, '\t\n  \t')).toBe(false)
-    expect(allergenValid(true, ' valid note ')).toBe(true)
-  })
-
-  it('allergens_identified false clears notes on submit (notes not sent)', () => {
-    // When allergens_identified is false, allergen_notes should not be sent
-    // Mirrors: allergen_notes: allergensIdentified ? (allergenNotes || undefined) : undefined
+  it('allergens_identified false — types not sent in payload', () => {
     const allergensIdentified = false
-    const allergenNotes       = 'some notes'
-    const payloadAllergenNotes = allergensIdentified ? (allergenNotes || undefined) : undefined
-    expect(payloadAllergenNotes).toBeUndefined()
+    const allergenTypes       = ['Milk/Dairy']
+    // Mirrors: allergen_notes: allergensIdentified ? ... : undefined
+    const sent = allergensIdentified
+      ? [allergenTypes.join(', ')].filter(Boolean).join(' — ')
+      : undefined
+    expect(sent).toBeUndefined()
   })
 
-  it('allergens_identified true sends notes in payload', () => {
+  it('allergens_identified true — selected types sent in payload', () => {
     const allergensIdentified = true
-    const allergenNotes       = 'Milk allergen found'
-    const payloadAllergenNotes = allergensIdentified ? (allergenNotes || undefined) : undefined
-    expect(payloadAllergenNotes).toBe('Milk allergen found')
-  })
-
-  it('allergens_identified true with empty notes sends undefined', () => {
-    const allergensIdentified = true
+    const allergenTypes       = ['Milk/Dairy', 'Mustard']
     const allergenNotes       = ''
-    const payloadAllergenNotes = allergensIdentified ? (allergenNotes || undefined) : undefined
-    expect(payloadAllergenNotes).toBeUndefined()
+    const sent = allergensIdentified
+      ? [allergenTypes.join(', '), allergenNotes.trim()].filter(Boolean).join(' — ')
+      : undefined
+    expect(sent).toBe('Milk/Dairy, Mustard')
+  })
+
+  it('allergens_identified true — types + notes combined with em dash separator', () => {
+    const allergensIdentified = true
+    const allergenTypes       = ['Milk/Dairy']
+    const allergenNotes       = 'Product code MK-001'
+    const sent = allergensIdentified
+      ? [allergenTypes.join(', '), allergenNotes.trim()].filter(Boolean).join(' — ')
+      : undefined
+    expect(sent).toBe('Milk/Dairy — Product code MK-001')
+  })
+
+  it('allergens_identified true with no notes — no trailing separator', () => {
+    const allergensIdentified = true
+    const allergenTypes       = ['Sesame']
+    const allergenNotes       = '   '
+    const sent = allergensIdentified
+      ? [allergenTypes.join(', '), allergenNotes.trim()].filter(Boolean).join(' — ')
+      : undefined
+    expect(sent).toBe('Sesame')
   })
 })
