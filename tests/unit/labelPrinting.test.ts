@@ -151,10 +151,12 @@ interface DeliveryLabelData {
   species:         string
   date_received:   string
   born_in:         string | null
+  reared_in:       string | null
   slaughter_site:  string | null
+  cut_site:        string | null
+  mfs_plant:       string
   temperature_c:   number
   temp_status:     string
-  is_frozen:       boolean
 }
 
 interface MinceLabelData {
@@ -169,29 +171,22 @@ interface MinceLabelData {
 }
 
 function generateDeliveryZPL(data: DeliveryLabelData, copies = 1): string {
-  // 100mm x 60mm at 203dpi = 800 x 480 dots
   const batchCode = data.batch_code
-  const storage   = data.is_frozen ? 'STORE AT <=-18C (FROZEN)' : 'STORE AT <=4C (FRESH)'
-  const origin    = [data.born_in, data.slaughter_site].filter(Boolean).join(' / ')
-
   return [
     `^XA`,
-    `^PQ${copies}`,              // print quantity
+    `^PQ${copies}`,
     `^FO20,20^A0N,28,28^FDMFS GLOBAL^FS`,
     `^FO500,20^A0N,20,20^FDGOODS IN^FS`,
-    `^FO20,60^GB760,3,3^FS`,     // horizontal rule
-    // Batch code text (large)
+    `^FO20,60^GB760,3,3^FS`,
     `^FO20,75^A0N,40,40^FD${batchCode}^FS`,
-    // Code 128 barcode
     `^FO20,125^BCN,60,Y,N,N^FD${batchCode}^FS`,
-    // Fields
     `^FO20,210^A0N,22,22^FDSupplier: ${data.supplier}^FS`,
     `^FO20,238^A0N,22,22^FDProduct: ${data.product} (${data.species})^FS`,
     `^FO20,266^A0N,22,22^FDDate in: ${data.date_received}^FS`,
-    origin ? `^FO20,294^A0N,18,18^FDOrigin: ${origin}^FS` : '',
-    `^FO20,318^A0N,22,22^FDReceived at: ${data.temperature_c}C^FS`,
-    `^FO20,355^GB760,3,3^FS`,
-    `^FO20,368^A0N,24,24^FD${storage}^FS`,
+    data.born_in    ? `^FO20,294^A0N,18,18^FDBorn in: ${data.born_in}^FS`           : '',
+    data.slaughter_site ? `^FO20,318^A0N,18,18^FDSlaughtered in: ${data.slaughter_site}^FS` : '',
+    `^FO20,342^A0N,18,18^FDFurther cut in: ${data.mfs_plant}^FS`,
+    `^FO20,368^A0N,22,22^FDTemp: ${data.temperature_c}C^FS`,
     `^XZ`,
   ].filter(Boolean).join('\n')
 }
@@ -227,7 +222,8 @@ describe('ZPL generation — delivery label', () => {
   const mockData: DeliveryLabelData = {
     batch_code: 'GI-2104-LAMB-003', supplier: 'Euro Quality Lambs',
     product: 'Lamb carcass', species: 'Lamb',
-    date_received: '21 Apr 2026', born_in: 'UK', slaughter_site: 'Leeds',
+    date_received: '21 Apr 2026', born_in: 'GB', reared_in: 'GB',
+    slaughter_site: 'GB1234', cut_site: 'GB1234', mfs_plant: 'UK2946',
     temperature_c: 3.8, temp_status: 'pass',
   }
 
