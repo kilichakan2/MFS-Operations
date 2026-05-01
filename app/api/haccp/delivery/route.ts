@@ -363,8 +363,10 @@ export async function POST(req: NextRequest) {
 
     const today  = todayUK()
     const status = tempStatus(temperature_c, product_category)
-    // Allergens on an allergen-free site = automatic non-conformance
-    const hasDeviationAllergen = allergens_identified === true
+    // Allergens on allergen-free meat/poultry = non-conformance requiring CA.
+    // Dairy, dry_goods, chilled_other, frozen = allergens may be expected — record only, no CA.
+    const ALLERGEN_CA_CATEGORIES = new Set(['lamb','beef','red_meat','offal','frozen_beef_lamb','poultry'])
+    const hasDeviationAllergen = allergens_identified === true && ALLERGEN_CA_CATEGORIES.has(product_category)
     const corrective_action_required = status !== 'pass' || covered_contaminated !== 'no' || hasDeviationAllergen
 
     // ── C1: pre-validate CA payloads before any DB write ─────────────────────

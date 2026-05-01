@@ -1023,9 +1023,11 @@ export default function DeliveryPage() {
   const supplierOtherTrim = supplierOther.trim()
   const supplierChosen    = Boolean(supplierIdSel || (supplierSel === 'other' && supplierOtherTrim))
 
+  const ALLERGEN_CA_CATEGORIES = new Set(['lamb','beef','red_meat','offal','frozen_beef_lamb','poultry'])
+
   const needsCCA = (tempStat === 'urgent' || tempStat === 'fail') ||
                    (contam === 'yes' || contam === 'yes_actioned') ||
-                   allergensIdentified
+                   (allergensIdentified && ALLERGEN_CA_CATEGORIES.has(category))
 
   const isMeat      = isMeatCategory(category)
   const isAmbient   = noTempCategory(category)

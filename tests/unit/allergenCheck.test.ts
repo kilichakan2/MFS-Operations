@@ -17,12 +17,17 @@ function allergenValid(identified: boolean, types: string[]): boolean {
 }
 
 // ── Mirrors corrective_action_required from delivery route ────────────────────
+// Allergen CA only for meat/poultry — dairy/dry_goods/frozen record only
+const ALLERGEN_CA_CATEGORIES = new Set(['lamb','beef','red_meat','offal','frozen_beef_lamb','poultry'])
+
 function correctiveActionRequired(
   tempStatus:     'pass' | 'urgent' | 'fail',
   contamination:  string,
   allergensFound: boolean,
+  category = 'lamb',  // default to meat for backwards compat with existing tests
 ): boolean {
-  return tempStatus !== 'pass' || contamination !== 'no' || allergensFound
+  const allergenDeviation = allergensFound && ALLERGEN_CA_CATEGORIES.has(category)
+  return tempStatus !== 'pass' || contamination !== 'no' || allergenDeviation
 }
 
 // ── Mirrors needsCCA from delivery page (determines whether CCA popup shows) ──
@@ -30,10 +35,12 @@ function needsCCA(
   tempStatus:     'pass' | 'urgent' | 'fail',
   contamination:  string,
   allergensFound: boolean,
+  category = 'lamb',
 ): boolean {
+  const allergenDeviation = allergensFound && ALLERGEN_CA_CATEGORIES.has(category)
   return (tempStatus === 'urgent' || tempStatus === 'fail') ||
          (contamination === 'yes' || contamination === 'yes_actioned') ||
-         allergensFound
+         allergenDeviation
 }
 
 // ── Mirrors allergen badge display logic from card ────────────────────────────
@@ -94,64 +101,71 @@ describe('allergenValid — form submission gate', () => {
 })
 
 // ── correctiveActionRequired ─────────────────────────────────────────────────
-describe('correctiveActionRequired — allergen contributes to CA flag', () => {
+describe('correctiveActionRequired — allergen CA scoped to meat/poultry only', () => {
   it('pass temp, clean, no allergens → no CA', () => {
-    expect(correctiveActionRequired('pass', 'no', false)).toBe(false)
+    expect(correctiveActionRequired('pass', 'no', false, 'lamb')).toBe(false)
   })
 
-  it('pass temp, clean, allergens found → CA required', () => {
-    expect(correctiveActionRequired('pass', 'no', true)).toBe(true)
+  it('lamb + allergens → CA required', () => {
+    expect(correctiveActionRequired('pass', 'no', true, 'lamb')).toBe(true)
   })
 
-  it('fail temp, clean, no allergens → CA required (temp alone)', () => {
-    expect(correctiveActionRequired('fail', 'no', false)).toBe(true)
+  it('beef + allergens → CA required', () => {
+    expect(correctiveActionRequired('pass', 'no', true, 'beef')).toBe(true)
   })
 
-  it('urgent temp, clean, allergens → CA required (both triggers)', () => {
-    expect(correctiveActionRequired('urgent', 'no', true)).toBe(true)
+  it('offal + allergens → CA required', () => {
+    expect(correctiveActionRequired('pass', 'no', true, 'offal')).toBe(true)
   })
 
-  it('pass temp, contamination, no allergens → CA required', () => {
-    expect(correctiveActionRequired('pass', 'yes', false)).toBe(true)
+  it('poultry + allergens → CA required (pure chicken should not have allergens)', () => {
+    expect(correctiveActionRequired('pass', 'no', true, 'poultry')).toBe(true)
   })
 
-  it('pass temp, contamination, allergens → CA required', () => {
-    expect(correctiveActionRequired('pass', 'yes', true)).toBe(true)
+  it('dairy + allergens → NO CA (milk allergen is expected in dairy products)', () => {
+    expect(correctiveActionRequired('pass', 'no', true, 'dairy')).toBe(false)
   })
 
-  it('fail temp, contamination, allergens → CA required (all three)', () => {
-    expect(correctiveActionRequired('fail', 'yes', true)).toBe(true)
+  it('dry_goods + allergens → NO CA (allergens expected in many dry goods)', () => {
+    expect(correctiveActionRequired('pass', 'no', true, 'dry_goods')).toBe(false)
+  })
+
+  it('frozen + allergens → NO CA (frozen chicken/fish etc.)', () => {
+    expect(correctiveActionRequired('pass', 'no', true, 'frozen')).toBe(false)
+  })
+
+  it('chilled_other + allergens → NO CA', () => {
+    expect(correctiveActionRequired('pass', 'no', true, 'chilled_other')).toBe(false)
+  })
+
+  it('dairy + fail temp → CA required (temp deviation still triggers)', () => {
+    expect(correctiveActionRequired('fail', 'no', true, 'dairy')).toBe(true)
   })
 })
 
-// ── needsCCA — determines whether CCA popup appears ─────────────────────────
-describe('needsCCA — allergen triggers CCA popup', () => {
+describe('needsCCA — allergen popup scoped to meat/poultry', () => {
   it('pass, clean, no allergens → no CCA popup', () => {
-    expect(needsCCA('pass', 'no', false)).toBe(false)
+    expect(needsCCA('pass', 'no', false, 'lamb')).toBe(false)
   })
 
-  it('allergens found → CCA popup required even with pass temp and clean', () => {
-    expect(needsCCA('pass', 'no', true)).toBe(true)
+  it('lamb allergens → CCA popup required', () => {
+    expect(needsCCA('pass', 'no', true, 'lamb')).toBe(true)
   })
 
-  it('urgent temp → CCA popup', () => {
-    expect(needsCCA('urgent', 'no', false)).toBe(true)
+  it('dairy allergens → NO CCA popup (expected)', () => {
+    expect(needsCCA('pass', 'no', true, 'dairy')).toBe(false)
   })
 
-  it('fail temp → CCA popup', () => {
-    expect(needsCCA('fail', 'no', false)).toBe(true)
+  it('dry_goods allergens → NO CCA popup', () => {
+    expect(needsCCA('pass', 'no', true, 'dry_goods')).toBe(false)
+  })
+
+  it('urgent temp → CCA popup regardless of category', () => {
+    expect(needsCCA('urgent', 'no', false, 'dairy')).toBe(true)
   })
 
   it('contamination yes → CCA popup', () => {
-    expect(needsCCA('pass', 'yes', false)).toBe(true)
-  })
-
-  it('contamination yes_actioned → CCA popup', () => {
-    expect(needsCCA('pass', 'yes_actioned', false)).toBe(true)
-  })
-
-  it('all three triggers → CCA popup', () => {
-    expect(needsCCA('fail', 'yes', true)).toBe(true)
+    expect(needsCCA('pass', 'yes', false, 'dry_goods')).toBe(true)
   })
 })
 
@@ -229,12 +243,12 @@ describe('allergen check default state', () => {
     expect(allergenValid(false, [])).toBe(true)
   })
 
-  it('default state does not trigger CA', () => {
-    expect(correctiveActionRequired('pass', 'no', false)).toBe(false)
+  it('default state does not trigger CA for lamb', () => {
+    expect(correctiveActionRequired('pass', 'no', false, 'lamb')).toBe(false)
   })
 
   it('default state does not require CCA popup', () => {
-    expect(needsCCA('pass', 'no', false)).toBe(false)
+    expect(needsCCA('pass', 'no', false, 'lamb')).toBe(false)
   })
 })
 
