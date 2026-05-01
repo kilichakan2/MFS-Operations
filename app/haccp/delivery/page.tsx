@@ -1131,6 +1131,23 @@ export default function DeliveryPage() {
 
           <div className="px-4 py-3 space-y-4">
 
+            {/* Product category — FIRST: drives supplier list, BLS fields, temp limits */}
+            <div>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product category</p>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORIES.map((c) => (
+                  <button key={c.key}
+                    onPointerDown={(e) => { e.preventDefault(); setCategory(c.key); setTempVal(''); setSupplierSel(''); setSupplierOther(''); setBornIn(''); setRearedIn(''); setRearedSame(false); setSlaughter(''); setCutSite(''); setCutSameAs(false) }}
+                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                      category === c.key ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                    }`}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              {catDef && <p className="text-slate-300 text-[10px] mt-1.5 ml-1">{catDef.detail}</p>}
+            </div>
+
             {/* Supplier */}
             <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Supplier</p>
@@ -1292,23 +1309,6 @@ export default function DeliveryPage() {
               <input type="text" value={product} onChange={(e) => setProduct(e.target.value)}
                 placeholder="e.g. Whole lamb carcasses — 24 units"
                 className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
-            </div>
-
-            {/* Product category */}
-            <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product category</p>
-              <div className="flex flex-wrap gap-2">
-                {CATEGORIES.map((c) => (
-                  <button key={c.key}
-                    onPointerDown={(e) => { e.preventDefault(); setCategory(c.key); setTempVal(''); setSupplierSel(''); setSupplierOther(''); setBornIn(''); setRearedIn(''); setRearedSame(false); setSlaughter(''); setCutSite(''); setCutSameAs(false) }}
-                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      category === c.key ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
-                    }`}>
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-              {catDef && <p className="text-slate-300 text-[10px] mt-1.5 ml-1">{catDef.detail}</p>}
             </div>
 
             {/* Temperature */}
