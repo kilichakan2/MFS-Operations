@@ -511,6 +511,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               }
               due={!!(s?.training_overdue || s?.training_due_soon)}
               onTap={() => { window.location.href = '/haccp/training' }} onHelp={() => setHelp('people')} />
+            <SmallTile id="allergens" icon={Icon.audit} label="Allergens" sub="SALSA 1.4.1 · Site assessment"
+              badge="View assessment" due={false}
+              onTap={() => { window.location.href = '/haccp/allergens' }} onHelp={() => setHelp('people')} />
             {isAdmin && (
               <SmallTile id="audit" icon={Icon.audit} label="Audit" sub="Records · Export"
                 badge="View all records" due={false}
