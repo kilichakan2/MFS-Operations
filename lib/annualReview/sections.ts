@@ -62,11 +62,44 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'Process flow diagrams accurate',
     ],
   },
-  // Phase 2 will add: 3.2 Training, 3.3 Hygiene, 3.4 Cleaning
-  // Phase 3 will add: 3.5 Pest Control, 3.6 Temperature, 3.7 Suppliers, 3.8 Incidents
-  // Phase 4 will add: 3.9 Food Fraud, 3.10 Premises
-  // Phase 5 will add: 3.11 Allergens, 3.12 Labelling
+  {
+    key:          '3.2',
+    title:        'Training',
+    hasDataPanel: true,
+    items: [
+      'All staff have appropriate food safety training',
+      'Training records complete and up to date',
+      'Annual refresher training completed',
+      'New starters inducted before handling food',
+    ],
+  },
+  // Phase 3 will add: 3.3 Hygiene, 3.4 Cleaning
+  // Phase 4 will add: 3.5 Pest Control, 3.6 Temperature, 3.7 Suppliers, 3.8 Incidents
+  // Phase 5 will add: 3.9 Food Fraud, 3.10 Premises
+  // Phase 6 will add: 3.11 Allergens, 3.12 Labelling
 ]
+
+// ─── Training status logic (used in data panel + tests) ──────────────────────
+
+export type TrainingStatus = 'current' | 'due_soon' | 'overdue' | 'not_recorded'
+
+/**
+ * Derive training currency from a refresh date.
+ * - null / undefined  → not_recorded
+ * - past today        → overdue
+ * - within 90 days    → due_soon
+ * - > 90 days away    → current
+ */
+export function trainingRefreshStatus(refreshDate: string | null | undefined): TrainingStatus {
+  if (!refreshDate) return 'not_recorded'
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const refresh   = new Date(refreshDate)
+  const daysUntil = Math.floor((refresh.getTime() - today.getTime()) / 86_400_000)
+  if (daysUntil < 0)   return 'overdue'
+  if (daysUntil <= 90) return 'due_soon'
+  return 'current'
+}
 
 // ─── Pure logic ───────────────────────────────────────────────────────────────
 

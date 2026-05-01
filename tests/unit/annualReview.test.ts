@@ -16,6 +16,7 @@ import {
   canSignOff,
   isValidStatus,
   isValidReviewPeriod,
+  trainingRefreshStatus,
   type Checklist,
 } from '@/lib/annualReview/sections'
 
@@ -319,4 +320,70 @@ describe('isValidReviewPeriod', () => {
     expect(isValidReviewPeriod('', past2)).toBe(false)
     expect(isValidReviewPeriod(past1, '')).toBe(false)
   })
+})
+
+// ── Section 3.2 — Training ────────────────────────────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.2 Training', () => {
+  it('section 3.2 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.2')).toBeDefined()
+  })
+
+  it('section 3.2 title is Training', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.2')?.title).toBe('Training')
+  })
+
+  it('section 3.2 has exactly 4 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.2')?.items).toHaveLength(4)
+  })
+
+  it('section 3.2 has data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.2')?.hasDataPanel).toBe(true)
+  })
+
+  it('section 3.2 contains required SALSA training items', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.2')!.items
+    expect(items).toContain('All staff have appropriate food safety training')
+    expect(items).toContain('Training records complete and up to date')
+    expect(items).toContain('Annual refresher training completed')
+    expect(items).toContain('New starters inducted before handling food')
+  })
+
+  it('REVIEW_SECTIONS now has at least 2 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('buildInitialChecklist includes section 3.2', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.2']).toBeDefined()
+    expect(cl['3.2'].items).toHaveLength(4)
+  })
+})
+
+// ── trainingRefreshStatus ─────────────────────────────────────────────────────
+
+describe('trainingRefreshStatus', () => {
+  const today = new Date()
+
+  function daysFromToday(n: number): string {
+    const d = new Date(today)
+    d.setDate(d.getDate() + n)
+    return d.toISOString().slice(0, 10)
+  }
+
+  it('null → not_recorded',      () => expect(trainingRefreshStatus(null)).toBe('not_recorded'))
+  it('undefined → not_recorded', () => expect(trainingRefreshStatus(undefined)).toBe('not_recorded'))
+  it('empty string → not_recorded', () => expect(trainingRefreshStatus('')).toBe('not_recorded'))
+
+  it('yesterday → overdue',      () => expect(trainingRefreshStatus(daysFromToday(-1))).toBe('overdue'))
+  it('30 days ago → overdue',    () => expect(trainingRefreshStatus(daysFromToday(-30))).toBe('overdue'))
+  it('365 days ago → overdue',   () => expect(trainingRefreshStatus(daysFromToday(-365))).toBe('overdue'))
+
+  it('today → due_soon (0 days = within 90)', () => expect(trainingRefreshStatus(daysFromToday(0))).toBe('due_soon'))
+  it('45 days → due_soon',       () => expect(trainingRefreshStatus(daysFromToday(45))).toBe('due_soon'))
+  it('90 days → due_soon',       () => expect(trainingRefreshStatus(daysFromToday(90))).toBe('due_soon'))
+
+  it('91 days → current',        () => expect(trainingRefreshStatus(daysFromToday(91))).toBe('current'))
+  it('180 days → current',       () => expect(trainingRefreshStatus(daysFromToday(180))).toBe('current'))
+  it('365 days → current',       () => expect(trainingRefreshStatus(daysFromToday(365))).toBe('current'))
 })

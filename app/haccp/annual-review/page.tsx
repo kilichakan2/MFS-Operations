@@ -4,8 +4,8 @@
  *
  * SALSA 3.1 — Annual Food Safety Systems Review
  *
- * Phase 1: DB shell + Section 3.1 HACCP System
- * Phase 2 onwards will add more sections.
+ * Phase 1: DB shell + Section 3.1
+ * Phase 2: Section 3.2 Training with live data panel
  */
 
 import { useState, useEffect, useCallback } from 'react'
@@ -15,10 +15,12 @@ import {
   completedSectionCount,
   isSectionComplete,
   canSignOff,
+  trainingRefreshStatus,
   type Checklist,
   type ChecklistSection,
   type ItemStatus,
   type ActionPlanItem,
+  type TrainingStatus,
 } from '@/lib/annualReview/sections'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -42,6 +44,153 @@ interface AnnualReview {
 interface User {
   id:   string
   name: string
+}
+
+interface StaffTrainingRecord {
+  staff_name:      string
+  job_role:        string | null
+  training_type:   string
+  completion_date: string | null
+  refresh_date:    string | null
+}
+
+interface AllergenTrainingRecord {
+  staff_name:         string
+  job_role:           string | null
+  certification_date: string | null
+  refresh_date:       string | null
+}
+
+interface SectionData {
+  '3.2'?: {
+    staff_training:    StaffTrainingRecord[]
+    allergen_training: AllergenTrainingRecord[]
+  }
+}
+
+// ─── Training status helpers ─────────────────────────────────────────────────
+
+const TRAINING_STATUS_CONFIG: Record<TrainingStatus, { label: string; dot: string }> = {
+  current:      { label: '✓ Current',     dot: 'bg-green-500' },
+  due_soon:     { label: '⚠ Due soon',    dot: 'bg-amber-400' },
+  overdue:      { label: '✗ Overdue',     dot: 'bg-red-500'   },
+  not_recorded: { label: '— Not on file', dot: 'bg-slate-300' },
+}
+
+function StatusDot({ status }: { status: TrainingStatus }) {
+  const cfg = TRAINING_STATUS_CONFIG[status]
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold ${
+      status === 'current' ? 'text-green-700' :
+      status === 'due_soon' ? 'text-amber-600' :
+      status === 'overdue' ? 'text-red-600' : 'text-slate-400'
+    }`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} flex-shrink-0`} />
+      {cfg.label}
+    </span>
+  )
+}
+
+// ─── Section 3.2 Training data panel ─────────────────────────────────────────
+
+function TrainingDataPanel({ data }: {
+  data: SectionData['3.2'] | undefined
+}) {
+  const [open, setOpen] = useState(false)
+
+  if (!data) return null
+
+  const { staff_training, allergen_training } = data
+
+  return (
+    <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full px-4 py-2.5 bg-slate-50 flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          <p className="text-slate-600 text-xs font-bold">Training records as of today</p>
+        </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pt-3 pb-4 space-y-4 bg-white">
+
+          {/* Food safety training */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Food safety training</p>
+            {staff_training.length === 0 ? (
+              <p className="text-slate-400 text-xs">No records found</p>
+            ) : (
+              <div className="space-y-1">
+                {staff_training.map((r, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto] gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                    <div>
+                      <p className="text-slate-800 text-xs font-semibold leading-tight">{r.staff_name}</p>
+                      <p className="text-slate-400 text-[10px]">{r.training_type}{r.job_role ? ` · ${r.job_role}` : ''}</p>
+                      {r.completion_date && (
+                        <p className="text-slate-400 text-[10px]">
+                          Completed {new Date(r.completion_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <StatusDot status={trainingRefreshStatus(r.refresh_date)} />
+                      {r.refresh_date && (
+                        <p className="text-slate-400 text-[10px] mt-0.5">
+                          Refresh {new Date(r.refresh_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Allergen awareness training */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Allergen awareness training</p>
+            {allergen_training.length === 0 ? (
+              <p className="text-slate-400 text-xs">No records found</p>
+            ) : (
+              <div className="space-y-1">
+                {allergen_training.map((r, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto] gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                    <div>
+                      <p className="text-slate-800 text-xs font-semibold leading-tight">{r.staff_name}</p>
+                      {r.job_role && <p className="text-slate-400 text-[10px]">{r.job_role}</p>}
+                      {r.certification_date && (
+                        <p className="text-slate-400 text-[10px]">
+                          Certified {new Date(r.certification_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <StatusDot status={trainingRefreshStatus(r.refresh_date)} />
+                      {r.refresh_date && (
+                        <p className="text-slate-400 text-[10px] mt-0.5">
+                          Refresh {new Date(r.refresh_date).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -130,12 +279,14 @@ function SectionCard({
   locked,
   onItemChange,
   onNotesChange,
+  dataPanelContent,
 }: {
-  sectionKey:    string
-  section:       ChecklistSection
-  locked:        boolean
-  onItemChange:  (idx: number, status: ItemStatus, notes: string) => void
-  onNotesChange: (notes: string) => void
+  sectionKey:       string
+  section:          ChecklistSection
+  locked:           boolean
+  onItemChange:     (idx: number, status: ItemStatus, notes: string) => void
+  onNotesChange:    (notes: string) => void
+  dataPanelContent?: React.ReactNode
 }) {
   const def      = REVIEW_SECTIONS.find(s => s.key === sectionKey)
   const complete = isSectionComplete(section)
@@ -158,7 +309,10 @@ function SectionCard({
         </div>
       </div>
 
-      <div className="px-4 pt-1 pb-3">
+      <div className="px-4 pt-3 pb-3">
+        {/* Data panel (section-specific live data) */}
+        {dataPanelContent}
+
         {section.items.map((item, idx) => (
           <ItemRow key={idx} item={item} idx={idx} locked={locked} onChange={onItemChange} />
         ))}
@@ -190,6 +344,7 @@ export default function AnnualReviewPage() {
   const [saving,    setSaving]    = useState(false)
   const [saveErr,   setSaveErr]   = useState('')
   const [flash,     setFlash]     = useState('')
+  const [sectionData, setSectionData] = useState<SectionData>({})
 
   // New review modal
   const [showModal,  setShowModal]  = useState(false)
@@ -229,6 +384,11 @@ export default function AnnualReviewPage() {
         return a.name.localeCompare(b.name)
       })
       setUsers(allUsers)
+      // Fetch live section data for data panels
+      fetch('/api/haccp/annual-review/data')
+        .then(r => r.ok ? r.json() : {})
+        .then(d => setSectionData(d))
+        .catch(() => {})
     } catch (e) {
       console.error('Annual review load failed:', e)
     } finally {
@@ -528,12 +688,20 @@ export default function AnnualReviewPage() {
         {REVIEW_SECTIONS.map(def => {
           const section = active.checklist[def.key]
           if (!section) return null
+
+          // Build data panel content per section
+          let dataPanelContent: React.ReactNode = undefined
+          if (def.key === '3.2') {
+            dataPanelContent = <TrainingDataPanel data={sectionData['3.2']} />
+          }
+
           return (
             <SectionCard
               key={def.key}
               sectionKey={def.key}
               section={section}
               locked={active.locked}
+              dataPanelContent={dataPanelContent}
               onItemChange={(idx, status, notes) => handleItemChange(def.key, idx, status, notes)}
               onNotesChange={notes => handleSectionNotesChange(def.key, notes)}
             />
