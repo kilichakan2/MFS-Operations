@@ -38,6 +38,7 @@ interface Supplier {
   cert_expiry:      string | null  // ISO date
   products_supplied:string | null
   date_approved:    string | null  // ISO date
+  categories:       string[]
   notes:            string | null
   created_at:       string
 }
@@ -225,7 +226,8 @@ export default function AdminCCAPage() {
     contact_email: '', fsa_approval_no: '', fsa_activities: '', cert_type: '',
     cert_expiry: '', products_supplied: '', date_approved: '', notes: '',
   }
-  const [form, setForm] = useState<typeof BLANK>(BLANK)
+  const [form,           setForm]           = useState<typeof BLANK>(BLANK)
+  const [editCategories, setEditCategories] = useState<string[]>([])
 
   function setF(k: keyof typeof BLANK, v: string | boolean) {
     setForm(f => ({ ...f, [k]: v }))
@@ -276,11 +278,13 @@ export default function AdminCCAPage() {
   function openNew() {
     setEditId(null)
     setForm(BLANK)
+    setEditCategories([])
     setShowForm(true)
   }
 
   function openEdit(s: Supplier) {
     setEditId(s.id)
+    setEditCategories(s.categories ?? [])
     setForm({
       name:             s.name,
       active:           s.active,
@@ -306,6 +310,7 @@ export default function AdminCCAPage() {
     try {
       const body = {
         ...form,
+        categories:    editCategories,
         cert_expiry:   form.cert_expiry   || null,
         date_approved: form.date_approved || null,
         ...(editId ? { id: editId } : {}),
@@ -543,6 +548,16 @@ export default function AdminCCAPage() {
                             )}
                             {!s.active && <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">Inactive</span>}
                           </div>
+                          {/* Category tags */}
+                          {s.categories && s.categories.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {s.categories.map(c => (
+                                <span key={c} className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                  {c.replace('_', ' ')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Products */}
                           {s.products_supplied && (
@@ -612,6 +627,35 @@ export default function AdminCCAPage() {
                 <button onClick={() => setShowForm(false)} className="text-slate-400 text-2xl leading-none">×</button>
               </div>
               <div className="px-5 py-4 space-y-3">
+
+                {/* Categories */}
+                <div>
+                  <p className="text-xs font-bold text-slate-600 mb-1">Supplier categories</p>
+                  <p className="text-slate-400 text-[10px] mb-2">Controls which Goods In deliveries this supplier appears in</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { key: 'lamb',          label: 'Lamb' },
+                      { key: 'beef',          label: 'Beef' },
+                      { key: 'poultry',       label: 'Poultry' },
+                      { key: 'dairy',         label: 'Dairy' },
+                      { key: 'dry_goods',     label: 'Dry Goods' },
+                      { key: 'chilled_other', label: 'Chilled Other' },
+                      { key: 'frozen',        label: 'Frozen' },
+                    ].map(({ key, label }) => (
+                      <button key={key}
+                        onClick={() => setEditCategories(prev =>
+                          prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]
+                        )}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors ${
+                          editCategories.includes(key)
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-white text-slate-500 border-slate-200'
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
                 {[
                   { label: 'Supplier name *', key: 'name' as const, placeholder: 'e.g. Pickstock Foods Ltd' },

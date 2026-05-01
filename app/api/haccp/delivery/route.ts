@@ -143,28 +143,46 @@ function nowTimeUK(): string {
   })
 }
 
-function tempStatus(temp: number, category: string): 'pass' | 'urgent' | 'fail' {
+function tempStatus(temp: number | null, category: string): 'pass' | 'urgent' | 'fail' {
+  // Dry goods are ambient — no temperature CCP, always pass
+  if (category === 'dry_goods') return 'pass'
+  if (temp === null || isNaN(temp as number)) return 'fail'
+  const t = temp as number
   switch (category) {
     case 'lamb':
     case 'beef':
-    case 'red_meat':   return temp <= 5.0   ? 'pass' : temp <= 8.0   ? 'urgent' : 'fail'
-    case 'offal':      return temp <= 3.0   ? 'pass' : 'fail'
-    case 'mince_prep': return temp <= 4.0   ? 'pass' : 'fail'
-    case 'frozen':     return temp <= -18.0 ? 'pass' : temp <= -15.0 ? 'urgent' : 'fail'
-    default:           return 'fail'
+    case 'red_meat':      return t <= 5.0   ? 'pass' : t <= 8.0   ? 'urgent' : 'fail'
+    case 'offal':         return t <= 3.0   ? 'pass' : 'fail'
+    case 'mince_prep':    return t <= 4.0   ? 'pass' : 'fail'
+    case 'frozen':        return t <= -18.0 ? 'pass' : t <= -15.0 ? 'urgent' : 'fail'
+    case 'poultry':
+    case 'dairy':
+    case 'chilled_other': return t <= 8.0   ? 'pass' : 'fail'
+    default:              return 'fail'
   }
 }
 
-// Batch number: DDMM-CC-N (ISO alpha-2 from born_in, N = delivery number today)
+// Batch number: DDMM-CC-N for meat (born_in country code), DDMM-XXX-N for non-meat
+const CATEGORY_BATCH_PREFIX: Record<string, string> = {
+  poultry:       'POL',
+  dairy:         'DAI',
+  chilled_other: 'CHI',
+  dry_goods:     'DRY',
+}
+
 function buildBatchNumber(
   date: string,
-  countryCode: string,
+  categoryOrCountry: string, // country code for meat, category key for non-meat
   deliveryNumber: number,
+  isMeat: boolean,
 ): string {
-  const d  = new Date(date + 'T00:00:00')
-  const dd = String(d.getDate()).padStart(2, '0')
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  return `${dd}${mm}-${countryCode}-${deliveryNumber}`
+  const d      = new Date(date + 'T00:00:00')
+  const dd     = String(d.getDate()).padStart(2, '0')
+  const mm     = String(d.getMonth() + 1).padStart(2, '0')
+  const prefix = isMeat
+    ? categoryOrCountry.toUpperCase()
+    : (CATEGORY_BATCH_PREFIX[categoryOrCountry] ?? categoryOrCountry.toUpperCase().slice(0, 3))
+  return `${dd}${mm}-${prefix}-${deliveryNumber}`
 }
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
@@ -218,7 +236,7 @@ export async function GET(req: NextRequest) {
       ).order('date', { ascending: false }).order('delivery_number', { ascending: false }),
       supabase
         .from('haccp_suppliers')
-        .select('id, name')
+        .select('id, name, categories')
         .eq('active', true)
         .order('name'),
     ])
@@ -266,7 +284,7 @@ export async function POST(req: NextRequest) {
       supplier_name?:            string
       product:                   string
       product_category:          string
-      temperature_c:             number
+      temperature_c:             number | null  // null for dry_goods (no temp CCP)
       covered_contaminated:      string
       contamination_type?:       string
       contamination_notes?:      string
@@ -313,22 +331,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Product description is required' }, { status: 400 })
     if (!product_category)
       return NextResponse.json({ error: 'Select a product category' }, { status: 400 })
-    if (temperature_c == null || isNaN(temperature_c))
+    // Dry goods are ambient — no temperature required
+    const isDryGoods = product_category === 'dry_goods'
+    if (!isDryGoods && (temperature_c == null || isNaN(temperature_c as number)))
       return NextResponse.json({ error: 'Temperature is required' }, { status: 400 })
     if (!covered_contaminated)
       return NextResponse.json({ error: 'Covered / contaminated field is required' }, { status: 400 })
 
-    // ── C8: traceability mandatory on every delivery ──────────────────────────
-    const missing: string[] = []
-    if (!born_in?.trim())        missing.push('Born in')
-    if (!reared_in?.trim())      missing.push('Reared in')
-    if (!slaughter_site?.trim()) missing.push('Slaughter site')
-    if (!cut_site?.trim())       missing.push('Cut site')
-    if (missing.length > 0) {
-      return NextResponse.json(
-        { error: `Traceability required: ${missing.join(', ')}` },
-        { status: 400 },
-      )
+    // ── C8: traceability mandatory for meat categories only ───────────────────
+    const isMeat = product_category === 'lamb' || product_category === 'beef' || product_category === 'red_meat'
+    if (isMeat) {
+      const missing: string[] = []
+      if (!born_in?.trim())        missing.push('Born in')
+      if (!reared_in?.trim())      missing.push('Reared in')
+      if (!slaughter_site?.trim()) missing.push('Slaughter site')
+      if (!cut_site?.trim())       missing.push('Cut site')
+      if (missing.length > 0) {
+        return NextResponse.json(
+          { error: `Traceability required: ${missing.join(', ')}` },
+          { status: 400 },
+        )
+      }
     }
 
     const today  = todayUK()
@@ -414,8 +437,9 @@ export async function POST(req: NextRequest) {
 
     const deliveryNumber = (count ?? 0) + 1
 
-    // born_in guaranteed non-null after C8 check above
-    const batchNumber = buildBatchNumber(today, born_in!.trim(), deliveryNumber)
+    const batchNumber = isMeat
+      ? buildBatchNumber(today, born_in!.trim(), deliveryNumber, true)
+      : buildBatchNumber(today, product_category,  deliveryNumber, false)
 
     // ── Insert delivery, select id back for CA source_id ─────────────────────
     const { data: inserted, error: insertErr } = await supabase
@@ -435,10 +459,10 @@ export async function POST(req: NextRequest) {
         contamination_notes:       contamination_notes?.trim() || null,
         corrective_action_required,
         notes:                     notes?.trim() || null,
-        born_in:                   born_in!.trim(),
-        reared_in:                 reared_in!.trim(),
-        slaughter_site:            slaughter_site!.trim(),
-        cut_site:                  cut_site!.trim(),
+        born_in:                   isMeat ? born_in!.trim()        : null,
+        reared_in:                 isMeat ? reared_in!.trim()      : null,
+        slaughter_site:            isMeat ? slaughter_site!.trim() : null,
+        cut_site:                  isMeat ? cut_site!.trim()       : null,
         delivery_number:           deliveryNumber,
         batch_number:              batchNumber,
         allergens_identified:      hasDeviationAllergen,

@@ -74,7 +74,24 @@ type CAPayload = {
   notes:       string
 }
 
-interface Supplier  { id: string; name: string }
+interface Supplier  { id: string; name: string; categories: string[] }
+
+// Categories that require BLS traceability fields
+const MEAT_CATEGORIES = new Set(['lamb', 'beef', 'red_meat'])
+// Categories that have a temperature CCP (all except dry_goods)
+const NO_TEMP_CATEGORIES = new Set(['dry_goods'])
+
+function isMeatCategory(cat: string) { return MEAT_CATEGORIES.has(cat) }
+function noTempCategory(cat: string)  { return NO_TEMP_CATEGORIES.has(cat) }
+
+// Filter suppliers to those tagged for the selected category
+function filterSuppliers(suppliers: Supplier[], category: string): Supplier[] {
+  if (!category) return []
+  return suppliers.filter(s =>
+    s.categories.length === 0 ||  // no categories = show for all (backwards compat)
+    s.categories.includes(category)
+  )
+}
 interface Delivery  {
   id:                   string
   date:                 string
@@ -110,16 +127,22 @@ const ALLERGENS = [
 
 
 const CATEGORIES: { key: string; label: string; limit: string; detail: string }[] = [
-  { key: 'lamb',       label: 'Lamb',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
-  { key: 'beef',       label: 'Beef',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
-  { key: 'offal',      label: 'Offal',             limit: '≤3°C',               detail: '≤3°C pass · >3°C reject' },
-  { key: 'mince_prep', label: 'Mince / meat prep', limit: '≤4°C',               detail: '≤4°C pass · >4°C reject' },
-  { key: 'frozen',     label: 'Frozen',            limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional (refreeze immediately) · >-15°C reject' },
+  { key: 'lamb',         label: 'Lamb',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
+  { key: 'beef',         label: 'Beef',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
+  { key: 'offal',        label: 'Offal',             limit: '≤3°C',               detail: '≤3°C pass · >3°C reject' },
+  { key: 'mince_prep',   label: 'Mince / meat prep', limit: '≤4°C',               detail: '≤4°C pass · >4°C reject' },
+  { key: 'frozen',       label: 'Frozen',            limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional (refreeze immediately) · >-15°C reject' },
+  { key: 'poultry',      label: 'Poultry',           limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
+  { key: 'dairy',        label: 'Dairy / Chilled',   limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
+  { key: 'chilled_other',label: 'Chilled Other',     limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
+  { key: 'dry_goods',    label: 'Dry Goods',         limit: 'Ambient',            detail: 'No temperature CCP — visual / condition check only' },
 ]
 
 const CATEGORY_LABELS: Record<string, string> = {
   lamb: 'Lamb', beef: 'Beef', red_meat: 'Red meat',
   offal: 'Offal', mince_prep: 'Mince / prep', frozen: 'Frozen',
+  poultry: 'Poultry', dairy: 'Dairy / Chilled',
+  chilled_other: 'Chilled Other', dry_goods: 'Dry Goods',
 }
 
 // ─── Countries ────────────────────────────────────────────────────────────────
@@ -191,16 +214,21 @@ function buildBatchPrefix(date: string, countryCode: string): string {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function calcStatus(temp: number, category: string): TempStatus {
-  if (isNaN(temp)) return null
+function calcStatus(temp: number | null, category: string): TempStatus {
+  if (category === 'dry_goods') return 'pass'
+  if (temp === null || isNaN(temp as number)) return null
+  const t = temp as number
   switch (category) {
     case 'lamb':
     case 'beef':
-    case 'red_meat':   return temp <= 5.0   ? 'pass' : temp <= 8.0   ? 'urgent' : 'fail'
-    case 'offal':      return temp <= 3.0   ? 'pass' : 'fail'
-    case 'mince_prep': return temp <= 4.0   ? 'pass' : 'fail'
-    case 'frozen':     return temp <= -18.0 ? 'pass' : temp <= -15.0 ? 'urgent' : 'fail'
-    default:           return null
+    case 'red_meat':      return t <= 5.0   ? 'pass' : t <= 8.0   ? 'urgent' : 'fail'
+    case 'offal':         return t <= 3.0   ? 'pass' : 'fail'
+    case 'mince_prep':    return t <= 4.0   ? 'pass' : 'fail'
+    case 'frozen':        return t <= -18.0 ? 'pass' : t <= -15.0 ? 'urgent' : 'fail'
+    case 'poultry':
+    case 'dairy':
+    case 'chilled_other': return t <= 8.0   ? 'pass' : 'fail'
+    default:              return null
   }
 }
 
@@ -957,7 +985,7 @@ export default function DeliveryPage() {
   useEffect(() => { loadData() }, [loadData])
 
   const tempNum  = parseFloat(tempVal)
-  const tempStat = category ? calcStatus(tempNum, category) : null
+  const tempStat = category ? calcStatus(noTempCategory(category) ? null : tempNum, category) : null
 
   const supplierIdSel     = supplierSel && supplierSel !== 'other' ? supplierSel : ''
   const supplierOtherTrim = supplierOther.trim()
@@ -967,20 +995,21 @@ export default function DeliveryPage() {
                    (contam === 'yes' || contam === 'yes_actioned') ||
                    allergensIdentified
 
-  // C8: all 4 traceability fields mandatory
-  // C9: if allergens identified, at least one type must be selected
+  const isMeat      = isMeatCategory(category)
+  const isAmbient   = noTempCategory(category)
+
+  // C8: traceability only required for meat categories
+  // C9: allergens: at least one type required when identified
+  // Temp: not required for dry_goods
   const allergenValid = !allergensIdentified || allergenTypes.length > 0
   const isValid =
     supplierChosen &&
     product.trim() &&
     category &&
-    tempVal !== '' && !isNaN(tempNum) &&
+    (isAmbient || (tempVal !== '' && !isNaN(tempNum))) &&
     contam &&
     (contam === 'no' || Boolean(contamType)) &&
-    Boolean(bornIn) &&
-    Boolean(rearedIn) &&
-    slaughter.trim() !== '' &&
-    Boolean(cutSite) &&
+    (!isMeat || (Boolean(bornIn) && Boolean(rearedIn) && slaughter.trim() !== '' && Boolean(cutSite))) &&
     allergenValid
 
   function resetForm() {
@@ -1002,15 +1031,15 @@ export default function DeliveryPage() {
           supplier_name: supplierSel === 'other' ? supplierOtherTrim : undefined,
           product:       product.trim(),
           product_category:     category,
-          temperature_c:        tempNum,
+          temperature_c:        isAmbient ? null : tempNum,
           covered_contaminated: contam,
           contamination_type:   (contam !== 'no' && contamType) ? contamType : undefined,
           contamination_notes:  contamNote || undefined,
           notes:                notes || undefined,
-          born_in:              bornIn   || undefined,
-          reared_in:            rearedIn || undefined,
-          slaughter_site:       slaughter || undefined,
-          cut_site:             cutSite   || undefined,
+          born_in:              isMeat ? (bornIn   || undefined) : undefined,
+          reared_in:            isMeat ? (rearedIn || undefined) : undefined,
+          slaughter_site:       isMeat ? (slaughter || undefined) : undefined,
+          cut_site:             isMeat ? (cutSite   || undefined) : undefined,
           allergens_identified: allergensIdentified,
           allergen_notes:       allergensIdentified
             ? [allergenTypes.join(', '), allergenNotes.trim()].filter(Boolean).join(' — ')
@@ -1105,31 +1134,39 @@ export default function DeliveryPage() {
             {/* Supplier */}
             <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Supplier</p>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {suppliers.map((s) => (
-                  <button key={s.id}
-                    onPointerDown={(e) => { e.preventDefault(); setSupplierSel(s.id); setSupplierOther('') }}
-                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      supplierSel === s.id ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
-                    }`}>
-                    {s.name}
-                  </button>
-                ))}
-                <button
-                  onPointerDown={(e) => { e.preventDefault(); setSupplierSel('other') }}
-                  className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                    supplierSel === 'other' ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
-                  }`}>
-                  Other
-                </button>
-              </div>
-              {supplierSel === 'other' && (
-                <input type="text" value={supplierOther} onChange={(e) => setSupplierOther(e.target.value)}
-                  placeholder="Enter supplier name…"
-                  className="w-full bg-slate-100 border border-amber-400 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]" />
+              {!category ? (
+                <p className="text-slate-400 text-xs italic">Select a product category first</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {filterSuppliers(suppliers, category).map((s) => (
+                      <button key={s.id}
+                        onPointerDown={(e) => { e.preventDefault(); setSupplierSel(s.id); setSupplierOther('') }}
+                        className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                          supplierSel === s.id ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                        }`}>
+                        {s.name}
+                      </button>
+                    ))}
+                    <button
+                      onPointerDown={(e) => { e.preventDefault(); setSupplierSel('other') }}
+                      className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
+                        supplierSel === 'other' ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                      }`}>
+                      Other
+                    </button>
+                  </div>
+                  {supplierSel === 'other' && (
+                    <input type="text" value={supplierOther} onChange={(e) => setSupplierOther(e.target.value)}
+                      placeholder="Enter supplier name…"
+                      className="w-full bg-slate-100 border border-amber-400 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]" />
+                  )}
+                </>
               )}
             </div>
 
+            {/* Born in / Reared in / Slaughter / Cut site — meat only (C8) */}
+            {isMeat && (<>
             {/* Born in (C8: required) */}
             <CountryPicker
               value={bornIn}
@@ -1246,6 +1283,8 @@ export default function DeliveryPage() {
                 )}
               </div>
             )}
+            {/* end BLS meat fields */}
+            </>)}
 
             {/* Product description */}
             <div>
@@ -1261,7 +1300,7 @@ export default function DeliveryPage() {
               <div className="flex flex-wrap gap-2">
                 {CATEGORIES.map((c) => (
                   <button key={c.key}
-                    onPointerDown={(e) => { e.preventDefault(); setCategory(c.key); setTempVal('') }}
+                    onPointerDown={(e) => { e.preventDefault(); setCategory(c.key); setTempVal(''); setSupplierSel(''); setSupplierOther(''); setBornIn(''); setRearedIn(''); setRearedSame(false); setSlaughter(''); setCutSite(''); setCutSameAs(false) }}
                     className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
                       category === c.key ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
                     }`}>
@@ -1273,7 +1312,13 @@ export default function DeliveryPage() {
             </div>
 
             {/* Temperature */}
-            <div>
+            {isAmbient ? (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature — Not applicable</p>
+                <p className="text-slate-500 text-xs">Dry goods are ambient — no temperature CCP. Condition and packaging check only.</p>
+              </div>
+            ) : (
+              <div>
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Temperature — tap to enter</p>
               <button
                 onClick={() => category && setShowNumpad(true)}
@@ -1313,7 +1358,9 @@ export default function DeliveryPage() {
                   <p className="text-slate-500 text-xs leading-relaxed">Do NOT accept. Photograph and complete non-conformance report. Notify supplier within 24 hours.</p>
                 </div>
               )}
-            </div>
+              </div>
+            )}
+            {/* end temperature */}
 
             {/* Covered / contaminated */}
             <div>
