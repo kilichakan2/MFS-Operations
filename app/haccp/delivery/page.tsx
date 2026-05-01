@@ -94,6 +94,8 @@ interface Delivery  {
   cut_site:             string | null
   batch_number:         string | null
   delivery_number:      number | null
+  allergens_identified: boolean
+  allergen_notes:       string | null
   submitted_at:         string
   users:                { name: string }
 }
@@ -776,11 +778,27 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
             </div>
           )}
 
+          {/* Allergen check result */}
+          <div className={`rounded-xl px-4 py-2.5 flex items-center gap-2 border ${
+            d.allergens_identified
+              ? 'bg-red-50 border-red-200'
+              : 'bg-green-50 border-green-200'
+          }`}>
+            <span className={`text-[10px] font-bold ${d.allergens_identified ? 'text-red-600' : 'text-green-700'}`}>
+              {d.allergens_identified ? '⚠️ ALLERGENS IDENTIFIED' : '✓ No allergens — SALSA 1.4.2'}
+            </span>
+          </div>
+
           {/* Corrective action required */}
           {d.corrective_action_required && (
             <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
               <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective action required</p>
-              <p className="text-slate-600 text-xs leading-relaxed">A temperature deviation or contamination issue was recorded. Corrective action was documented at time of logging.</p>
+              <p className="text-slate-600 text-xs leading-relaxed">
+                {d.allergens_identified
+                  ? `Allergen non-conformance: ${d.allergen_notes || 'See corrective action log'}. Do not process until resolved.`
+                  : 'A temperature deviation or contamination issue was recorded. Corrective action was documented at time of logging.'
+                }
+              </p>
             </div>
           )}
 
@@ -896,6 +914,9 @@ export default function DeliveryPage() {
   const [cutSite,       setCutSite]       = useState('')
   const [cutSameAs,     setCutSameAs]     = useState(false)
   const [notes,         setNotes]         = useState('')
+  // SALSA 1.4.2 — allergen check at intake
+  const [allergensIdentified, setAllergensIdentified] = useState(false)
+  const [allergenNotes,       setAllergenNotes]       = useState('')
 
   // UI state
   const [showNumpad,       setShowNumpad]       = useState(false)
@@ -935,9 +956,12 @@ export default function DeliveryPage() {
   const supplierChosen    = Boolean(supplierIdSel || (supplierSel === 'other' && supplierOtherTrim))
 
   const needsCCA = (tempStat === 'urgent' || tempStat === 'fail') ||
-                   (contam === 'yes' || contam === 'yes_actioned')
+                   (contam === 'yes' || contam === 'yes_actioned') ||
+                   allergensIdentified
 
   // C8: all 4 traceability fields mandatory
+  // C9: if allergens identified, notes are required
+  const allergenValid = !allergensIdentified || allergenNotes.trim().length > 0
   const isValid =
     supplierChosen &&
     product.trim() &&
@@ -948,12 +972,14 @@ export default function DeliveryPage() {
     Boolean(bornIn) &&
     Boolean(rearedIn) &&
     slaughter.trim() !== '' &&
-    Boolean(cutSite)
+    Boolean(cutSite) &&
+    allergenValid
 
   function resetForm() {
     setSupplierSel(''); setSupplierOther(''); setProduct('')
     setCategory(''); setTempVal(''); setContam('')
     setContamType(''); setContamNote(''); setNotes(''); setSubmitErr('')
+    setAllergensIdentified(false); setAllergenNotes('')
     setBornIn(''); setRearedIn(''); setRearedSame(false)
     setSlaughter(''); setCutSite(''); setCutSameAs(false)
   }
@@ -977,6 +1003,8 @@ export default function DeliveryPage() {
           reared_in:            rearedIn || undefined,
           slaughter_site:       slaughter || undefined,
           cut_site:             cutSite   || undefined,
+          allergens_identified: allergensIdentified,
+          allergen_notes:       allergensIdentified ? (allergenNotes || undefined) : undefined,
           corrective_action_temp:   caTemp   ?? undefined,
           corrective_action_contam: caContam ?? undefined,
         }),
@@ -1333,6 +1361,49 @@ export default function DeliveryPage() {
               <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
                 placeholder="Any additional notes…"
                 className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+            </div>
+
+            {/* SALSA 1.4.2 — Allergen check (required) */}
+            <div className={`rounded-xl border px-4 py-3 ${allergensIdentified ? 'border-red-300 bg-red-50' : 'border-blue-100 bg-white'}`}>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
+                Allergen check — SALSA 1.4.2
+              </p>
+              <p className="text-slate-600 text-xs mb-3">Did this delivery contain any allergen-containing products?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setAllergensIdentified(false); setAllergenNotes('') }}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
+                    !allergensIdentified
+                      ? 'bg-green-600 text-white border-green-600'
+                      : 'bg-white text-slate-500 border-slate-200'
+                  }`}>
+                  ✓ No allergens
+                </button>
+                <button
+                  onClick={() => setAllergensIdentified(true)}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
+                    allergensIdentified
+                      ? 'bg-red-600 text-white border-red-600'
+                      : 'bg-white text-slate-500 border-slate-200'
+                  }`}>
+                  ⚠️ Allergens found
+                </button>
+              </div>
+              {allergensIdentified && (
+                <div className="mt-3">
+                  <p className="text-red-700 text-xs font-bold mb-1">Describe allergens identified (required):</p>
+                  <textarea
+                    value={allergenNotes}
+                    onChange={(e) => setAllergenNotes(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Delivery contained product with milk allergen — not in spec…"
+                    className="w-full border border-red-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-red-500 resize-none"
+                  />
+                  <p className="text-red-600 text-[10px] mt-1 font-bold">
+                    ⚠️ A corrective action will be raised automatically. Do not process this delivery until resolved.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Meta */}

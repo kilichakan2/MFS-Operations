@@ -207,6 +207,7 @@ export async function GET(req: NextRequest) {
         id, date, time_of_delivery, supplier, product, product_category, species,
         temperature_c, temp_status, covered_contaminated, contamination_notes, notes,
         born_in, reared_in, slaughter_site, cut_site, batch_number, delivery_number,
+        allergens_identified, allergen_notes,
         submitted_at, users!inner(name)
       `)
 
@@ -257,6 +258,7 @@ export async function POST(req: NextRequest) {
       product, product_category, temperature_c,
       covered_contaminated, contamination_type, contamination_notes, notes,
       born_in, reared_in, slaughter_site, cut_site,
+      allergens_identified, allergen_notes,
       corrective_action_temp,
       corrective_action_contam,
     } = body as {
@@ -272,6 +274,8 @@ export async function POST(req: NextRequest) {
       born_in?:                  string
       reared_in?:                string
       slaughter_site?:           string
+      allergens_identified:      boolean
+      allergen_notes?:           string
       cut_site?:                 string
       corrective_action_temp?:   CAPayload
       corrective_action_contam?: CAPayload
@@ -329,7 +333,9 @@ export async function POST(req: NextRequest) {
 
     const today  = todayUK()
     const status = tempStatus(temperature_c, product_category)
-    const corrective_action_required = status !== 'pass' || covered_contaminated !== 'no'
+    // Allergens on an allergen-free site = automatic non-conformance
+    const hasDeviationAllergen = allergens_identified === true
+    const corrective_action_required = status !== 'pass' || covered_contaminated !== 'no' || hasDeviationAllergen
 
     // ── C1: pre-validate CA payloads before any DB write ─────────────────────
     const hasDeviationTemp   = status === 'urgent' || status === 'fail'
@@ -435,6 +441,8 @@ export async function POST(req: NextRequest) {
         cut_site:                  cut_site!.trim(),
         delivery_number:           deliveryNumber,
         batch_number:              batchNumber,
+        allergens_identified:      hasDeviationAllergen,
+        allergen_notes:            hasDeviationAllergen ? (allergen_notes?.trim() || null) : null,
       })
       .select('id')
       .single()
@@ -495,6 +503,22 @@ export async function POST(req: NextRequest) {
           product_disposition:             DISPOSITION_MAP[ca.disposition],
           recurrence_prevention:           rec,
           management_verification_required: covered_contaminated === 'yes',
+          resolved:                        false,
+        })
+      }
+
+      // Allergen CA — automatic when allergens identified on allergen-free site
+      if (hasDeviationAllergen) {
+        caRows.push({
+          actioned_by:                     userId,
+          source_table:                    'haccp_deliveries',
+          source_id:                       inserted.id,
+          ccp_ref:                         'CCP1',
+          deviation_description:           `Allergen identified in delivery — MFS is an allergen-free site. ${allergen_notes?.trim() ? `Details: ${allergen_notes.trim()}` : 'No further detail provided.'}`,
+          action_taken:                    'Delivery quarantined pending management review. Do not process until CA resolved.',
+          product_disposition:             'Quarantine — pending management review',
+          recurrence_prevention:           'Review supplier specification. Ensure allergen-free status confirmed on all future deliveries.',
+          management_verification_required: true,
           resolved:                        false,
         })
       }
