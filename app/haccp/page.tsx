@@ -232,7 +232,7 @@ function SmallTile({
 }) {
   return (
     <div
-      className={`flex-1 rounded-xl px-3 py-2.5 flex items-center gap-3 cursor-pointer border transition-all active:scale-[0.97] ${
+      className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-2 cursor-pointer border transition-all active:scale-[0.97] ${
         due ? 'bg-amber-50 border-2 border-amber-400' : 'bg-white border-2 border-blue-200'
       }`}
       onPointerDown={(e) => { e.preventDefault(); onTap() }}>
@@ -442,26 +442,23 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
       <div className="flex flex-1 overflow-hidden">
 
         {/* Tile grid */}
-        <div className="flex-1 p-4 flex flex-col gap-3">
+        <div className="flex-1 p-4 flex flex-col gap-3 min-h-0 overflow-y-auto">
 
-          {/* Row 1 — 4 large tiles */}
-          <div className="flex gap-3">
+          {/* Row 1 — 3 priority large tiles */}
+          <div className="flex gap-3 flex-shrink-0">
             <LargeTile id="cold_storage" icon={Icon.cold} label="Cold Storage" state={coldState} badge={coldBadge}
               sub={s ? `CCP 2 · 5 units${s.cold_storage.am_done ? ' · AM done' : ''}` : 'CCP 2 · 5 units'}
               onTap={() => { window.location.href = '/haccp/cold-storage' }} onHelp={() => setHelp('cold_storage')} />
             <LargeTile id="processing_room" icon={Icon.room} label="Process Room" state={roomState} badge={roomBadge}
               sub={s ? `CCP 3 · Daily Diary${s.daily_diary.opening ? ' · Opening ✓' : ''}` : 'CCP 3 · Daily Diary'}
               onTap={() => { window.location.href = '/haccp/process-room' }} onHelp={() => setHelp('processing_room')} />
-            <LargeTile id="cleaning" icon={Icon.clean} label="Cleaning" state={cleaningState} badge={cleaningBadge}
-              sub={s?.cleaning.last_logged_at ? `Last: ${fmtTime(s.cleaning.last_logged_at)}` : 'SOP 2 — log each clean'}
-              onTap={() => { window.location.href = '/haccp/cleaning' }} onHelp={() => setHelp('cleaning')} />
             <LargeTile id="delivery" icon={Icon.delivery} label="Delivery" state={delivState} badge={delivBadge}
               sub={`CCP 1 · SOP 5B${s?.deliveries.deviations ? ` · ${s.deliveries.deviations} CCA` : ''}`}
               onTap={() => { window.location.href = '/haccp/delivery' }} onHelp={() => setHelp('delivery')} />
           </div>
 
-          {/* Row 2 — 2 standard + wide CCA */}
-          <div className="flex gap-3">
+          {/* Row 2 — 3 priority large tiles */}
+          <div className="flex gap-3 flex-shrink-0">
             <LargeTile id="mince" icon={Icon.mince} label="Mince / Prep"
               state={!s ? 'neutral' : s.mince_runs.has_deviations ? 'deviation' : s.mince_runs.count_today > 0 ? 'complete' : 'neutral'}
               badge={!s ? '—' : s.mince_runs.has_deviations ? `${s.mince_runs.count_today} runs · deviation` : s.mince_runs.count_today > 0 ? `${s.mince_runs.count_today} runs` : 'None today'}
@@ -472,13 +469,16 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               badge={!s ? '—' : s.product_returns.has_safety_returns ? `${s.product_returns.count_today} logged · safety` : s.product_returns.count_today > 0 ? `${s.product_returns.count_today} logged` : 'None'}
               sub="SOP 12 · RC01–RC08"
               onTap={() => { window.location.href = '/haccp/product-return' }} onHelp={() => setHelp('product_return')} />
+            <LargeTile id="cleaning" icon={Icon.clean} label="Cleaning" state={cleaningState} badge={cleaningBadge}
+              sub={s?.cleaning.last_logged_at ? `Last: ${fmtTime(s.cleaning.last_logged_at)}` : 'SOP 2 — log each clean'}
+              onTap={() => { window.location.href = '/haccp/cleaning' }} onHelp={() => setHelp('cleaning')} />
           </div>
 
           {/* Divider */}
-          <div className="h-px bg-slate-300 mx-1" />
+          <div className="h-px bg-slate-300 mx-1 flex-shrink-0" />
 
-          {/* Small tile row */}
-          <div className="flex gap-3">
+          {/* Secondary tiles — 4-column grid, wraps cleanly */}
+          <div className="grid grid-cols-4 gap-2 flex-shrink-0">
             <SmallTile id="calibration" icon={Icon.cal} label="Calibration" sub="Monthly · SOP 3"
               badge={
                 !s ? '—'
@@ -511,13 +511,13 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               }
               due={!!(s?.training_overdue || s?.training_due_soon)}
               onTap={() => { window.location.href = '/haccp/training' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="allergens" icon={Icon.audit} label="Allergens" sub="SALSA 1.4.1 · Site assessment"
+            <SmallTile id="allergens" icon={Icon.audit} label="Allergens" sub="SALSA 1.4.1"
               badge="View assessment" due={false}
               onTap={() => { window.location.href = '/haccp/allergens' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="recall" icon={Icon.docs} label="Recall Contacts" sub="SALSA 3.4 · RCL-001"
+            <SmallTile id="recall" icon={Icon.audit} label="Recall Contacts" sub="SALSA 3.4"
               badge="View contacts" due={false}
               onTap={() => { window.location.href = '/haccp/recall' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="annual-review" icon={Icon.review} label="Annual Review" sub="SALSA 3.1 · MFS-ASR-001"
+            <SmallTile id="annual-review" icon={Icon.review} label="Annual Review" sub="SALSA 3.1"
               badge="View reviews" due={false}
               onTap={() => { window.location.href = '/haccp/annual-review' }} onHelp={() => setHelp('people')} />
             {isAdmin && (
