@@ -42,7 +42,7 @@ interface DeliveryRow {
   product:                     string
   species:                     string | null
   product_category:            string
-  temperature_c:               number
+  temperature_c:               number | null
   temp_status:                 string
   covered_contaminated:        string
   contamination_notes:         string | null
@@ -316,7 +316,7 @@ function DeliveryTableRow({ row }: { row: DeliveryRow }) {
             row.temp_status === 'fail'   ? 'text-red-600'
           : row.temp_status === 'urgent' ? 'text-amber-600'
           : 'text-green-700'
-          }`}>{row.temperature_c}°C</span>
+          }`}>{row.temperature_c != null ? `${row.temperature_c}°C` : 'Ambient'}</span>
         </td>
         <td className="px-3 py-2.5 whitespace-nowrap"><TempBadge status={row.temp_status} /></td>
         <td className="px-3 py-2.5 whitespace-nowrap"><ContamBadge val={row.covered_contaminated} /></td>
@@ -516,7 +516,7 @@ interface ColdStorageRow {
   id:                         string
   date:                       string
   session:                    string
-  temperature_c:              number
+  temperature_c:              number | null
   temp_status:                string
   comments:                   string | null
   corrective_action_required: boolean
@@ -562,7 +562,7 @@ function ColdStorageTableRow({ row }: { row: ColdStorageRow }) {
             row.temp_status === 'critical' ? 'text-red-600'
           : row.temp_status === 'amber'    ? 'text-amber-600'
           : 'text-green-700'
-          }`}>{row.temperature_c}°C</span>
+          }`}>{row.temperature_c != null ? `${row.temperature_c}°C` : 'Ambient'}</span>
         </td>
         <td className="px-3 py-2.5 whitespace-nowrap"><ColdTempBadge status={row.temp_status} /></td>
         <td className="px-3 py-2.5 text-xs text-slate-500 max-w-28 truncate">{row.comments ?? '—'}</td>

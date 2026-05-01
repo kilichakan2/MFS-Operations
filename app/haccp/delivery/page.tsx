@@ -101,7 +101,7 @@ interface Delivery  {
   supplier:             string
   product:              string
   product_category:     string
-  temperature_c:        number
+  temperature_c:        number | null
   temp_status:          string
   covered_contaminated: string
   corrective_action_required: boolean
@@ -759,7 +759,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
               <p className={`text-2xl font-bold font-mono ${
                 d.temp_status === 'pass'   ? 'text-green-700' :
                 d.temp_status === 'urgent' ? 'text-amber-700' : 'text-red-700'
-              }`}>{d.temperature_c}°C</p>
+              }`}>{d.temperature_c != null ? `${d.temperature_c}°C` : 'Ambient'}</p>
               <span className={`text-xs font-bold px-3 py-1 rounded-full ${STATUS_BADGE[d.temp_status]}`}>
                 {STATUS_LABEL[d.temp_status]}
               </span>
@@ -1632,7 +1632,10 @@ export default function DeliveryPage() {
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                       <p className="text-slate-400 text-xs">{deliveryTime(d.time_of_delivery)}</p>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_BADGE[d.temp_status] ?? 'bg-slate-100 text-slate-400'}`}>
-                        {STATUS_LABEL[d.temp_status] ?? d.temp_status} · {d.temperature_c}°C
+                        {d.temperature_c != null
+                          ? `${STATUS_LABEL[d.temp_status] ?? d.temp_status} · ${d.temperature_c}°C`
+                          : 'Ambient'
+                        }
                       </span>
                       {d.batch_number && (
                         <button
