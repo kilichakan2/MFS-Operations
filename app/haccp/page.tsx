@@ -517,6 +517,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <SmallTile id="recall" icon={Icon.docs} label="Recall Contacts" sub="SALSA 3.4 · RCL-001"
               badge="View contacts" due={false}
               onTap={() => { window.location.href = '/haccp/recall' }} onHelp={() => setHelp('people')} />
+            <SmallTile id="annual-review" icon={Icon.review} label="Annual Review" sub="SALSA 3.1 · MFS-ASR-001"
+              badge="View reviews" due={false}
+              onTap={() => { window.location.href = '/haccp/annual-review' }} onHelp={() => setHelp('people')} />
             {isAdmin && (
               <SmallTile id="audit" icon={Icon.audit} label="Audit" sub="Records · Export"
                 badge="View all records" due={false}
