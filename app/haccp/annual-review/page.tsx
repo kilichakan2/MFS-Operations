@@ -382,7 +382,7 @@ export default function AnnualReviewPage() {
           )}
         </div>
 
-        <div className="px-5 py-5 space-y-3 max-w-2xl mx-auto">
+        <div className="px-5 py-5 space-y-3">
           {reviews.length === 0 ? (
             <div className="bg-white border border-blue-100 rounded-xl px-4 py-8 text-center">
               <p className="text-slate-400 text-sm">No annual reviews yet</p>
@@ -522,7 +522,7 @@ export default function AnnualReviewPage() {
         </div>
       )}
 
-      <div className="px-5 py-5 space-y-4 max-w-2xl mx-auto">
+      <div className="px-5 py-5 space-y-4">
 
         {/* Render built sections only */}
         {REVIEW_SECTIONS.map(def => {

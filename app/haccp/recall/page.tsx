@@ -286,7 +286,7 @@ export default function RecallPage() {
         )}
       </div>
 
-      <div className="px-5 py-5 space-y-6 max-w-2xl mx-auto">
+      <div className="px-5 py-5 space-y-6">
 
         {/* Flash */}
         {flash && (
