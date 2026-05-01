@@ -818,14 +818,19 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
           )}
 
           {/* Allergen check result */}
-          <div className={`rounded-xl px-4 py-2.5 flex items-center gap-2 border ${
+          <div className={`rounded-xl px-4 py-2.5 flex items-start gap-2 border ${
             d.allergens_identified
               ? 'bg-red-50 border-red-200'
               : 'bg-green-50 border-green-200'
           }`}>
-            <span className={`text-[10px] font-bold ${d.allergens_identified ? 'text-red-600' : 'text-green-700'}`}>
-              {d.allergens_identified ? '⚠️ ALLERGENS IDENTIFIED' : '✓ No allergens — SALSA 1.4.2'}
-            </span>
+            <div>
+              <span className={`text-[10px] font-bold block ${d.allergens_identified ? 'text-red-600' : 'text-green-700'}`}>
+                {d.allergens_identified ? '⚠️ ALLERGENS IDENTIFIED — SALSA 1.4.2' : '✓ No allergens — SALSA 1.4.2'}
+              </span>
+              {d.allergens_identified && d.allergen_notes && (
+                <span className="text-red-700 text-xs font-bold block mt-0.5">{d.allergen_notes}</span>
+              )}
+            </div>
           </div>
 
           {/* Corrective action required */}
@@ -1589,6 +1594,11 @@ export default function DeliveryPage() {
                       </div>
                       {d.covered_contaminated !== 'no' && (
                         <p className="text-amber-600 text-xs mt-1">⚠ Contamination {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}</p>
+                      )}
+                      {d.allergens_identified && (
+                        <p className="text-red-600 text-[10px] font-bold mt-0.5">
+                          ⚠️ Allergens: {d.allergen_notes?.split(' — ')[0] ?? 'identified'}
+                        </p>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">

@@ -188,12 +188,13 @@ const CSV_HEADERS = [
   'Date', 'Time', 'Supplier', 'Product', 'Species', 'Category',
   'Temp °C', 'Status', 'Contamination', 'Batch No', 'Delivery No',
   'Born in', 'Reared in', 'Slaughter site', 'Cut site', 'Notes',
+  'Allergens identified', 'Allergen detail',
   'Submitted by', 'CA logged', 'CA resolved', 'CA deviation', 'CA action taken', 'CA disposition',
 ]
 
 describe('CSV generation', () => {
-  it('has 22 headers', () => {
-    expect(CSV_HEADERS).toHaveLength(22)
+  it('has 24 headers', () => {
+    expect(CSV_HEADERS).toHaveLength(24)
   })
 
   it('headers include all key audit fields', () => {
@@ -244,6 +245,7 @@ describe('CSV generation', () => {
       temperature_c: 3.5, temp_status: 'pass', covered_contaminated: 'covered_not_contaminated',
       batch_number: 'B001', delivery_number: 1, born_in: 'UK', reared_in: 'UK',
       slaughter_site: 'Sheffield', cut_site: 'Sheffield', notes: null,
+      allergens_identified: false, allergen_notes: null,
       submitted_by_name: 'Daz',
       ca: null as CA,
     }
@@ -253,7 +255,10 @@ describe('CSV generation', () => {
       mockRow.species, mockRow.product_category, mockRow.temperature_c, mockRow.temp_status,
       mockRow.covered_contaminated, mockRow.batch_number, mockRow.delivery_number,
       mockRow.born_in, mockRow.reared_in, mockRow.slaughter_site, mockRow.cut_site,
-      mockRow.notes, mockRow.submitted_by_name,
+      mockRow.notes,
+      mockRow.allergens_identified ? 'Yes' : 'No',
+      mockRow.allergen_notes ?? '',
+      mockRow.submitted_by_name,
       mockRow.ca ? 'Yes' : 'No',
       mockRow.ca ? (mockRow.ca.resolved ? 'Yes' : 'No') : '',
       mockRow.ca ? '' : '',

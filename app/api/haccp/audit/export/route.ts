@@ -38,6 +38,7 @@ async function fetchDeliveriesSheet(from: string, to: string) {
       covered_contaminated, contamination_notes, contamination_type,
       corrective_action_required, batch_number, delivery_number,
       born_in, reared_in, slaughter_site, cut_site, notes,
+      allergens_identified, allergen_notes,
       users!submitted_by ( name )
     `)
     .gte('date', from)
@@ -65,6 +66,7 @@ async function fetchDeliveriesSheet(from: string, to: string) {
     'Date', 'Time', 'Supplier', 'Product', 'Species', 'Category',
     'Temp °C', 'Status', 'Contamination', 'Batch No', 'Delivery No',
     'Born in', 'Reared in', 'Slaughter site', 'Cut site', 'Notes',
+    'Allergens identified', 'Allergen detail',
     'Submitted by', 'CA logged', 'CA resolved', 'CA deviation', 'CA action taken', 'CA disposition',
   ]
 
@@ -88,6 +90,8 @@ async function fetchDeliveriesSheet(from: string, to: string) {
       d.slaughter_site ?? '',
       d.cut_site ?? '',
       d.notes ?? '',
+      (d as unknown as { allergens_identified?: boolean }).allergens_identified ? 'Yes' : 'No',
+      (d as unknown as { allergen_notes?: string }).allergen_notes ?? '',
       user,
       ca ? 'Yes' : 'No',
       ca ? (ca.resolved ? 'Yes' : 'No') : '',

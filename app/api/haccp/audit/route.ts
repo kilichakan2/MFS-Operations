@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
           covered_contaminated, contamination_notes, contamination_type,
           corrective_action_required, batch_number, delivery_number,
           born_in, reared_in, slaughter_site, cut_site, notes,
+          allergens_identified, allergen_notes,
           users!submitted_by ( name )
         `)
         .gte('date', from)

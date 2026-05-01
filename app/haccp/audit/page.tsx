@@ -55,6 +55,8 @@ interface DeliveryRow {
   slaughter_site:              string | null
   cut_site:                    string | null
   notes:                       string | null
+  allergens_identified:        boolean
+  allergen_notes:              string | null
   submitted_by_name:           string
   ca:                          CA | null
 }
@@ -349,6 +351,10 @@ function DeliveryTableRow({ row }: { row: DeliveryRow }) {
                   {row.contamination_notes && <p className="text-slate-600">Contamination: {row.contamination_notes}</p>}
                   {row.contamination_type  && <p className="text-slate-600">Type: {row.contamination_type}</p>}
                   {row.notes               && <p className="text-slate-600">{row.notes}</p>}
+                  {row.allergens_identified
+                    ? <p className="text-red-600 font-bold text-xs">⚠️ Allergens: {row.allergen_notes ?? 'identified'}</p>
+                    : <p className="text-green-700 text-[10px]">✓ No allergens</p>
+                  }
                   <p className="text-slate-400 text-[10px] mt-1">Submitted by: {row.submitted_by_name}</p>
                 </div>
               </div>
@@ -419,13 +425,17 @@ function DeliveriesSection({ from, to, onHeatmapData }: {
       'Date', 'Time', 'Supplier', 'Product', 'Species', 'Category',
       'Temp °C', 'Status', 'Contamination', 'Batch No', 'Delivery No',
       'Born in', 'Reared in', 'Slaughter site', 'Cut site', 'Notes',
+      'Allergens identified', 'Allergen detail',
       'Submitted by', 'CA logged', 'CA resolved', 'CA deviation', 'CA action taken', 'CA disposition',
     ]
     const csvRows = rows.map((r) => [
       r.date, r.time_of_delivery ?? '', r.supplier, r.product, r.species ?? '',
       r.product_category, r.temperature_c, r.temp_status, r.covered_contaminated,
       r.batch_number ?? '', r.delivery_number ?? '', r.born_in ?? '', r.reared_in ?? '',
-      r.slaughter_site ?? '', r.cut_site ?? '', r.notes ?? '', r.submitted_by_name,
+      r.slaughter_site ?? '', r.cut_site ?? '', r.notes ?? '',
+      r.allergens_identified ? 'Yes' : 'No',
+      r.allergen_notes ?? '',
+      r.submitted_by_name,
       r.ca ? 'Yes' : 'No',
       r.ca ? (r.ca.resolved ? 'Yes' : 'No') : '',
       r.ca?.deviation_description ?? '', r.ca?.action_taken ?? '', r.ca?.product_disposition ?? '',
