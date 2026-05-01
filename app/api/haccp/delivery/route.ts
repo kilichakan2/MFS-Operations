@@ -219,7 +219,7 @@ export async function GET(req: NextRequest) {
         .from('haccp_suppliers')
         .select('id, name')
         .eq('active', true)
-        .order('position'),
+        .order('name'),
     ])
 
     if (deliveries.error) return NextResponse.json({ error: deliveries.error.message }, { status: 500 })

@@ -338,19 +338,6 @@ export default function AdminCCAPage() {
     loadSuppliers()
   }
 
-  async function movePosition(s: Supplier, dir: 'up' | 'down') {
-    const sorted = [...suppliers].sort((a, b) => a.position - b.position)
-    const idx = sorted.findIndex(x => x.id === s.id)
-    const swapIdx = dir === 'up' ? idx - 1 : idx + 1
-    if (swapIdx < 0 || swapIdx >= sorted.length) return
-    const swap = sorted[swapIdx]
-    await Promise.all([
-      fetch('/api/haccp/admin/suppliers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: s.id,    position: swap.position }) }),
-      fetch('/api/haccp/admin/suppliers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: swap.id, position: s.position    }) }),
-    ])
-    loadSuppliers()
-  }
-
   const visibleSuppliers = suppliers.filter(s => showInactive || s.active)
 
   // Group unresolved by CCP ref
@@ -541,7 +528,7 @@ export default function AdminCCAPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {visibleSuppliers.map((s, idx) => {
+                {visibleSuppliers.map((s) => {
                   const expiryStatus = certExpiryStatus(s.cert_expiry)
                   return (
                     <div key={s.id} className={`bg-white border rounded-xl px-4 py-3 ${!s.active ? 'opacity-50 border-slate-200' : 'border-blue-100'}`}>
@@ -602,16 +589,6 @@ export default function AdminCCAPage() {
                             className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded">
                             Edit
                           </button>
-                          <div className="flex gap-1">
-                            <button onClick={() => movePosition(s, 'up')} disabled={idx === 0}
-                              className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded text-slate-400 disabled:opacity-30">
-                              <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3"><polyline points="2,7 5,3 8,7"/></svg>
-                            </button>
-                            <button onClick={() => movePosition(s, 'down')} disabled={idx === visibleSuppliers.length - 1}
-                              className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded text-slate-400 disabled:opacity-30">
-                              <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3"><polyline points="2,3 5,7 8,3"/></svg>
-                            </button>
-                          </div>
                           <button onClick={() => toggleActive(s)}
                             className={`text-[10px] font-bold px-2 py-1 rounded ${s.active ? 'text-red-600 bg-red-50' : 'text-green-700 bg-green-50'}`}>
                             {s.active ? 'Deactivate' : 'Activate'}

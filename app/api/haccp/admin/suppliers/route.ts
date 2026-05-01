@@ -26,7 +26,6 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from('haccp_suppliers')
       .select('id, name, active, position, address, contact_name, contact_phone, contact_email, fsa_approval_no, fsa_activities, cert_type, cert_expiry, products_supplied, date_approved, notes, created_at')
-      .order('position', { ascending: true })
       .order('name', { ascending: true })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
