@@ -154,7 +154,8 @@ function tempStatus(temp: number | null, category: string): 'pass' | 'urgent' | 
     case 'red_meat':      return t <= 5.0   ? 'pass' : t <= 8.0   ? 'urgent' : 'fail'
     case 'offal':         return t <= 3.0   ? 'pass' : 'fail'
     case 'mince_prep':    return t <= 4.0   ? 'pass' : 'fail'
-    case 'frozen':        return t <= -18.0 ? 'pass' : t <= -15.0 ? 'urgent' : 'fail'
+    case 'frozen':
+    case 'frozen_beef_lamb': return t <= -18.0 ? 'pass' : t <= -15.0 ? 'urgent' : 'fail'
     case 'poultry':
     case 'dairy':
     case 'chilled_other': return t <= 8.0   ? 'pass' : 'fail'
@@ -168,6 +169,8 @@ const CATEGORY_BATCH_PREFIX: Record<string, string> = {
   dairy:         'DAI',
   chilled_other: 'CHI',
   dry_goods:     'DRY',
+  frozen:        'FRZ',
+  // frozen_beef_lamb is isMeat=true — uses born_in country code, not a prefix
 }
 
 function buildBatchNumber(
@@ -339,7 +342,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Covered / contaminated field is required' }, { status: 400 })
 
     // ── C8: traceability mandatory for meat categories only ───────────────────
-    const isMeat = product_category === 'lamb' || product_category === 'beef' || product_category === 'red_meat'
+    // offal: bovine offal requires BLS legally; ovine offal best practice
+    // frozen_beef_lamb: BLS applies to frozen red meat same as fresh
+    const isMeat = product_category === 'lamb' || product_category === 'beef' ||
+                   product_category === 'red_meat' || product_category === 'offal' ||
+                   product_category === 'frozen_beef_lamb'
     if (isMeat) {
       const missing: string[] = []
       if (!born_in?.trim())        missing.push('Born in')

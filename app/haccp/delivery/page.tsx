@@ -77,7 +77,9 @@ type CAPayload = {
 interface Supplier  { id: string; name: string; categories: string[] }
 
 // Categories that require BLS traceability fields
-const MEAT_CATEGORIES = new Set(['lamb', 'beef', 'red_meat'])
+// offal: bovine offal legally requires BLS; lamb offal best practice
+// frozen_beef_lamb: frozen red meat still requires BLS (same regs as fresh)
+const MEAT_CATEGORIES = new Set(['lamb', 'beef', 'red_meat', 'offal', 'frozen_beef_lamb'])
 // Categories that have a temperature CCP (all except dry_goods)
 const NO_TEMP_CATEGORIES = new Set(['dry_goods'])
 
@@ -127,20 +129,21 @@ const ALLERGENS = [
 
 
 const CATEGORIES: { key: string; label: string; limit: string; detail: string }[] = [
-  { key: 'lamb',         label: 'Lamb',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
-  { key: 'beef',         label: 'Beef',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
-  { key: 'offal',        label: 'Offal',             limit: '≤3°C',               detail: '≤3°C pass · >3°C reject' },
-  { key: 'mince_prep',   label: 'Mince / meat prep', limit: '≤4°C',               detail: '≤4°C pass · >4°C reject' },
-  { key: 'frozen',       label: 'Frozen',            limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional (refreeze immediately) · >-15°C reject' },
-  { key: 'poultry',      label: 'Poultry',           limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
-  { key: 'dairy',        label: 'Dairy / Chilled',   limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
-  { key: 'chilled_other',label: 'Chilled Other',     limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
-  { key: 'dry_goods',    label: 'Dry Goods',         limit: 'Ambient',            detail: 'No temperature CCP — visual / condition check only' },
+  { key: 'lamb',            label: 'Lamb',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
+  { key: 'beef',            label: 'Beef',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
+  { key: 'offal',           label: 'Offal',             limit: '≤3°C',               detail: '≤3°C pass · >3°C reject' },
+  { key: 'frozen',          label: 'Frozen',            limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional · >-15°C reject' },
+  { key: 'frozen_beef_lamb',label: 'Frozen Beef/Lamb',  limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional · >-15°C reject · BLS traceability required' },
+  { key: 'poultry',         label: 'Poultry',           limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
+  { key: 'dairy',           label: 'Dairy / Chilled',   limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
+  { key: 'chilled_other',   label: 'Chilled Other',     limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
+  { key: 'dry_goods',       label: 'Dry Goods',         limit: 'Ambient',            detail: 'No temperature CCP — visual / condition check only' },
 ]
 
 const CATEGORY_LABELS: Record<string, string> = {
   lamb: 'Lamb', beef: 'Beef', red_meat: 'Red meat',
   offal: 'Offal', mince_prep: 'Mince / prep', frozen: 'Frozen',
+  frozen_beef_lamb: 'Frozen Beef/Lamb',
   poultry: 'Poultry', dairy: 'Dairy / Chilled',
   chilled_other: 'Chilled Other', dry_goods: 'Dry Goods',
 }
@@ -224,7 +227,8 @@ function calcStatus(temp: number | null, category: string): TempStatus {
     case 'red_meat':      return t <= 5.0   ? 'pass' : t <= 8.0   ? 'urgent' : 'fail'
     case 'offal':         return t <= 3.0   ? 'pass' : 'fail'
     case 'mince_prep':    return t <= 4.0   ? 'pass' : 'fail'
-    case 'frozen':        return t <= -18.0 ? 'pass' : t <= -15.0 ? 'urgent' : 'fail'
+    case 'frozen':
+    case 'frozen_beef_lamb': return t <= -18.0 ? 'pass' : t <= -15.0 ? 'urgent' : 'fail'
     case 'poultry':
     case 'dairy':
     case 'chilled_other': return t <= 8.0   ? 'pass' : 'fail'

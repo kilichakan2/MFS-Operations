@@ -634,13 +634,15 @@ export default function AdminCCAPage() {
                   <p className="text-slate-400 text-[10px] mb-2">Controls which Goods In deliveries this supplier appears in</p>
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { key: 'lamb',          label: 'Lamb' },
-                      { key: 'beef',          label: 'Beef' },
-                      { key: 'poultry',       label: 'Poultry' },
-                      { key: 'dairy',         label: 'Dairy' },
-                      { key: 'dry_goods',     label: 'Dry Goods' },
-                      { key: 'chilled_other', label: 'Chilled Other' },
-                      { key: 'frozen',        label: 'Frozen' },
+                      { key: 'lamb',            label: 'Lamb' },
+                      { key: 'beef',            label: 'Beef' },
+                      { key: 'offal',           label: 'Offal' },
+                      { key: 'poultry',         label: 'Poultry' },
+                      { key: 'dairy',           label: 'Dairy' },
+                      { key: 'dry_goods',       label: 'Dry Goods' },
+                      { key: 'chilled_other',   label: 'Chilled Other' },
+                      { key: 'frozen',          label: 'Frozen' },
+                      { key: 'frozen_beef_lamb',label: 'Frozen Beef/Lamb' },
                     ].map(({ key, label }) => (
                       <button key={key}
                         onClick={() => setEditCategories(prev =>
