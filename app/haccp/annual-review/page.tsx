@@ -398,7 +398,21 @@ export default function AnnualReviewPage() {
 
   useEffect(() => { load() }, [load])
 
-  // ── Create new review ───────────────────────────────────────────────────────
+  function openReview(r: AnnualReview) {
+    // Merge any newly added sections into the checklist so they render correctly
+    // (existing drafts won't have sections added in later phases)
+    const merged = { ...r.checklist }
+    for (const def of REVIEW_SECTIONS) {
+      if (!merged[def.key]) {
+        merged[def.key] = {
+          items: def.items.map(label => ({ label, status: null, notes: '' })),
+          section_notes: '',
+        }
+      }
+    }
+    setActive({ ...r, checklist: merged })
+    setView('editing')
+  }
 
   async function handleCreate() {
     setCreating(true); setCreateErr('')
@@ -551,7 +565,7 @@ export default function AnnualReviewPage() {
           ) : (
             reviews.map(r => (
               <button key={r.id}
-                onClick={() => { setActive(r); setView('editing') }}
+                onClick={() => openReview(r)}
                 className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-left hover:border-slate-300 transition-all">
                 <div className="flex items-center justify-between gap-3">
                   <div>

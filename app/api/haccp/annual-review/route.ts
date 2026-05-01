@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
       .from('haccp_annual_reviews')
       .select(`
         id, review_year, review_period_from, review_period_to,
+        checklist, action_plan,
         locked, signed_off_at, approved_at, updated_at, created_at,
         signer:signed_off_by  ( name ),
         approver:approved_by  ( name ),
