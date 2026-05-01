@@ -31,6 +31,50 @@ interface AllergenAssessment {
   updater:           { name: string } | null
 }
 
+interface DetectionDetail {
+  date:          string
+  supplier:      string
+  product:       string
+  category:      string
+  batch_number:  string | null
+  allergen_notes: string | null
+}
+
+interface MonthlyReview {
+  id:                  string
+  month_year:          string
+  period_start:        string
+  period_end:          string
+  total_deliveries:    number
+  allergen_detections: number
+  category_breakdown:  Record<string, number>
+  detection_details:   DetectionDetail[]
+  site_status:         'confirmed_nil' | 'detections_found' | 'no_deliveries'
+  reviewed_at:         string
+  notes:               string | null
+  reviewer:            { name: string } | null
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  lamb: 'Lamb', beef: 'Beef', red_meat: 'Red meat', offal: 'Offal',
+  poultry: 'Poultry', dairy: 'Dairy / Chilled', chilled_other: 'Chilled Other',
+  dry_goods: 'Dry Goods', frozen: 'Frozen', frozen_beef_lamb: 'Frozen Beef/Lamb',
+}
+
+/** Previous month as YYYY-MM string */
+function prevMonthStr(): string {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function fmtMonthYear(yyyy_mm: string): string {
+  const [y, m] = yyyy_mm.split('-')
+  return new Date(Number(y), Number(m) - 1, 1)
+    .toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string) {
@@ -85,13 +129,22 @@ export default function AllergenAssessmentPage() {
   const [editNotes,     setEditNotes]     = useState('')
   const [editMaterials, setEditMaterials] = useState<RawMaterial[]>([])
 
+  // Monthly review state
+  const [reviews,        setReviews]        = useState<MonthlyReview[]>([])
+  const [reviewsLoading, setReviewsLoading] = useState(false)
+  const [runMonth,       setRunMonth]       = useState(prevMonthStr())
+  const [runNotes,       setRunNotes]       = useState('')
+  const [running,        setRunning]        = useState(false)
+  const [runErr,         setRunErr]         = useState('')
+  const [runFlash,       setRunFlash]       = useState('')
+  const [expandedId,     setExpandedId]     = useState<string | null>(null)
+
   const loadAssessment = useCallback(() => {
     setLoading(true)
     fetch('/api/haccp/allergen-assessment')
       .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
       .then(d => {
         setAssessment(d.assessment ?? null)
-        // Detect admin from cookie via a quick profile check
         fetch('/api/auth/type')
           .then(r => r.json())
           .then(p => setIsAdmin(p.role === 'admin'))
@@ -101,7 +154,16 @@ export default function AllergenAssessmentPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { loadAssessment() }, [loadAssessment])
+  const loadReviews = useCallback(() => {
+    setReviewsLoading(true)
+    fetch('/api/haccp/allergen-assessment/monthly-reviews')
+      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
+      .then(d => setReviews(d.reviews ?? []))
+      .catch(() => {})
+      .finally(() => setReviewsLoading(false))
+  }, [])
+
+  useEffect(() => { loadAssessment(); loadReviews() }, [loadAssessment, loadReviews])
 
   function openEdit() {
     if (!assessment) return
@@ -149,6 +211,34 @@ export default function AllergenAssessmentPage() {
 
   function setMaterialField(idx: number, field: keyof RawMaterial, val: string) {
     setEditMaterials(prev => prev.map((m, i) => i === idx ? { ...m, [field]: val } : m))
+  }
+
+  async function handleRunReview() {
+    setRunning(true)
+    setRunErr('')
+    setRunFlash('')
+    try {
+      const res = await fetch('/api/haccp/allergen-assessment/monthly-reviews', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ month_year: runMonth, notes: runNotes || undefined }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setRunErr(d.error ?? 'Review failed'); return }
+      setRunFlash(
+        d.review.site_status === 'no_deliveries'
+          ? `⚠️ No deliveries found for ${fmtMonthYear(runMonth)} — check records are complete`
+          : d.review.allergen_detections > 0
+          ? `⚠️ Review complete — ${d.review.allergen_detections} allergen detection(s) found`
+          : `✓ Review complete — ${d.review.total_deliveries} deliveries checked, 0 detections`
+      )
+      setRunNotes('')
+      loadReviews()
+    } catch {
+      setRunErr('Connection error')
+    } finally {
+      setRunning(false)
+    }
   }
 
   function addMaterial() {
@@ -394,6 +484,159 @@ export default function AllergenAssessmentPage() {
                 {saving ? 'Saving…' : 'Save assessment'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── Monthly Allergen Reviews ─────────────────────────────────── */}
+        {!editing && (
+          <div className="space-y-3 mt-2">
+
+            {/* Section header */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Monthly Allergen Reviews</p>
+                <p className="text-slate-400 text-[10px] mt-0.5">SALSA 1.4.2 — ongoing monitoring evidence</p>
+              </div>
+              <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded">{reviews.length} reviews</span>
+            </div>
+
+            {/* Run a review — admin only */}
+            {isAdmin && (
+              <div className="bg-white border border-blue-100 rounded-xl px-4 py-4 space-y-3">
+                <p className="text-slate-700 text-xs font-bold">Run monthly review</p>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <p className="text-slate-400 text-[10px] mb-1">Month</p>
+                    <input type="month" value={runMonth} onChange={e => setRunMonth(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400" />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-slate-400 text-[10px] mb-1">Notes (optional)</p>
+                  <input value={runNotes} onChange={e => setRunNotes(e.target.value)}
+                    placeholder="e.g. Reviewed following new dairy supplier added"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-400" />
+                </div>
+                {runErr   && <p className="text-red-600 text-xs">{runErr}</p>}
+                {runFlash && (
+                  <p className={`text-xs font-bold ${runFlash.startsWith('⚠️') ? 'text-amber-600' : 'text-green-700'}`}>{runFlash}</p>
+                )}
+                <button onClick={handleRunReview} disabled={running || !runMonth}
+                  className="w-full bg-slate-900 text-white text-sm font-bold py-3 rounded-xl disabled:opacity-40">
+                  {running ? 'Running…' : `Run review — ${runMonth ? fmtMonthYear(runMonth) : '—'}`}
+                </button>
+                <p className="text-slate-400 text-[10px]">
+                  Queries all deliveries for the selected month. Re-running overwrites the existing review for that month.
+                </p>
+              </div>
+            )}
+
+            {/* Reviews list */}
+            {reviewsLoading ? (
+              <p className="text-slate-400 text-sm py-2">Loading reviews…</p>
+            ) : reviews.length === 0 ? (
+              <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-6 text-center">
+                <p className="text-slate-400 text-sm">No monthly reviews yet</p>
+                <p className="text-slate-400 text-xs mt-1">Run the first review above to start building an evidence trail</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {reviews.map(r => {
+                  const isExpanded = expandedId === r.id
+                  const isClean    = r.site_status === 'confirmed_nil'
+                  const isEmpty    = r.site_status === 'no_deliveries'
+                  return (
+                    <div key={r.id} className={`bg-white border rounded-xl overflow-hidden ${
+                      isEmpty ? 'border-amber-200' : isClean ? 'border-green-200' : 'border-red-200'
+                    }`}>
+                      {/* Card header */}
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                        className="w-full px-4 py-3 text-left flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className={`text-lg ${isEmpty ? '' : isClean ? '' : ''}`}>
+                            {isEmpty ? '⚠️' : isClean ? '✅' : '🚨'}
+                          </span>
+                          <div>
+                            <p className="text-slate-900 font-bold text-sm">{fmtMonthYear(r.month_year)}</p>
+                            <p className={`text-xs font-bold mt-0.5 ${
+                              isEmpty ? 'text-amber-600' : isClean ? 'text-green-700' : 'text-red-600'
+                            }`}>
+                              {isEmpty
+                                ? 'No deliveries recorded'
+                                : isClean
+                                ? `${r.total_deliveries} deliveries · 0 allergen detections`
+                                : `${r.total_deliveries} deliveries · ⚠️ ${r.allergen_detections} detection${r.allergen_detections > 1 ? 's' : ''}`
+                              }
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <p className="text-slate-400 text-[10px]">{r.reviewer?.name ?? '—'}</p>
+                          <svg className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                            fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                            <polyline points="6 9 12 15 18 9"/>
+                          </svg>
+                        </div>
+                      </button>
+
+                      {/* Expanded detail */}
+                      {isExpanded && (
+                        <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+
+                          {/* Category breakdown */}
+                          {Object.keys(r.category_breakdown).length > 0 && (
+                            <div>
+                              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Deliveries by category</p>
+                              <div className="flex flex-wrap gap-2">
+                                {Object.entries(r.category_breakdown)
+                                  .sort(([, a], [, b]) => b - a)
+                                  .map(([cat, count]) => (
+                                    <span key={cat} className="text-xs bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg font-medium">
+                                      {CATEGORY_LABELS[cat] ?? cat}: <span className="font-bold">{count}</span>
+                                    </span>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Detections */}
+                          {r.detection_details.length > 0 && (
+                            <div>
+                              <p className="text-red-600 text-[10px] font-bold uppercase tracking-widest mb-2">Allergen detections</p>
+                              <div className="space-y-2">
+                                {r.detection_details.map((det, i) => (
+                                  <div key={i} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                                    <p className="text-red-700 text-xs font-bold">{det.date} — {det.supplier}</p>
+                                    <p className="text-slate-600 text-xs">{det.product} ({CATEGORY_LABELS[det.category] ?? det.category})</p>
+                                    {det.batch_number  && <p className="text-slate-500 text-[10px] font-mono">{det.batch_number}</p>}
+                                    {det.allergen_notes && <p className="text-red-600 text-xs font-bold mt-0.5">{det.allergen_notes}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Metadata */}
+                          <div className="flex items-center justify-between text-slate-400 text-[10px]">
+                            <span>{r.period_start} → {r.period_end}</span>
+                            <span>Reviewed {new Date(r.reviewed_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                          </div>
+                          {r.notes && (
+                            <p className="text-slate-500 text-xs italic">{r.notes}</p>
+                          )}
+                          {isEmpty && (
+                            <p className="text-amber-600 text-xs font-bold">
+                              ⚠️ No deliveries were recorded this month. Verify that all deliveries were logged in the system before accepting this review.
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
