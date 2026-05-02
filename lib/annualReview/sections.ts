@@ -73,10 +73,20 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'New starters inducted before handling food',
     ],
   },
-  // Phase 3 will add: 3.3 Hygiene, 3.4 Cleaning
-  // Phase 4 will add: 3.5 Pest Control, 3.6 Temperature, 3.7 Suppliers, 3.8 Incidents
-  // Phase 5 will add: 3.9 Food Fraud, 3.10 Premises
-  // Phase 6 will add: 3.11 Allergens, 3.12 Labelling
+  {
+    key:          '3.3',
+    title:        'Personal Hygiene & Health',
+    hasDataPanel: true,
+    items: [
+      'Hand washing facilities adequate',
+      'Protective clothing policy followed',
+      'Health screening procedure in place',
+      'Illness reporting procedure followed',
+    ],
+  },
+  // Phase 4 will add: 3.4 Cleaning, 3.5 Pest Control
+  // Phase 5 will add: 3.6 Temperature, 3.7 Suppliers, 3.8 Incidents
+  // Phase 6 will add: 3.9 Food Fraud, 3.10 Premises
 ]
 
 // ─── Training status logic (used in data panel + tests) ──────────────────────

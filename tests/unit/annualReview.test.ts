@@ -387,3 +387,100 @@ describe('trainingRefreshStatus', () => {
   it('180 days → current',       () => expect(trainingRefreshStatus(daysFromToday(180))).toBe('current'))
   it('365 days → current',       () => expect(trainingRefreshStatus(daysFromToday(365))).toBe('current'))
 })
+
+// ── Section 3.3 — Personal Hygiene & Health ───────────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.3 Personal Hygiene & Health', () => {
+  it('section 3.3 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.3')).toBeDefined()
+  })
+
+  it('section 3.3 title is correct', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.3')?.title).toBe('Personal Hygiene & Health')
+  })
+
+  it('section 3.3 has exactly 4 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.3')?.items).toHaveLength(4)
+  })
+
+  it('section 3.3 has data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.3')?.hasDataPanel).toBe(true)
+  })
+
+  it('section 3.3 items match document verbatim', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.3')!.items
+    expect(items[0]).toBe('Hand washing facilities adequate')
+    expect(items[1]).toBe('Protective clothing policy followed')
+    expect(items[2]).toBe('Health screening procedure in place')
+    expect(items[3]).toBe('Illness reporting procedure followed')
+  })
+
+  it('REVIEW_SECTIONS now has at least 3 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('buildInitialChecklist includes section 3.3', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.3']).toBeDefined()
+    expect(cl['3.3'].items).toHaveLength(4)
+    expect(cl['3.3'].items[0].label).toBe('Hand washing facilities adequate')
+    expect(cl['3.3'].items[0].status).toBeNull()
+  })
+
+  it('section order is 3.1, 3.2, 3.3', () => {
+    const keys = REVIEW_SECTIONS.map(s => s.key)
+    expect(keys.indexOf('3.1')).toBeLessThan(keys.indexOf('3.2'))
+    expect(keys.indexOf('3.2')).toBeLessThan(keys.indexOf('3.3'))
+  })
+})
+
+// ── Health data open exclusion logic ─────────────────────────────────────────
+
+describe('Health exclusion open/closed logic', () => {
+  // Pure logic: open exclusion = absence_to is null
+  function isOpenExclusion(record: { absence_to: string | null }): boolean {
+    return record.absence_to === null
+  }
+
+  it('null absence_to → open exclusion', () => {
+    expect(isOpenExclusion({ absence_to: null })).toBe(true)
+  })
+
+  it('set absence_to → closed exclusion', () => {
+    expect(isOpenExclusion({ absence_to: '2026-04-30' })).toBe(false)
+  })
+
+  it('filters open exclusions from a list', () => {
+    const records = [
+      { absence_to: null },
+      { absence_to: '2026-04-15' },
+      { absence_to: null },
+    ]
+    const open = records.filter(isOpenExclusion)
+    expect(open).toHaveLength(2)
+  })
+
+  it('empty list returns no open exclusions', () => {
+    expect([].filter(isOpenExclusion)).toHaveLength(0)
+  })
+})
+
+// ── Section 3.3 data panel empty state ───────────────────────────────────────
+
+describe('Section 3.3 data panel empty states', () => {
+  it('all empty arrays produce totalRecords = 0', () => {
+    const data = { new_staff: [], exclusions: [], visitors: [] }
+    const total = data.new_staff.length + data.exclusions.length + data.visitors.length
+    expect(total).toBe(0)
+  })
+
+  it('counts across all three sub-panels correctly', () => {
+    const data = {
+      new_staff:  [{ id: '1' }, { id: '2' }],
+      exclusions: [{ id: '3' }],
+      visitors:   [{ id: '4' }, { id: '5' }, { id: '6' }],
+    }
+    const total = data.new_staff.length + data.exclusions.length + data.visitors.length
+    expect(total).toBe(6)
+  })
+})

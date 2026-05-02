@@ -61,10 +61,32 @@ interface AllergenTrainingRecord {
   refresh_date:       string | null
 }
 
+interface HealthRecord {
+  id:                           string
+  record_type:                  string
+  date:                         string
+  staff_name:                   string | null
+  fit_for_work:                 boolean
+  exclusion_reason:             string | null
+  illness_type:                 string | null
+  absence_from:                 string | null
+  absence_to:                   string | null
+  symptom_free_48h:             boolean | null
+  return_date:                  string | null
+  visitor_name:                 string | null
+  visitor_company:              string | null
+  visitor_declaration_confirmed: boolean | null
+}
+
 interface SectionData {
   '3.2'?: {
     staff_training:    StaffTrainingRecord[]
     allergen_training: AllergenTrainingRecord[]
+  }
+  '3.3'?: {
+    new_staff:  HealthRecord[]
+    exclusions: HealthRecord[]
+    visitors:   HealthRecord[]
   }
 }
 
@@ -332,7 +354,147 @@ function SectionCard({
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Section 3.3 Health data panel ───────────────────────────────────────────
+
+function HealthDataPanel({ data }: { data: SectionData['3.3'] | undefined }) {
+  const [open, setOpen] = useState(false)
+
+  if (!data) return null
+
+  const { new_staff, exclusions, visitors } = data
+  const totalRecords = new_staff.length + exclusions.length + visitors.length
+  const openExclusions = exclusions.filter(r => !r.absence_to)
+
+  return (
+    <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full px-4 py-2.5 bg-slate-50 flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <p className="text-slate-600 text-xs font-bold">Health &amp; hygiene records — review period</p>
+          {openExclusions.length > 0 && (
+            <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">
+              {openExclusions.length} open exclusion{openExclusions.length > 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pt-3 pb-4 space-y-4 bg-white">
+
+          {totalRecords === 0 && (
+            <p className="text-slate-400 text-xs">No health records in this review period</p>
+          )}
+
+          {/* New starter declarations */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              New starter declarations ({new_staff.length})
+            </p>
+            {new_staff.length === 0 ? (
+              <p className="text-slate-400 text-xs">None in period</p>
+            ) : (
+              <div className="space-y-1">
+                {new_staff.map((r, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto] gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                    <div>
+                      <p className="text-slate-800 text-xs font-semibold">{r.staff_name ?? '—'}</p>
+                      <p className="text-slate-400 text-[10px]">
+                        {new Date(r.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] font-bold self-center ${r.fit_for_work ? 'text-green-700' : 'text-red-600'}`}>
+                      {r.fit_for_work ? '✓ Fit' : '✗ Not fit'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Illness exclusions */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Illness exclusions / returns ({exclusions.length})
+            </p>
+            {exclusions.length === 0 ? (
+              <p className="text-slate-400 text-xs">None in period</p>
+            ) : (
+              <div className="space-y-1">
+                {exclusions.map((r, i) => {
+                  const isOpen = !r.absence_to
+                  const notSymptomFree = r.symptom_free_48h === false
+                  return (
+                    <div key={i} className={`py-1.5 border-b border-slate-50 last:border-0 ${isOpen ? 'bg-red-50 -mx-1 px-1 rounded' : ''}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-slate-800 text-xs font-semibold">{r.staff_name ?? '—'}</p>
+                          {r.illness_type && <p className="text-slate-500 text-[10px]">{r.illness_type}</p>}
+                          <p className="text-slate-400 text-[10px]">
+                            {r.absence_from ? new Date(r.absence_from).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '?'}
+                            {' → '}
+                            {r.absence_to ? new Date(r.absence_to).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '?'}
+                          </p>
+                          {r.return_date && (
+                            <p className="text-slate-400 text-[10px]">
+                              Returned {new Date(r.return_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0 space-y-0.5">
+                          {isOpen && <p className="text-red-600 text-[10px] font-bold">🔴 Open</p>}
+                          {notSymptomFree && <p className="text-amber-600 text-[10px] font-bold">⚠ 48h not confirmed</p>}
+                          {!isOpen && !notSymptomFree && <p className="text-green-700 text-[10px] font-bold">✓ Closed</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Visitor declarations */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Visitor declarations ({visitors.length})
+            </p>
+            {visitors.length === 0 ? (
+              <p className="text-slate-400 text-xs">None in period</p>
+            ) : (
+              <div className="space-y-1">
+                {visitors.map((r, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto] gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                    <div>
+                      <p className="text-slate-800 text-xs font-semibold">{r.visitor_name ?? '—'}</p>
+                      {r.visitor_company && <p className="text-slate-400 text-[10px]">{r.visitor_company}</p>}
+                      <p className="text-slate-400 text-[10px]">
+                        {new Date(r.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] font-bold self-center ${r.visitor_declaration_confirmed ? 'text-green-700' : 'text-red-600'}`}>
+                      {r.visitor_declaration_confirmed ? '✓ Declared' : '✗ Not confirmed'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function AnnualReviewPage() {
   const [view,      setView]      = useState<'list' | 'editing'>('list')
@@ -384,11 +546,6 @@ export default function AnnualReviewPage() {
         return a.name.localeCompare(b.name)
       })
       setUsers(allUsers)
-      // Fetch live section data for data panels
-      fetch('/api/haccp/annual-review/data')
-        .then(r => r.ok ? r.json() : {})
-        .then(d => setSectionData(d))
-        .catch(() => {})
     } catch (e) {
       console.error('Annual review load failed:', e)
     } finally {
@@ -400,7 +557,6 @@ export default function AnnualReviewPage() {
 
   function openReview(r: AnnualReview) {
     // Merge any newly added sections into the checklist so they render correctly
-    // (existing drafts won't have sections added in later phases)
     const merged = { ...r.checklist }
     for (const def of REVIEW_SECTIONS) {
       if (!merged[def.key]) {
@@ -412,6 +568,15 @@ export default function AnnualReviewPage() {
     }
     setActive({ ...r, checklist: merged })
     setView('editing')
+    // Fetch section data with review period dates for period-filtered panels
+    const params = new URLSearchParams({
+      from: r.review_period_from,
+      to:   r.review_period_to,
+    })
+    fetch(`/api/haccp/annual-review/data?${params}`)
+      .then(res => res.ok ? res.json() : {})
+      .then(d => setSectionData(d))
+      .catch(() => {})
   }
 
   async function handleCreate() {
@@ -707,6 +872,9 @@ export default function AnnualReviewPage() {
           let dataPanelContent: React.ReactNode = undefined
           if (def.key === '3.2') {
             dataPanelContent = <TrainingDataPanel data={sectionData['3.2']} />
+          }
+          if (def.key === '3.3') {
+            dataPanelContent = <HealthDataPanel data={sectionData['3.3']} />
           }
 
           return (

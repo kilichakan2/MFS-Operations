@@ -27,9 +27,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
+    const { searchParams } = new URL(req.url)
+    const from = searchParams.get('from')  // ISO date e.g. 2025-05-01
+    const to   = searchParams.get('to')    // ISO date e.g. 2026-05-01
+
     // ── Section 3.2 — Training (current state, not period-filtered) ──────────
 
-    // Latest food safety training record per staff_name + training_type
     const { data: staffRaw, error: staffErr } = await supabase
       .from('haccp_staff_training')
       .select('staff_name, job_role, training_type, completion_date, refresh_date, supervisor_name')
@@ -39,7 +42,6 @@ export async function GET(req: NextRequest) {
 
     if (staffErr) throw staffErr
 
-    // Deduplicate: keep first (latest) per staff_name + training_type
     const staffSeen  = new Set<string>()
     const staffTraining = (staffRaw ?? []).filter(r => {
       const key = `${r.staff_name}::${r.training_type}`
@@ -48,7 +50,6 @@ export async function GET(req: NextRequest) {
       return true
     })
 
-    // Latest allergen training record per staff_name
     const { data: allergenRaw, error: allergenErr } = await supabase
       .from('haccp_allergen_training')
       .select('staff_name, job_role, certification_date, refresh_date')
@@ -64,6 +65,37 @@ export async function GET(req: NextRequest) {
       return true
     })
 
+    // ── Section 3.3 — Personal Hygiene & Health (period activity) ────────────
+
+    let healthData: {
+      new_staff:  unknown[]
+      exclusions: unknown[]
+      visitors:   unknown[]
+    } = { new_staff: [], exclusions: [], visitors: [] }
+
+    if (from && to) {
+      const healthQuery = supabase
+        .from('haccp_health_records')
+        .select(
+          'id, record_type, date, staff_name, fit_for_work, exclusion_reason,' +
+          'illness_type, absence_from, absence_to, symptom_free_48h, return_date,' +
+          'visitor_name, visitor_company, visitor_declaration_confirmed'
+        )
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: false })
+
+      const { data: healthRaw, error: healthErr } = await healthQuery
+      if (healthErr) throw healthErr
+
+      const records = (healthRaw ?? []) as unknown as Array<{ record_type: string; [key: string]: unknown }>
+      healthData = {
+        new_staff:  records.filter(r => r.record_type === 'new_staff_declaration'),
+        exclusions: records.filter(r => r.record_type === 'return_to_work'),
+        visitors:   records.filter(r => r.record_type === 'visitor'),
+      }
+    }
+
     // ── Response ─────────────────────────────────────────────────────────────
 
     return NextResponse.json({
@@ -71,7 +103,7 @@ export async function GET(req: NextRequest) {
         staff_training:    staffTraining,
         allergen_training: allergenTraining,
       },
-      // Further sections populated in later phases
+      '3.3': healthData,
     })
 
   } catch (err) {
