@@ -3,8 +3,8 @@
  *
  * SALSA 1.4.1 — Site allergen identification and cross-contamination risk
  *
- * GET  — fetch current assessment (latest record)
- * POST — upsert new assessment (admin only)
+ * GET  — fetch all assessments desc + latest (backward compatible)
+ * POST — insert new assessment (admin only — never overwrites)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -30,11 +30,14 @@ export async function GET(req: NextRequest) {
         updater:updated_by(name)
       `)
       .order('assessed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ assessment: data })
+
+    const all        = data ?? []
+    const latest     = all[0] ?? null
+
+    // backward compatible: assessment = latest (existing callers unaffected)
+    return NextResponse.json({ assessment: latest, all_assessments: all })
   } catch (err) {
     console.error('[GET /api/haccp/allergen-assessment]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

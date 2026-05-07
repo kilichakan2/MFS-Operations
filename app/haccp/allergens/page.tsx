@@ -113,14 +113,17 @@ const DEFAULT_MATERIALS: RawMaterial[] = [
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AllergenAssessmentPage() {
-  const [assessment,  setAssessment]  = useState<AllergenAssessment | null>(null)
-  const [loading,     setLoading]     = useState(true)
-  const [error,       setError]       = useState('')
-  const [isAdmin,     setIsAdmin]     = useState(false)
-  const [editing,     setEditing]     = useState(false)
-  const [saving,      setSaving]      = useState(false)
-  const [saveErr,     setSaveErr]     = useState('')
-  const [flash,       setFlash]       = useState('')
+  const [assessment,      setAssessment]      = useState<AllergenAssessment | null>(null)
+  const [allAssessments,  setAllAssessments]  = useState<AllergenAssessment[]>([])
+  const [loading,         setLoading]         = useState(true)
+  const [error,           setError]           = useState('')
+  const [isAdmin,         setIsAdmin]         = useState(false)
+  const [editBase,        setEditBase]        = useState<AllergenAssessment | null>(null)
+  const [editOrigin,      setEditOrigin]      = useState<'main' | 'history'>('main')
+  const [selectedHistory, setSelectedHistory] = useState<AllergenAssessment | null>(null)
+  const [saving,          setSaving]          = useState(false)
+  const [saveErr,         setSaveErr]         = useState('')
+  const [flash,           setFlash]           = useState('')
 
   // Edit form state
   const [editStatus,    setEditStatus]    = useState<AllergenAssessment['site_status']>('nil_allergens')
@@ -148,6 +151,7 @@ export default function AllergenAssessmentPage() {
       .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
       .then(d => {
         setAssessment(d.assessment ?? null)
+        setAllAssessments(d.all_assessments ?? [])
       })
       .catch(e => setError(`Could not load — ${e.message}`))
       .finally(() => setLoading(false))
@@ -164,16 +168,16 @@ export default function AllergenAssessmentPage() {
 
   useEffect(() => { loadAssessment(); loadReviews() }, [loadAssessment, loadReviews])
 
-  function openEdit() {
-    if (!assessment) return
-    setEditStatus(assessment.site_status)
-    setEditReview(assessment.next_review_date)
-    setEditRisk(assessment.cross_contam_risk)
-    setEditNotes(assessment.procedure_notes ?? '')
-    setEditMaterials(assessment.raw_materials.length > 0
-      ? [...assessment.raw_materials]
+  function openEdit(base: AllergenAssessment, origin: 'main' | 'history') {
+    setEditStatus(base.site_status)
+    setEditReview(base.next_review_date)
+    setEditRisk(base.cross_contam_risk)
+    setEditNotes(base.procedure_notes ?? '')
+    setEditMaterials(base.raw_materials.length > 0
+      ? [...base.raw_materials]
       : [...DEFAULT_MATERIALS])
-    setEditing(true)
+    setEditBase(base)
+    setEditOrigin(origin)
     setSaveErr('')
   }
 
@@ -197,7 +201,8 @@ export default function AllergenAssessmentPage() {
         setSaveErr(d.error ?? 'Save failed')
         return
       }
-      setEditing(false)
+      setEditBase(null)
+      setSelectedHistory(null)
       setFlash('Assessment updated')
       setTimeout(() => setFlash(''), 3000)
       loadAssessment()
@@ -284,8 +289,8 @@ export default function AllergenAssessmentPage() {
           <p className="text-orange-400 text-[10px] font-bold tracking-widest uppercase">HACCP · SALSA 1.4.1</p>
           <h1 className="text-white text-lg font-bold leading-tight">Site Allergen Assessment</h1>
         </div>
-        {isAdmin && assessment && !editing && (
-          <button onClick={openEdit}
+        {isAdmin && assessment && !editBase && !selectedHistory && (
+          <button onClick={() => openEdit(assessment, 'main')}
             className="bg-white/10 hover:bg-white/18 text-white text-xs font-bold px-3 py-2 rounded-xl transition-all">
             Update
           </button>
@@ -303,7 +308,7 @@ export default function AllergenAssessmentPage() {
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
 
-        {assessment && !editing && (
+        {assessment && !editBase && !selectedHistory && (
           <>
             {/* Site status */}
             <div className="bg-white border border-blue-100 rounded-xl px-5 py-4">
@@ -381,13 +386,113 @@ export default function AllergenAssessmentPage() {
                 It must be reviewed annually and updated whenever raw materials, suppliers, or processes change.
               </p>
             </div>
+
+            {/* Version history */}
+            {allAssessments.length > 1 && (
+              <div className="bg-white border border-blue-100 rounded-xl px-5 py-4">
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-3">Version History</p>
+                <div className="space-y-2">
+                  {allAssessments.slice(1).map(a => (
+                    <button key={a.id} onClick={() => setSelectedHistory(a)}
+                      className="w-full flex items-center justify-between gap-3 py-2 border-b border-slate-50 last:border-0 text-left">
+                      <div>
+                        <p className="text-slate-700 text-xs font-semibold">{fmtDate(a.assessed_at)}</p>
+                        <p className="text-slate-400 text-[10px]">
+                          {SITE_STATUS_LABELS[a.site_status]?.label ?? a.site_status} · {a.raw_materials.length} materials
+                          {a.assessor && ` · ${a.assessor.name}`}
+                        </p>
+                      </div>
+                      <svg className="w-4 h-4 text-slate-300 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── Historical detail view ──────────────────────────────────────────── */}
+        {selectedHistory && !editBase && (
+          <>
+            <div className="bg-white border border-blue-100 rounded-xl px-5 py-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Previous Assessment</p>
+                  <p className="text-slate-700 text-sm font-bold">{fmtDate(selectedHistory.assessed_at)}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <button onClick={() => openEdit(selectedHistory, 'history')}
+                      className="bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-xl">
+                      Update based on this
+                    </button>
+                  )}
+                  <button onClick={() => setSelectedHistory(null)}
+                    className="text-slate-400 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200">
+                    ← Back
+                  </button>
+                </div>
+              </div>
+              <span className={`inline-block text-sm font-bold px-3 py-1.5 rounded-xl ${SITE_STATUS_LABELS[selectedHistory.site_status]?.colour ?? ''}`}>
+                {SITE_STATUS_LABELS[selectedHistory.site_status]?.label ?? selectedHistory.site_status}
+              </span>
+              <p className="text-slate-500 text-xs mt-3 leading-relaxed">{selectedHistory.cross_contam_risk}</p>
+            </div>
+
+            <div className="bg-white border border-blue-100 rounded-xl px-5 py-4">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-3">Assessment Details</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-slate-500 text-xs">Date assessed</p>
+                  <p className="text-slate-800 text-xs font-bold">{fmtDate(selectedHistory.assessed_at)}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-slate-500 text-xs">Assessed by</p>
+                  <p className="text-slate-800 text-xs font-bold">{selectedHistory.assessor?.name ?? '—'}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-slate-500 text-xs">Next review due</p>
+                  <p className="text-slate-800 text-xs font-bold">{fmtDate(selectedHistory.next_review_date)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-blue-100 rounded-xl px-5 py-4">
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-3">Raw Materials</p>
+              <div className="space-y-2">
+                {selectedHistory.raw_materials.map((m, i) => {
+                  const statusInfo = ALLERGEN_STATUS_LABELS[m.allergen_status]
+                  return (
+                    <div key={i} className="flex items-start justify-between gap-3 py-2 border-b border-slate-100 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-800 text-sm font-semibold">{m.material}</p>
+                        <p className="text-slate-400 text-[10px] mt-0.5">{m.category}</p>
+                        {m.notes && <p className="text-slate-500 text-xs mt-0.5 italic">{m.notes}</p>}
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-lg flex-shrink-0 ${statusInfo?.colour ?? ''}`}>
+                        {statusInfo?.label ?? m.allergen_status}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {selectedHistory.procedure_notes && (
+              <div className="bg-white border border-blue-100 rounded-xl px-5 py-4">
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Procedure Notes</p>
+                <p className="text-slate-700 text-xs leading-relaxed">{selectedHistory.procedure_notes}</p>
+              </div>
+            )}
           </>
         )}
 
         {/* ── Edit form ──────────────────────────────────────────────────────── */}
-        {editing && (
+        {editBase !== null && (
           <div className="space-y-4">
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Update Allergen Assessment</p>
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+              New version based on {fmtDate(editBase.assessed_at)}
+            </p>
 
             {/* Site status */}
             <div>
@@ -474,7 +579,14 @@ export default function AllergenAssessmentPage() {
             {saveErr && <p className="text-red-600 text-xs">{saveErr}</p>}
 
             <div className="flex gap-3">
-              <button onClick={() => setEditing(false)}
+              <button onClick={() => {
+                setEditBase(null)
+                if (editOrigin === 'history') {
+                  // stay on the history detail view we came from
+                } else {
+                  setSelectedHistory(null)
+                }
+              }}
                 className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-500 text-sm font-bold">
                 Cancel
               </button>
@@ -487,7 +599,7 @@ export default function AllergenAssessmentPage() {
         )}
 
         {/* ── Monthly Allergen Reviews ─────────────────────────────────── */}
-        {!editing && (
+        {!editBase && !selectedHistory && (
           <div className="space-y-3 mt-2">
 
             {/* Section header */}
