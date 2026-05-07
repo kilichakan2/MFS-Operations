@@ -260,7 +260,8 @@ function SmallTile({
 function HomeScreen({ userName, userRole }: { userName: string; userRole: string }) {
   const isAdmin     = userRole === 'admin'
   const now         = useLiveClock()
-  const [status, setStatus]   = useState<TodayStatus | null>(null)
+  const [status, setStatus]               = useState<TodayStatus | null>(null)
+  const [specReviewDue, setSpecReviewDue] = useState(false)
   const [helpSection, setHelp] = useState<string | null>(null)
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -272,6 +273,10 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     fetch('/api/haccp/today-status')
       .then((r) => r.json())
       .then((d) => { if (!d.error) setStatus(d) })
+      .catch(() => {})
+    fetch('/api/haccp/product-specs')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setSpecReviewDue(d.review_due_count > 0) })
       .catch(() => {})
   }, [])
 
@@ -517,6 +522,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <SmallTile id="recall" icon={Icon.audit} label="Recall Contacts" sub="SALSA 3.4"
               badge="View contacts" due={false}
               onTap={() => { window.location.href = '/haccp/recall' }} onHelp={() => setHelp('people')} />
+            <SmallTile id="product-specs" icon={Icon.review} label="Product Specs" sub="BSD 1.6.2"
+              badge={specReviewDue ? 'Review due' : 'View specs'} due={specReviewDue}
+              onTap={() => { window.location.href = '/haccp/product-specs' }} onHelp={() => setHelp('people')} />
             {isAdmin && (
               <SmallTile id="audit" icon={Icon.audit} label="Audit" sub="Records · Export"
                 badge="View all records" due={false}
