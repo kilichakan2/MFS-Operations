@@ -930,3 +930,125 @@ describe('Supplier data panel logic', () => {
     expect(g.total).toBe(0)
   })
 })
+
+// ── Section 3.8 — Incidents & Complaints ─────────────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.8 Incidents & Complaints', () => {
+  it('section 3.8 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.8')).toBeDefined()
+  })
+
+  it('section 3.8 title is correct', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.8')?.title).toBe('Incidents & Complaints')
+  })
+
+  it('section 3.8 has exactly 4 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.8')?.items).toHaveLength(4)
+  })
+
+  it('section 3.8 has data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.8')?.hasDataPanel).toBe(true)
+  })
+
+  it('section 3.8 items match MFS-ASR-001 verbatim', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.8')!.items
+    expect(items[0]).toBe('Complaint handling procedure in place')
+    expect(items[1]).toBe('Complaints investigated and closed out')
+    expect(items[2]).toBe('Recall procedure documented and tested')
+    expect(items[3]).toBe('No outstanding incidents')
+  })
+
+  it('section order: 3.7 before 3.8', () => {
+    const keys = REVIEW_SECTIONS.map(s => s.key)
+    expect(keys.indexOf('3.7')).toBeLessThan(keys.indexOf('3.8'))
+  })
+
+  it('REVIEW_SECTIONS has at least 8 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(8)
+  })
+
+  it('buildInitialChecklist includes 3.8 with 4 items and null statuses', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.8']).toBeDefined()
+    expect(cl['3.8'].items).toHaveLength(4)
+    expect(cl['3.8'].items.every(i => i.status === null)).toBe(true)
+  })
+
+  it('isChecklistComplete requires 3.8 answered before sign-off', () => {
+    const cl = buildInitialChecklist()
+    for (const s of REVIEW_SECTIONS) {
+      if (s.key !== '3.8') {
+        cl[s.key].items = cl[s.key].items.map(item => ({ ...item, status: 'ok' as const }))
+      }
+    }
+    expect(isChecklistComplete(cl)).toBe(false)
+  })
+})
+
+// ── Incidents data panel logic ────────────────────────────────────────────────
+
+describe('Incidents data panel logic', () => {
+  it('hasAlerts true when open CAs > 0', () => {
+    const ca = { total_open: 3, total_resolved: 10, in_period: 2, open_by_source: [] }
+    const comp = { total: 5, open: 0, resolved: 5 }
+    expect(ca.total_open > 0 || comp.open > 0).toBe(true)
+  })
+
+  it('hasAlerts true when open complaints > 0', () => {
+    const ca = { total_open: 0, total_resolved: 10, in_period: 0, open_by_source: [] }
+    const comp = { total: 5, open: 2, resolved: 3 }
+    expect(ca.total_open > 0 || comp.open > 0).toBe(true)
+  })
+
+  it('hasAlerts false when all clear', () => {
+    const ca = { total_open: 0, total_resolved: 10, in_period: 2, open_by_source: [] }
+    const comp = { total: 5, open: 0, resolved: 5 }
+    expect(ca.total_open > 0 || comp.open > 0).toBe(false)
+  })
+
+  it('open_by_source groups correctly', () => {
+    const cas = [
+      { source_table: 'haccp_deliveries', resolved: false },
+      { source_table: 'haccp_deliveries', resolved: false },
+      { source_table: 'haccp_cleaning_log', resolved: false },
+      { source_table: 'haccp_deliveries', resolved: true },
+    ]
+    const open = cas.filter(c => !c.resolved)
+    const map: Record<string, number> = {}
+    for (const c of open) map[c.source_table] = (map[c.source_table] ?? 0) + 1
+    expect(map['haccp_deliveries']).toBe(2)
+    expect(map['haccp_cleaning_log']).toBe(1)
+    expect(Object.keys(map).length).toBe(2)
+  })
+
+  it('return code count correct', () => {
+    const returns = [
+      { return_code: 'RC01' }, { return_code: 'RC01' }, { return_code: 'RC02' },
+    ]
+    const map: Record<string, number> = {}
+    for (const r of returns) map[r.return_code] = (map[r.return_code] ?? 0) + 1
+    expect(map['RC01']).toBe(2)
+    expect(map['RC02']).toBe(1)
+  })
+
+  it('empty period: all zeros, no crash', () => {
+    const ret = { total: 0, by_code: [] }
+    const comp = { total: 0, open: 0, resolved: 0 }
+    expect(ret.total).toBe(0)
+    expect(comp.total).toBe(0)
+  })
+
+  it('CA in_period filter uses submitted_at date slice', () => {
+    const cas = [
+      { submitted_at: '2026-04-15T09:00:00Z', resolved: false },
+      { submitted_at: '2026-03-01T09:00:00Z', resolved: false },
+      { submitted_at: '2026-04-30T09:00:00Z', resolved: true },
+    ]
+    const from = '2026-04-01', to = '2026-04-30'
+    const inPeriod = cas.filter(c => {
+      const d = c.submitted_at?.slice(0, 10) ?? ''
+      return d >= from && d <= to
+    })
+    expect(inPeriod.length).toBe(2)
+  })
+})

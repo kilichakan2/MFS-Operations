@@ -134,7 +134,17 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'Traceability test conducted — mock recall completed forward and backward (BSD 3.4.2)',
     ],
   },
-  // Phase 8 will add: 3.8 Incidents & Complaints
+  {
+    key:          '3.8',
+    title:        'Incidents & Complaints',
+    hasDataPanel: true,
+    items: [
+      'Complaint handling procedure in place',
+      'Complaints investigated and closed out',
+      'Recall procedure documented and tested',
+      'No outstanding incidents',
+    ],
+  },
   // Phase 9 will add: 3.9 Food Fraud, 3.10 Premises & Equipment
 ]
 

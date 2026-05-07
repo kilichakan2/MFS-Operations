@@ -141,6 +141,23 @@ interface SectionData {
       meat_bls_complete: number
     }
   }
+  '3.8'?: {
+    ca_stats: {
+      total_open:     number
+      total_resolved: number
+      in_period:      number
+      open_by_source: { source: string; count: number }[]
+    }
+    returns_stats: {
+      total:   number
+      by_code: { code: string; label: string; count: number }[]
+    }
+    complaints_stats: {
+      total:    number
+      open:     number
+      resolved: number
+    }
+  }
 }
 
 // ─── Training status helpers ─────────────────────────────────────────────────
@@ -947,6 +964,131 @@ function SupplierDataPanel({ data }: { data: SectionData['3.7'] | undefined }) {
   )
 }
 
+// ─── Section 3.8 Incidents & Complaints data panel ───────────────────────────
+
+function IncidentsDataPanel({ data }: { data: SectionData['3.8'] | undefined }) {
+  const [open, setOpen] = useState(false)
+  if (!data) return null
+
+  const { ca_stats: ca, returns_stats: ret, complaints_stats: comp } = data
+  const hasAlerts = ca.total_open > 0 || comp.open > 0
+
+  const alertParts = [
+    ca.total_open > 0   && `${ca.total_open} open CA${ca.total_open > 1 ? 's' : ''}`,
+    comp.open > 0       && `${comp.open} open complaint${comp.open > 1 ? 's' : ''}`,
+  ].filter(Boolean)
+
+  return (
+    <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full px-4 py-2.5 bg-slate-50 flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <svg className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+          <p className="text-slate-600 text-xs font-bold">Incidents, CAs &amp; complaints</p>
+          {hasAlerts && (
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+              {alertParts.join(' · ')}
+            </span>
+          )}
+        </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pt-3 pb-4 space-y-4 bg-white">
+
+          {/* Corrective actions */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Corrective actions
+            </p>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <div className={`rounded-lg px-3 py-2 text-center ${ca.total_open > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                <p className={`font-bold text-sm ${ca.total_open > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{ca.total_open}</p>
+                <p className="text-slate-400 text-[10px]">Open (all time)</p>
+              </div>
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
+                <p className="text-green-700 font-bold text-sm">{ca.total_resolved}</p>
+                <p className="text-slate-400 text-[10px]">Resolved</p>
+              </div>
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
+                <p className="text-slate-900 font-bold text-sm">{ca.in_period}</p>
+                <p className="text-slate-400 text-[10px]">Raised in period</p>
+              </div>
+            </div>
+            {ca.open_by_source.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-slate-400 text-[10px] font-semibold">Open by area:</p>
+                {ca.open_by_source.map(s => (
+                  <div key={s.source} className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-1.5">
+                    <p className="text-slate-700 text-xs">{s.source}</p>
+                    <p className="text-amber-700 text-xs font-bold">{s.count}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Returns */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Returns — review period
+            </p>
+            {ret.total === 0 ? (
+              <p className="text-slate-400 text-xs">No returns in this period</p>
+            ) : (
+              <div className="space-y-1">
+                {ret.by_code.map(r => (
+                  <div key={r.code} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-1.5">
+                    <p className="text-slate-700 text-xs">{r.label} <span className="text-slate-400">({r.code})</span></p>
+                    <p className="text-slate-900 text-xs font-bold">{r.count}</p>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between px-3 py-1">
+                  <p className="text-slate-500 text-xs font-semibold">Total</p>
+                  <p className="text-slate-900 text-xs font-bold">{ret.total}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Complaints */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Complaints — review period
+            </p>
+            {comp.total === 0 ? (
+              <p className="text-slate-400 text-xs">No complaints in this period</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
+                  <p className="text-slate-900 font-bold text-sm">{comp.total}</p>
+                  <p className="text-slate-400 text-[10px]">Total</p>
+                </div>
+                <div className={`rounded-lg px-3 py-2 text-center ${comp.open > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                  <p className={`font-bold text-sm ${comp.open > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{comp.open}</p>
+                  <p className="text-slate-400 text-[10px]">Open</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
+                  <p className="text-green-700 font-bold text-sm">{comp.resolved}</p>
+                  <p className="text-slate-400 text-[10px]">Resolved</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AnnualReviewPage() {
   const [view,      setView]      = useState<'list' | 'editing'>('list')
   const [reviews,   setReviews]   = useState<AnnualReview[]>([])
@@ -1323,11 +1465,12 @@ export default function AnnualReviewPage() {
 
           // Build data panel content per section
           let dataPanelContent: React.ReactNode = undefined
-          if (def.key === '3.2') dataPanelContent = <TrainingDataPanel   data={sectionData['3.2']} />
-          if (def.key === '3.3') dataPanelContent = <HealthDataPanel     data={sectionData['3.3']} />
-          if (def.key === '3.4') dataPanelContent = <CleaningDataPanel   data={sectionData['3.4']} />
+          if (def.key === '3.2') dataPanelContent = <TrainingDataPanel    data={sectionData['3.2']} />
+          if (def.key === '3.3') dataPanelContent = <HealthDataPanel      data={sectionData['3.3']} />
+          if (def.key === '3.4') dataPanelContent = <CleaningDataPanel    data={sectionData['3.4']} />
           if (def.key === '3.6') dataPanelContent = <TempControlDataPanel data={sectionData['3.6']} />
-          if (def.key === '3.7') dataPanelContent = <SupplierDataPanel   data={sectionData['3.7']} />
+          if (def.key === '3.7') dataPanelContent = <SupplierDataPanel    data={sectionData['3.7']} />
+          if (def.key === '3.8') dataPanelContent = <IncidentsDataPanel   data={sectionData['3.8']} />
 
           return (
             <SectionCard

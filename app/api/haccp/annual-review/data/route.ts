@@ -288,6 +288,108 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Section 3.8 — Incidents & Complaints ────────────────────────────────
+
+    // Sub-panel 1: Corrective actions
+    // Open = all currently open (not period-filtered — auditor needs current backlog)
+    // Total in period = how many were raised during review period
+    const { data: caAllRaw, error: caAllErr } = await supabase
+      .from('haccp_corrective_actions')
+      .select('source_table, resolved, submitted_at')
+
+    if (caAllErr) throw caAllErr
+
+    const caAll   = caAllRaw ?? []
+    const caOpen  = caAll.filter(c => !c.resolved)
+
+    // Count by source table (open only) — map to short labels
+    const CA_SOURCE_LABELS: Record<string, string> = {
+      haccp_cold_storage_temps: 'Cold storage',
+      haccp_deliveries:         'Deliveries',
+      haccp_cleaning_log:       'Cleaning',
+      haccp_calibration_log:    'Calibration',
+      haccp_mince_log:          'Mince',
+      haccp_processing_temps:   'Process room',
+      haccp_returns:            'Returns',
+      haccp_weekly_review:      'Weekly review',
+      haccp_monthly_review:     'Monthly review',
+      haccp_daily_diary:        'Daily diary',
+    }
+
+    const openBySource: Record<string, number> = {}
+    for (const ca of caOpen) {
+      const label = CA_SOURCE_LABELS[ca.source_table] ?? ca.source_table
+      openBySource[label] = (openBySource[label] ?? 0) + 1
+    }
+
+    // Period-created count
+    let caInPeriod = 0
+    if (from && to) {
+      caInPeriod = caAll.filter(c => {
+        const d = c.submitted_at?.slice(0, 10) ?? ''
+        return d >= from && d <= to
+      }).length
+    }
+
+    const caStats = {
+      total_open:     caOpen.length,
+      total_resolved: caAll.filter(c => c.resolved).length,
+      in_period:      caInPeriod,
+      open_by_source: Object.entries(openBySource).map(([source, count]) => ({ source, count })),
+    }
+
+    // Sub-panel 2: Returns (period-filtered)
+    let returnsStats: { total: number; by_code: { code: string; label: string; count: number }[] } =
+      { total: 0, by_code: [] }
+
+    if (from && to) {
+      const { data: returnsRaw, error: returnsErr } = await supabase
+        .from('haccp_returns')
+        .select('return_code')
+        .gte('date', from)
+        .lte('date', to)
+
+      if (returnsErr) throw returnsErr
+
+      const RETURN_LABELS: Record<string, string> = {
+        RC01: 'Temperature', RC02: 'Quality', RC03: 'Wrong product',
+        RC04: 'Short shelf life', RC05: 'Packaging', RC06: 'Quantity',
+        RC07: 'Cancelled', RC08: 'Other',
+      }
+
+      const codeMap: Record<string, number> = {}
+      for (const r of returnsRaw ?? []) {
+        codeMap[r.return_code] = (codeMap[r.return_code] ?? 0) + 1
+      }
+
+      returnsStats = {
+        total:   (returnsRaw ?? []).length,
+        by_code: Object.entries(codeMap).map(([code, count]) => ({
+          code, label: RETURN_LABELS[code] ?? code, count,
+        })).sort((a, b) => b.count - a.count),
+      }
+    }
+
+    // Sub-panel 3: Complaints (period-filtered by created_at)
+    let complaintsStats = { total: 0, open: 0, resolved: 0 }
+
+    if (from && to) {
+      const { data: complaintsRaw, error: complaintsErr } = await supabase
+        .from('complaints')
+        .select('status')
+        .gte('created_at', from)
+        .lte('created_at', to + 'T23:59:59Z')
+
+      if (complaintsErr) throw complaintsErr
+
+      const comps = complaintsRaw ?? []
+      complaintsStats = {
+        total:    comps.length,
+        open:     comps.filter(c => c.status === 'open').length,
+        resolved: comps.filter(c => c.status === 'resolved').length,
+      }
+    }
+
     // ── Response ─────────────────────────────────────────────────────────────
 
     return NextResponse.json({
@@ -296,6 +398,7 @@ export async function GET(req: NextRequest) {
       '3.4': cleaningData,
       '3.6': { calibration, cold_storage: coldStorage, delivery_temps: deliveryTemps },
       '3.7': { supplier_stats: supplierStats, spec_stats: specStats, goods_in: goodsIn },
+      '3.8': { ca_stats: caStats, returns_stats: returnsStats, complaints_stats: complaintsStats },
     })
 
   } catch (err) {
