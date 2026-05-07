@@ -1139,7 +1139,7 @@ export default function AnnualReviewPage() {
       {/* Header */}
       <div className="bg-white border-b border-blue-100 px-5 py-4">
         <div className="flex items-center gap-3">
-          <button onClick={() => setView('list')} className="text-slate-400 hover:text-slate-600">
+          <button onClick={() => { setView('list'); load() }} className="text-slate-400 hover:text-slate-600">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
