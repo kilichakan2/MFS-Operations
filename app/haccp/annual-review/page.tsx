@@ -1184,6 +1184,129 @@ function FoodFraudDefencePanel({ data }: { data: SectionData['3.9'] | undefined 
   )
 }
 
+// ─── Section 4: Action Plan ───────────────────────────────────────────────────
+
+function ActionPlanSection({
+  items, locked, onChange,
+}: {
+  items:    ActionPlanItem[]
+  locked:   boolean
+  onChange: (items: ActionPlanItem[]) => void
+}) {
+  // Normalise to exactly 6 rows
+  const rows: ActionPlanItem[] = Array.from({ length: 6 }, (_, i) => (
+    items[i] ?? { ref: i + 1, action: '', owner: '', due_date: '', status: 'open' }
+  ))
+
+  function updateRow(idx: number, field: keyof ActionPlanItem, value: string) {
+    const updated = rows.map((r, i) =>
+      i === idx ? { ...r, [field]: value } : r
+    )
+    onChange(updated)
+  }
+
+  function toggleStatus(idx: number) {
+    const updated = rows.map((r, i) =>
+      i === idx ? { ...r, status: r.status === 'open' ? 'complete' as const : 'open' as const } : r
+    )
+    onChange(updated)
+  }
+
+  const inputCls = 'w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-orange-400 disabled:bg-slate-50 disabled:text-slate-400'
+
+  return (
+    <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100">
+        <p className="text-slate-900 font-bold text-sm">4. Action Plan</p>
+        <p className="text-slate-400 text-xs mt-0.5">Record actions identified during this review</p>
+      </div>
+
+      <div className="divide-y divide-slate-50">
+        {rows.map((row, idx) => (
+          <div key={idx} className="px-4 py-3">
+            <div className="flex items-start gap-3">
+              {/* Ref number */}
+              <span className="text-slate-400 text-xs font-bold w-4 flex-shrink-0 mt-1.5">{idx + 1}</span>
+
+              <div className="flex-1 space-y-2">
+                {/* Action required */}
+                {locked ? (
+                  <p className="text-slate-700 text-xs">{row.action || '—'}</p>
+                ) : (
+                  <textarea
+                    value={row.action}
+                    onChange={e => updateRow(idx, 'action', e.target.value)}
+                    placeholder="Describe action required…"
+                    rows={2}
+                    className={inputCls + ' resize-none'}
+                  />
+                )}
+
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Owner */}
+                  <div>
+                    <p className="text-slate-400 text-[10px] mb-0.5">Owner</p>
+                    {locked ? (
+                      <p className="text-slate-700 text-xs">{row.owner || '—'}</p>
+                    ) : (
+                      <input
+                        value={row.owner}
+                        onChange={e => updateRow(idx, 'owner', e.target.value)}
+                        placeholder="Name"
+                        className={inputCls}
+                      />
+                    )}
+                  </div>
+
+                  {/* Due date */}
+                  <div>
+                    <p className="text-slate-400 text-[10px] mb-0.5">Due date</p>
+                    {locked ? (
+                      <p className="text-slate-700 text-xs">
+                        {row.due_date ? new Date(row.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </p>
+                    ) : (
+                      <input
+                        type="date"
+                        value={row.due_date}
+                        onChange={e => updateRow(idx, 'due_date', e.target.value)}
+                        className={inputCls}
+                      />
+                    )}
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <p className="text-slate-400 text-[10px] mb-0.5">Status</p>
+                    {locked ? (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        row.status === 'complete' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        {row.status === 'complete' ? 'Complete' : 'Open'}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => toggleStatus(idx)}
+                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${
+                          row.status === 'complete'
+                            ? 'bg-green-100 text-green-700 border-green-200'
+                            : 'bg-white text-slate-500 border-slate-200'
+                        }`}
+                      >
+                        {row.status === 'complete' ? '✓ Complete' : 'Open'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function AnnualReviewPage() {
   const [view,      setView]      = useState<'list' | 'editing'>('list')
   const [reviews,   setReviews]   = useState<AnnualReview[]>([])
@@ -1349,6 +1472,27 @@ export default function AnnualReviewPage() {
   async function handleSectionNotesSave(sectionKey: string) {
     if (!active) return
     await saveChecklist(active.checklist)
+  }
+
+  // ── Action plan ─────────────────────────────────────────────────────────────
+
+  function handleActionPlanChange(items: ActionPlanItem[]) {
+    if (!active || active.locked) return
+    setActive(prev => prev ? { ...prev, action_plan: items } : prev)
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(async () => {
+      setSaving(true)
+      try {
+        const res = await fetch(`/api/haccp/annual-review`, {
+          method:  'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ id: active.id, action_plan: items }),
+        })
+        if (!res.ok) setSaveErr('Auto-save failed')
+        else setSaveErr('')
+      } catch { setSaveErr('Auto-save failed') }
+      finally { setSaving(false) }
+    }, 800)
   }
 
   // ── Sign-off ────────────────────────────────────────────────────────────────
@@ -1581,12 +1725,12 @@ export default function AnnualReviewPage() {
           )
         })}
 
-        {/* Coming soon placeholder for unbuilt sections */}
-        {!active.locked && (
-          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-xl px-4 py-4 text-center">
-            <p className="text-slate-400 text-xs">Sections 3.2–3.12 will be added in subsequent phases</p>
-          </div>
-        )}
+        {/* Action Plan — Section 4 */}
+        <ActionPlanSection
+          items={active.action_plan}
+          locked={active.locked}
+          onChange={handleActionPlanChange}
+        />
 
         {/* Sign-off section */}
         {!active.locked && isAdmin && (
