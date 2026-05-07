@@ -959,12 +959,11 @@ export default function AnnualReviewPage() {
               {fmtDate(active.review_period_from)} → {fmtDate(active.review_period_to)}
             </p>
           </div>
-          <div className="text-right">
-            {saving ? (
-              <p className="text-slate-400 text-[10px]">Saving…</p>
-            ) : (
-              <p className="text-slate-400 text-[10px]">{completedCount}/{totalSections} sections</p>
+          <div className="text-right flex items-center gap-2">
+            {saving && (
+              <span className="text-[10px] font-bold text-orange-500 animate-pulse">Saving…</span>
             )}
+            <p className="text-slate-400 text-[10px]">{completedCount}/{totalSections} sections</p>
           </div>
         </div>
         {/* Progress bar */}
