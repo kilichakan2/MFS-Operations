@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from('users')
       .select('id, name, role')
+      .in('role', ['admin', 'warehouse', 'butcher'])
       .eq('active', true)
       .order('name', { ascending: true })
 
