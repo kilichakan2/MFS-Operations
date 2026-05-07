@@ -156,7 +156,17 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'Cyber security measures in place',
     ],
   },
-  // Phase 10 will add: 3.10 Premises & Equipment
+  {
+    key:          '3.10',
+    title:        'Premises & Equipment',
+    hasDataPanel: false,
+    items: [
+      'Premises in good repair',
+      'Equipment maintained and fit for purpose',
+      'Glass/breakables register up to date',
+      'Water supply safe (testing current)',
+    ],
+  },
 ]
 
 // ─── Training status logic (used in data panel + tests) ──────────────────────

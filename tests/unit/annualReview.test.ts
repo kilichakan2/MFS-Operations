@@ -1151,3 +1151,57 @@ describe('FoodFraudDefencePanel logic', () => {
     expect(hasAlerts).toBe(true)
   })
 })
+
+// ── Section 3.10 — Premises & Equipment ──────────────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.10 Premises & Equipment', () => {
+  it('section 3.10 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.10')).toBeDefined()
+  })
+
+  it('section 3.10 title is correct', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.10')?.title).toBe('Premises & Equipment')
+  })
+
+  it('section 3.10 has exactly 4 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.10')?.items).toHaveLength(4)
+  })
+
+  it('section 3.10 has no data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.10')?.hasDataPanel).toBe(false)
+  })
+
+  it('section 3.10 items match MFS-ASR-001 verbatim', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.10')!.items
+    expect(items[0]).toBe('Premises in good repair')
+    expect(items[1]).toBe('Equipment maintained and fit for purpose')
+    expect(items[2]).toBe('Glass/breakables register up to date')
+    expect(items[3]).toBe('Water supply safe (testing current)')
+  })
+
+  it('section order: 3.9 before 3.10', () => {
+    const keys = REVIEW_SECTIONS.map(s => s.key)
+    expect(keys.indexOf('3.9')).toBeLessThan(keys.indexOf('3.10'))
+  })
+
+  it('REVIEW_SECTIONS has at least 10 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('buildInitialChecklist includes 3.10 with 4 items and null statuses', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.10']).toBeDefined()
+    expect(cl['3.10'].items).toHaveLength(4)
+    expect(cl['3.10'].items.every(i => i.status === null)).toBe(true)
+  })
+
+  it('isChecklistComplete requires 3.10 answered', () => {
+    const cl = buildInitialChecklist()
+    for (const s of REVIEW_SECTIONS) {
+      if (s.key !== '3.10') {
+        cl[s.key].items = cl[s.key].items.map(item => ({ ...item, status: 'ok' as const }))
+      }
+    }
+    expect(isChecklistComplete(cl)).toBe(false)
+  })
+})
