@@ -261,8 +261,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   const isAdmin     = userRole === 'admin'
   const now         = useLiveClock()
   const [status, setStatus]               = useState<TodayStatus | null>(null)
-  const [specReviewDue,   setSpecReviewDue]   = useState(false)
-  const [fraudReviewDue,  setFraudReviewDue]  = useState(false)
+  const [specReviewDue,     setSpecReviewDue]     = useState(false)
+  const [fraudReviewDue,    setFraudReviewDue]    = useState(false)
+  const [defenceReviewDue,  setDefenceReviewDue]  = useState(false)
   const [helpSection, setHelp] = useState<string | null>(null)
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -282,6 +283,10 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
     fetch('/api/haccp/food-fraud')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setFraudReviewDue(d.review_due === true) })
+      .catch(() => {})
+    fetch('/api/haccp/food-defence')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setDefenceReviewDue(d.review_due === true) })
       .catch(() => {})
   }, [])
 
@@ -533,6 +538,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <SmallTile id="food-fraud" icon={Icon.audit} label="Food Fraud" sub="BSD 1.6.4"
               badge={fraudReviewDue ? 'Review due' : 'Current'} due={fraudReviewDue}
               onTap={() => { window.location.href = '/haccp/food-fraud' }} onHelp={() => setHelp('people')} />
+            <SmallTile id="food-defence" icon={Icon.audit} label="Food Defence" sub="SALSA 4.2.3"
+              badge={defenceReviewDue ? 'Review due' : 'Current'} due={defenceReviewDue}
+              onTap={() => { window.location.href = '/haccp/food-defence' }} onHelp={() => setHelp('people')} />
             {isAdmin && (
               <SmallTile id="audit" icon={Icon.audit} label="Audit" sub="Records · Export"
                 badge="View all records" due={false}
