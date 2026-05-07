@@ -95,9 +95,22 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'Equipment sanitisation effective (82C steriliser)',
     ],
   },
-  // Phase 5 will add: 3.5 Pest Control
-  // Phase 6 will add: 3.6 Temperature, 3.7 Suppliers, 3.8 Incidents
-  // Phase 7 will add: 3.9 Food Fraud, 3.10 Premises
+  {
+    key:          '3.5',
+    title:        'Pest Control',
+    hasDataPanel: false,
+    items: [
+      'Pest control contract in place and service contract reviewed',
+      'Contractor visit reports reviewed — min every 12 weeks',
+      'Bait plan/site plan up to date',
+      'Site adequately proofed — no gaps, doors seal, no evidence of pest activity',
+      'EFK UV bulbs changed annually',
+      'Contractor recommendations actioned and trend analysis completed',
+    ],
+  },
+  // Phase 6 will add: 3.6 Temperature Control
+  // Phase 7 will add: 3.7 Supplier Control & Traceability, 3.8 Incidents & Complaints
+  // Phase 8 will add: 3.9 Food Fraud, 3.10 Premises & Equipment
 ]
 
 // ─── Training status logic (used in data panel + tests) ──────────────────────

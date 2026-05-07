@@ -611,3 +611,61 @@ describe('Cleaning data panel logic', () => {
     expect(hasAlerts(0, 0)).toBe(false)
   })
 })
+
+// ── Section 3.5 — Pest Control ────────────────────────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.5 Pest Control', () => {
+  it('section 3.5 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.5')).toBeDefined()
+  })
+
+  it('section 3.5 title is correct', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.5')?.title).toBe('Pest Control')
+  })
+
+  it('section 3.5 has exactly 6 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.5')?.items).toHaveLength(6)
+  })
+
+  it('section 3.5 has NO data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.5')?.hasDataPanel).toBe(false)
+  })
+
+  it('section 3.5 items match BSD 1.9 compliant labels verbatim', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.5')!.items
+    expect(items[0]).toBe('Pest control contract in place and service contract reviewed')
+    expect(items[1]).toBe('Contractor visit reports reviewed — min every 12 weeks')
+    expect(items[2]).toBe('Bait plan/site plan up to date')
+    expect(items[3]).toBe('Site adequately proofed — no gaps, doors seal, no evidence of pest activity')
+    expect(items[4]).toBe('EFK UV bulbs changed annually')
+    expect(items[5]).toBe('Contractor recommendations actioned and trend analysis completed')
+  })
+
+  it('section order: 3.4 before 3.5', () => {
+    const keys = REVIEW_SECTIONS.map(s => s.key)
+    expect(keys.indexOf('3.4')).toBeLessThan(keys.indexOf('3.5'))
+  })
+
+  it('REVIEW_SECTIONS has at least 5 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('buildInitialChecklist includes 3.5 with 6 items and null statuses', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.5']).toBeDefined()
+    expect(cl['3.5'].items).toHaveLength(6)
+    expect(cl['3.5'].items[0].label).toBe('Pest control contract in place and service contract reviewed')
+    expect(cl['3.5'].items.every(i => i.status === null)).toBe(true)
+  })
+
+  it('isChecklistComplete requires 3.5 to be complete before sign-off', () => {
+    const cl = buildInitialChecklist()
+    // Complete every section except 3.5
+    for (const s of REVIEW_SECTIONS) {
+      if (s.key !== '3.5') {
+        cl[s.key].items = cl[s.key].items.map(item => ({ ...item, status: 'ok' as const }))
+      }
+    }
+    expect(isChecklistComplete(cl)).toBe(false)
+  })
+})
