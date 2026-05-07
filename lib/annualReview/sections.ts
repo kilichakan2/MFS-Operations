@@ -145,7 +145,18 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'No outstanding incidents',
     ],
   },
-  // Phase 9 will add: 3.9 Food Fraud, 3.10 Premises & Equipment
+  {
+    key:          '3.9',
+    title:        'Food Fraud & Food Defence',
+    hasDataPanel: true,
+    items: [
+      'Food fraud risk assessment completed',
+      'Food defence plan in place',
+      'Site security adequate',
+      'Cyber security measures in place',
+    ],
+  },
+  // Phase 10 will add: 3.10 Premises & Equipment
 ]
 
 // ─── Training status logic (used in data panel + tests) ──────────────────────

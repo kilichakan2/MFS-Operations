@@ -390,6 +390,41 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Section 3.9 — Food Fraud & Food Defence ──────────────────────────────
+    // Current-state only — not period-filtered (these are standing documents)
+
+    const { data: ffRaw } = await supabase
+      .from('haccp_food_fraud_assessments')
+      .select('version, issue_date, next_review_date')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const { data: fdRaw } = await supabase
+      .from('haccp_food_defence_plans')
+      .select('version, issue_date, next_review_date')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const todayStr = new Date().toISOString().slice(0, 10)
+
+    const foodFraudStatus = {
+      exists:      !!ffRaw,
+      version:     ffRaw?.version     ?? null,
+      issue_date:  ffRaw?.issue_date  ?? null,
+      next_review: ffRaw?.next_review_date ?? null,
+      review_due:  !ffRaw || ffRaw.next_review_date < todayStr,
+    }
+
+    const foodDefenceStatus = {
+      exists:      !!fdRaw,
+      version:     fdRaw?.version     ?? null,
+      issue_date:  fdRaw?.issue_date  ?? null,
+      next_review: fdRaw?.next_review_date ?? null,
+      review_due:  !fdRaw || fdRaw.next_review_date < todayStr,
+    }
+
     // ── Response ─────────────────────────────────────────────────────────────
 
     return NextResponse.json({
@@ -399,6 +434,7 @@ export async function GET(req: NextRequest) {
       '3.6': { calibration, cold_storage: coldStorage, delivery_temps: deliveryTemps },
       '3.7': { supplier_stats: supplierStats, spec_stats: specStats, goods_in: goodsIn },
       '3.8': { ca_stats: caStats, returns_stats: returnsStats, complaints_stats: complaintsStats },
+      '3.9': { food_fraud: foodFraudStatus, food_defence: foodDefenceStatus },
     })
 
   } catch (err) {

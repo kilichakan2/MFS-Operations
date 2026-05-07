@@ -158,6 +158,16 @@ interface SectionData {
       resolved: number
     }
   }
+  '3.9'?: {
+    food_fraud: {
+      exists: boolean; version: string | null
+      issue_date: string | null; next_review: string | null; review_due: boolean
+    }
+    food_defence: {
+      exists: boolean; version: string | null
+      issue_date: string | null; next_review: string | null; review_due: boolean
+    }
+  }
 }
 
 // ─── Training status helpers ─────────────────────────────────────────────────
@@ -1089,6 +1099,91 @@ function IncidentsDataPanel({ data }: { data: SectionData['3.8'] | undefined }) 
   )
 }
 
+// ─── Section 3.9 Food Fraud & Food Defence data panel ────────────────────────
+
+function FoodFraudDefencePanel({ data }: { data: SectionData['3.9'] | undefined }) {
+  const [open, setOpen] = useState(false)
+  if (!data) return null
+
+  const { food_fraud: ff, food_defence: fd } = data
+  const hasAlerts = ff.review_due || !ff.exists || fd.review_due || !fd.exists
+
+  const alertParts = [
+    !ff.exists           && 'Fraud assessment missing',
+    ff.exists && ff.review_due  && 'Fraud review due',
+    !fd.exists           && 'Defence plan missing',
+    fd.exists && fd.review_due  && 'Defence review due',
+  ].filter(Boolean)
+
+  function fmtDate(iso: string | null) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  }
+
+  function DocCard({
+    label, docRef, d,
+  }: {
+    label: string
+    docRef: string
+    d: { exists: boolean; version: string | null; issue_date: string | null; next_review: string | null; review_due: boolean }
+  }) {
+    if (!d.exists) return (
+      <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+        <p className="text-red-700 text-xs font-bold">{label}</p>
+        <p className="text-red-600 text-[10px] mt-0.5">{docRef} — not on file</p>
+      </div>
+    )
+    return (
+      <div className={`border rounded-xl px-4 py-3 ${d.review_due ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <p className="text-slate-800 text-xs font-bold">{label}</p>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${d.review_due ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+            {d.review_due ? 'Review due' : 'Current'}
+          </span>
+        </div>
+        <p className="text-slate-500 text-[10px]">{docRef} · {d.version}</p>
+        <div className="grid grid-cols-2 gap-2 mt-2 text-[10px]">
+          <div><p className="text-slate-400">Issued</p><p className="font-semibold text-slate-700">{fmtDate(d.issue_date)}</p></div>
+          <div><p className="text-slate-400">Next review</p><p className={`font-semibold ${d.review_due ? 'text-amber-700' : 'text-slate-700'}`}>{fmtDate(d.next_review)}</p></div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full px-4 py-2.5 bg-slate-50 flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <svg className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <p className="text-slate-600 text-xs font-bold">Food fraud &amp; food defence documents</p>
+          {hasAlerts && (
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+              {alertParts.join(' · ')}
+            </span>
+          )}
+        </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pt-3 pb-4 space-y-3 bg-white">
+          <DocCard label="Food Fraud Risk Assessment" docRef="MFS-FFRA-001" d={ff} />
+          <DocCard label="Food Defence Plan"          docRef="MFS-FDP-001"  d={fd} />
+          <p className="text-slate-400 text-[10px]">
+            Items 3 &amp; 4 (site security, cyber security) are covered within the Food Defence Plan.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AnnualReviewPage() {
   const [view,      setView]      = useState<'list' | 'editing'>('list')
   const [reviews,   setReviews]   = useState<AnnualReview[]>([])
@@ -1469,8 +1564,9 @@ export default function AnnualReviewPage() {
           if (def.key === '3.3') dataPanelContent = <HealthDataPanel      data={sectionData['3.3']} />
           if (def.key === '3.4') dataPanelContent = <CleaningDataPanel    data={sectionData['3.4']} />
           if (def.key === '3.6') dataPanelContent = <TempControlDataPanel data={sectionData['3.6']} />
-          if (def.key === '3.7') dataPanelContent = <SupplierDataPanel    data={sectionData['3.7']} />
-          if (def.key === '3.8') dataPanelContent = <IncidentsDataPanel   data={sectionData['3.8']} />
+          if (def.key === '3.7') dataPanelContent = <SupplierDataPanel      data={sectionData['3.7']} />
+          if (def.key === '3.8') dataPanelContent = <IncidentsDataPanel     data={sectionData['3.8']} />
+          if (def.key === '3.9') dataPanelContent = <FoodFraudDefencePanel  data={sectionData['3.9']} />
 
           return (
             <SectionCard

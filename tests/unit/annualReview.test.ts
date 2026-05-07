@@ -1052,3 +1052,102 @@ describe('Incidents data panel logic', () => {
     expect(inPeriod.length).toBe(2)
   })
 })
+
+// ── Section 3.9 — Food Fraud & Food Defence ──────────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.9 Food Fraud & Food Defence', () => {
+  it('section 3.9 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.9')).toBeDefined()
+  })
+
+  it('section 3.9 title is correct', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.9')?.title).toBe('Food Fraud & Food Defence')
+  })
+
+  it('section 3.9 has exactly 4 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.9')?.items).toHaveLength(4)
+  })
+
+  it('section 3.9 has data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.9')?.hasDataPanel).toBe(true)
+  })
+
+  it('section 3.9 items match MFS-ASR-001 verbatim', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.9')!.items
+    expect(items[0]).toBe('Food fraud risk assessment completed')
+    expect(items[1]).toBe('Food defence plan in place')
+    expect(items[2]).toBe('Site security adequate')
+    expect(items[3]).toBe('Cyber security measures in place')
+  })
+
+  it('section order: 3.8 before 3.9', () => {
+    const keys = REVIEW_SECTIONS.map(s => s.key)
+    expect(keys.indexOf('3.8')).toBeLessThan(keys.indexOf('3.9'))
+  })
+
+  it('REVIEW_SECTIONS has at least 9 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(9)
+  })
+
+  it('buildInitialChecklist includes 3.9 with 4 items and null statuses', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.9']).toBeDefined()
+    expect(cl['3.9'].items).toHaveLength(4)
+    expect(cl['3.9'].items.every(i => i.status === null)).toBe(true)
+  })
+
+  it('isChecklistComplete requires 3.9 answered', () => {
+    const cl = buildInitialChecklist()
+    for (const s of REVIEW_SECTIONS) {
+      if (s.key !== '3.9') {
+        cl[s.key].items = cl[s.key].items.map(item => ({ ...item, status: 'ok' as const }))
+      }
+    }
+    expect(isChecklistComplete(cl)).toBe(false)
+  })
+})
+
+// ── 3.9 data panel logic ──────────────────────────────────────────────────────
+
+describe('FoodFraudDefencePanel logic', () => {
+  const today = new Date().toISOString().slice(0, 10)
+  const future = '2027-01-12'
+  const past   = '2025-01-01'
+
+  it('review_due false when next_review in future', () => {
+    expect(!('exists') || future < today).toBe(false)
+    expect(future < today).toBe(false)
+  })
+
+  it('review_due true when next_review in past', () => {
+    expect(past < today).toBe(true)
+  })
+
+  it('hasAlerts false when both current', () => {
+    const ff = { exists: true, version: 'V1.0', issue_date: '2026-01-12', next_review: future, review_due: false }
+    const fd = { exists: true, version: 'V1.0', issue_date: '2026-01-12', next_review: future, review_due: false }
+    const hasAlerts = ff.review_due || !ff.exists || fd.review_due || !fd.exists
+    expect(hasAlerts).toBe(false)
+  })
+
+  it('hasAlerts true when fraud assessment missing', () => {
+    const ff = { exists: false, version: null, issue_date: null, next_review: null, review_due: true }
+    const fd = { exists: true,  version: 'V1.0', issue_date: '2026-01-12', next_review: future, review_due: false }
+    const hasAlerts = ff.review_due || !ff.exists || fd.review_due || !fd.exists
+    expect(hasAlerts).toBe(true)
+  })
+
+  it('hasAlerts true when defence plan overdue', () => {
+    const ff = { exists: true, version: 'V1.0', issue_date: '2026-01-12', next_review: future, review_due: false }
+    const fd = { exists: true, version: 'V1.0', issue_date: '2025-01-12', next_review: past,   review_due: true }
+    const hasAlerts = ff.review_due || !ff.exists || fd.review_due || !fd.exists
+    expect(hasAlerts).toBe(true)
+  })
+
+  it('hasAlerts true when both missing', () => {
+    const ff = { exists: false, version: null, issue_date: null, next_review: null, review_due: true }
+    const fd = { exists: false, version: null, issue_date: null, next_review: null, review_due: true }
+    const hasAlerts = ff.review_due || !ff.exists || fd.review_due || !fd.exists
+    expect(hasAlerts).toBe(true)
+  })
+})
