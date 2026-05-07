@@ -1711,6 +1711,14 @@ export default function AnnualReviewPage() {
           if (def.key === '3.7') dataPanelContent = <SupplierDataPanel      data={sectionData['3.7']} />
           if (def.key === '3.8') dataPanelContent = <IncidentsDataPanel     data={sectionData['3.8']} />
           if (def.key === '3.9') dataPanelContent = <FoodFraudDefencePanel  data={sectionData['3.9']} />
+          if (def.key === '3.10') dataPanelContent = (
+            <div className="mb-3 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+              <p className="text-blue-700 text-xs">
+                <span className="font-bold">Water testing: </span>
+                Paper records maintained on site. Present to auditor on request.
+              </p>
+            </div>
+          )
 
           return (
             <SectionCard

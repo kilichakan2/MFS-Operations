@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('haccp_documents')
-      .select('doc_ref, title, version, category, description, purpose, linked_docs, status, updated_at, review_due, owner')
+      .select('doc_ref, title, version, category, register_type, description, purpose, linked_docs, status, updated_at, review_due, owner')
       .order('category')
       .order('doc_ref')
 

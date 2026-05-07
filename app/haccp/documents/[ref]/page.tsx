@@ -66,6 +66,27 @@ const FORM_DOCS: Record<string, { label: string; description: string; links: { l
       { label: 'Visitors Questionnaire', href: '/haccp/people', desc: 'Every visitor to production — Form 17' },
     ],
   },
+  'MFS-FFRA-001': {
+    label: 'Food Fraud Risk Assessment',
+    description: 'The food fraud vulnerability assessment is maintained as a live record in the HACCP system.',
+    links: [
+      { label: 'Food Fraud Risk Assessment', href: '/haccp/food-fraud', desc: 'View current assessment and version history — MFS-FFRA-001' },
+    ],
+  },
+  'MFS-FDP-001': {
+    label: 'Food Defence Plan',
+    description: 'The food defence plan is maintained as a live record in the HACCP system.',
+    links: [
+      { label: 'Food Defence Plan', href: '/haccp/food-defence', desc: 'View current plan and version history — MFS-FDP-001' },
+    ],
+  },
+  'MFS-ASR-001': {
+    label: 'Annual Food Safety Systems Review',
+    description: 'The annual systems review is completed and managed digitally in the HACCP system.',
+    links: [
+      { label: 'Annual Systems Review', href: '/haccp/annual-review', desc: 'View current and past reviews — MFS-ASR-001' },
+    ],
+  },
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

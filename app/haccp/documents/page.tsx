@@ -10,17 +10,18 @@
 import { useState, useEffect } from 'react'
 
 interface HaccpDoc {
-  doc_ref:     string
-  title:       string
-  version:     string
-  category:    string
-  description: string
-  purpose:     string
-  linked_docs: string[]
-  status:      string
-  updated_at:  string
-  review_due:  string
-  owner:       string
+  doc_ref:       string
+  title:         string
+  version:       string
+  category:      string
+  register_type: string[]
+  description:   string
+  purpose:       string
+  linked_docs:   string[]
+  status:        string
+  updated_at:    string
+  review_due:    string
+  owner:         string
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -32,6 +33,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   training:          'Training',
   salsa:             'SALSA Compliance',
   allergen:          'Allergen Management',
+  food_fraud:        'Food Fraud',
+  food_defence:      'Food Defence',
+  haccp_system:      'HACCP System',
 }
 
 const CATEGORY_COLOUR: Record<string, string> = {
@@ -43,6 +47,9 @@ const CATEGORY_COLOUR: Record<string, string> = {
   training:          'bg-slate-100 text-slate-500',
   salsa:             'bg-purple-50 text-purple-700',
   allergen:          'bg-green-50 text-green-700',
+  food_fraud:        'bg-orange-50 text-orange-700',
+  food_defence:      'bg-red-50 text-red-700',
+  haccp_system:      'bg-indigo-50 text-indigo-700',
 }
 
 function reviewStatus(reviewDue: string): 'ok' | 'soon' | 'overdue' {
@@ -63,6 +70,7 @@ export default function DocumentRegisterPage() {
   const [loading,    setLoading]    = useState(true)
   const [error,      setError]      = useState('')
   const [expanded,   setExpanded]   = useState<string | null>(null)
+  const [activeTab,  setActiveTab]  = useState<'all' | 'fsa' | 'salsa'>('all')
   // Search
   const [searchQ,    setSearchQ]    = useState('')
   const [searching,  setSearching]  = useState(false)
@@ -92,8 +100,9 @@ export default function DocumentRegisterPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const overdue = docs.filter((d) => reviewStatus(d.review_due) === 'overdue')
-  const soon    = docs.filter((d) => reviewStatus(d.review_due) === 'soon')
+  const filteredDocs = activeTab === 'all' ? docs : docs.filter(d => d.register_type?.includes(activeTab))
+  const overdue = filteredDocs.filter((d) => reviewStatus(d.review_due) === 'overdue')
+  const soon    = filteredDocs.filter((d) => reviewStatus(d.review_due) === 'soon')
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col select-none">
@@ -193,8 +202,22 @@ export default function DocumentRegisterPage() {
             </div>
           )}
 
+          {/* Register tabs */}
+          <div className="flex gap-2 pb-1">
+            {(['all', 'fsa', 'salsa'] as const).map(tab => (
+              <button key={tab} onClick={() => setActiveTab(tab)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                  activeTab === tab
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white border border-slate-200 text-slate-500'
+                }`}>
+                {tab === 'all' ? `All (${docs.length})` : tab === 'fsa' ? `FSA (${docs.filter(d => d.register_type?.includes('fsa')).length})` : `SALSA (${docs.filter(d => d.register_type?.includes('salsa')).length})`}
+              </button>
+            ))}
+          </div>
+
           {/* Document list */}
-          {docs.map((doc) => {
+          {filteredDocs.map((doc) => {
             const rs      = reviewStatus(doc.review_due)
             const isOpen  = expanded === doc.doc_ref
 
