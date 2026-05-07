@@ -120,10 +120,14 @@ export async function PATCH(req: NextRequest) {
     const { id, allergens, ...rest } = body
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
-    const updates = {
+    const updates: Record<string, unknown> = {
       ...rest,
-      allergens: Array.isArray(allergens) && allergens.length > 0 ? allergens : null,
       updated_at: new Date().toISOString(),
+    }
+
+    // Only update allergens if it was explicitly included in the request body
+    if ('allergens' in body) {
+      updates.allergens = Array.isArray(allergens) && allergens.length > 0 ? allergens : null
     }
 
     const { data, error } = await supabase

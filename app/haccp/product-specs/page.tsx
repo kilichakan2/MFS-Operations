@@ -244,7 +244,7 @@ export default function ProductSpecsPage(){
   if(selected){const s=selected;return(
     <div className="min-h-screen bg-slate-50">
       <div className="bg-white border-b border-blue-100 px-5 py-4 flex items-center gap-3">
-        <button onClick={()=>setSelected(null)} className="text-slate-400">
+        <button onClick={()=>{setSelected(null);setConfirmDelete(false)}} className="text-slate-400">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <div className="flex-1"><p className="text-slate-900 font-bold text-base">{s.product_name}</p>
@@ -326,7 +326,7 @@ export default function ProductSpecsPage(){
             {isAdmin&&<p className="text-slate-400 text-xs mt-1">Tap + Add spec to create the first one</p>}
           </div>
         ):specs.map(s=>(
-          <button key={s.id} onClick={()=>setSelected(s)}
+          <button key={s.id} onClick={()=>{setSelected(s);setConfirmDelete(false)}}
             className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-left flex items-center justify-between gap-3 active:scale-[0.99]">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
