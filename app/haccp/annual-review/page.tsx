@@ -852,12 +852,11 @@ export default function AnnualReviewPage() {
     try {
       const [reviewsRes, usersRes] = await Promise.all([
         fetch('/api/haccp/annual-review').then(r => r.json()),
-        fetch('/api/haccp/people').then(r => r.json()),
+        fetch('/api/haccp/users').then(r => r.json()),
       ])
       setReviews(reviewsRes.reviews ?? [])
-      // Filter to Hakan, Ege, Daz as primary approvers — sort them first
       const priority = ['Hakan', 'Ege', 'Daz']
-      const allUsers: User[] = usersRes.team ?? usersRes.users ?? []
+      const allUsers: User[] = usersRes.users ?? []
       allUsers.sort((a, b) => {
         const ai = priority.indexOf(a.name)
         const bi = priority.indexOf(b.name)

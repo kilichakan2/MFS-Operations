@@ -13,8 +13,6 @@ import { supabaseService }           from '@/lib/supabase'
 
 const supabase = supabaseService
 
-// ─── GET ─────────────────────────────────────────────────────────────────────
-
 export async function GET(req: NextRequest) {
   try {
     const role = req.cookies.get('mfs_role')?.value
@@ -25,7 +23,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from('haccp_product_specs')
       .select(`
-        id, product_name, description, ingredients, allergens,
+        id, product_name, description, ingredients, allergens, allergen_notes,
         portion_weight_g, storage_temp_c,
         shelf_life_chilled_days, shelf_life_frozen_days,
         packaging_type, micro_limits,
@@ -39,7 +37,6 @@ export async function GET(req: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Derive review_due: never reviewed or reviewed > 12 months ago
     const twelveMonthsAgo = new Date()
     twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1)
 
@@ -48,16 +45,15 @@ export async function GET(req: NextRequest) {
       review_due: !s.reviewed_at || new Date(s.reviewed_at) < twelveMonthsAgo,
     }))
 
-    const review_due_count = specs.filter(s => s.review_due).length
-
-    return NextResponse.json({ specs, review_due_count })
+    return NextResponse.json({
+      specs,
+      review_due_count: specs.filter(s => s.review_due).length,
+    })
   } catch (err) {
     console.error('[GET /api/haccp/product-specs]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
-
-// ─── POST — create ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -69,7 +65,8 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const {
-      product_name, description, ingredients, allergens,
+      product_name, description, ingredients,
+      allergens, allergen_notes,
       portion_weight_g, storage_temp_c,
       shelf_life_chilled_days, shelf_life_frozen_days,
       packaging_type, micro_limits,
@@ -84,11 +81,12 @@ export async function POST(req: NextRequest) {
       .from('haccp_product_specs')
       .insert({
         product_name:            product_name.trim(),
-        description:             description?.trim()   || null,
-        ingredients:             ingredients?.trim()   || null,
-        allergens:               allergens?.trim()     || null,
-        portion_weight_g:        portion_weight_g      || null,
-        storage_temp_c:          storage_temp_c        || null,
+        description:             description?.trim()    || null,
+        ingredients:             ingredients?.trim()    || null,
+        allergens:               Array.isArray(allergens) && allergens.length > 0 ? allergens : null,
+        allergen_notes:          allergen_notes?.trim() || null,
+        portion_weight_g:        portion_weight_g       || null,
+        storage_temp_c:          storage_temp_c         || null,
         shelf_life_chilled_days: shelf_life_chilled_days || null,
         shelf_life_frozen_days:  shelf_life_frozen_days  || null,
         packaging_type:          packaging_type?.trim() || null,
@@ -110,8 +108,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// ─── PATCH — update ───────────────────────────────────────────────────────────
-
 export async function PATCH(req: NextRequest) {
   try {
     const role   = req.cookies.get('mfs_role')?.value
@@ -121,13 +117,18 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { id, ...fields } = body
-
+    const { id, allergens, ...rest } = body
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+    const updates = {
+      ...rest,
+      allergens: Array.isArray(allergens) && allergens.length > 0 ? allergens : null,
+      updated_at: new Date().toISOString(),
+    }
 
     const { data, error } = await supabase
       .from('haccp_product_specs')
-      .update({ ...fields, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', id)
       .select()
       .single()
