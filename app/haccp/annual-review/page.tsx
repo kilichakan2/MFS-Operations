@@ -311,53 +311,63 @@ function SectionCard({
   onNotesChange,
   dataPanelContent,
 }: {
-  sectionKey:       string
-  section:          ChecklistSection
-  locked:           boolean
-  onItemChange:     (idx: number, status: ItemStatus, notes: string) => void
-  onNotesChange:    (notes: string) => void
+  sectionKey:        string
+  section:           ChecklistSection
+  locked:            boolean
+  onItemChange:      (idx: number, status: ItemStatus, notes: string) => void
+  onNotesChange:     (notes: string) => void
   dataPanelContent?: React.ReactNode
 }) {
   const def      = REVIEW_SECTIONS.find(s => s.key === sectionKey)
   const complete = isSectionComplete(section)
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
     <div className="bg-white border border-blue-100 rounded-xl overflow-hidden">
-      <div className={`px-4 py-3 border-b flex items-center gap-3 ${
-        complete ? 'border-green-100 bg-green-50' : 'border-blue-100'
-      }`}>
+      {/* Collapsible header */}
+      <button
+        onClick={() => setIsOpen(v => !v)}
+        className={`w-full px-4 py-3 border-b flex items-center gap-3 text-left transition-colors ${
+          complete ? 'border-green-100 bg-green-50' : 'border-blue-100'
+        }`}
+      >
         <span className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center flex-shrink-0 ${
           complete ? 'bg-green-600 text-white' : 'bg-slate-200 text-slate-600'
         }`}>
           {complete ? '✓' : sectionKey}
         </span>
-        <div>
+        <div className="flex-1">
           <p className="text-slate-900 font-bold text-sm">{def?.title ?? sectionKey}</p>
           <p className="text-slate-400 text-[10px]">
             {section.items.filter(i => i.status !== null).length} of {section.items.length} items answered
           </p>
         </div>
-      </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
 
-      <div className="px-4 pt-3 pb-3">
-        {/* Data panel (section-specific live data) */}
-        {dataPanelContent}
-
-        {section.items.map((item, idx) => (
-          <ItemRow key={idx} item={item} idx={idx} locked={locked} onChange={onItemChange} />
-        ))}
-        <div className="mt-3">
-          <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Section notes (optional)</p>
-          <textarea
-            value={section.section_notes}
-            onChange={e => onNotesChange(e.target.value)}
-            disabled={locked}
-            placeholder="Any overall notes for this section…"
-            rows={2}
-            className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-400 resize-none disabled:opacity-50"
-          />
+      {/* Collapsible body */}
+      {isOpen && (
+        <div className="px-4 pt-3 pb-3">
+          {dataPanelContent}
+          {section.items.map((item, idx) => (
+            <ItemRow key={idx} item={item} idx={idx} locked={locked} onChange={onItemChange} />
+          ))}
+          <div className="mt-3">
+            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Section notes (optional)</p>
+            <textarea
+              value={section.section_notes}
+              onChange={e => onNotesChange(e.target.value)}
+              disabled={locked}
+              placeholder="Any overall notes for this section…"
+              rows={2}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-400 resize-none disabled:opacity-50"
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -722,6 +732,7 @@ export default function AnnualReviewPage() {
   async function saveChecklist(checklist: Checklist) {
     if (!active) return
     setSaving(true); setSaveErr('')
+    const start = Date.now()
     try {
       const res = await fetch('/api/haccp/annual-review', {
         method:  'PATCH',
@@ -734,7 +745,10 @@ export default function AnnualReviewPage() {
     } catch {
       setSaveErr('Connection error')
     } finally {
-      setSaving(false)
+      // Keep "Saving…" visible for at least 600ms so it's readable
+      const elapsed = Date.now() - start
+      const remaining = Math.max(0, 600 - elapsed)
+      setTimeout(() => setSaving(false), remaining)
     }
   }
 
