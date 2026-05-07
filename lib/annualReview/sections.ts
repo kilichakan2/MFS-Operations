@@ -108,7 +108,19 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'Contractor recommendations actioned and trend analysis completed',
     ],
   },
-  // Phase 6 will add: 3.6 Temperature Control
+  {
+    key:          '3.6',
+    title:        'Temperature Control',
+    hasDataPanel: true,
+    items: [
+      'Temperature monitoring records complete and up to date (cold storage, deliveries, process room)',
+      'Thermometers calibrated — manual monthly or certified probe in use (BSD 1.5.4)',
+      'Chillers operating ≤8°C and freezer operating ≤-18°C (legal limits)',
+      'Delivery temperatures checked at goods-in and recorded (BSD 1.6.3)',
+      'Temperature deviations investigated, corrective actions documented and resolved',
+      'Calibration records retained (cert reference or manual test results)',
+    ],
+  },
   // Phase 7 will add: 3.7 Supplier Control & Traceability, 3.8 Incidents & Complaints
   // Phase 8 will add: 3.9 Food Fraud, 3.10 Premises & Equipment
 ]

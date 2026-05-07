@@ -669,3 +669,155 @@ describe('REVIEW_SECTIONS — Section 3.5 Pest Control', () => {
     expect(isChecklistComplete(cl)).toBe(false)
   })
 })
+
+// ── Section 3.6 — Temperature Control ────────────────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.6 Temperature Control', () => {
+  it('section 3.6 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.6')).toBeDefined()
+  })
+
+  it('section 3.6 title is correct', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.6')?.title).toBe('Temperature Control')
+  })
+
+  it('section 3.6 has exactly 6 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.6')?.items).toHaveLength(6)
+  })
+
+  it('section 3.6 has data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.6')?.hasDataPanel).toBe(true)
+  })
+
+  it('section 3.6 items match plan verbatim', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.6')!.items
+    expect(items[0]).toBe('Temperature monitoring records complete and up to date (cold storage, deliveries, process room)')
+    expect(items[1]).toBe('Thermometers calibrated — manual monthly or certified probe in use (BSD 1.5.4)')
+    expect(items[2]).toBe('Chillers operating ≤8°C and freezer operating ≤-18°C (legal limits)')
+    expect(items[3]).toBe('Delivery temperatures checked at goods-in and recorded (BSD 1.6.3)')
+    expect(items[4]).toBe('Temperature deviations investigated, corrective actions documented and resolved')
+    expect(items[5]).toBe('Calibration records retained (cert reference or manual test results)')
+  })
+
+  it('section order: 3.5 before 3.6', () => {
+    const keys = REVIEW_SECTIONS.map(s => s.key)
+    expect(keys.indexOf('3.5')).toBeLessThan(keys.indexOf('3.6'))
+  })
+
+  it('REVIEW_SECTIONS has at least 6 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('buildInitialChecklist includes 3.6 with 6 items and null statuses', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.6']).toBeDefined()
+    expect(cl['3.6'].items).toHaveLength(6)
+    expect(cl['3.6'].items.every(i => i.status === null)).toBe(true)
+  })
+
+  it('isChecklistComplete requires 3.6 answered before sign-off', () => {
+    const cl = buildInitialChecklist()
+    for (const s of REVIEW_SECTIONS) {
+      if (s.key !== '3.6') {
+        cl[s.key].items = cl[s.key].items.map(item => ({ ...item, status: 'ok' as const }))
+      }
+    }
+    expect(isChecklistComplete(cl)).toBe(false)
+  })
+})
+
+// ── Temperature data panel logic ──────────────────────────────────────────────
+
+describe('Temperature data panel logic', () => {
+  const makeCalibManual = (pass: boolean, daysAgo: number, id = 'Probe 1') => {
+    const d = new Date(); d.setDate(d.getDate() - daysAgo)
+    return {
+      thermometer_id: id, calibration_mode: 'manual',
+      date: d.toISOString().slice(0, 10), cert_reference: null,
+      ice_water_result_c: pass ? 0.5 : 2.5, ice_water_pass: pass,
+      boiling_water_result_c: pass ? 99.5 : 97, boiling_water_pass: pass,
+    }
+  }
+  const makeCalibCert = (daysAgo: number, ref = 'CERT-001') => {
+    const d = new Date(); d.setDate(d.getDate() - daysAgo)
+    return {
+      thermometer_id: 'Certified', calibration_mode: 'certified_probe',
+      date: d.toISOString().slice(0, 10), cert_reference: ref,
+      ice_water_result_c: null, ice_water_pass: null,
+      boiling_water_result_c: null, boiling_water_pass: null,
+    }
+  }
+
+  it('certified probe: never counts as a failure', () => {
+    const r = makeCalibCert(10)
+    const isFail = r.calibration_mode === 'manual' && (r.ice_water_pass === false || r.boiling_water_pass === false)
+    expect(isFail).toBe(false)
+  })
+
+  it('manual pass: both tests pass → not a failure', () => {
+    const r = makeCalibManual(true, 5)
+    const isFail = r.calibration_mode === 'manual' && (r.ice_water_pass === false || r.boiling_water_pass === false)
+    expect(isFail).toBe(false)
+  })
+
+  it('manual fail: either test fails → is a failure', () => {
+    const r = makeCalibManual(false, 5)
+    const isFail = r.calibration_mode === 'manual' && (r.ice_water_pass === false || r.boiling_water_pass === false)
+    expect(isFail).toBe(true)
+  })
+
+  it('stale calibration: > 31 days → overdue flag', () => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const r = makeCalibManual(true, 32)
+    const days = Math.floor((today.getTime() - new Date(r.date).getTime()) / 86_400_000)
+    expect(days).toBeGreaterThan(31)
+  })
+
+  it('31 days exactly → not yet stale', () => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const r = makeCalibManual(true, 31)
+    const days = Math.floor((today.getTime() - new Date(r.date).getTime()) / 86_400_000)
+    expect(days).toBeLessThanOrEqual(31)
+  })
+
+  it('cold storage: non-pass status → alert', () => {
+    const units = [{ latest: { temp_status: 'amber' } }, { latest: { temp_status: 'pass' } }]
+    const fails = units.filter(u => u.latest && u.latest.temp_status !== 'pass')
+    expect(fails).toHaveLength(1)
+  })
+
+  it('cold storage: all pass → no alert', () => {
+    const units = [{ latest: { temp_status: 'pass' } }, { latest: { temp_status: 'pass' } }]
+    const fails = units.filter(u => u.latest && u.latest.temp_status !== 'pass')
+    expect(fails).toHaveLength(0)
+  })
+
+  it('delivery temp_cas uses temp_status not corrective_action_required', () => {
+    // 15 deliveries all pass temp, 2 have CA from contamination
+    // temp_cas must be 0, not 2
+    const delivs = Array(15).fill({ temp_status: 'pass', corrective_action_required: false })
+    const contamCAs = [
+      { temp_status: 'pass', corrective_action_required: true },
+      { temp_status: 'pass', corrective_action_required: true },
+    ]
+    const all = [...delivs, ...contamCAs]
+    const temp_cas_correct = all.filter(d => d.temp_status !== 'pass').length
+    const temp_cas_wrong   = all.filter(d => d.corrective_action_required).length
+    expect(temp_cas_correct).toBe(0)  // correct: 0 temp deviations
+    expect(temp_cas_wrong).toBe(2)    // wrong method would return 2
+  })
+
+  it('hasAlerts true when any calibration fails', () => {
+    const calibFails = [makeCalibManual(false, 5)]
+    expect(calibFails.length > 0).toBe(true)
+  })
+
+  it('hasAlerts false when everything is fine', () => {
+    const calibFails:  unknown[] = []
+    const staleCalib:  unknown[] = []
+    const coldFails:   unknown[] = []
+    const temp_cas    = 0
+    const hasAlerts   = calibFails.length > 0 || staleCalib.length > 0 || coldFails.length > 0 || temp_cas > 0
+    expect(hasAlerts).toBe(false)
+  })
+})

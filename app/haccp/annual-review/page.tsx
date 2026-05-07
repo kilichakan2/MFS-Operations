@@ -96,6 +96,32 @@ interface SectionData {
     low_temp_list:    { date: string; sanitiser_temp_c: number }[]
     last_log_date:    string | null
   }
+  '3.6'?: {
+    calibration: {
+      thermometer_id:          string
+      calibration_mode:        string
+      date:                    string
+      cert_reference:          string | null
+      ice_water_result_c:      number | null
+      ice_water_pass:          boolean | null
+      boiling_water_result_c:  number | null
+      boiling_water_pass:      boolean | null
+    }[]
+    cold_storage: {
+      name:          string
+      unit_type:     string
+      target_temp_c: number
+      max_temp_c:    number
+      latest:        { temperature_c: number; temp_status: string; date: string; session: string } | null
+    }[]
+    delivery_temps: {
+      total:    number
+      pass:     number
+      urgent:   number
+      fail:     number
+      temp_cas: number
+    }
+  }
 }
 
 // ─── Training status helpers ─────────────────────────────────────────────────
@@ -619,6 +645,178 @@ function CleaningDataPanel({ data }: { data: SectionData['3.4'] | undefined }) {
   )
 }
 
+// ─── Section 3.6 Temperature Control data panel ───────────────────────────────
+
+function TempControlDataPanel({ data }: { data: SectionData['3.6'] | undefined }) {
+  const [open, setOpen] = useState(false)
+  if (!data) return null
+
+  const { calibration, cold_storage, delivery_temps } = data
+
+  // Derive alert state
+  const calibFails  = calibration.filter(r =>
+    r.calibration_mode === 'manual' && (r.ice_water_pass === false || r.boiling_water_pass === false)
+  )
+  const today       = new Date(); today.setHours(0, 0, 0, 0)
+  const staleCalib  = calibration.filter(r => {
+    const days = Math.floor((today.getTime() - new Date(r.date).getTime()) / 86_400_000)
+    return days > 31
+  })
+  const coldFails   = cold_storage.filter(r => r.latest && r.latest.temp_status !== 'pass')
+  const hasAlerts   = calibFails.length > 0 || staleCalib.length > 0 || coldFails.length > 0 || delivery_temps.temp_cas > 0
+
+  const alertParts = [
+    calibFails.length  > 0 && `${calibFails.length} probe fail${calibFails.length > 1 ? 's' : ''}`,
+    staleCalib.length  > 0 && `${staleCalib.length} probe${staleCalib.length > 1 ? 's' : ''} overdue`,
+    coldFails.length   > 0 && `${coldFails.length} unit${coldFails.length > 1 ? 's' : ''} off-temp`,
+    delivery_temps.temp_cas > 0 && `${delivery_temps.temp_cas} delivery deviation${delivery_temps.temp_cas > 1 ? 's' : ''}`,
+  ].filter(Boolean)
+
+  return (
+    <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full px-4 py-2.5 bg-slate-50 flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <svg className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/>
+          </svg>
+          <p className="text-slate-600 text-xs font-bold">Temperature records</p>
+          {hasAlerts && (
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+              {alertParts.join(' · ')}
+            </span>
+          )}
+        </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pt-3 pb-4 space-y-4 bg-white">
+
+          {/* Calibration */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Thermometer calibration
+            </p>
+            {calibration.length === 0 ? (
+              <p className="text-slate-400 text-xs">No calibration records found</p>
+            ) : (
+              <div className="space-y-1.5">
+                {calibration.map((r, i) => {
+                  const isCert   = r.calibration_mode === 'certified_probe'
+                  const manFail  = !isCert && (r.ice_water_pass === false || r.boiling_water_pass === false)
+                  const days     = Math.floor((today.getTime() - new Date(r.date).getTime()) / 86_400_000)
+                  const stale    = days > 31
+                  return (
+                    <div key={i} className={`rounded-lg px-3 py-2 border ${manFail ? 'bg-red-50 border-red-200' : stale ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-slate-800 text-xs font-semibold">{r.thermometer_id}</p>
+                          {isCert ? (
+                            <p className="text-slate-500 text-[10px]">Certified probe · Ref: {r.cert_reference ?? '—'}</p>
+                          ) : (
+                            <p className="text-slate-500 text-[10px]">
+                              Ice {r.ice_water_result_c}°C {r.ice_water_pass ? '✓' : '✗'}
+                              {' · '}
+                              Boiling {r.boiling_water_result_c}°C {r.boiling_water_pass ? '✓' : '✗'}
+                            </p>
+                          )}
+                          <p className="text-slate-400 text-[10px]">
+                            {fmtShortDate(r.date)} · {days === 0 ? 'today' : `${days}d ago`}
+                          </p>
+                        </div>
+                        <span className={`text-[10px] font-bold flex-shrink-0 ${manFail ? 'text-red-600' : stale ? 'text-amber-600' : 'text-green-700'}`}>
+                          {manFail ? '✗ Fail' : stale ? '⚠ Overdue' : isCert ? '✓ Certified' : '✓ Pass'}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Cold storage */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Cold storage — current state
+            </p>
+            {cold_storage.length === 0 ? (
+              <p className="text-slate-400 text-xs">No storage units found</p>
+            ) : (
+              <div className="space-y-1.5">
+                {cold_storage.map((u, i) => {
+                  const isFail = u.latest && u.latest.temp_status !== 'pass'
+                  return (
+                    <div key={i} className={`rounded-lg px-3 py-2 border ${isFail ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-slate-800 text-xs font-semibold">{u.name}</p>
+                          <p className="text-slate-400 text-[10px]">
+                            {u.unit_type === 'freezer' ? 'Freezer' : 'Chiller'}
+                            {' · '}target {u.target_temp_c}°C · max {u.max_temp_c}°C
+                          </p>
+                          {u.latest && (
+                            <p className="text-slate-400 text-[10px]">
+                              Last: {fmtShortDate(u.latest.date)} {u.latest.session}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {u.latest ? (
+                            <>
+                              <p className={`text-sm font-bold ${isFail ? 'text-red-600' : 'text-green-700'}`}>
+                                {u.latest.temperature_c}°C
+                              </p>
+                              <p className={`text-[10px] font-bold ${isFail ? 'text-red-600' : 'text-green-700'}`}>
+                                {isFail ? '✗ ' : '✓ '}{u.latest.temp_status}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-amber-500 text-[10px] font-bold">No reading</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Delivery temps */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Delivery temperature checks — review period
+            </p>
+            {delivery_temps.total === 0 ? (
+              <p className="text-slate-400 text-xs">No delivery temperature checks in this period</p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: 'Checked', value: delivery_temps.total, colour: 'text-slate-900' },
+                  { label: 'Pass',    value: delivery_temps.pass,   colour: 'text-green-700' },
+                  { label: 'Urgent',  value: delivery_temps.urgent, colour: delivery_temps.urgent > 0 ? 'text-amber-600' : 'text-slate-400' },
+                  { label: 'Fail',    value: delivery_temps.fail,   colour: delivery_temps.fail > 0   ? 'text-red-600'   : 'text-slate-400' },
+                ].map(({ label, value, colour }) => (
+                  <div key={label} className="bg-slate-50 rounded-lg px-2 py-2 text-center">
+                    <p className={`font-bold text-sm ${colour}`}>{value}</p>
+                    <p className="text-slate-400 text-[10px]">{label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AnnualReviewPage() {
   const [view,      setView]      = useState<'list' | 'editing'>('list')
   const [reviews,   setReviews]   = useState<AnnualReview[]>([])
@@ -996,15 +1194,10 @@ export default function AnnualReviewPage() {
 
           // Build data panel content per section
           let dataPanelContent: React.ReactNode = undefined
-          if (def.key === '3.2') {
-            dataPanelContent = <TrainingDataPanel data={sectionData['3.2']} />
-          }
-          if (def.key === '3.3') {
-            dataPanelContent = <HealthDataPanel data={sectionData['3.3']} />
-          }
-          if (def.key === '3.4') {
-            dataPanelContent = <CleaningDataPanel data={sectionData['3.4']} />
-          }
+          if (def.key === '3.2') dataPanelContent = <TrainingDataPanel  data={sectionData['3.2']} />
+          if (def.key === '3.3') dataPanelContent = <HealthDataPanel    data={sectionData['3.3']} />
+          if (def.key === '3.4') dataPanelContent = <CleaningDataPanel  data={sectionData['3.4']} />
+          if (def.key === '3.6') dataPanelContent = <TempControlDataPanel data={sectionData['3.6']} />
 
           return (
             <SectionCard

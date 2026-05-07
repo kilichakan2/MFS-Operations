@@ -135,12 +135,102 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Section 3.6 — Temperature Control ───────────────────────────────────
+
+    // Sub-panel 1: Calibration — latest record per thermometer (current state)
+    const { data: calibRaw, error: calibErr } = await supabase
+      .from('haccp_calibration_log')
+      .select('thermometer_id, calibration_mode, date, cert_reference, ice_water_result_c, ice_water_pass, boiling_water_result_c, boiling_water_pass')
+      .order('thermometer_id', { ascending: true })
+      .order('date',           { ascending: false })
+      .order('submitted_at',   { ascending: false })
+
+    if (calibErr) throw calibErr
+
+    // JS-side dedup: latest per thermometer_id (same pattern as training)
+    const calibSeen = new Set<string>()
+    const calibration = (calibRaw ?? []).filter(r => {
+      if (calibSeen.has(r.thermometer_id)) return false
+      calibSeen.add(r.thermometer_id)
+      return true
+    })
+
+    // Sub-panel 2: Cold storage — latest reading per unit (current state)
+    const { data: unitsRaw, error: unitsErr } = await supabase
+      .from('haccp_cold_storage_units')
+      .select('id, name, unit_type, target_temp_c, max_temp_c')
+      .eq('active', true)
+      .order('position', { ascending: true })
+
+    if (unitsErr) throw unitsErr
+
+    // Fetch all cold storage temps, deduplicate to latest per unit in JS
+    const { data: tempsRaw, error: tempsErr } = await supabase
+      .from('haccp_cold_storage_temps')
+      .select('unit_id, temperature_c, temp_status, date, session')
+      .order('date',         { ascending: false })
+      .order('submitted_at', { ascending: false })
+
+    if (tempsErr) throw tempsErr
+
+    const tempsByUnit = new Map<string, { temperature_c: number; temp_status: string; date: string; session: string }>()
+    for (const t of tempsRaw ?? []) {
+      if (!tempsByUnit.has(t.unit_id)) {
+        tempsByUnit.set(t.unit_id, {
+          temperature_c: Number(t.temperature_c),
+          temp_status:   t.temp_status,
+          date:          t.date,
+          session:       t.session,
+        })
+      }
+    }
+
+    const coldStorage = (unitsRaw ?? []).map(u => ({
+      name:          u.name,
+      unit_type:     u.unit_type,
+      target_temp_c: Number(u.target_temp_c),
+      max_temp_c:    Number(u.max_temp_c),
+      latest:        tempsByUnit.get(u.id) ?? null,
+    }))
+
+    // Sub-panel 3: Delivery temps — period-filtered, exclude dry_goods
+    let deliveryTemps: {
+      total:    number
+      pass:     number
+      urgent:   number
+      fail:     number
+      temp_cas: number
+    } = { total: 0, pass: 0, urgent: 0, fail: 0, temp_cas: 0 }
+
+    if (from && to) {
+      const { data: delivRaw, error: delivErr } = await supabase
+        .from('haccp_deliveries')
+        .select('temp_status')
+        .gte('date', from)
+        .lte('date', to)
+        .neq('product_category', 'dry_goods')
+
+      if (delivErr) throw delivErr
+
+      const delivs = delivRaw ?? []
+      deliveryTemps = {
+        total:    delivs.length,
+        pass:     delivs.filter(d => d.temp_status === 'pass').length,
+        urgent:   delivs.filter(d => d.temp_status === 'urgent').length,
+        fail:     delivs.filter(d => d.temp_status === 'fail').length,
+        // temp_cas = deliveries where temp was not pass (NOT corrective_action_required
+        // which also captures contamination CAs and would inflate the count)
+        temp_cas: delivs.filter(d => d.temp_status !== 'pass').length,
+      }
+    }
+
     // ── Response ─────────────────────────────────────────────────────────────
 
     return NextResponse.json({
       '3.2': { staff_training: staffTraining, allergen_training: allergenTraining },
       '3.3': healthData,
       '3.4': cleaningData,
+      '3.6': { calibration, cold_storage: coldStorage, delivery_temps: deliveryTemps },
     })
 
   } catch (err) {
