@@ -64,6 +64,18 @@ export default function ProductSpecsPage(){
   const [form,setForm]=useState<FormState>({...EMPTY})
   const [saving,setSaving]=useState(false)
   const [saveErr,setSaveErr]=useState('')
+  const [deleting,setDeleting]=useState(false)
+  const [confirmDelete,setConfirmDelete]=useState(false)
+
+  async function handleDelete(){
+    if(!selected)return
+    setDeleting(true)
+    try{
+      const res=await fetch('/api/haccp/product-specs',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:selected.id,active:false})})
+      if(!res.ok){setDeleting(false);return}
+      setConfirmDelete(false);setSelected(null);await load()
+    }catch{setDeleting(false)}
+  }
 
   const sf=(k:keyof FormState,v:string|string[])=>setForm(p=>({...p,[k]:v}))
   const toggleA=(a:string)=>sf('allergens',form.allergens.includes(a)?form.allergens.filter(x=>x!==a):[...form.allergens,a])
@@ -237,9 +249,26 @@ export default function ProductSpecsPage(){
         </button>
         <div className="flex-1"><p className="text-slate-900 font-bold text-base">{s.product_name}</p>
           <p className="text-slate-400 text-xs">{s.version} · BSD 1.6.2</p></div>
-        {isAdmin&&<button onClick={()=>{openEdit(s)}} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Edit</button>}
+        {isAdmin&&(
+          <div className="flex items-center gap-2">
+            <button onClick={()=>{openEdit(s)}} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">Edit</button>
+            <button onClick={()=>setConfirmDelete(true)} className="px-4 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-bold">Delete</button>
+          </div>
+        )}
       </div>
       <div className="px-5 py-5 space-y-3">
+        {confirmDelete&&(
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-4">
+            <p className="text-red-800 text-sm font-bold mb-1">Delete {s.product_name}?</p>
+            <p className="text-red-600 text-xs mb-3">Removes it from the spec register. Record kept for audit purposes.</p>
+            <div className="flex gap-2">
+              <button onClick={()=>setConfirmDelete(false)} className="flex-1 py-2 rounded-xl border border-red-200 text-red-600 text-xs font-bold">Cancel</button>
+              <button onClick={handleDelete} disabled={deleting} className="flex-1 py-2 rounded-xl bg-red-600 text-white text-xs font-bold disabled:opacity-40">
+                {deleting?'Deleting…':'Confirm delete'}
+              </button>
+            </div>
+          </div>
+        )}
         {s.review_due&&<div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <p className="text-amber-700 text-xs font-bold">⚠ Review due — {s.reviewed_at?'last reviewed '+fmtDate(s.reviewed_at):'never reviewed'}</p></div>}
         {[{label:'Description / intended use',value:s.description},{label:'Ingredients',value:s.ingredients},{label:'Micro limits',value:s.micro_limits}]
