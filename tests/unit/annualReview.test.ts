@@ -821,3 +821,112 @@ describe('Temperature data panel logic', () => {
     expect(hasAlerts).toBe(false)
   })
 })
+
+// ── Section 3.7 — Supplier Control & Traceability ────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.7 Supplier Control & Traceability', () => {
+  it('section 3.7 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.7')).toBeDefined()
+  })
+
+  it('section 3.7 title is correct', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.7')?.title).toBe('Supplier Control & Traceability')
+  })
+
+  it('section 3.7 has exactly 6 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.7')?.items).toHaveLength(6)
+  })
+
+  it('section 3.7 has data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.7')?.hasDataPanel).toBe(true)
+  })
+
+  it('section 3.7 items match plan verbatim', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.7')!.items
+    expect(items[0]).toBe('Approved supplier list maintained — all active suppliers risk assessed and date approved recorded')
+    expect(items[1]).toBe('Product specifications held for all supplied products and reviewed (BSD 1.6.2)')
+    expect(items[2]).toBe('Supplier certificates current — FSA approval numbers and third-party certs on file where applicable')
+    expect(items[3]).toBe('Goods-in checks completed at every delivery — temp, condition, batch number and documentation')
+    expect(items[4]).toBe('BLS traceability data recorded at intake for all red meat and offal (EC 853/2004)')
+    expect(items[5]).toBe('Traceability test conducted — mock recall completed forward and backward (BSD 3.4.2)')
+  })
+
+  it('section order: 3.6 before 3.7', () => {
+    const keys = REVIEW_SECTIONS.map(s => s.key)
+    expect(keys.indexOf('3.6')).toBeLessThan(keys.indexOf('3.7'))
+  })
+
+  it('REVIEW_SECTIONS has at least 7 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(7)
+  })
+
+  it('buildInitialChecklist includes 3.7 with 6 items and null statuses', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.7']).toBeDefined()
+    expect(cl['3.7'].items).toHaveLength(6)
+    expect(cl['3.7'].items.every(i => i.status === null)).toBe(true)
+  })
+
+  it('isChecklistComplete requires 3.7 answered before sign-off', () => {
+    const cl = buildInitialChecklist()
+    for (const s of REVIEW_SECTIONS) {
+      if (s.key !== '3.7') {
+        cl[s.key].items = cl[s.key].items.map(item => ({ ...item, status: 'ok' as const }))
+      }
+    }
+    expect(isChecklistComplete(cl)).toBe(false)
+  })
+})
+
+// ── Supplier & traceability data logic ───────────────────────────────────────
+
+describe('Supplier data panel logic', () => {
+  it('formally_approved < total → approval gap alert', () => {
+    const s = { total: 43, formally_approved: 0, fsa_approved: 2, expired_certs: 0, expiring_60_days: 0 }
+    expect(s.total - s.formally_approved).toBe(43)
+    expect(s.formally_approved < s.total).toBe(true)
+  })
+
+  it('formally_approved === total → no gap', () => {
+    const s = { total: 5, formally_approved: 5, fsa_approved: 2, expired_certs: 0, expiring_60_days: 0 }
+    expect(s.formally_approved < s.total).toBe(false)
+  })
+
+  it('expired_certs > 0 → alert', () => {
+    const s = { total: 10, formally_approved: 10, fsa_approved: 2, expired_certs: 1, expiring_60_days: 0 }
+    expect(s.expired_certs > 0).toBe(true)
+  })
+
+  it('BLS completeness: all complete → no alert', () => {
+    const g = { total: 17, has_batch: 17, meat_total: 13, meat_bls_complete: 13 }
+    const blsIncomplete = g.meat_total > 0 && g.meat_bls_complete < g.meat_total
+    expect(blsIncomplete).toBe(false)
+  })
+
+  it('BLS completeness: some incomplete → alert', () => {
+    const g = { total: 17, has_batch: 17, meat_total: 13, meat_bls_complete: 11 }
+    const blsIncomplete = g.meat_total > 0 && g.meat_bls_complete < g.meat_total
+    expect(blsIncomplete).toBe(true)
+  })
+
+  it('BLS completeness: no meat deliveries → no alert', () => {
+    const g = { total: 5, has_batch: 5, meat_total: 0, meat_bls_complete: 0 }
+    const blsIncomplete = g.meat_total > 0 && g.meat_bls_complete < g.meat_total
+    expect(blsIncomplete).toBe(false)
+  })
+
+  it('hasAlerts false when everything clean', () => {
+    const s = { total: 5, formally_approved: 5, fsa_approved: 2, expired_certs: 0, expiring_60_days: 0 }
+    const sp = { total: 2, review_due: 0 }
+    const g  = { total: 10, has_batch: 10, meat_total: 8, meat_bls_complete: 8 }
+    const blsIncomplete = g.meat_total > 0 && g.meat_bls_complete < g.meat_total
+    const hasAlerts = (s.total - s.formally_approved) > 0 || s.expired_certs > 0
+      || s.expiring_60_days > 0 || blsIncomplete || sp.review_due > 0
+    expect(hasAlerts).toBe(false)
+  })
+
+  it('empty period: goods_in total = 0, no crash', () => {
+    const g = { total: 0, has_batch: 0, meat_total: 0, meat_bls_complete: 0 }
+    expect(g.total).toBe(0)
+  })
+})

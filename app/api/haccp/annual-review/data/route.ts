@@ -224,6 +224,70 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Section 3.7 — Supplier Control & Traceability ───────────────────────
+
+    // Sub-panel 1: Supplier register (current state)
+    const { data: suppliersRaw, error: suppliersErr } = await supabase
+      .from('haccp_suppliers')
+      .select('date_approved, fsa_approval_no, cert_type, cert_expiry')
+      .eq('active', true)
+
+    if (suppliersErr) throw suppliersErr
+
+    const suppliers = suppliersRaw ?? []
+    const today     = new Date().toISOString().slice(0, 10)
+    const in60Days  = new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10)
+
+    const supplierStats = {
+      total:             suppliers.length,
+      formally_approved: suppliers.filter(s => s.date_approved).length,
+      fsa_approved:      suppliers.filter(s => s.fsa_approval_no?.trim()).length,
+      expired_certs:     suppliers.filter(s => s.cert_expiry && s.cert_expiry < today).length,
+      expiring_60_days:  suppliers.filter(s => s.cert_expiry && s.cert_expiry >= today && s.cert_expiry <= in60Days).length,
+    }
+
+    // Product specs — bundled here to avoid extra round trip
+    const { data: specsRaw } = await supabase
+      .from('haccp_product_specs')
+      .select('reviewed_at')
+      .eq('active', true)
+
+    const specs              = specsRaw ?? []
+    const oneYearAgo         = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+    const specStats = {
+      total:      specs.length,
+      review_due: specs.filter(s => !s.reviewed_at || new Date(s.reviewed_at) < oneYearAgo).length,
+    }
+
+    // Sub-panel 2: Goods-in period activity
+    const MEAT_CATEGORIES = ['lamb', 'beef', 'red_meat', 'offal', 'frozen_beef_lamb']
+
+    let goodsIn = {
+      total:             0,
+      has_batch:         0,
+      meat_total:        0,
+      meat_bls_complete: 0,
+    }
+
+    if (from && to) {
+      const { data: delivRaw, error: delivErr2 } = await supabase
+        .from('haccp_deliveries')
+        .select('batch_number, product_category, born_in, slaughter_site, cut_site')
+        .gte('date', from)
+        .lte('date', to)
+
+      if (delivErr2) throw delivErr2
+
+      const delivs = delivRaw ?? []
+      const meat   = delivs.filter(d => MEAT_CATEGORIES.includes(d.product_category))
+      goodsIn = {
+        total:             delivs.length,
+        has_batch:         delivs.filter(d => d.batch_number?.trim()).length,
+        meat_total:        meat.length,
+        meat_bls_complete: meat.filter(d => d.born_in && d.slaughter_site && d.cut_site).length,
+      }
+    }
+
     // ── Response ─────────────────────────────────────────────────────────────
 
     return NextResponse.json({
@@ -231,6 +295,7 @@ export async function GET(req: NextRequest) {
       '3.3': healthData,
       '3.4': cleaningData,
       '3.6': { calibration, cold_storage: coldStorage, delivery_temps: deliveryTemps },
+      '3.7': { supplier_stats: supplierStats, spec_stats: specStats, goods_in: goodsIn },
     })
 
   } catch (err) {

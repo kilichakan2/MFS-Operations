@@ -122,6 +122,25 @@ interface SectionData {
       temp_cas: number
     }
   }
+  '3.7'?: {
+    supplier_stats: {
+      total:             number
+      formally_approved: number
+      fsa_approved:      number
+      expired_certs:     number
+      expiring_60_days:  number
+    }
+    spec_stats: {
+      total:      number
+      review_due: number
+    }
+    goods_in: {
+      total:             number
+      has_batch:         number
+      meat_total:        number
+      meat_bls_complete: number
+    }
+  }
 }
 
 // ─── Training status helpers ─────────────────────────────────────────────────
@@ -817,6 +836,117 @@ function TempControlDataPanel({ data }: { data: SectionData['3.6'] | undefined }
   )
 }
 
+// ─── Section 3.7 Supplier & Traceability data panel ──────────────────────────
+
+function SupplierDataPanel({ data }: { data: SectionData['3.7'] | undefined }) {
+  const [open, setOpen] = useState(false)
+  if (!data) return null
+
+  const { supplier_stats: s, spec_stats: sp, goods_in: g } = data
+
+  const approvalGap    = s.total - s.formally_approved
+  const blsIncomplete  = g.meat_total > 0 && g.meat_bls_complete < g.meat_total
+  const hasAlerts      = approvalGap > 0 || s.expired_certs > 0 || s.expiring_60_days > 0
+                       || blsIncomplete || sp.review_due > 0
+
+  const alertParts = [
+    approvalGap > 0       && `${approvalGap} supplier${approvalGap > 1 ? 's' : ''} not approved`,
+    s.expired_certs > 0   && `${s.expired_certs} expired cert${s.expired_certs > 1 ? 's' : ''}`,
+    s.expiring_60_days > 0 && `${s.expiring_60_days} expiring soon`,
+    blsIncomplete          && 'BLS incomplete',
+    sp.review_due > 0      && `${sp.review_due} spec${sp.review_due > 1 ? 's' : ''} review due`,
+  ].filter(Boolean)
+
+  const Stat = ({ label, value, alert }: { label: string; value: string | number; alert?: boolean }) => (
+    <div className={`rounded-lg px-3 py-2 ${alert ? 'bg-amber-50' : 'bg-slate-50'}`}>
+      <p className={`font-bold text-sm ${alert ? 'text-amber-700' : 'text-slate-900'}`}>{value}</p>
+      <p className="text-slate-400 text-[10px]">{label}</p>
+    </div>
+  )
+
+  return (
+    <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full px-4 py-2.5 bg-slate-50 flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <svg className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <p className="text-slate-600 text-xs font-bold">Supplier register &amp; goods-in</p>
+          {hasAlerts && (
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+              {alertParts.join(' · ')}
+            </span>
+          )}
+        </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pt-3 pb-4 space-y-4 bg-white">
+
+          {/* Supplier register */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Supplier register — current state
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Stat label="Active suppliers"       value={s.total} />
+              <Stat label="Formally approved"      value={`${s.formally_approved}/${s.total}`} alert={s.formally_approved < s.total} />
+              <Stat label="FSA approved"           value={s.fsa_approved} />
+              <Stat label="Expired certs"          value={s.expired_certs}    alert={s.expired_certs > 0} />
+              <Stat label="Expiring ≤60 days"      value={s.expiring_60_days} alert={s.expiring_60_days > 0} />
+            </div>
+            {s.formally_approved < s.total && (
+              <p className="text-amber-600 text-[10px] mt-1.5">
+                ⚠ {approvalGap} supplier{approvalGap > 1 ? 's' : ''} missing approval date — set in Admin → Suppliers
+              </p>
+            )}
+          </div>
+
+          {/* Product specs */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Product specifications (BSD 1.6.2)
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Stat label="Specs on file"  value={sp.total} alert={sp.total === 0} />
+              <Stat label="Review due"     value={sp.review_due} alert={sp.review_due > 0} />
+            </div>
+            {sp.total === 0 && (
+              <p className="text-amber-600 text-[10px] mt-1.5">⚠ No product specs on file — add via Product Specs tile</p>
+            )}
+          </div>
+
+          {/* Goods-in */}
+          <div>
+            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+              Goods-in — review period
+            </p>
+            {g.total === 0 ? (
+              <p className="text-slate-400 text-xs">No deliveries in this review period</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Stat label="Total deliveries"   value={g.total} />
+                <Stat label="With batch number"  value={`${g.has_batch}/${g.total}`}
+                  alert={g.has_batch < g.total} />
+                <Stat label="Meat deliveries"    value={g.meat_total} />
+                <Stat label="BLS complete"       value={g.meat_total > 0 ? `${g.meat_bls_complete}/${g.meat_total}` : '—'}
+                  alert={blsIncomplete} />
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AnnualReviewPage() {
   const [view,      setView]      = useState<'list' | 'editing'>('list')
   const [reviews,   setReviews]   = useState<AnnualReview[]>([])
@@ -1193,10 +1323,11 @@ export default function AnnualReviewPage() {
 
           // Build data panel content per section
           let dataPanelContent: React.ReactNode = undefined
-          if (def.key === '3.2') dataPanelContent = <TrainingDataPanel  data={sectionData['3.2']} />
-          if (def.key === '3.3') dataPanelContent = <HealthDataPanel    data={sectionData['3.3']} />
-          if (def.key === '3.4') dataPanelContent = <CleaningDataPanel  data={sectionData['3.4']} />
+          if (def.key === '3.2') dataPanelContent = <TrainingDataPanel   data={sectionData['3.2']} />
+          if (def.key === '3.3') dataPanelContent = <HealthDataPanel     data={sectionData['3.3']} />
+          if (def.key === '3.4') dataPanelContent = <CleaningDataPanel   data={sectionData['3.4']} />
           if (def.key === '3.6') dataPanelContent = <TempControlDataPanel data={sectionData['3.6']} />
+          if (def.key === '3.7') dataPanelContent = <SupplierDataPanel   data={sectionData['3.7']} />
 
           return (
             <SectionCard

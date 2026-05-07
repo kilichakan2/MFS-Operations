@@ -121,8 +121,21 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'Calibration records retained (cert reference or manual test results)',
     ],
   },
-  // Phase 7 will add: 3.7 Supplier Control & Traceability, 3.8 Incidents & Complaints
-  // Phase 8 will add: 3.9 Food Fraud, 3.10 Premises & Equipment
+  {
+    key:          '3.7',
+    title:        'Supplier Control & Traceability',
+    hasDataPanel: true,
+    items: [
+      'Approved supplier list maintained — all active suppliers risk assessed and date approved recorded',
+      'Product specifications held for all supplied products and reviewed (BSD 1.6.2)',
+      'Supplier certificates current — FSA approval numbers and third-party certs on file where applicable',
+      'Goods-in checks completed at every delivery — temp, condition, batch number and documentation',
+      'BLS traceability data recorded at intake for all red meat and offal (EC 853/2004)',
+      'Traceability test conducted — mock recall completed forward and backward (BSD 3.4.2)',
+    ],
+  },
+  // Phase 8 will add: 3.8 Incidents & Complaints
+  // Phase 9 will add: 3.9 Food Fraud, 3.10 Premises & Equipment
 ]
 
 // ─── Training status logic (used in data panel + tests) ──────────────────────
