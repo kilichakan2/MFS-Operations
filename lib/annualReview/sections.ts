@@ -84,9 +84,20 @@ export const REVIEW_SECTIONS: SectionDef[] = [
       'Illness reporting procedure followed',
     ],
   },
-  // Phase 4 will add: 3.4 Cleaning, 3.5 Pest Control
-  // Phase 5 will add: 3.6 Temperature, 3.7 Suppliers, 3.8 Incidents
-  // Phase 6 will add: 3.9 Food Fraud, 3.10 Premises
+  {
+    key:          '3.4',
+    title:        'Cleaning & Disinfection',
+    hasDataPanel: true,
+    items: [
+      'Cleaning schedules in place and followed',
+      'Cleaning chemicals stored safely',
+      'Cleaning verification conducted (ATP swabs)',
+      'Equipment sanitisation effective (82C steriliser)',
+    ],
+  },
+  // Phase 5 will add: 3.5 Pest Control
+  // Phase 6 will add: 3.6 Temperature, 3.7 Suppliers, 3.8 Incidents
+  // Phase 7 will add: 3.9 Food Fraud, 3.10 Premises
 ]
 
 // ─── Training status logic (used in data panel + tests) ──────────────────────

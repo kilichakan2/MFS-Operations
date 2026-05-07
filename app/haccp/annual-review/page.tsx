@@ -88,6 +88,14 @@ interface SectionData {
     exclusions: HealthRecord[]
     visitors:   HealthRecord[]
   }
+  '3.4'?: {
+    total:            number
+    issues_count:     number
+    issues_list:      { date: string; what_did_you_do: string | null }[]
+    sanitiser_checks: number
+    low_temp_list:    { date: string; sanitiser_temp_c: number }[]
+    last_log_date:    string | null
+  }
 }
 
 // ─── Training status helpers ─────────────────────────────────────────────────
@@ -496,6 +504,111 @@ function HealthDataPanel({ data }: { data: SectionData['3.3'] | undefined }) {
   )
 }
 
+// ─── Section 3.4 Cleaning data panel ─────────────────────────────────────────
+
+function fmtShortDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function CleaningDataPanel({ data }: { data: SectionData['3.4'] | undefined }) {
+  const [open, setOpen] = useState(false)
+  if (!data) return null
+
+  const { total, issues_count, issues_list, sanitiser_checks, low_temp_list, last_log_date } = data
+  const hasAlerts = issues_count > 0 || low_temp_list.length > 0
+
+  return (
+    <div className="mb-3 border border-slate-200 rounded-xl overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full px-4 py-2.5 bg-slate-50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <p className="text-slate-600 text-xs font-bold">Cleaning records — review period</p>
+          {hasAlerts && (
+            <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+              {[issues_count > 0 && `${issues_count} issue${issues_count > 1 ? 's' : ''}`,
+                low_temp_list.length > 0 && `${low_temp_list.length} low temp${low_temp_list.length > 1 ? 's' : ''}`
+              ].filter(Boolean).join(' · ')}
+            </span>
+          )}
+        </div>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="px-4 pt-3 pb-4 space-y-4 bg-white">
+          {total === 0 ? (
+            <p className="text-slate-400 text-xs">No cleaning records in this review period</p>
+          ) : (
+            <>
+              {/* Summary row */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
+                  <p className="text-slate-900 font-bold text-base">{total}</p>
+                  <p className="text-slate-400 text-[10px]">Sessions logged</p>
+                </div>
+                <div className={`rounded-lg px-3 py-2 text-center ${issues_count > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                  <p className={`font-bold text-base ${issues_count > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+                    {issues_count}
+                  </p>
+                  <p className="text-slate-400 text-[10px]">Issues flagged</p>
+                </div>
+                <div className="bg-slate-50 rounded-lg px-3 py-2 text-center">
+                  <p className="text-slate-900 font-bold text-base">{sanitiser_checks}</p>
+                  <p className="text-slate-400 text-[10px]">Sanitiser checks</p>
+                </div>
+              </div>
+
+              {last_log_date && (
+                <p className="text-slate-400 text-[10px]">Last log: {fmtShortDate(last_log_date)}</p>
+              )}
+
+              {/* Issues list */}
+              {issues_count > 0 && (
+                <div>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">Issues flagged</p>
+                  <div className="space-y-1.5">
+                    {issues_list.map((r, i) => (
+                      <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                        <p className="text-slate-400 text-[10px]">{fmtShortDate(r.date)}</p>
+                        <p className="text-slate-700 text-xs mt-0.5">
+                          {r.what_did_you_do ?? 'No action recorded'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Low sanitiser temps */}
+              {low_temp_list.length > 0 && (
+                <div>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-2">
+                    Sanitiser below 82°C (CCP limit)
+                  </p>
+                  <div className="space-y-1.5">
+                    {low_temp_list.map((r, i) => (
+                      <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                        <p className="text-slate-400 text-[10px]">{fmtShortDate(r.date)}</p>
+                        <p className="text-amber-700 text-xs font-bold">{r.sanitiser_temp_c}°C</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AnnualReviewPage() {
   const [view,      setView]      = useState<'list' | 'editing'>('list')
   const [reviews,   setReviews]   = useState<AnnualReview[]>([])
@@ -875,6 +988,9 @@ export default function AnnualReviewPage() {
           }
           if (def.key === '3.3') {
             dataPanelContent = <HealthDataPanel data={sectionData['3.3']} />
+          }
+          if (def.key === '3.4') {
+            dataPanelContent = <CleaningDataPanel data={sectionData['3.4']} />
           }
 
           return (

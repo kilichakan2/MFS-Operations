@@ -484,3 +484,130 @@ describe('Section 3.3 data panel empty states', () => {
     expect(total).toBe(6)
   })
 })
+
+// ── Section 3.4 — Cleaning & Disinfection ────────────────────────────────────
+
+describe('REVIEW_SECTIONS — Section 3.4 Cleaning & Disinfection', () => {
+  it('section 3.4 exists', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.4')).toBeDefined()
+  })
+
+  it('section 3.4 title is correct', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.4')?.title).toBe('Cleaning & Disinfection')
+  })
+
+  it('section 3.4 has exactly 4 items', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.4')?.items).toHaveLength(4)
+  })
+
+  it('section 3.4 has data panel', () => {
+    expect(REVIEW_SECTIONS.find(s => s.key === '3.4')?.hasDataPanel).toBe(true)
+  })
+
+  it('section 3.4 items match MFS-ASR-001 verbatim', () => {
+    const items = REVIEW_SECTIONS.find(s => s.key === '3.4')!.items
+    expect(items[0]).toBe('Cleaning schedules in place and followed')
+    expect(items[1]).toBe('Cleaning chemicals stored safely')
+    expect(items[2]).toBe('Cleaning verification conducted (ATP swabs)')
+    expect(items[3]).toBe('Equipment sanitisation effective (82C steriliser)')
+  })
+
+  it('section order: 3.3 before 3.4', () => {
+    const keys = REVIEW_SECTIONS.map(s => s.key)
+    expect(keys.indexOf('3.3')).toBeLessThan(keys.indexOf('3.4'))
+  })
+
+  it('REVIEW_SECTIONS has at least 4 sections', () => {
+    expect(REVIEW_SECTIONS.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('buildInitialChecklist includes 3.4 with 4 items and null statuses', () => {
+    const cl = buildInitialChecklist()
+    expect(cl['3.4']).toBeDefined()
+    expect(cl['3.4'].items).toHaveLength(4)
+    expect(cl['3.4'].items[0].label).toBe('Cleaning schedules in place and followed')
+    expect(cl['3.4'].items.every(i => i.status === null)).toBe(true)
+  })
+})
+
+// ── Cleaning data logic ───────────────────────────────────────────────────────
+
+describe('Cleaning data panel logic', () => {
+  const makeRecord = (issues: boolean, what_did_you_do: string | null, sanitiser_temp_c: number | null, date = '2026-04-21') =>
+    ({ date, issues, what_did_you_do, sanitiser_temp_c })
+
+  it('empty period: all zeros, null last_log_date', () => {
+    const records: ReturnType<typeof makeRecord>[] = []
+    expect(records.length).toBe(0)
+    expect(records.filter(r => r.issues).length).toBe(0)
+    expect(records.filter(r => r.sanitiser_temp_c !== null).length).toBe(0)
+    expect(records.length > 0 ? records[0].date : null).toBeNull()
+  })
+
+  it('issues filter counts records where issues = true', () => {
+    const records = [
+      makeRecord(true, 'Fixed it', null),
+      makeRecord(false, null, 82),
+      makeRecord(true, null, 79),
+    ]
+    expect(records.filter(r => r.issues).length).toBe(2)
+  })
+
+  it('issues_list maps date and what_did_you_do', () => {
+    const records = [makeRecord(true, 'Action taken', null, '2026-04-21')]
+    const list = records.filter(r => r.issues).map(r => ({ date: r.date, what_did_you_do: r.what_did_you_do }))
+    expect(list[0].date).toBe('2026-04-21')
+    expect(list[0].what_did_you_do).toBe('Action taken')
+  })
+
+  it('what_did_you_do null on issues=true: no crash, returns null', () => {
+    const records = [makeRecord(true, null, null)]
+    const list = records.filter(r => r.issues).map(r => ({ date: r.date, what_did_you_do: r.what_did_you_do }))
+    expect(list[0].what_did_you_do).toBeNull()
+  })
+
+  it('sanitiser_checks counts non-null sanitiser_temp_c', () => {
+    const records = [
+      makeRecord(false, null, 82),
+      makeRecord(false, null, null),
+      makeRecord(true, 'Fixed', 79),
+      makeRecord(false, null, null),
+    ]
+    expect(records.filter(r => r.sanitiser_temp_c !== null).length).toBe(2)
+  })
+
+  it('low_temp_list: only records where sanitiser_temp_c < 82 (strict)', () => {
+    const records = [
+      makeRecord(false, null, 82),   // exactly 82 — passes, not in list
+      makeRecord(false, null, 83),   // above — passes
+      makeRecord(false, null, 79),   // below — in list
+      makeRecord(false, null, 81),   // below — in list
+      makeRecord(false, null, null), // no reading — not in list
+    ]
+    const lowTemps = records.filter(r => r.sanitiser_temp_c !== null && r.sanitiser_temp_c < 82)
+    expect(lowTemps.length).toBe(2)
+    expect(lowTemps.map(r => r.sanitiser_temp_c)).toEqual([79, 81])
+  })
+
+  it('82°C exactly does NOT appear in low_temp_list', () => {
+    const records = [makeRecord(false, null, 82)]
+    const lowTemps = records.filter(r => r.sanitiser_temp_c !== null && r.sanitiser_temp_c < 82)
+    expect(lowTemps.length).toBe(0)
+  })
+
+  it('last_log_date is first record when sorted descending', () => {
+    const records = [
+      makeRecord(false, null, null, '2026-04-24'),
+      makeRecord(false, null, null, '2026-04-19'),
+    ]
+    expect(records.length > 0 ? records[0].date : null).toBe('2026-04-24')
+  })
+
+  it('hasAlerts true when issues_count > 0', () => {
+    const hasAlerts = (issues_count: number, low_temp_count: number) =>
+      issues_count > 0 || low_temp_count > 0
+    expect(hasAlerts(1, 0)).toBe(true)
+    expect(hasAlerts(0, 1)).toBe(true)
+    expect(hasAlerts(0, 0)).toBe(false)
+  })
+})

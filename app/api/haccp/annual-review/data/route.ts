@@ -96,14 +96,51 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Section 3.4 — Cleaning & Disinfection (period activity) ─────────────
+
+    let cleaningData: {
+      total:            number
+      issues_count:     number
+      issues_list:      { date: string; what_did_you_do: string | null }[]
+      sanitiser_checks: number
+      low_temp_list:    { date: string; sanitiser_temp_c: number }[]
+      last_log_date:    string | null
+    } = {
+      total: 0, issues_count: 0, issues_list: [],
+      sanitiser_checks: 0, low_temp_list: [], last_log_date: null,
+    }
+
+    if (from && to) {
+      const { data: cleaningRaw, error: cleaningErr } = await supabase
+        .from('haccp_cleaning_log')
+        .select('date, issues, what_did_you_do, sanitiser_temp_c')
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: false })
+
+      if (cleaningErr) throw cleaningErr
+
+      const records = cleaningRaw ?? []
+      cleaningData = {
+        total:            records.length,
+        issues_count:     records.filter(r => r.issues === true).length,
+        issues_list:      records
+          .filter(r => r.issues === true)
+          .map(r => ({ date: r.date, what_did_you_do: r.what_did_you_do })),
+        sanitiser_checks: records.filter(r => r.sanitiser_temp_c !== null).length,
+        low_temp_list:    records
+          .filter(r => r.sanitiser_temp_c !== null && Number(r.sanitiser_temp_c) < 82)
+          .map(r => ({ date: r.date, sanitiser_temp_c: Number(r.sanitiser_temp_c) })),
+        last_log_date:    records.length > 0 ? records[0].date : null,
+      }
+    }
+
     // ── Response ─────────────────────────────────────────────────────────────
 
     return NextResponse.json({
-      '3.2': {
-        staff_training:    staffTraining,
-        allergen_training: allergenTraining,
-      },
+      '3.2': { staff_training: staffTraining, allergen_training: allergenTraining },
       '3.3': healthData,
+      '3.4': cleaningData,
     })
 
   } catch (err) {
