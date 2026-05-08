@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from 'next/server'
 // session cookie. The individual cron routes validate their own auth via CRON_SECRET.
 // /sw.js must be public — browsers fetch the service worker without credentials.
 // Without this it 307s to /login and pushManager.subscribe() fails silently.
-const PUBLIC_PATHS = ['/login', '/haccp', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team', '/api/auth/haccp-team', '/api/auth/haccp-admin', '/api/cron', '/sw.js']
+const PUBLIC_PATHS = ['/login', '/haccp', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team', '/api/auth/haccp-team', '/api/auth/haccp-admin', '/api/cron', '/sw.js', '/api/haccp/visitor']
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {

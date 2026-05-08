@@ -53,9 +53,11 @@ export default function VisitorSignInPage() {
   const [submitting,  setSubmitting]  = useState(false)
   const [result,      setResult]      = useState<'success' | 'excluded' | null>(null)
   const [countdown,   setCountdown]   = useState(10)
+  const [confirmingExclusion, setConfirmingExclusion] = useState(false)
 
-  // Exclusion: any of vq1–vq8 = yes
+  // Exclusion: any of vq1–vq8 = yes, OR vq9 = no (doesn't understand)
   const hasExclusion   = VISITOR_QUESTIONS.slice(0, 8).some(q => answers[q.id] === true)
+                       || answers['vq9'] === false
   const allAnswered    = VISITOR_QUESTIONS.every(q => answers[q.id] !== null)
   const allDeclared    = VISITOR_DECLARATION.every(d => declaration[d.id])
   const isValid        = name.trim() && company.trim() && reason.trim()
@@ -64,7 +66,7 @@ export default function VisitorSignInPage() {
   const reset = useCallback(() => {
     setName(''); setCompany(''); setReason('')
     setAnswers(initialAnswers()); setDeclaration(initialDeclaration())
-    setManager(''); setResult(null); setCountdown(10)
+    setManager(''); setResult(null); setCountdown(10); setConfirmingExclusion(false)
   }, [])
 
   // Auto-reset after success/excluded
@@ -191,18 +193,19 @@ export default function VisitorSignInPage() {
                 <p className="text-white text-xs mb-2.5">{q.label}</p>
                 <div className="flex gap-2">
                   {(['Yes', 'No'] as const).map(opt => {
-                    const val = opt === 'Yes'
+                    const val      = opt === 'Yes'
                     const selected = answers[q.id] === val
-                    const isExclusionYes = val && q.id !== 'vq9' && val
+                    // vq9 is inverted: Yes (understands) = green, No = red
+                    // vq1-vq8: Yes (has condition) = red, No = green
+                    const isGreen = selected && (q.id === 'vq9' ? val === true  : val === false)
+                    const isRed   = selected && (q.id === 'vq9' ? val === false : val === true)
                     return (
                       <button key={opt}
                         onClick={() => setAnswers(prev => ({ ...prev, [q.id]: val }))}
                         className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
-                          selected
-                            ? (isExclusionYes && q.id !== 'vq9'
-                                ? 'bg-red-500 text-white'
-                                : 'bg-green-500 text-white')
-                            : 'bg-[#0f172a] text-slate-400 border border-[#2d4a6b]'
+                          isRed   ? 'bg-red-500 text-white' :
+                          isGreen ? 'bg-green-500 text-white' :
+                          'bg-[#0f172a] text-slate-400 border border-[#2d4a6b]'
                         }`}>
                         {opt}
                       </button>
@@ -261,13 +264,37 @@ export default function VisitorSignInPage() {
           </div>
         </div>
 
+        {/* Exclusion confirmation panel */}
+        {confirmingExclusion && (
+          <div className="bg-red-900/40 border border-red-700 rounded-xl px-4 py-4">
+            <p className="text-red-300 text-sm font-bold mb-1">Your visit will be recorded as excluded</p>
+            <p className="text-red-400 text-xs mb-3">Based on your answers, you are not permitted to enter the production area at this time. Please inform a member of staff. Your visit details will still be recorded.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmingExclusion(false)}
+                className="flex-1 py-2.5 rounded-xl border border-red-700 text-red-300 text-sm font-bold">
+                Go back
+              </button>
+              <button onClick={handleSubmit} disabled={submitting}
+                className="flex-1 py-2.5 rounded-xl bg-red-700 text-white text-sm font-bold disabled:opacity-40">
+                {submitting ? 'Recording…' : 'Confirm & record'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Submit */}
-        <button
-          onClick={handleSubmit}
-          disabled={!isValid || submitting}
-          className="w-full py-4 rounded-xl bg-orange-500 text-white text-base font-bold disabled:opacity-30 transition-opacity">
-          {submitting ? 'Signing in…' : 'Submit sign-in'}
-        </button>
+        {!confirmingExclusion && (
+          <button
+            onClick={() => {
+              if (!isValid) return
+              if (hasExclusion) { setConfirmingExclusion(true); return }
+              handleSubmit()
+            }}
+            disabled={!isValid || submitting}
+            className="w-full py-4 rounded-xl bg-orange-500 text-white text-base font-bold disabled:opacity-30 transition-opacity">
+            {submitting ? 'Signing in…' : 'Submit sign-in'}
+          </button>
+        )}
 
         <p className="text-slate-600 text-[10px] text-center pb-4">
           MFS Global Ltd · Unit 2-3 Rutland Way, Sheffield S3 8DG · HACCP Visitor Record
