@@ -541,9 +541,6 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <SmallTile id="food-defence" icon={Icon.audit} label="Food Defence" sub="SALSA 4.2.3"
               badge={defenceReviewDue ? 'Review due' : 'Current'} due={defenceReviewDue}
               onTap={() => { window.location.href = '/haccp/food-defence' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="visitor-signin" icon={Icon.people} label="Visitor Sign-In" sub="Public · No login"
-              badge="Tap to sign in" due={false}
-              onTap={() => { window.location.href = '/haccp/visitor' }} onHelp={() => setHelp('people')} />
             {isAdmin && (
               <SmallTile id="audit" icon={Icon.audit} label="Audit" sub="Records · Export"
                 badge="View all records" due={false}
@@ -715,6 +712,17 @@ function LoginDoor() {
         )}
       </div>
       <div className="text-center pb-8 text-slate-300 text-xs tracking-widest uppercase">MFS Global Ltd · Sheffield</div>
+      <div className="pb-10 px-6 flex justify-center">
+        <button
+          onPointerDown={() => { window.location.href = '/haccp/visitor' }}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-700 text-slate-400 text-sm font-medium active:scale-95 transition-all select-none">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          Visitor sign-in
+        </button>
+      </div>
     </div>
   )
 }
