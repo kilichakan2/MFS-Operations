@@ -541,6 +541,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <SmallTile id="food-defence" icon={Icon.audit} label="Food Defence" sub="SALSA 4.2.3"
               badge={defenceReviewDue ? 'Review due' : 'Current'} due={defenceReviewDue}
               onTap={() => { window.location.href = '/haccp/food-defence' }} onHelp={() => setHelp('people')} />
+            <SmallTile id="visitor-signin" icon={Icon.people} label="Visitor Sign-In" sub="Public · No login"
+              badge="Tap to sign in" due={false}
+              onTap={() => { window.location.href = '/haccp/visitor' }} onHelp={() => setHelp('people')} />
             {isAdmin && (
               <SmallTile id="audit" icon={Icon.audit} label="Audit" sub="Records · Export"
                 badge="View all records" due={false}
