@@ -225,12 +225,13 @@ export async function POST(req: NextRequest) {
       path:     '/',
     })
 
-    // mfs_secondary_roles — always empty in a single-role session (role was chosen)
-    response.cookies.set('mfs_secondary_roles', sessionSecondaryRoles.join(','), {
+    // mfs_secondary_roles — expired after role picker (single-role session)
+    // maxAge: 0 explicitly deletes the cookie in all browsers/PWA contexts
+    response.cookies.set('mfs_secondary_roles', '', {
       httpOnly: false,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge:   60 * 60 * 24 * 30,
+      maxAge:   0,
       path:     '/',
     })
 
