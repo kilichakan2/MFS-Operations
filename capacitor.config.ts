@@ -11,11 +11,8 @@ const config: CapacitorConfig = {
   android: {
     allowMixedContent: false,
   },
-  plugins: {
-    SunmiPrinter: {
-      bindOnLoad: true,       // bind printer service when app opens
-    },
-  },
+  // No Capacitor plugins — the Sunmi printer is reached via a native
+  // JavaScript interface (window.MFSSunmiPrint), see ADR-0001.
 }
 
 export default config
