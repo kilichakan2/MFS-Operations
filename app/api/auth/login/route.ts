@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     // ── Fetch user by name (service role — RLS bypassed) ─────────────────────
     const { data: user, error: dbError } = await supabase
       .from('users')
-      .select('id, name, role, pin_hash, password_hash, active')
+      .select('id, name, role, secondary_roles, pin_hash, password_hash, active')
       .ilike('name', name)
       .single()
 
@@ -174,29 +174,39 @@ export async function POST(req: NextRequest) {
     // response.cookies.set() is the correct Next.js 15 Route Handler pattern.
     // The deprecated cookies() from next/headers does NOT attach to the response object.
     const redirect = ROLE_ROUTES[user.role] ?? '/screen4'
+    const secondaryRoles: string[] = (user.secondary_roles as string[] | null) ?? []
 
     const response = NextResponse.json({
-      success:  true,
-      role:     user.role,
-      name:     user.name,
+      success:        true,
+      role:           user.role,
+      secondaryRoles,
+      name:           user.name,
       redirect,
     })
 
     response.cookies.set('mfs_session', JSON.stringify({
-      userId: user.id,
-      name:   user.name,
-      role:   user.role,
+      userId:         user.id,
+      name:           user.name,
+      role:           user.role,
+      secondaryRoles,
     }), {
       httpOnly: true,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge:   60 * 60 * 24 * 30,   // 30 days
+      maxAge:   60 * 60 * 24 * 30,
       path:     '/',
     })
 
-    // mfs_role is NOT httpOnly — readable by client-side JS for nav rendering only.
-    // Role string is not sensitive; middleware enforces actual access server-side.
     response.cookies.set('mfs_role', user.role, {
+      httpOnly: false,
+      secure:   process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge:   60 * 60 * 24 * 30,
+      path:     '/',
+    })
+
+    // mfs_secondary_roles — client-readable, comma-separated secondary roles
+    response.cookies.set('mfs_secondary_roles', secondaryRoles.join(','), {
       httpOnly: false,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',

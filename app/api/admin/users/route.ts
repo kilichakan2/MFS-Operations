@@ -16,7 +16,7 @@ const supabase = supabaseService
 export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, role, active, last_login_at, created_at, email')
+    .select('id, name, role, secondary_roles, active, last_login_at, created_at, email')
     .order('created_at', { ascending: true })
 
   if (error) {
@@ -36,10 +36,12 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null)
 
-    const name       = String(body?.name       ?? '').trim()
-    const role       = String(body?.role       ?? '').trim()
-    const credential = String(body?.credential ?? '').trim()
-    const email      = body?.email ? String(body.email).trim() || null : null
+    const name            = String(body?.name       ?? '').trim()
+    const role            = String(body?.role       ?? '').trim()
+    const credential      = String(body?.credential ?? '').trim()
+    const email           = body?.email ? String(body.email).trim() || null : null
+    const secondaryRoles  = (Array.isArray(body?.secondary_roles) ? body.secondary_roles : [])
+      .filter((r: unknown) => typeof r === 'string' && r !== 'admin') as string[]
 
     if (!name || !role || !credential) {
       return NextResponse.json(
@@ -76,8 +78,8 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('users')
-      .insert({ name, role, [field]: hash, active: true, ...(email ? { email } : {}) })
-      .select('id, name, role, active, last_login_at, created_at, email')
+      .insert({ name, role, secondary_roles: secondaryRoles, [field]: hash, active: true, ...(email ? { email } : {}) })
+      .select('id, name, role, secondary_roles, active, last_login_at, created_at, email')
       .single()
 
     if (error) {

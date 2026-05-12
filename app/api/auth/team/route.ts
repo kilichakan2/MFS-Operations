@@ -13,7 +13,7 @@ export async function GET() {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, name, role')
+      .select('id, name, role, secondary_roles')
       .in('role', ['warehouse', 'office', 'sales', 'driver'])
       .eq('active', true)
       .order('name', { ascending: true })

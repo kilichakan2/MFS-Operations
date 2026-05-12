@@ -27,10 +27,9 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('users')
-      .select('id, name, role')
-      .in('role', ['driver', 'sales'])
+      .select('id, name, role, secondary_roles')
+      .or('role.in.(driver,sales),secondary_roles.cs.{driver},secondary_roles.cs.{sales}')
       .eq('active', true)
-      .order('role', { ascending: true })   // drivers first, then sales
       .order('name', { ascending: true })
 
     if (error) {
@@ -39,7 +38,7 @@ export async function GET(req: NextRequest) {
     }
 
     const users = data ?? []
-    console.log(`[/api/routes/users] ${users.length} assignable users — drivers: ${users.filter(u => u.role === 'driver').length}, sales: ${users.filter(u => u.role === 'sales').length}`)
+    console.log(`[/api/routes/users] ${users.length} assignable users`)
 
     return NextResponse.json({ users })
 

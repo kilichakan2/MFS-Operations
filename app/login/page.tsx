@@ -11,7 +11,7 @@ import AuthKeypad                                      from '@/components/AuthKe
 
 type Mode = 'select' | 'team' | 'admin'
 
-interface TeamMember { id: string; name: string; role: string }
+interface TeamMember { id: string; name: string; role: string; secondary_roles?: string[] }
 
 const ROLE_ACCENT: Record<string, string> = {
   warehouse: 'border-amber-500/60  text-amber-700',
@@ -310,6 +310,15 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
                   <span className={`text-[10px] font-semibold mt-1 ${ROLE_ACCENT[m.role]?.split(' ')[1] ?? 'text-white/40'}`}>
                     {ROLE_LABEL[m.role] ?? m.role}
                   </span>
+                  {(m.secondary_roles ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1 justify-center">
+                      {(m.secondary_roles ?? []).map(r => (
+                        <span key={r} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[#16205B]/10 text-[#16205B]/60">
+                          +{r}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>

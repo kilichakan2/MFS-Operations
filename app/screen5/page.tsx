@@ -11,13 +11,14 @@ type ImportState = 'input' | 'mapping' | 'preview' | 'list'
 type UserRole   = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver' | 'butcher'
 
 interface AppUser {
-  id:            string
-  name:          string
-  role:          UserRole
-  active:        boolean
-  last_login_at: string | null
-  created_at:    string
-  email:         string | null
+  id:              string
+  name:            string
+  role:            UserRole
+  secondary_roles: string[]
+  active:          boolean
+  last_login_at:   string | null
+  created_at:      string
+  email:           string | null
 }
 
 interface AppCustomer { id: string; name: string; postcode: string | null; lat: number | null; lng: number | null; active: boolean; created_at: string }
@@ -133,19 +134,36 @@ const PIN_RE = /^\d{4}$/
 interface ResetTarget { id: string; name: string; role: UserRole }
 
 // ─── UserRow — inline email editing ──────────────────────────────────────────
-function UserRow({ u, onToggle, onReset, onDelete, deleting, onEmailSaved, isPin }: {
-  u:            AppUser
-  onToggle:     (id: string, current: boolean) => void
-  onReset:      (u: AppUser) => void
-  onDelete:     (u: AppUser) => void
-  deleting:     boolean
-  onEmailSaved: (id: string, email: string | null) => void
-  isPin:        (role: UserRole) => boolean
+function UserRow({ u, onToggle, onReset, onDelete, deleting, onEmailSaved, onSecondaryRolesChanged, isPin }: {
+  u:                        AppUser
+  onToggle:                 (id: string, current: boolean) => void
+  onReset:                  (u: AppUser) => void
+  onDelete:                 (u: AppUser) => void
+  deleting:                 boolean
+  onEmailSaved:             (id: string, email: string | null) => void
+  onSecondaryRolesChanged:  (id: string, roles: string[]) => void
+  isPin:                    (role: UserRole) => boolean
 }) {
-  const [editingEmail, setEditingEmail] = useState(false)
-  const [emailVal,     setEmailVal]     = useState(u.email ?? '')
-  const [emailSaving,  setEmailSaving]  = useState(false)
-  const [emailError,   setEmailError]   = useState('')
+  const [editingEmail,  setEditingEmail]  = useState(false)
+  const [emailVal,      setEmailVal]      = useState(u.email ?? '')
+  const [emailSaving,   setEmailSaving]   = useState(false)
+  const [emailError,    setEmailError]    = useState('')
+  const [secSaving,     setSecSaving]     = useState(false)
+
+  const allRoleOptions: UserRole[] = ['warehouse', 'office', 'sales', 'driver', 'butcher']
+
+  async function toggleSecondaryRole(r: string) {
+    const current   = u.secondary_roles ?? []
+    const updated   = current.includes(r) ? current.filter(x => x !== r) : [...current, r]
+    setSecSaving(true)
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secondary_roles: updated }),
+      })
+      if (res.ok) onSecondaryRolesChanged(u.id, updated)
+    } finally { setSecSaving(false) }
+  }
 
   async function saveEmail() {
     setEmailSaving(true); setEmailError('')
@@ -170,7 +188,28 @@ function UserRow({ u, onToggle, onReset, onDelete, deleting, onEmailSaved, isPin
       <td className="py-3 px-3">
         <span className={`text-sm font-medium ${u.active ? 'text-gray-900' : 'text-gray-400'}`}>{u.name}</span>
       </td>
-      <td className="py-3 px-3"><RoleBadge role={u.role} /></td>
+      <td className="py-3 px-3">
+        <div className="flex flex-wrap items-center gap-1">
+          <RoleBadge role={u.role} />
+          {allRoleOptions
+            .filter(r => r !== u.role)
+            .map(r => {
+              const active = (u.secondary_roles ?? []).includes(r)
+              return (
+                <button key={r} type="button" disabled={secSaving}
+                  onClick={() => toggleSecondaryRole(r)}
+                  title={active ? `Remove ${r} secondary role` : `Add ${r} secondary role`}
+                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded border transition-colors ${
+                    active
+                      ? 'bg-slate-800 text-white border-slate-800 hover:bg-red-600 hover:border-red-600'
+                      : 'bg-white text-slate-300 border-slate-200 hover:text-slate-600 hover:border-slate-400'
+                  }`}>
+                  {active ? '+' : '+'}{r}
+                </button>
+              )
+            })}
+        </div>
+      </td>
       {/* Email — inline edit */}
       <td className="py-3 px-3">
         {editingEmail ? (
@@ -245,11 +284,12 @@ function UsersSection() {
   const [users,       setUsers]       = useState<AppUser[]>([])
   const [loading,     setLoading]     = useState(true)
   const [showAdd,     setShowAdd]     = useState(false)
-  const [newName,     setNewName]     = useState('')
-  const [newRole,     setNewRole]     = useState<UserRole>('sales')
-  const [newPin,      setNewPin]      = useState('')
-  const [newEmail,    setNewEmail]    = useState('')
-  const [pinError,    setPinError]    = useState('')
+  const [newName,            setNewName]           = useState('')
+  const [newRole,            setNewRole]           = useState<UserRole>('sales')
+  const [newSecondaryRoles,  setNewSecondaryRoles] = useState<string[]>([])
+  const [newPin,             setNewPin]            = useState('')
+  const [newEmail,           setNewEmail]          = useState('')
+  const [pinError,           setPinError]          = useState('')
   const [saving,      setSaving]      = useState(false)
   const [saveError,   setSaveError]   = useState('')
 
@@ -318,14 +358,14 @@ function UsersSection() {
     try {
       const res  = await fetch('/api/admin/users', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), role: newRole, credential: newPin, email: newEmail.trim() || null }),
+        body: JSON.stringify({ name: newName.trim(), role: newRole, secondary_roles: newSecondaryRoles, credential: newPin, email: newEmail.trim() || null }),
       })
       let data: AppUser & { error?: string }
       try { data = await res.json() }
       catch { setSaveError(`Server error (${res.status})`); return }
       if (res.ok) {
         setUsers((prev) => [...prev, data as AppUser])
-        setNewName(''); setNewPin(''); setNewEmail(''); setPinError(''); setShowAdd(false)
+        setNewName(''); setNewPin(''); setNewEmail(''); setNewSecondaryRoles([]); setPinError(''); setShowAdd(false)
       } else {
         setSaveError(data.error ?? `Failed (${res.status})`)
       }
@@ -422,7 +462,7 @@ function UsersSection() {
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">Role</label>
-              <select value={newRole} onChange={(e) => { setNewRole(e.target.value as UserRole); setNewPin(''); setPinError('') }}
+              <select value={newRole} onChange={(e) => { setNewRole(e.target.value as UserRole); setNewPin(''); setPinError(''); setNewSecondaryRoles([]) }}
                 className="w-full h-9 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-[#EB6619] bg-white">
                 <option value="warehouse">Warehouse</option>
                 <option value="office">Office</option>
@@ -431,6 +471,26 @@ function UsersSection() {
                 <option value="driver">Driver</option>
                 <option value="butcher">Butcher</option>
               </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Secondary roles <span className="text-gray-300">(optional)</span></label>
+              <div className="flex flex-wrap gap-1.5">
+                {(['warehouse','office','sales','driver','butcher'] as UserRole[])
+                  .filter(r => r !== newRole)
+                  .map(r => (
+                    <button key={r} type="button"
+                      onClick={() => setNewSecondaryRoles(prev =>
+                        prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r]
+                      )}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                        newSecondaryRoles.includes(r)
+                          ? 'bg-slate-800 text-white border-slate-800'
+                          : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                      }`}>
+                      {r}
+                    </button>
+                  ))}
+              </div>
             </div>
             <div className="col-span-2">
               <label className="block text-xs text-gray-500 mb-1">
@@ -482,6 +542,7 @@ function UsersSection() {
                   onDelete={handleDelete}
                   deleting={deletingId === u.id}
                   onEmailSaved={(id, email) => setUsers(prev => prev.map(x => x.id === id ? { ...x, email } : x))}
+                  onSecondaryRolesChanged={(id, roles) => setUsers(prev => prev.map(x => x.id === id ? { ...x, secondary_roles: roles } : x))}
                   isPin={isPin}
                 />
               ))}

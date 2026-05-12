@@ -108,7 +108,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  let session: { userId: string; name: string; role: string }
+  let session: { userId: string; name: string; role: string; secondaryRoles?: string[] }
 
   try {
     session = JSON.parse(sessionCookie)
@@ -120,6 +120,7 @@ export function middleware(req: NextRequest) {
   }
 
   const { role } = session
+  const allRoles = [role, ...(session.secondaryRoles ?? []).filter(r => r !== 'admin')]
 
   // Root path — redirect to role home
   // Exception: warehouse/butcher who logged in via the HACCP kiosk door
@@ -132,21 +133,19 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/login', req.url))
   }
 
-  // Build enriched headers once — used by every authenticated pass-through.
-  // Sync routes read x-mfs-user-id to identify the caller without re-parsing
-  // the cookie. This must happen BEFORE the shared-path early return.
   const requestHeaders = new Headers(req.headers)
-  requestHeaders.set('x-mfs-user-id',   session.userId)
-  requestHeaders.set('x-mfs-user-name', session.name)
-  requestHeaders.set('x-mfs-user-role', session.role)
+  requestHeaders.set('x-mfs-user-id',          session.userId)
+  requestHeaders.set('x-mfs-user-name',         session.name)
+  requestHeaders.set('x-mfs-user-role',         session.role)
+  requestHeaders.set('x-mfs-secondary-roles',   (session.secondaryRoles ?? []).join(','))
 
   // Shared API paths — allow any authenticated user (all roles can sync)
   if (SHARED_API_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next({ request: { headers: requestHeaders } })
   }
 
-  // Check role permissions for screen paths
-  const permitted = ROLE_PERMISSIONS[role] ?? []
+  // Check role permissions — union of primary + secondary roles
+  const permitted = allRoles.flatMap(r => ROLE_PERMISSIONS[r] ?? [])
   const isPermitted = permitted.some((p) => pathname.startsWith(p))
 
   if (!isPermitted) {

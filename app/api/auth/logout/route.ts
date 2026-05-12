@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
 
   response.cookies.set('mfs_session',       '', { ...COOKIE_CLEAR, httpOnly: true  })
   response.cookies.set('mfs_role',          '', { ...COOKIE_CLEAR, httpOnly: false })
+  response.cookies.set('mfs_secondary_roles', '', { ...COOKIE_CLEAR, httpOnly: false })
   response.cookies.set('mfs_user_id',       '', { ...COOKIE_CLEAR, httpOnly: false })
   response.cookies.set('mfs_name',          '', { ...COOKIE_CLEAR, httpOnly: false })
   response.cookies.set('mfs_haccp_session', '', { ...COOKIE_CLEAR, httpOnly: false })
@@ -27,6 +28,7 @@ export async function POST() {
 
   response.cookies.set('mfs_session',       '', { ...COOKIE_CLEAR, httpOnly: true  })
   response.cookies.set('mfs_role',          '', { ...COOKIE_CLEAR, httpOnly: false })
+  response.cookies.set('mfs_secondary_roles', '', { ...COOKIE_CLEAR, httpOnly: false })
   response.cookies.set('mfs_user_id',       '', { ...COOKIE_CLEAR, httpOnly: false })
   response.cookies.set('mfs_name',          '', { ...COOKIE_CLEAR, httpOnly: false })
   response.cookies.set('mfs_haccp_session', '', { ...COOKIE_CLEAR, httpOnly: false })

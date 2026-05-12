@@ -19,7 +19,7 @@ import { usePushNotifications }   from '@/hooks/usePushNotifications'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface StaffMember { id: string; name: string; role: string }
+interface StaffMember { id: string; name: string; role: string; secondary_roles?: string[] }
 
 interface TodayStatus {
   cold_storage:       { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
@@ -629,6 +629,15 @@ function StaffCard({ member, onSelect }: { member: StaffMember; onSelect: (m: St
       <span className={`text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full ${isWh ? 'bg-amber-50 text-[#EB6619]' : 'bg-pink-100 text-slate-700'}`}>
         {isWh ? 'Warehouse' : 'Butcher'}
       </span>
+      {(member.secondary_roles ?? []).length > 0 && (
+        <div className="flex flex-wrap gap-1 justify-center">
+          {(member.secondary_roles ?? []).map(r => (
+            <span key={r} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-500">
+              +{r}
+            </span>
+          ))}
+        </div>
+      )}
     </button>
   )
 }

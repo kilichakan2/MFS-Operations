@@ -23,10 +23,11 @@ export async function PATCH(
 
     const { id }  = await params
     const body    = await req.json() as {
-      active?:     boolean
-      credential?: string
-      role?:       string
-      email?:      string | null
+      active?:          boolean
+      credential?:      string
+      role?:            string
+      email?:           string | null
+      secondary_roles?: string[]
     }
 
     const updates: Record<string, unknown> = {}
@@ -35,9 +36,13 @@ export async function PATCH(
       updates.active = body.active
     }
 
-    // Email update — null clears it, empty string treated as null
     if (body.email !== undefined) {
       updates.email = body.email?.trim() || null
+    }
+
+    if (body.secondary_roles !== undefined) {
+      updates.secondary_roles = body.secondary_roles
+        .filter((r: string) => r !== 'admin')
     }
 
     if (body.credential && body.role) {
@@ -53,7 +58,7 @@ export async function PATCH(
       .from('users')
       .update(updates)
       .eq('id', id)
-      .select('id, name, role, active, last_login_at, created_at, email')
+      .select('id, name, role, secondary_roles, active, last_login_at, created_at, email')
       .single()
 
     if (error) {

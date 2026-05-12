@@ -732,7 +732,7 @@ function ChequesTab({ role }: { role: string }) {
 
       setCustomers(custList.map((c: Record<string,unknown>) => ({ id: String(c.id), name: String(c.name) })))
       setDrivers(drvList
-        .filter((u: Record<string,unknown>) => u.role === 'driver')
+        .filter((u: Record<string,unknown>) => u.role === 'driver' || (Array.isArray(u.secondary_roles) && u.secondary_roles.includes('driver')))
         .map((u: Record<string,unknown>) => ({ id: String(u.id), name: String(u.name) })))
     } catch { /* refs optional */ }
   }
