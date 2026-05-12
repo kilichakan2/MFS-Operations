@@ -121,7 +121,7 @@ function countryName(code: string | null): string {
   return COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
 }
 
-// ── Shared print CSS ──────────────────────────────────────────────────────────
+// ── Shared print CSS — 100mm ──────────────────────────────────────────────────
 
 function labelCSS(): string {
   return (
@@ -141,6 +141,31 @@ function labelCSS(): string {
     `.fw{display:flex;gap:1.5mm;margin-bottom:0.2mm}` +
     `.fk{color:#444;min-width:22mm;flex-shrink:0;font-size:6.5pt}` +
     `.fv{font-size:7.5pt;font-weight:500}`
+  )
+}
+
+// ── Print CSS — 58mm (Sunmi V3) ───────────────────────────────────────────────
+// Effective print width = 48mm = 384px at 203dpi
+// height: auto — let content determine label length (gap/black-mark label stock)
+
+function labelCSS58(): string {
+  return (
+    `@page{size:58mm auto;margin:0}` +
+    `*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}` +
+    `body{background:white}` +
+    `.label{width:58mm;padding:1mm 1.5mm;page-break-after:always;overflow:hidden}` +
+    `.label:last-child{page-break-after:auto}` +
+    `.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:0.5mm;border-bottom:0.5mm solid #000;margin-bottom:0.5mm}` +
+    `.co{font-size:7pt;font-weight:bold}` +
+    `.tp{font-size:6pt;font-weight:bold;color:#333}` +
+    `.bc{font-size:10pt;font-weight:bold;font-family:'Courier New',Courier,monospace;letter-spacing:1px;line-height:1;margin-bottom:0.5mm}` +
+    `.br{margin-bottom:0.6mm;line-height:0}` +
+    `.br svg{display:block;max-width:100%}` +
+    `.dv{border-top:0.3mm solid #aaa;margin:0.5mm 0}` +
+    `.fl{font-size:6.5pt;line-height:1.25}` +
+    `.fw{display:flex;gap:1mm;margin-bottom:0.15mm}` +
+    `.fk{color:#444;min-width:14mm;flex-shrink:0;font-size:5.5pt}` +
+    `.fv{font-size:6.5pt;font-weight:500}`
   )
 }
 
@@ -234,4 +259,100 @@ export function renderMinceHTML(data: MinceLabelData, copies = 1): string {
 
   const body = Array.from({ length: copies }, () => lbl).join('')
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${labelCSS()}</style></head><body>${body}</body></html>`
+}
+
+// ── 58mm Delivery label (Sunmi V3) ───────────────────────────────────────────
+// Barcode contains all data — label is for human identification only.
+// Supplier shown as label_code (e.g. "KPK"), falls back to first 4 chars.
+
+export function renderDeliveryHTML58(
+  data:       DeliveryLabelData,
+  copies = 1,
+  supplierCode = '',
+): string {
+  const tempColour = data.temp_status === 'pass' ? '#166534' : '#991b1b'
+  const barcode    = generateBarcodeSVG(data.batch_code, 150, 36, 7)
+  const code       = supplierCode || data.supplier.slice(0, 4).toUpperCase()
+
+  // BLS: born/reared combined if same country
+  const bornName   = countryName(data.born_in)
+  const rearedName = countryName(data.reared_in)
+  const sameOrigin = data.born_in && data.reared_in && data.born_in === data.reared_in
+  const originLine = sameOrigin
+    ? `<div class="fw"><span class="fk">Born/Reared:</span><span class="fv">${bornName}</span></div>`
+    : [
+        data.born_in   ? `<div class="fw"><span class="fk">Born:</span><span class="fv">${bornName}</span></div>` : '',
+        data.reared_in ? `<div class="fw"><span class="fk">Reared:</span><span class="fv">${rearedName}</span></div>` : '',
+      ].join('')
+
+  // BLS: slaughter/cut combined if same site
+  const sameSite = data.slaughter_site && data.cut_site && data.slaughter_site === data.cut_site
+  const siteLine = sameSite
+    ? `<div class="fw"><span class="fk">Sl/Cut:</span><span class="fv">${data.slaughter_site}</span></div>`
+    : [
+        data.slaughter_site ? `<div class="fw"><span class="fk">Sl:</span><span class="fv">${data.slaughter_site}</span></div>` : '',
+        data.cut_site       ? `<div class="fw"><span class="fk">Cut:</span><span class="fv">${data.cut_site}</span></div>` : '',
+      ].join('')
+
+  const lbl = [
+    `<div class="label">`,
+    `<div class="hdr"><span class="co">MFS</span><span class="tp">GOODS IN · ${data.species.toUpperCase()}</span></div>`,
+    `<div class="bc">${data.batch_code}</div>`,
+    `<div class="br">${barcode}</div>`,
+    `<div class="dv"></div>`,
+    `<div class="fl">`,
+    `<div class="fw"><span class="fk">Supplier:</span><span class="fv">${code}</span></div>`,
+    `<div class="fw"><span class="fk">Date:</span><span class="fv">${data.date_received}</span></div>`,
+    `<div class="fw"><span class="fk">Temp:</span><span class="fv" style="color:${tempColour};font-weight:bold">${data.temperature_c}°C</span></div>`,
+    originLine,
+    siteLine,
+    `<div class="fw"><span class="fk">MFS:</span><span class="fv">${data.mfs_plant}</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#166534;font-weight:bold">None</span></div>`,
+    `</div>`,
+    `</div>`,
+  ].filter(Boolean).join('')
+
+  const body = Array.from({ length: copies }, () => lbl).join('')
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${labelCSS58()}</style></head><body>${body}</body></html>`
+}
+
+// ── 58mm Mince/Prep label (Sunmi V3) ─────────────────────────────────────────
+
+export function renderMinceHTML58(data: MinceLabelData, copies = 1): string {
+  const mode    = data.output_mode.toUpperCase()
+  const barcode = generateBarcodeSVG(data.batch_code, 150, 36, 7)
+
+  const originsStr     = data.origins.length > 0 ? data.origins.join(', ') : '—'
+  const slaughteredStr = data.slaughtered_in.length > 0 ? data.slaughtered_in.join(', ') : '—'
+
+  const allergenStr = data.allergens_present.length === 0
+    ? '<span style="color:#166534;font-weight:bold">None</span>'
+    : `<span style="color:#991b1b;font-weight:bold">${data.allergens_present.join(', ')}</span>`
+
+  const killStr = (data.kill_date && data.days_from_kill !== null)
+    ? `<div class="fw"><span class="fk">Kill:</span><span class="fv">${data.kill_date} (${data.days_from_kill}d)</span></div>`
+    : ''
+
+  const lbl = [
+    `<div class="label">`,
+    `<div class="hdr"><span class="co">MFS</span><span class="tp">PROD · ${mode}</span></div>`,
+    `<div class="bc">${data.batch_code}</div>`,
+    `<div class="br">${barcode}</div>`,
+    `<div class="dv"></div>`,
+    `<div class="fl">`,
+    `<div class="fw"><span class="fk">Species:</span><span class="fv">${data.product_species}</span></div>`,
+    `<div class="fw"><span class="fk">Date:</span><span class="fv">${data.date}</span></div>`,
+    killStr,
+    `<div class="fw"><span class="fk">Use by:</span><span class="fv" style="font-weight:bold">${data.use_by}</span></div>`,
+    `<div class="dv"></div>`,
+    `<div class="fw"><span class="fk">Born:</span><span class="fv">${originsStr}</span></div>`,
+    `<div class="fw"><span class="fk">Sl:</span><span class="fv">${slaughteredStr}</span></div>`,
+    `<div class="fw"><span class="fk">Minced:</span><span class="fv">${data.minced_in}</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv">${allergenStr}</span></div>`,
+    `</div>`,
+    `</div>`,
+  ].filter(Boolean).join('')
+
+  const body = Array.from({ length: copies }, () => lbl).join('')
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${labelCSS58()}</style></head><body>${body}</body></html>`
 }

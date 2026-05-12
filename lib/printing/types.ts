@@ -6,9 +6,10 @@
  * Phase 3: zpl → Zebra Cloud Connect WebSocket
  */
 
-export type LabelType = 'delivery' | 'mince'
+export type LabelType   = 'delivery' | 'mince'
 export type PrintFormat = 'html' | 'zpl'
-export type OutputMode = 'chilled' | 'frozen' | 'prep'
+export type OutputMode  = 'chilled' | 'frozen' | 'prep'
+export type LabelWidth  = '100mm' | '58mm'
 
 // ── Label data shapes (mapped from DB records) ────────────────────────────────
 
@@ -50,9 +51,11 @@ export type LabelData = DeliveryLabelData | MinceLabelData
 export interface PrintConfig {
   format:  PrintFormat  // 'html' (Phase 1/2) | 'zpl' (Phase 3)
   copies:  number       // 1–50
+  width:   LabelWidth   // '100mm' (Zebra) | '58mm' (Sunmi V3)
 }
 
 export const DEFAULT_PRINT_CONFIG: PrintConfig = {
   format: 'html',
   copies: 1,
+  width:  '100mm',
 }

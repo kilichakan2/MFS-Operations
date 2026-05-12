@@ -793,24 +793,38 @@ export default function MincePage() {
                   { label: 'Frozen 3 months', days: 90  },
                   { label: 'Frozen 6 months', days: 182 },
                 ].map(opt => (
-                  <button
-                    key={opt.days}
-                    type="button"
-                    onPointerDown={async (e) => {
-                      e.preventDefault()
-                      setPrintTarget(null)
-                      await printLabelInApp(
-                        `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}`
-                      )
-                    }}
-                    className={`px-3 py-2.5 rounded-xl text-xs font-bold border-2 transition-all text-left ${
-                      opt.label.startsWith('Frozen')
-                        ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-                        : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
+                  <div key={opt.days} className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onPointerDown={async (e) => {
+                        e.preventDefault()
+                        setPrintTarget(null)
+                        await printLabelInApp(
+                          `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}&width=100mm`
+                        )
+                      }}
+                      className={`flex-1 px-2.5 py-2.5 rounded-xl text-xs font-bold border-2 transition-all text-left ${
+                        opt.label.startsWith('Frozen')
+                          ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                          : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                      }`}
+                    >
+                      {opt.label}<br/><span className="text-[10px] opacity-70">100mm</span>
+                    </button>
+                    <button
+                      type="button"
+                      onPointerDown={async (e) => {
+                        e.preventDefault()
+                        setPrintTarget(null)
+                        await printLabelInApp(
+                          `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}&width=58mm`
+                        )
+                      }}
+                      className="px-2.5 py-2.5 rounded-xl text-xs font-bold border-2 border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all"
+                    >
+                      58mm
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

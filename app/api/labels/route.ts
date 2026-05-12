@@ -35,12 +35,13 @@ const ALLOWED_ROLES = ['admin', 'warehouse', 'butcher']
 
 function validateParams(params: URLSearchParams): {
   valid: boolean; error?: string
-  type?: string; id?: string; format?: string; copies?: number; usebydays?: number
+  type?: string; id?: string; format?: string; width?: string; copies?: number; usebydays?: number
 } {
   const type   = params.get('type')   ?? undefined
   const id     = params.get('id')     ?? undefined
   const format = params.get('format') ?? 'html'
-  const copiesStr  = params.get('copies')    ?? '1'
+  const width  = params.get('width')  ?? '100mm'
+  const copiesStr    = params.get('copies')    ?? '1'
   const usebydaysStr = params.get('usebydays') ?? undefined
 
   if (!type || !['delivery', 'mince'].includes(type)) {
@@ -51,6 +52,9 @@ function validateParams(params: URLSearchParams): {
   }
   if (!['html', 'zpl'].includes(format)) {
     return { valid: false, error: 'format must be html or zpl' }
+  }
+  if (!['100mm', '58mm'].includes(width)) {
+    return { valid: false, error: 'width must be 100mm or 58mm' }
   }
   const copies = parseInt(copiesStr)
   if (isNaN(copies) || copies < 1 || copies > 50) {
@@ -66,7 +70,7 @@ function validateParams(params: URLSearchParams): {
     }
   }
 
-  return { valid: true, type, id, format, copies, usebydays }
+  return { valid: true, type, id, format, width, copies, usebydays }
 }
 
 export async function GET(req: NextRequest) {
@@ -83,8 +87,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 400 })
     }
 
-    const { type, id, format, copies, usebydays } = result as Required<typeof result> & { usebydays?: number }
-    const config: PrintConfig = { format: format as 'html' | 'zpl', copies }
+    const { type, id, format, width, copies, usebydays } = result as Required<typeof result> & { usebydays?: number }
+    const config: PrintConfig = { format: format as 'html' | 'zpl', copies, width: width as '100mm' | '58mm' }
 
     // ── Delivery label ─────────────────────────────────────────────────────────
     if (type === 'delivery') {
@@ -130,7 +134,19 @@ export async function GET(req: NextRequest) {
         temp_status:    data.temp_status ?? 'pass',
       }
 
-      const output = generateLabel('delivery', labelData, config)
+      // For 58mm: fetch supplier label_code (case-insensitive match, fallback handled in renderer)
+      let supplierCode = ''
+      if (config.width === '58mm') {
+        const { data: sup } = await supabase
+          .from('haccp_suppliers')
+          .select('label_code')
+          .ilike('name', data.supplier)
+          .limit(1)
+          .maybeSingle()
+        supplierCode = sup?.label_code ?? ''
+      }
+
+      const output = generateLabel('delivery', labelData, { ...config, supplierCode } as Parameters<typeof generateLabel>[2])
 
       return new NextResponse(output.content, {
         headers: {

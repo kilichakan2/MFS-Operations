@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('haccp_suppliers')
-      .select('id, name, active, position, address, contact_name, contact_phone, contact_email, fsa_approval_no, fsa_activities, cert_type, cert_expiry, products_supplied, date_approved, notes, categories, created_at')
+      .select('id, name, active, position, address, contact_name, contact_phone, contact_email, fsa_approval_no, fsa_activities, cert_type, cert_expiry, products_supplied, date_approved, notes, categories, label_code, created_at')
       .order('name', { ascending: true })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
         cert_expiry:      body.cert_expiry      ?? null,
         products_supplied:body.products_supplied ?? null,
         date_approved:    body.date_approved    ?? null,
+        label_code:       body.label_code?.trim().toUpperCase().slice(0, 6) || null,
         notes:            body.notes            ?? null,
       })
       .select()
@@ -94,7 +95,7 @@ export async function PATCH(req: NextRequest) {
     const allowed = [
       'name', 'active', 'position', 'address', 'contact_name', 'contact_phone',
       'contact_email', 'fsa_approval_no', 'fsa_activities', 'cert_type', 'cert_expiry',
-      'products_supplied', 'date_approved', 'notes', 'categories',
+      'products_supplied', 'date_approved', 'notes', 'categories', 'label_code',
     ]
     const update: Record<string, unknown> = {}
     for (const key of allowed) {

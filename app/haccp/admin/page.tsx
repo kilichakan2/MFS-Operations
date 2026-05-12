@@ -34,6 +34,7 @@ interface Supplier {
   contact_email:    string | null
   fsa_approval_no:  string | null
   fsa_activities:   string | null
+  label_code:       string | null
   cert_type:        string | null
   cert_expiry:      string | null  // ISO date
   products_supplied:string | null
@@ -224,7 +225,7 @@ export default function AdminCCAPage() {
   const BLANK = {
     name: '', active: true, address: '', contact_name: '', contact_phone: '',
     contact_email: '', fsa_approval_no: '', fsa_activities: '', cert_type: '',
-    cert_expiry: '', products_supplied: '', date_approved: '', notes: '',
+    cert_expiry: '', products_supplied: '', date_approved: '', notes: '', label_code: '',
   }
   const [form,           setForm]           = useState<typeof BLANK>(BLANK)
   const [editCategories, setEditCategories] = useState<string[]>([])
@@ -299,6 +300,7 @@ export default function AdminCCAPage() {
       products_supplied:s.products_supplied ?? '',
       date_approved:    s.date_approved    ?? '',
       notes:            s.notes            ?? '',
+      label_code:       s.label_code       ?? '',
     })
     setShowForm(true)
   }
@@ -313,6 +315,7 @@ export default function AdminCCAPage() {
         categories:    editCategories,
         cert_expiry:   form.cert_expiry   || null,
         date_approved: form.date_approved || null,
+        label_code:    form.label_code?.trim().toUpperCase().slice(0, 6) || null,
         ...(editId ? { id: editId } : {}),
       }
       const res = await fetch('/api/haccp/admin/suppliers', {
@@ -695,6 +698,14 @@ export default function AdminCCAPage() {
                   <input type="date" value={form.date_approved}
                     onChange={e => setF('date_approved', e.target.value)}
                     className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-400"
+                  />
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold text-slate-600 mb-1">Label code <span className="text-slate-400 font-normal">(max 6 chars — shown on 58mm labels, e.g. KPK)</span></p>
+                  <input value={form.label_code ?? ''} onChange={e => setF('label_code', e.target.value.toUpperCase().slice(0, 6))}
+                    placeholder="e.g. KPK"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-orange-400 font-mono uppercase"
                   />
                 </div>
 

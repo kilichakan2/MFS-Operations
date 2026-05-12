@@ -731,19 +731,34 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
               <div className="flex items-center justify-between gap-3">
                 <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
-                <button
-                  type="button"
-                  onPointerDown={(e) => {
-                    e.preventDefault()
-                    printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`)
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold transition-colors flex-shrink-0"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-                  </svg>
-                  Print label
-                </button>
+                <div className="flex gap-1.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => {
+                      e.preventDefault()
+                      printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[10px] font-bold transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+                    </svg>
+                    100mm
+                  </button>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => {
+                      e.preventDefault()
+                      printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`)
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+                    </svg>
+                    58mm
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1640,20 +1655,36 @@ export default function DeliveryPage() {
                         }
                       </span>
                       {d.batch_number && (
-                        <button
-                          type="button"
-                          onPointerDown={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1`)
-                          }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-600 text-white text-[10px] font-bold"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                            <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-                          </svg>
-                          Print
-                        </button>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            onPointerDown={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-600 text-white text-[10px] font-bold"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+                            </svg>
+                            100
+                          </button>
+                          <button
+                            type="button"
+                            onPointerDown={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`)
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+                            </svg>
+                            58
+                          </button>
+                        </div>
                       )}
                       <svg className="w-3.5 h-3.5 text-slate-300 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
                     </div>

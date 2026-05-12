@@ -12,7 +12,7 @@
 
 import type { LabelType, LabelData, PrintConfig, DeliveryLabelData, MinceLabelData } from './types'
 import { generateDeliveryZPL, generateMinceZPL } from './zpl'
-import { renderDeliveryHTML, renderMinceHTML } from './html'
+import { renderDeliveryHTML, renderMinceHTML, renderDeliveryHTML58, renderMinceHTML58 } from './html'
 
 export { formatGoodsInBatchCode, formatMinceBatchCode, ddmmFromDate, calculateUseByFromDays, fmtDisplayDate } from './zpl'
 export type { LabelType, LabelData, PrintConfig, DeliveryLabelData, MinceLabelData } from './types'
@@ -53,17 +53,21 @@ export function generateLabel(
   }
 
   // Default: HTML for browser/AirPrint
-  const html = type === 'delivery'
-    ? renderDeliveryHTML(data as DeliveryLabelData, copies)
+  const is58mm = config.width === '58mm'
+
+  if (type === 'delivery') {
+    const html = is58mm
+      ? renderDeliveryHTML58(data as DeliveryLabelData, copies, (config as PrintConfig & { supplierCode?: string }).supplierCode)
+      : renderDeliveryHTML(data as DeliveryLabelData, copies)
+
+    const batchCode = (data as DeliveryLabelData).batch_code
+    return { content: html, contentType: 'text/html', filename: `label-${batchCode}.html` }
+  }
+
+  const html = is58mm
+    ? renderMinceHTML58(data as MinceLabelData, copies)
     : renderMinceHTML(data as MinceLabelData, copies)
 
-  const batchCode = type === 'delivery'
-    ? (data as DeliveryLabelData).batch_code
-    : (data as MinceLabelData).batch_code
-
-  return {
-    content:     html,
-    contentType: 'text/html',
-    filename:    `label-${batchCode}.html`,
-  }
+  const batchCode = (data as MinceLabelData).batch_code
+  return { content: html, contentType: 'text/html', filename: `label-${batchCode}.html` }
 }
