@@ -232,7 +232,7 @@ function SmallTile({
 }) {
   return (
     <div
-      className={`w-full rounded-xl px-3 py-2.5 flex items-center gap-2 cursor-pointer border transition-all active:scale-[0.97] ${
+      className={`w-full rounded-xl px-3 py-3 flex items-center gap-2 cursor-pointer border transition-all active:scale-[0.97] ${
         due ? 'bg-amber-50 border-2 border-amber-400' : 'bg-white border-2 border-blue-200'
       }`}
       onPointerDown={(e) => { e.preventDefault(); onTap() }}>
@@ -254,6 +254,96 @@ function SmallTile({
   )
 }
 
+
+// ─── Status Strip ─────────────────────────────────────────────────────────────
+// Replaces the w-44 sidebar. Sits between header and tile grid.
+// Collapsed: time + date + progress + overdue count. Tap to expand details.
+
+function StatusStrip({
+  now, pct, overdueCount, overdueItems, s,
+}: {
+  now:          Date
+  pct:          number
+  overdueCount: number
+  overdueItems: string[]
+  s:            TodayStatus | null
+}) {
+  const [open, setOpen] = useState(false)
+
+  const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const dateStr = now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+
+  return (
+    <div className="flex-shrink-0 bg-slate-800 border-b border-slate-700">
+      {/* Collapsed bar — always visible */}
+      <button
+        type="button"
+        onPointerDown={(e) => { e.preventDefault(); setOpen(v => !v) }}
+        className="w-full flex items-center gap-3 px-4 py-2 active:bg-slate-700 transition-colors"
+      >
+        {/* Time + date */}
+        <div className="flex items-baseline gap-1.5 flex-shrink-0">
+          <span className="text-white text-sm font-bold tabular-nums">{timeStr}</span>
+          <span className="text-slate-400 text-[10px]">{dateStr}</span>
+        </div>
+
+        {/* Progress bar */}
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <div className="flex-1 bg-slate-700 rounded-full h-1.5 overflow-hidden">
+            <div
+              className="bg-[#EB6619] h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-slate-400 text-[10px] font-bold flex-shrink-0 tabular-nums">{pct}%</span>
+        </div>
+
+        {/* Overdue badge */}
+        {overdueCount > 0 && (
+          <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
+            {overdueCount} overdue
+          </span>
+        )}
+
+        {/* Chevron */}
+        <svg
+          className={`w-3.5 h-3.5 text-slate-500 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {/* Expanded details */}
+      {open && (
+        <div className="px-4 pb-3 space-y-2 border-t border-slate-700">
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Today</span>
+            <span className="text-white text-xs font-bold">
+              {s ? `${s.completed_checks} of ${s.total_checks} checks` : '—'}
+            </span>
+          </div>
+          {overdueItems.length > 0 && (
+            <div className="space-y-1">
+              {overdueItems.map(item => (
+                <div key={item} className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
+                  <span className="text-red-300 text-[11px]">{item}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {overdueItems.length === 0 && (
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+              <span className="text-green-300 text-[11px]">All checks on track</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ─── Home Screen ─────────────────────────────────────────────────────────────
 
@@ -453,14 +543,25 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
         </div>
       )}
 
-      {/* Body */}
+      {/* Status strip — phone/Sunmi only (hidden on iPad+) */}
+      <div className="md:hidden">
+        <StatusStrip
+          now={now}
+          pct={pct}
+          overdueCount={overdue.length}
+          overdueItems={overdue}
+          s={s}
+        />
+      </div>
+
+      {/* Body — flex row so sidebar sits beside tiles on iPad */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* Tile grid */}
-        <div className="flex-1 p-4 flex flex-col gap-3 min-h-0 overflow-y-auto">
+        {/* Tile grid — full width on phone/Sunmi, flex-1 on iPad */}
+        <div className="flex-1 p-4 flex flex-col gap-3 min-h-0 overflow-y-auto pb-20">
 
-          {/* Row 1 — 3 priority large tiles */}
-          <div className="flex gap-3 flex-shrink-0">
+          {/* Row 1 — large tiles (2-col on phone/Sunmi, 3-col on iPad+) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-shrink-0">
             <LargeTile id="cold_storage" icon={Icon.cold} label="Cold Storage" state={coldState} badge={coldBadge}
               sub={s ? `CCP 2 · 5 units${s.cold_storage.am_done ? ' · AM done' : ''}` : 'CCP 2 · 5 units'}
               onTap={() => { window.location.href = '/haccp/cold-storage' }} onHelp={() => setHelp('cold_storage')} />
@@ -472,8 +573,8 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               onTap={() => { window.location.href = '/haccp/delivery' }} onHelp={() => setHelp('delivery')} />
           </div>
 
-          {/* Row 2 — 3 priority large tiles */}
-          <div className="flex gap-3 flex-shrink-0">
+          {/* Row 2 — large tiles (2-col on phone/Sunmi, 3-col on iPad+) */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-shrink-0">
             <LargeTile id="mince" icon={Icon.mince} label="Mince / Prep"
               state={!s ? 'neutral' : s.mince_runs.has_deviations ? 'deviation' : s.mince_runs.count_today > 0 ? 'complete' : 'neutral'}
               badge={!s ? '—' : s.mince_runs.has_deviations ? `${s.mince_runs.count_today} runs · deviation` : s.mince_runs.count_today > 0 ? `${s.mince_runs.count_today} runs` : 'None today'}
@@ -492,8 +593,8 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
           {/* Divider */}
           <div className="h-px bg-slate-300 mx-1 flex-shrink-0" />
 
-          {/* Secondary tiles — 4-column grid, wraps cleanly */}
-          <div className="grid grid-cols-4 gap-2 flex-shrink-0">
+          {/* Secondary tiles — 2-col on phone/Sunmi, 4-col on iPad+ */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 flex-shrink-0">
             <SmallTile id="calibration" icon={Icon.cal} label="Calibration" sub="Monthly · SOP 3"
               badge={
                 !s ? '—'
@@ -550,8 +651,8 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
 
         </div>
 
-        {/* Status panel */}
-        <div className="w-44 flex-shrink-0 border-l border-blue-100 bg-white p-4 flex flex-col gap-4">
+        {/* Status panel — iPad+ only (hidden on phone/Sunmi) */}
+        <div className="hidden md:flex w-44 flex-shrink-0 border-l border-blue-100 bg-white p-4 flex-col gap-4">
 
           <div>
             <div className="text-slate-900 text-2xl font-bold tracking-wide">

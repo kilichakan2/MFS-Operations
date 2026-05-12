@@ -40,14 +40,14 @@ export default function BottomNav({ items }: BottomNavProps) {
               key={item.href}
               href={item.href}
               className={[
-                'flex-1 flex flex-col items-center justify-center py-1.5 gap-px min-h-[48px]',
-                'text-[9px] font-bold tracking-wide uppercase',
+                'flex-1 flex flex-col items-center justify-center py-2 gap-px min-h-[56px]',
+                'text-[10px] font-bold tracking-wide uppercase',
                 active ? 'text-[#EB6619]' : 'text-gray-500 active:text-[#EB6619]',
               ].join(' ')}
               aria-current={active ? 'page' : undefined}
               style={{ touchAction: 'manipulation' }}
             >
-              <span className={['w-5 h-5 flex-shrink-0 pointer-events-none', active ? 'text-[#EB6619]' : 'text-gray-500'].join(' ')}>
+              <span className={['w-6 h-6 flex-shrink-0 pointer-events-none', active ? 'text-[#EB6619]' : 'text-gray-500'].join(' ')}>
                 {item.icon}
               </span>
               {item.label}
