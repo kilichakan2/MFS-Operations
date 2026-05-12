@@ -76,7 +76,7 @@ const ROLE_ROUTES: Record<string, string> = {
 export async function POST(req: NextRequest) {
   try {
     // ── Parse body ────────────────────────────────────────────────────────────
-    let body: { name?: unknown; credential?: unknown } | null = null
+    let body: { name?: unknown; credential?: unknown; chosenRole?: unknown } | null = null
     try {
       body = await req.json()
     } catch {
@@ -85,8 +85,9 @@ export async function POST(req: NextRequest) {
 
     // Explicitly cast both to string — guards against JSON number types
     // (bcrypt.compare throws "Illegal arguments: number, string" if not a string)
-    const name       = String(body?.name       ?? '').trim()
-    const credential = String(body?.credential ?? '').trim()
+    const name        = String(body?.name       ?? '').trim()
+    const credential  = String(body?.credential ?? '').trim()
+    const chosenRole  = body?.chosenRole ? String(body.chosenRole).trim() : null
 
     if (!name || !credential) {
       return NextResponse.json(
@@ -170,16 +171,35 @@ export async function POST(req: NextRequest) {
         if (e) console.error('[login] last_login_at update failed:', e.message)
       })
 
+    // ── Multi-role: prompt picker if no chosenRole provided ───────────────────
+    const secondaryRoles: string[] = (user.secondary_roles as string[] | null) ?? []
+    const allRoles = [user.role, ...secondaryRoles]
+
+    if (secondaryRoles.length > 0 && !chosenRole) {
+      // PIN verified — return role options, no session set yet
+      return NextResponse.json({
+        requiresRolePicker: true,
+        roles: allRoles,
+        name:  user.name,
+      })
+    }
+
+    // ── Validate chosenRole if provided ───────────────────────────────────────
+    const activeRole = chosenRole ?? user.role
+    if (!allRoles.includes(activeRole)) {
+      return NextResponse.json({ error: 'Invalid role selection' }, { status: 400 })
+    }
+
     // ── Build response and set cookie ─────────────────────────────────────────
     // response.cookies.set() is the correct Next.js 15 Route Handler pattern.
     // The deprecated cookies() from next/headers does NOT attach to the response object.
-    const redirect = ROLE_ROUTES[user.role] ?? '/screen4'
-    const secondaryRoles: string[] = (user.secondary_roles as string[] | null) ?? []
+    const redirect = ROLE_ROUTES[activeRole] ?? '/screen4'
+    const sessionSecondaryRoles: string[] = []  // always empty — single-role session
 
     const response = NextResponse.json({
       success:        true,
-      role:           user.role,
-      secondaryRoles,
+      role:           activeRole,
+      secondaryRoles: sessionSecondaryRoles,
       name:           user.name,
       redirect,
     })
@@ -187,8 +207,8 @@ export async function POST(req: NextRequest) {
     response.cookies.set('mfs_session', JSON.stringify({
       userId:         user.id,
       name:           user.name,
-      role:           user.role,
-      secondaryRoles,
+      role:           activeRole,
+      secondaryRoles: sessionSecondaryRoles,
     }), {
       httpOnly: true,
       secure:   process.env.NODE_ENV === 'production',
@@ -197,7 +217,7 @@ export async function POST(req: NextRequest) {
       path:     '/',
     })
 
-    response.cookies.set('mfs_role', user.role, {
+    response.cookies.set('mfs_role', activeRole, {
       httpOnly: false,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -205,8 +225,8 @@ export async function POST(req: NextRequest) {
       path:     '/',
     })
 
-    // mfs_secondary_roles — client-readable, comma-separated secondary roles
-    response.cookies.set('mfs_secondary_roles', secondaryRoles.join(','), {
+    // mfs_secondary_roles — always empty in a single-role session (role was chosen)
+    response.cookies.set('mfs_secondary_roles', sessionSecondaryRoles.join(','), {
       httpOnly: false,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',

@@ -33,11 +33,13 @@ const ROLE_LABEL: Record<string, string> = {
 // that could cause middleware to see a stale request without the cookie.
 
 async function submitLogin(
-  name:       string,
-  credential: string,
-  onSuccess:  (redirect: string) => void,
-  onError:    (msg: string)      => void,
-  from:       string | null,
+  name:        string,
+  credential:  string,
+  onSuccess:   (redirect: string) => void,
+  onError:     (msg: string)      => void,
+  from:        string | null,
+  onPicker?:   (roles: string[]) => void,
+  chosenRole?: string,
 ) {
   console.log('[LOGIN] Sending PIN/password to server for:', name)
 
@@ -51,16 +53,19 @@ async function submitLogin(
     const res = await fetch('/api/auth/login', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ name: name.trim(), credential: String(credential) }),
+      body:    JSON.stringify({
+        name:       name.trim(),
+        credential: String(credential),
+        ...(chosenRole ? { chosenRole } : {}),
+      }),
       signal:  controller.signal,
     })
 
     console.log('[LOGIN] Server response status:', res.status)
 
-    let data: { redirect?: string; error?: string }
+    let data: { redirect?: string; error?: string; requiresRolePicker?: boolean; roles?: string[] }
     try {
       data = await res.json()
-      console.log('[LOGIN] Response body:', JSON.stringify(data))
     } catch (parseErr) {
       console.log('[LOGIN] Failed to parse response as JSON:', parseErr)
       onError(`Server returned unexpected response (${res.status})`)
@@ -68,12 +73,14 @@ async function submitLogin(
     }
 
     if (res.ok) {
+      if (data.requiresRolePicker && data.roles && onPicker) {
+        onPicker(data.roles)
+        return
+      }
       const dest = from ?? data.redirect ?? '/screen1'
       console.log('[LOGIN] Success — forcing hard redirect to', dest)
-      // Hard navigation: full browser reload, new cookie sent natively with next request
       onSuccess(dest)
     } else {
-      console.log('[LOGIN] Auth failed:', data.error)
       onError(data.error ?? `Login failed (${res.status})`)
     }
   } catch (err: unknown) {
@@ -203,13 +210,15 @@ function ModeSelect({ onSelect }: { onSelect: (m: 'team' | 'admin') => void }) {
 
 function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }) {
   const { t } = useLanguage()
-  const [step,        setStep]        = useState<'grid' | 'pin'>('grid')
-  const [selected,    setSelected]    = useState<TeamMember | null>(null)
-  const [members,     setMembers]     = useState<TeamMember[]>([])
-  const [fetchError,  setFetchError]  = useState('')
-  const [loadingList, setLoadingList] = useState(true)
-  const [error,       setError]       = useState('')
-  const [resetSignal, setReset]       = useState(0)
+  const [step,          setStep]          = useState<'grid' | 'pin' | 'role_picker'>('grid')
+  const [selected,      setSelected]      = useState<TeamMember | null>(null)
+  const [members,       setMembers]       = useState<TeamMember[]>([])
+  const [fetchError,    setFetchError]    = useState('')
+  const [loadingList,   setLoadingList]   = useState(true)
+  const [error,         setError]         = useState('')
+  const [resetSignal,   setReset]         = useState(0)
+  const [pendingPin,    setPendingPin]     = useState('')
+  const [availableRoles,setAvailableRoles] = useState<string[]>([])
 
   function loadMembers() {
     setLoadingList(true)
@@ -232,7 +241,6 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
         selected.name,
         pin,
         (redirect) => {
-          // Hard redirect — full browser reload, no SPA router
           console.log('[LOGIN] Forcing hard redirect to', redirect)
           window.location.href = redirect
         },
@@ -241,6 +249,12 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
           setError(msg)
         },
         from,
+        (roles) => {
+          // Multi-role picker
+          setPendingPin(pin)
+          setAvailableRoles(roles)
+          setStep('role_picker')
+        },
       )
     } catch (unexpectedErr) {
       // Should never reach here — submitLogin has its own try/catch
@@ -257,6 +271,71 @@ function TeamLogin({ onBack, from }: { onBack: () => void; from: string | null }
     setSelected(m)
     setError('')
     setStep('pin')
+  }
+
+  // ── Role picker step ──────────────────────────────────────────────────────
+
+  if (step === 'role_picker') {
+    const ROLE_CONFIG: Record<string, { label: string; sub: string; icon: string; accent: string }> = {
+      driver:    { label: 'Driver',     sub: 'Route, deliveries & complaints', icon: '🚗', accent: 'border-blue-500/40 hover:border-blue-500/70 bg-blue-500/5' },
+      sales:     { label: 'Sales',      sub: 'Visits, complaints & pricing',    icon: '💼', accent: 'border-green-500/40 hover:border-green-500/70 bg-green-500/5' },
+      warehouse: { label: 'Warehouse',  sub: 'Dispatch & routes',               icon: '📦', accent: 'border-amber-500/40 hover:border-amber-500/70 bg-amber-500/5' },
+      office:    { label: 'Office',     sub: 'Dispatch, cash & complaints',     icon: '🏢', accent: 'border-purple-500/40 hover:border-purple-500/70 bg-purple-500/5' },
+      butcher:   { label: 'Butcher',    sub: 'HACCP production',                icon: '🔪', accent: 'border-pink-500/40 hover:border-pink-500/70 bg-pink-500/5' },
+    }
+
+    return (
+      <div className="min-h-screen bg-[#16205B] flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-xs">
+          <div className="text-center mb-8">
+            <MfsLogo className="h-10 w-auto mx-auto text-[#EB6619] mb-4" />
+            <p className="text-white font-bold text-xl">{selected?.name}</p>
+            <p className="text-white/50 text-sm mt-1">Choose your mode for this session</p>
+          </div>
+
+          <div className="space-y-3">
+            {availableRoles.map(role => {
+              const cfg = ROLE_CONFIG[role]
+              if (!cfg) return null
+              return (
+                <button key={role} type="button"
+                  onClick={async () => {
+                    setError('')
+                    await submitLogin(
+                      selected!.name,
+                      pendingPin,
+                      (redirect) => { window.location.href = redirect },
+                      (msg) => setError(msg),
+                      from,
+                      undefined,
+                      role,
+                    )
+                  }}
+                  className={`w-full flex items-center gap-4 rounded-2xl border p-5 text-left active:scale-[0.98] transition-all ${cfg.accent}`}
+                >
+                  <span className="text-3xl">{cfg.icon}</span>
+                  <div>
+                    <p className="text-white font-bold text-base">{cfg.label}</p>
+                    <p className="text-white/40 text-xs mt-0.5">{cfg.sub}</p>
+                  </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="white" className="w-5 h-5 ml-auto opacity-30">
+                    <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd"/>
+                  </svg>
+                </button>
+              )
+            })}
+          </div>
+
+          {error && <p className="text-red-400 text-sm text-center mt-4">{error}</p>}
+
+          <button type="button"
+            onClick={() => { setStep('pin'); setPendingPin(''); setError(''); setReset(n => n + 1) }}
+            className="mt-6 w-full text-white/40 text-sm text-center hover:text-white/70 transition-colors">
+            ← Back
+          </button>
+        </div>
+      </div>
+    )
   }
 
   if (step === 'grid') {
