@@ -18,7 +18,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { isSunmiCapacitor, printDeliverySunmi, type DeliveryForPrint } from '@/lib/printing/sunmi'
+import { isSunmiNative, printDeliverySunmi, type DeliveryForPrint } from '@/lib/printing/sunmi'
 
 /**
  * Prints a label without opening a new tab.
@@ -68,7 +68,7 @@ async function printLabelInApp(url: string): Promise<void> {
 // All other devices: existing window.print() via iframe.
 
 async function handlePrint58(d: Delivery): Promise<void> {
-  if (isSunmiCapacitor()) {
+  if (isSunmiNative()) {
     const forPrint: DeliveryForPrint = {
       id:               d.id,
       batch_number:     d.batch_number ?? '',

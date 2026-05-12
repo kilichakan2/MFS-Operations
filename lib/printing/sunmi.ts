@@ -2,10 +2,39 @@
 /**
  * lib/printing/sunmi.ts
  *
- * Silent native printing for Sunmi V3 via Capacitor bridge.
- * Only active when running inside the MFS Capacitor Android shell.
- * Falls back gracefully on all other platforms.
+ * Silent native printing for Sunmi V3 via the MFSSunmiPrint JavaScript
+ * interface. The interface is injected by MainActivity using
+ * webView.addJavascriptInterface — independent of Capacitor's plugin bridge,
+ * which does not reach remote URLs on the V3's WebView (see ADR-0001).
+ *
+ * Only active inside the MFS Android shell. Falls back gracefully on iPad
+ * and browsers via the existing window.print() iframe path.
  */
+
+// ── Bridge type declaration ───────────────────────────────────────────────────
+// Mirrors the @JavascriptInterface methods on android/.../SunmiPrintBridge.java.
+
+interface MFSSunmiPrintBridge {
+  isReady(): boolean
+  printDeliveryLabel(
+    batchCode:     string,
+    supplierCode:  string,
+    date:          string,
+    tempLine:      string,
+    bornLine:      string,
+    slaughterSite: string,
+    cutSite:       string,
+    species:       string,
+    allergens:     string,
+  ): void
+}
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+  interface Window {
+    MFSSunmiPrint?: MFSSunmiPrintBridge
+  }
+}
 
 export interface DeliveryForPrint {
   id:               string
@@ -21,15 +50,6 @@ export interface DeliveryForPrint {
   cut_site:         string | null
 }
 
-// ── Capacitor detection ────────────────────────────────────────────────────────
-// Returns true only inside the MFS Android APK shell, not in Chrome/Safari.
-
-export function isSunmiCapacitor(): boolean {
-  if (typeof window === 'undefined') return false
-  const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor
-  return !!(cap?.isNativePlatform?.())
-}
-
 // ── Native bridge detection ────────────────────────────────────────────────────
 // The MFS Android shell injects window.MFSSunmiPrint via
 // webView.addJavascriptInterface in MainActivity. This works on every WebView
@@ -38,7 +58,7 @@ export function isSunmiCapacitor(): boolean {
 
 export function isSunmiNative(): boolean {
   if (typeof window === 'undefined') return false
-  return !!(window as unknown as { MFSSunmiPrint?: unknown }).MFSSunmiPrint
+  return !!window.MFSSunmiPrint
 }
 
 // ── Pure label-content helpers ────────────────────────────────────────────────
@@ -81,19 +101,6 @@ export function formatSpecies(productCategory: string): string {
   return productCategory.replace(/_/g, ' ').toUpperCase()
 }
 
-// ── Lazy plugin loader ─────────────────────────────────────────────────────────
-// Dynamic import avoids SSR issues — module only loaded client-side in Capacitor.
-
-type SunmiPlugin = typeof import('@kduma-autoid/capacitor-sunmi-printer')
-let _plugin: SunmiPlugin | null = null
-
-async function getPlugin(): Promise<SunmiPlugin> {
-  if (!_plugin) {
-    _plugin = await import('@kduma-autoid/capacitor-sunmi-printer')
-  }
-  return _plugin
-}
-
 // ── Supplier label code lookup ─────────────────────────────────────────────────
 
 async function getSupplierCode(supplierName: string): Promise<string> {
@@ -110,61 +117,29 @@ async function getSupplierCode(supplierName: string): Promise<string> {
 }
 
 // ── Delivery label ─────────────────────────────────────────────────────────────
+// All label-content formatting happens here. The native bridge receives flat
+// primitive strings; it does no formatting of its own (see SunmiPrintBridge.java).
 
 export async function printDeliverySunmi(d: DeliveryForPrint): Promise<void> {
-  const {
-    SunmiPrinter,
-    AlignmentModeEnum,
-    BarcodeSymbologyEnum,
-    BarcodeTextPositionEnum,
-  } = await getPlugin()
+  const bridge = typeof window !== 'undefined' ? window.MFSSunmiPrint : undefined
+  if (!bridge) {
+    throw new Error('printDeliverySunmi called without MFSSunmiPrint bridge')
+  }
 
   const supplierCode = await getSupplierCode(d.supplier)
-  const species      = formatSpecies(d.product_category)
-  const tempLine     = formatTempStatus(d.temperature_c, d.temp_status)
-  const bornLine     = formatBornLine(d.born_in, d.reared_in)
+  const species   = formatSpecies(d.product_category)
+  const tempLine  = formatTempStatus(d.temperature_c, d.temp_status)
+  const bornLine  = formatBornLine(d.born_in, d.reared_in) ?? ''
 
-  await SunmiPrinter.printerInit()
-  await SunmiPrinter.enterPrinterBuffer({ clean: true })
-
-  // ── Header ─────────────────────────────────────────────────────
-  await SunmiPrinter.setAlignment({ alignment: AlignmentModeEnum.LEFT })
-  await SunmiPrinter.setFontSize({ size: 18 })
-  await SunmiPrinter.setBold({ enable: true })
-  await SunmiPrinter.printText({ text: `MFS GLOBAL  GOODS IN\n` })
-  await SunmiPrinter.setFontSize({ size: 22 })
-  await SunmiPrinter.printText({ text: `${species}\n` })
-  await SunmiPrinter.setBold({ enable: false })
-
-  // ── Batch code ─────────────────────────────────────────────────
-  await SunmiPrinter.setFontSize({ size: 26 })
-  await SunmiPrinter.setBold({ enable: true })
-  await SunmiPrinter.printText({ text: `${d.batch_number}\n` })
-  await SunmiPrinter.setBold({ enable: false })
-
-  // ── Barcode (native — no SVG) ──────────────────────────────────
-  await SunmiPrinter.setAlignment({ alignment: AlignmentModeEnum.CENTER })
-  await SunmiPrinter.printBarCode({
-    content:       d.batch_number,
-    symbology:     BarcodeSymbologyEnum.CODE_128,
-    height:        80,
-    width:         2,
-    text_position: BarcodeTextPositionEnum.BELOW,
-  })
-
-  // ── Fields ─────────────────────────────────────────────────────
-  await SunmiPrinter.setAlignment({ alignment: AlignmentModeEnum.LEFT })
-  await SunmiPrinter.setFontSize({ size: 20 })
-  await SunmiPrinter.printText({ text: '--------------------------------\n' })
-  await SunmiPrinter.printText({ text: `Supplier: ${supplierCode}\n` })
-  await SunmiPrinter.printText({ text: `Date:     ${d.date}\n` })
-  await SunmiPrinter.printText({ text: `Temp:     ${tempLine}\n` })
-  if (bornLine)        await SunmiPrinter.printText({ text: `${bornLine}\n` })
-  if (d.slaughter_site) await SunmiPrinter.printText({ text: `Sl:       ${d.slaughter_site}\n` })
-  if (d.cut_site)       await SunmiPrinter.printText({ text: `Cut:      ${d.cut_site}\n` })
-  await SunmiPrinter.printText({ text: `Allergens: None\n` })
-
-  // ── Feed and print ─────────────────────────────────────────────
-  await SunmiPrinter.lineWrap({ lines: 3 })
-  await SunmiPrinter.exitPrinterBuffer({ commit: true })
+  bridge.printDeliveryLabel(
+    d.batch_number,
+    supplierCode,
+    d.date,
+    tempLine,
+    bornLine,
+    d.slaughter_site ?? '',
+    d.cut_site       ?? '',
+    species,
+    'None',
+  )
 }
