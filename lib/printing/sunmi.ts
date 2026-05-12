@@ -30,6 +30,57 @@ export function isSunmiCapacitor(): boolean {
   return !!(cap?.isNativePlatform?.())
 }
 
+// ── Native bridge detection ────────────────────────────────────────────────────
+// The MFS Android shell injects window.MFSSunmiPrint via
+// webView.addJavascriptInterface in MainActivity. This works on every WebView
+// version since API 17, regardless of whether Capacitor's own bridge was injected.
+// Detection must be safe in SSR and on devices that lack the bridge.
+
+export function isSunmiNative(): boolean {
+  if (typeof window === 'undefined') return false
+  return !!(window as unknown as { MFSSunmiPrint?: unknown }).MFSSunmiPrint
+}
+
+// ── Pure label-content helpers ────────────────────────────────────────────────
+// Extracted from printDeliverySunmi so label-content logic is unit-testable
+// and survives the bridge transport switch.
+
+/**
+ * Render the BLS born/reared line for the 58mm label.
+ * - Both null → null (caller omits the line entirely)
+ * - Same value → single combined "Born/Reared: GB" line
+ * - Different values → "Born: GB  Reared: IE" (two spaces between fields)
+ * - One present → just that field
+ */
+export function formatBornLine(bornIn: string | null, rearedIn: string | null): string | null {
+  if (!bornIn && !rearedIn) return null
+  if (bornIn && rearedIn && bornIn === rearedIn) {
+    return `Born/Reared: ${bornIn}`
+  }
+  return [
+    bornIn   ? `Born: ${bornIn}`     : null,
+    rearedIn ? `Reared: ${rearedIn}` : null,
+  ].filter(Boolean).join('  ')
+}
+
+/**
+ * Render the temperature + status line for the 58mm label.
+ * Both 'pass' and 'conditional' print as PASS — the conditional flag is
+ * captured separately in the daily diary, not on the label.
+ */
+export function formatTempStatus(temperatureC: number | null, tempStatus: string): string {
+  const tempStr = temperatureC != null ? `${temperatureC}\u00b0C` : '\u2014'
+  const tempPass = tempStatus === 'pass' || tempStatus === 'conditional'
+  return `${tempStr}  ${tempPass ? 'PASS' : 'FAIL'}`
+}
+
+/**
+ * Render the product_category as a label header — uppercased, underscores → spaces.
+ */
+export function formatSpecies(productCategory: string): string {
+  return productCategory.replace(/_/g, ' ').toUpperCase()
+}
+
 // ── Lazy plugin loader ─────────────────────────────────────────────────────────
 // Dynamic import avoids SSR issues — module only loaded client-side in Capacitor.
 
@@ -69,21 +120,9 @@ export async function printDeliverySunmi(d: DeliveryForPrint): Promise<void> {
   } = await getPlugin()
 
   const supplierCode = await getSupplierCode(d.supplier)
-  const species      = d.product_category.replace(/_/g, ' ').toUpperCase()
-  const tempPass     = d.temp_status === 'pass' || d.temp_status === 'conditional'
-  const tempStr      = d.temperature_c != null ? `${d.temperature_c}\u00b0C` : '—'
-
-  // BLS: born/reared combined if same country
-  const bornLine = (() => {
-    if (!d.born_in && !d.reared_in) return null
-    if (d.born_in && d.reared_in && d.born_in === d.reared_in) {
-      return `Born/Reared: ${d.born_in}`
-    }
-    return [
-      d.born_in   ? `Born: ${d.born_in}`    : null,
-      d.reared_in ? `Reared: ${d.reared_in}` : null,
-    ].filter(Boolean).join('  ')
-  })()
+  const species      = formatSpecies(d.product_category)
+  const tempLine     = formatTempStatus(d.temperature_c, d.temp_status)
+  const bornLine     = formatBornLine(d.born_in, d.reared_in)
 
   await SunmiPrinter.printerInit()
   await SunmiPrinter.enterPrinterBuffer({ clean: true })
@@ -119,9 +158,7 @@ export async function printDeliverySunmi(d: DeliveryForPrint): Promise<void> {
   await SunmiPrinter.printText({ text: '--------------------------------\n' })
   await SunmiPrinter.printText({ text: `Supplier: ${supplierCode}\n` })
   await SunmiPrinter.printText({ text: `Date:     ${d.date}\n` })
-  await SunmiPrinter.printText({
-    text: `Temp:     ${tempStr}  ${tempPass ? 'PASS' : 'FAIL'}\n`,
-  })
+  await SunmiPrinter.printText({ text: `Temp:     ${tempLine}\n` })
   if (bornLine)        await SunmiPrinter.printText({ text: `${bornLine}\n` })
   if (d.slaughter_site) await SunmiPrinter.printText({ text: `Sl:       ${d.slaughter_site}\n` })
   if (d.cut_site)       await SunmiPrinter.printText({ text: `Cut:      ${d.cut_site}\n` })
