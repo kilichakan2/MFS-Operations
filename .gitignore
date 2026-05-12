@@ -12,3 +12,9 @@ next-env.d.ts
 # TypeScript incremental build cache
 *.tsbuildinfo
 .env.local
+
+# Android build artifacts (Capacitor android/ project is committed, outputs are not)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties

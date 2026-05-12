@@ -18,6 +18,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { isSunmiCapacitor, printDeliverySunmi, type DeliveryForPrint } from '@/lib/printing/sunmi'
 
 /**
  * Prints a label without opening a new tab.
@@ -59,6 +60,34 @@ async function printLabelInApp(url: string): Promise<void> {
     }
   } catch (err) {
     console.error('[printLabelInApp]', err)
+  }
+}
+
+// ── Sunmi-aware print handler ──────────────────────────────────────────────────
+// On Sunmi V3 (Capacitor shell): silent native print, no dialog.
+// All other devices: existing window.print() via iframe.
+
+async function handlePrint58(d: Delivery): Promise<void> {
+  if (isSunmiCapacitor()) {
+    const forPrint: DeliveryForPrint = {
+      id:               d.id,
+      batch_number:     d.batch_number ?? '',
+      supplier:         d.supplier,
+      product_category: d.product_category,
+      date:             d.date,
+      temperature_c:    d.temperature_c,
+      temp_status:      d.temp_status,
+      born_in:          d.born_in,
+      reared_in:        d.reared_in,
+      slaughter_site:   d.slaughter_site,
+      cut_site:         d.cut_site,
+    }
+    await printDeliverySunmi(forPrint).catch(err => {
+      console.error('[handlePrint58] Sunmi error — falling back', err)
+      printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`)
+    })
+  } else {
+    printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`)
   }
 }
 
@@ -749,7 +778,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
                     type="button"
                     onPointerDown={(e) => {
                       e.preventDefault()
-                      printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`)
+                      handlePrint58(d)
                     }}
                     className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors"
                   >
@@ -1663,6 +1692,7 @@ export default function DeliveryPage() {
                               e.preventDefault()
                               printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)
                             }}
+                            onClick={e => e.stopPropagation()}
                             className="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-600 text-white text-[10px] font-bold"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -1675,8 +1705,9 @@ export default function DeliveryPage() {
                             onPointerDown={(e) => {
                               e.stopPropagation()
                               e.preventDefault()
-                              printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`)
+                              handlePrint58(d)
                             }}
+                            onClick={e => e.stopPropagation()}
                             className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
