@@ -7,6 +7,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import PrintLabelStrip from '@/components/PrintLabelStrip'
 
 /**
  * Prints a label without opening a new tab.
@@ -446,7 +447,7 @@ export default function MincePage() {
   const [deliveries,setDeliveries]    = useState<DeliveryOption[]>([])
   const [minceBatches, setMinceBatches] = useState<{ id: string; batch_code: string; species: string; kill_date: string; output_mode: string }[]>([])
   const [loading,   setLoading]       = useState(true)
-  const [printTarget, setPrintTarget] = useState<{ id: string; batchCode: string; outputMode: string } | null>(null)
+  const [printTarget, setPrintTarget] = useState<{ id: string; batchCode: string; outputMode: string; width: '100mm' | '58mm' } | null>(null)
   const [dateFilter, setDateFilter]   = useState<'today' | 'week' | 'last_week'>('today')
 
   // ── Mince form state ────────────────────────────────────────────────────────
@@ -779,13 +780,13 @@ export default function MincePage() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
             <div className="px-5 pt-5 pb-3">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Print label</p>
+              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Print {printTarget.width} label</p>
               <p className="text-slate-900 font-bold text-base font-mono">{printTarget.batchCode}</p>
               <p className="text-slate-500 text-xs mt-0.5 capitalize">{printTarget.outputMode}</p>
             </div>
             <div className="px-5 pb-2">
               <p className="text-slate-600 text-xs font-semibold mb-3">Select use-by date:</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-2">
                 {[
                   { label: 'Fresh 7 days',    days: 7   },
                   { label: 'Fresh 10 days',   days: 10  },
@@ -793,46 +794,33 @@ export default function MincePage() {
                   { label: 'Frozen 3 months', days: 90  },
                   { label: 'Frozen 6 months', days: 182 },
                 ].map(opt => (
-                  <div key={opt.days} className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onPointerDown={async (e) => {
-                        e.preventDefault()
-                        setPrintTarget(null)
-                        await printLabelInApp(
-                          `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}&width=100mm`
-                        )
-                      }}
-                      className={`flex-1 px-2.5 py-2.5 rounded-xl text-xs font-bold border-2 transition-all text-left ${
-                        opt.label.startsWith('Frozen')
-                          ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
-                          : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                      }`}
-                    >
-                      {opt.label}<br/><span className="text-[10px] opacity-70">100mm</span>
-                    </button>
-                    <button
-                      type="button"
-                      onPointerDown={async (e) => {
-                        e.preventDefault()
-                        setPrintTarget(null)
-                        await printLabelInApp(
-                          `/api/labels?type=mince&id=${printTarget.id}&format=html&copies=1&usebydays=${opt.days}&width=58mm`
-                        )
-                      }}
-                      className="px-2.5 py-2.5 rounded-xl text-xs font-bold border-2 border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all"
-                    >
-                      58mm
-                    </button>
-                  </div>
+                  <button
+                    key={opt.days}
+                    type="button"
+                    onPointerDown={async (e) => {
+                      e.preventDefault()
+                      const target = printTarget
+                      setPrintTarget(null)
+                      await printLabelInApp(
+                        `/api/labels?type=mince&id=${target.id}&format=html&copies=1&usebydays=${opt.days}&width=${target.width}`
+                      )
+                    }}
+                    className={`w-full h-12 px-4 rounded-xl text-sm font-bold border-2 transition-all text-left ${
+                      opt.label.startsWith('Frozen')
+                        ? 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
                 ))}
               </div>
             </div>
-            <div className="px-5 pb-5 pt-2">
+            <div className="px-5 pb-5 pt-3">
               <button
                 type="button"
                 onPointerDown={(e) => { e.preventDefault(); setPrintTarget(null) }}
-                className="w-full py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-500 hover:bg-slate-200"
+                className="w-full h-12 rounded-xl text-sm font-bold bg-slate-100 text-slate-500 hover:bg-slate-200"
               >
                 Cancel
               </button>
@@ -1091,21 +1079,12 @@ export default function MincePage() {
                           }`}>
                             {r.kill_date_within_limit && r.input_temp_pass && r.output_temp_pass ? 'All pass' : 'Deviation'}
                           </span>
-                          <button
-                            type="button"
-                            onPointerDown={(e) => {
-                              e.preventDefault()
-                              setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode })
-                            }}
-                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-600 text-white text-[10px] font-bold"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-                            </svg>
-                            Print
-                          </button>
                         </div>
                       </div>
+                      <PrintLabelStrip
+                        on100mm={() => setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode, width: '100mm' })}
+                        on58mm={() => setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode, width: '58mm' })}
+                      />
                     </div>
                   ))}
                 </div>
