@@ -55,20 +55,20 @@ State change: `printTarget` gains a `width: '100mm' | '58mm'` field. Modal reads
 
 Vertical slices. Each ends with green tests + clean commit.
 
-- [ ] **1. Create `components/PrintLabelStrip.tsx`** as a pure presentation component. No business logic, no fetch, no state — just renders two buttons with the agreed sizing, calls the prop callbacks on tap. Default export. TypeScript-strict props.
-- [ ] **2. Replace delivery COLLAPSED row buttons with `<PrintLabelStrip>`.** Remove the existing button pair from lines ~1686-1718. Add `<PrintLabelStrip>` at the bottom of the row card (after the `flex items-start justify-between` block closes). Wire `on100mm` to `printLabelInApp(...)` with `width=100mm`, `on58mm` to `handlePrint58(d)`. Verify `stopPropagation` keeps the card's expand-on-tap behaviour from triggering when buttons are tapped.
-- [ ] **3. Move category badge in delivery row** from row 2 (`<span>` inline before product name) to row 1 (alongside date/delivery-number badges). Row 2 becomes pure product description.
-- [ ] **4. Replace delivery OPEN DETAIL header buttons with `<PrintLabelStrip>`.** Remove buttons from lines ~764-789. Restructure batch reference block: batch number on its own line, `<PrintLabelStrip>` below as a separate strip.
-- [ ] **5. Run `npm run test`** — expect 989/989 passing (no logic change, JSX shape only).
-- [ ] **6. Run `npx tsc --noEmit`** — clean on touched files.
-- [ ] **7. Commit `refactor(haccp): bottom-strip print buttons on delivery`** — Phase 1 of the work. Delivery alone is shippable; mince is a separate concern.
-- [ ] **8. Replace mince ROW button** with `<PrintLabelStrip>`. `on100mm` and `on58mm` callbacks call `setPrintTarget({ id, batchCode, outputMode, width: '100mm' })` or `'58mm'` respectively.
-- [ ] **9. Update `printTarget` state shape** to include `width: '100mm' | '58mm'`. TypeScript will catch every read site; fix each.
-- [ ] **10. Collapse the mince print modal** to a single-column 5-button use-by-date selector. Each button uses the width from `printTarget.width`. Modal title becomes "Print {width} label" so the user knows what they selected. Cancel button stays.
-- [ ] **11. Run `npm run test`** — expect 989/989 still passing.
-- [ ] **12. Run `npx tsc --noEmit`** — clean on `app/haccp/mince/page.tsx`.
-- [ ] **13. Commit `refactor(haccp): bottom-strip print buttons on mince + simplified modal`** — Phase 2.
-- [ ] **14. Tick all done steps in plan, commit, code-critic, push.**
+- [x] **1. Create `components/PrintLabelStrip.tsx`** as a pure presentation component. No business logic, no fetch, no state — just renders two buttons with the agreed sizing, calls the prop callbacks on tap. Default export. TypeScript-strict props.
+- [x] **2. Replace delivery COLLAPSED row buttons with `<PrintLabelStrip>`.** Remove the existing button pair from lines ~1686-1718. Add `<PrintLabelStrip>` at the bottom of the row card (after the `flex items-start justify-between` block closes). Wire `on100mm` to `printLabelInApp(...)` with `width=100mm`, `on58mm` to `handlePrint58(d)`. Verify `stopPropagation` keeps the card's expand-on-tap behaviour from triggering when buttons are tapped.
+- [x] **3. Move category badge in delivery row** from row 2 (`<span>` inline before product name) to row 1 (alongside date/delivery-number badges). Row 2 becomes pure product description.
+- [x] **4. Replace delivery OPEN DETAIL header buttons with `<PrintLabelStrip>`.** Remove buttons from lines ~764-789. Restructure batch reference block: batch number on its own line, `<PrintLabelStrip>` below as a separate strip.
+- [x] **5. Run `npm run test`** — expect 989/989 passing (no logic change, JSX shape only).
+- [x] **6. Run `npx tsc --noEmit`** — clean on touched files.
+- [x] **7. Commit `refactor(haccp): bottom-strip print buttons on delivery`** — Phase 1 of the work. Delivery alone is shippable; mince is a separate concern.
+- [x] **8. Replace mince ROW button** with `<PrintLabelStrip>`. `on100mm` and `on58mm` callbacks call `setPrintTarget({ id, batchCode, outputMode, width: '100mm' })` or `'58mm'` respectively.
+- [x] **9. Update `printTarget` state shape** to include `width: '100mm' | '58mm'`. TypeScript will catch every read site; fix each.
+- [x] **10. Collapse the mince print modal** to a single-column 5-button use-by-date selector. Each button uses the width from `printTarget.width`. Modal title becomes "Print {width} label" so the user knows what they selected. Cancel button stays.
+- [x] **11. Run `npm run test`** — expect 989/989 still passing.
+- [x] **12. Run `npx tsc --noEmit`** — clean on `app/haccp/mince/page.tsx`.
+- [x] **13. Commit `refactor(haccp): bottom-strip print buttons on mince + simplified modal`** — Phase 2.
+- [x] **14. Tick all done steps in plan, commit, code-critic, push.**
 
 ## Test plan
 
