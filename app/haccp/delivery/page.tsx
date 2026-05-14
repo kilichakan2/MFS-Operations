@@ -19,6 +19,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { isSunmiNative, printDeliverySunmi, type DeliveryForPrint } from '@/lib/printing/sunmi'
+import PrintLabelStrip from '@/components/PrintLabelStrip'
 
 /**
  * Prints a label without opening a new tab.
@@ -758,37 +759,11 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
           {d.batch_number && (
             <div className="bg-slate-900 rounded-xl px-4 py-3">
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
-                <div className="flex gap-1.5 flex-shrink-0">
-                  <button
-                    type="button"
-                    onPointerDown={(e) => {
-                      e.preventDefault()
-                      printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-[10px] font-bold transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-                    </svg>
-                    100mm
-                  </button>
-                  <button
-                    type="button"
-                    onPointerDown={(e) => {
-                      e.preventDefault()
-                      handlePrint58(d)
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-                    </svg>
-                    58mm
-                  </button>
-                </div>
-              </div>
+              <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
+              <PrintLabelStrip
+                on100mm={() => printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)}
+                on58mm={() => handlePrint58(d)}
+              />
             </div>
           )}
 
@@ -1635,7 +1610,10 @@ export default function DeliveryPage() {
                   className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-left transition-all hover:border-slate-300 hover:shadow-sm active:scale-[0.99]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_COLOUR[d.product_category] ?? 'bg-slate-100 text-slate-500'}`}>
+                          {CATEGORY_LABELS[d.product_category] ?? d.product_category}
+                        </span>
                         {dateFilter !== 'today' && (
                           <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">
                             {new Date(d.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
@@ -1647,9 +1625,6 @@ export default function DeliveryPage() {
                         <p className="text-slate-900 font-semibold text-sm truncate">{d.supplier}</p>
                       </div>
                       <p className="text-slate-500 text-xs mt-0.5 truncate">
-                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded mr-1.5 ${CATEGORY_COLOUR[d.product_category] ?? 'bg-slate-100 text-slate-500'}`}>
-                          {CATEGORY_LABELS[d.product_category] ?? d.product_category}
-                        </span>
                         {d.product}
                       </p>
                       {d.batch_number && (
@@ -1683,43 +1658,15 @@ export default function DeliveryPage() {
                           : 'Ambient'
                         }
                       </span>
-                      {d.batch_number && (
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onPointerDown={(e) => {
-                              e.stopPropagation()
-                              e.preventDefault()
-                              printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)
-                            }}
-                            onClick={e => e.stopPropagation()}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-600 text-white text-[10px] font-bold"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-                            </svg>
-                            100
-                          </button>
-                          <button
-                            type="button"
-                            onPointerDown={(e) => {
-                              e.stopPropagation()
-                              e.preventDefault()
-                              handlePrint58(d)
-                            }}
-                            onClick={e => e.stopPropagation()}
-                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-                            </svg>
-                            58
-                          </button>
-                        </div>
-                      )}
                       <svg className="w-3.5 h-3.5 text-slate-300 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
                     </div>
                   </div>
+                  {d.batch_number && (
+                    <PrintLabelStrip
+                      on100mm={() => printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)}
+                      on58mm={() => handlePrint58(d)}
+                    />
+                  )}
                 </button>
               ))}
             </div>
