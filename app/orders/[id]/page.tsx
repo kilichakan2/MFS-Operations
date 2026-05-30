@@ -165,6 +165,9 @@ export default function OrderDetailPage({ params }: OrderDetailPageProps) {
                 ))}
             </section>
 
+            {/* Print picking list — primary action for office/warehouse */}
+            <PrintPickingListButton order={order} />
+
             {/* Edit button — only available while placed */}
             {order.state === 'placed' && (
               <Link
@@ -240,4 +243,86 @@ function ProductName({ id }: { id: string | null }) {
   if (!id) return <>—</>
   const p = products.find(x => x.id === id)
   return <>{p?.name ?? 'Unknown product'}</>
+}
+
+// ─── Print picking list button + iframe ──────────────────────
+
+function PrintPickingListButton({ order }: { order: OrderPayload }) {
+  const [printing, setPrinting] = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
+
+  // Hide for completed orders entirely — can't reprint after completion
+  if (order.state === 'completed') return null
+
+  async function handlePrint() {
+    setError(null)
+    setPrinting(true)
+
+    try {
+      const res = await fetch(`/api/orders/${order.id}/picking-list`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setError(body?.error ?? `Server error (${res.status})`)
+        setPrinting(false)
+        return
+      }
+      const html = await res.text()
+
+      // Inject into a hidden iframe; the iframe's onload triggers window.print()
+      // automatically (the picking-list HTML has that wired in).
+      const iframe = document.createElement('iframe')
+      iframe.style.position = 'fixed'
+      iframe.style.right    = '0'
+      iframe.style.bottom   = '0'
+      iframe.style.width    = '0'
+      iframe.style.height   = '0'
+      iframe.style.border   = '0'
+      document.body.appendChild(iframe)
+      iframe.srcdoc = html
+
+      // Clean up the iframe a few seconds after the print dialog opens.
+      // Most browsers keep the dialog alive until the user dismisses it,
+      // and the iframe being removed doesn't kill the dialog.
+      setTimeout(() => {
+        document.body.removeChild(iframe)
+      }, 5000)
+
+      // Refresh the page state so the UI reflects 'printed'
+      setTimeout(() => { window.location.reload() }, 1000)
+    } catch (e) {
+      console.error('[PrintPickingListButton] print failed', e)
+      setError('Network error — please try again')
+      setPrinting(false)
+    }
+  }
+
+  const isReprint = order.state === 'printed'
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={handlePrint}
+        disabled={printing}
+        className="w-full h-14 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-base font-bold disabled:opacity-50 transition-opacity active:scale-[0.99] flex items-center justify-center gap-2"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <polyline points="6 9 6 2 18 2 18 9" />
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+          <rect x="6" y="14" width="12" height="8" />
+        </svg>
+        {printing ? 'Preparing…' : (isReprint ? 'Reprint picking list' : 'Print picking list')}
+      </button>
+      <p className="text-[11px] text-slate-500 text-center px-2">
+        {isReprint
+          ? 'This will print a fresh sheet — retrieve the old one from the butcher first.'
+          : 'Printing will lock this order from sales edits.'}
+      </p>
+      {error && (
+        <p className="text-xs text-red-600 text-center">{error}</p>
+      )}
+    </div>
+  )
 }
