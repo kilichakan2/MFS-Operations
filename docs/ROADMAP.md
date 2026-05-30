@@ -32,7 +32,7 @@ Single source of truth for what's been agreed to ship, what's in flight, and wha
 |---|---|---|---|---|---|
 | 1 | 🧪 | Print button bottom-strip pattern | `app-ui` | M | [`docs/plans/2026-05-14-print-button-bottom-strip.md`](plans/2026-05-14-print-button-bottom-strip.md) |
 | 2 | ⏸️ | Van tracking — Phase 0 hardware in transit | `infra-hardware` | M-L | _(spec locked below; planner runs when hardware arrives)_ |
-| 3 | 📝 | Order pipeline + KDS production-room display | `app-feature` | XL | [`docs/plans/2026-05-30-order-pipeline-kds-frame.md`](plans/2026-05-30-order-pipeline-kds-frame.md) _(Gate 1 spec — awaiting sign-off)_ |
+| 3 | 📝 | Order pipeline + KDS production-room display | `app-feature` | XL | Frame: [`...kds-frame.md`](plans/2026-05-30-order-pipeline-kds-frame.md) (signed off) · Plan: [`...kds-implementation.md`](plans/2026-05-30-order-pipeline-kds-implementation.md) _(Gate 2 plan — awaiting sign-off)_ |
 | 4 | 📋 | PWA icon mismatch (Capacitor default → MFS logo on V3) | `sunmi-hardware` | S | _(not yet written)_ |
 | 5 | 📋 | Silent V3 printing for mince + meat prep | `sunmi-hardware` | M | _(not yet written)_ |
 | 6 | 🔬 | V3 mobile formatting overhaul | `sunmi-hardware` | L | _(needs discovery pass first)_ |
