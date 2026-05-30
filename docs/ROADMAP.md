@@ -32,7 +32,7 @@ Single source of truth for what's been agreed to ship, what's in flight, and wha
 |---|---|---|---|---|---|
 | 1 | 🧪 | Print button bottom-strip pattern | `app-ui` | M | [`docs/plans/2026-05-14-print-button-bottom-strip.md`](plans/2026-05-14-print-button-bottom-strip.md) |
 | 2 | ⏸️ | Van tracking — Phase 0 hardware in transit | `infra-hardware` | M-L | _(spec locked below; planner runs when hardware arrives)_ |
-| 3 | 📝 | Order pipeline + KDS production-room display | `app-feature` | XL | _(grilling now — see item below)_ |
+| 3 | 📝 | Order pipeline + KDS production-room display | `app-feature` | XL | [`docs/plans/2026-05-30-order-pipeline-kds-frame.md`](plans/2026-05-30-order-pipeline-kds-frame.md) _(Gate 1 spec — awaiting sign-off)_ |
 | 4 | 📋 | PWA icon mismatch (Capacitor default → MFS logo on V3) | `sunmi-hardware` | S | _(not yet written)_ |
 | 5 | 📋 | Silent V3 printing for mince + meat prep | `sunmi-hardware` | M | _(not yet written)_ |
 | 6 | 🔬 | V3 mobile formatting overhaul | `sunmi-hardware` | L | _(needs discovery pass first)_ |
@@ -112,31 +112,25 @@ Likely structure when the integration work begins:
 
 ---
 
-## 3. 📋 Order pipeline + KDS production-room display
+## 3. 📝 Order pipeline + KDS production-room display
+
+**Status:** FORGE Gate 1 (Frame) spec written — awaiting Hakan sign-off.
+**Spec:** [`docs/plans/2026-05-30-order-pipeline-kds-frame.md`](plans/2026-05-30-order-pipeline-kds-frame.md)
 
 **Why:** Meat orders currently arrive via WhatsApp. Production room operates from screenshots, drivers chase clarifications, orders get missed in long WhatsApp threads, no audit trail. Largest workflow problem in the business.
 
-**Initial scope (subject to extensive grilling — this is XL):**
+**Scope summary** (full detail in spec doc):
+- Sales reps capture orders in mfsops.com (replaces WhatsApp)
+- Office prints A4 picking sheet from mfsops — this locks the order from sales edits
+- KDS touchscreen in production room shows orders as cards, butcher taps Done per line
+- Weights still captured on scale-ticket labels, office still types into BarcodeX for invoicing (unchanged)
+- 4-week parallel running with WhatsApp before cutover
 
-Three connected pieces, likely four sub-branches off a long-lived `feat/order-pipeline` integration branch:
+**Sub-branches planned:** 6 sub-branches off long-lived `feat/order-pipeline` integration branch — schema, capture, dashboard, print, KDS, cutover. Each is a PR into the integration branch, ANVIL gates the merge to main.
 
-1. **Order capture** — sales reps log new orders in mfsops.com: customer, items (with the existing product catalogue), quantities, delivery date, notes. Replaces "type into WhatsApp".
+**Hardware:** 1 KDS device for production room — provisional spec is 24" touchscreen + small mini-PC in IP-rated enclosure. To confirm during Gate 2 planner phase.
 
-2. **KDS production-room display** — a dedicated touchscreen in the cutting room showing the live order queue, prioritised by delivery date and progress. Cards transition through states: `received → in_cutting → packed → ready → dispatched`. Staff tap to advance state. This is the kitchen-display-system pattern — order changes appear in real time across the screen via Supabase realtime.
-
-3. **Customer notifications** — replicates the WhatsApp confirmation habit, so customers still get the ping they're used to. Order received → confirmation. Ready → "your order is being dispatched" message. Out for delivery → ETA. Done via WhatsApp Business templates (we already have the infrastructure on the credit control app) or email.
-
-4. **Audit + reporting** — every state transition logged with timestamp and operator. Daily/weekly reports for production efficiency. Disputes ("customer says order was wrong") become traceable.
-
-**Open questions — extensive, will be addressed in grilling:**
-- What's in the order? Just SKU + qty, or per-item notes (cut style, butchery preferences)?
-- Multi-customer route batching — one order per customer, or one delivery containing multiple orders for the route?
-- Modifications mid-process — what if customer phones at 9am to add an item to an 11am cut?
-- KDS hardware — touchscreen monitor + PC, or a tablet on a stand, or another V3-style Android device?
-- Who can capture orders? Just sales reps, or can the customer self-serve via a portal? (Latter is a much bigger feature.)
-- Replacing WhatsApp fully or running both in parallel for a few weeks?
-
-**Risk:** High. Replaces a 100+ customer-touching workflow. Mistakes cost real money. Must run alongside WhatsApp for a parallel period before cutover. Likely multi-week with several plans.
+**Risk:** High. Replaces a customer-touching workflow. Mistakes cost real money. The 4-week parallel-running cutover is essential.
 
 ---
 
