@@ -30,6 +30,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 
 import type { OrderState, OrderUom } from '@/lib/orders/types'
 import { useProductsWithDetail } from '@/hooks/useReferenceData'
+import { isOrderPipelineEnabled } from '@/lib/orders/featureFlag'
 import {
   isCardFlashing,
   cardFadeOpacity,
@@ -95,6 +96,34 @@ interface SignedInButcher {
 // ─── Component ─────────────────────────────────────────────────
 
 export default function KdsPage() {
+  if (!isOrderPipelineEnabled()) {
+    return <KdsPausedScreen />
+  }
+  return <KdsPageInner />
+}
+
+function KdsPausedScreen() {
+  return (
+    <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-8">
+      <div className="max-w-md text-center">
+        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-amber-500/20 border-4 border-amber-500 flex items-center justify-center">
+          <svg className="w-10 h-10 text-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="6"  x2="12" y2="14" />
+            <line x1="12" y1="17" x2="12" y2="17.01" />
+          </svg>
+        </div>
+        <h1 className="text-3xl font-bold mb-3">KDS paused</h1>
+        <p className="text-lg text-slate-400 leading-relaxed">
+          The production-room screen is temporarily disabled.
+          Work from the printed picking sheets from the office until further notice.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function KdsPageInner() {
   const [orders,         setOrders]         = useState<KdsOrder[]>([])
   const [recentFlashes,  setRecentFlashes]  = useState<FlashEntry[]>([])
   const [loading,        setLoading]        = useState(true)

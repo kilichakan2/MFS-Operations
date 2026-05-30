@@ -26,9 +26,11 @@ import AppHeader            from '@/components/AppHeader'
 import RoleNav              from '@/components/RoleNav'
 import BottomSheetSelector  from '@/components/BottomSheetSelector'
 import EditLockBanner       from '@/components/EditLockBanner'
+import OrderPipelinePausedNotice from '@/components/OrderPipelinePausedNotice'
 import { useCustomers, useProductsWithDetail } from '@/hooks/useReferenceData'
 import type { SelectableItem } from '@/components/BottomSheetSelector'
 import type { OrderState, OrderUom } from '@/lib/orders/types'
+import { isOrderPipelineEnabled } from '@/lib/orders/featureFlag'
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -68,6 +70,13 @@ interface EditOrderPageProps {
 }
 
 export default function EditOrderPage({ params }: EditOrderPageProps) {
+  if (!isOrderPipelineEnabled()) {
+    return <OrderPipelinePausedNotice />
+  }
+  return <EditOrderPageInner params={params} />
+}
+
+function EditOrderPageInner({ params }: EditOrderPageProps) {
   const { id } = usePromise(params)
   const router = useRouter()
 

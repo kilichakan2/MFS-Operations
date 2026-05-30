@@ -25,7 +25,10 @@ import Link from 'next/link'
 import AppHeader            from '@/components/AppHeader'
 import RoleNav              from '@/components/RoleNav'
 import BottomSheetSelector  from '@/components/BottomSheetSelector'
+import OrderPipelinePausedNotice from '@/components/OrderPipelinePausedNotice'
+import OrderCutoverBanner   from '@/components/OrderCutoverBanner'
 import { useCustomers }     from '@/hooks/useReferenceData'
+import { isOrderPipelineEnabled } from '@/lib/orders/featureFlag'
 
 import type { OrderState, OrderUom } from '@/lib/orders/types'
 import {
@@ -79,6 +82,16 @@ function fmtDeliveryDate(date: string): string {
 // ─── Page ─────────────────────────────────────────────────────
 
 export default function OrdersDashboardPage() {
+  // Feature flag — when disabled, render the paused notice and bail
+  // before any of the data-loading hooks run
+  if (!isOrderPipelineEnabled()) {
+    return <OrderPipelinePausedNotice />
+  }
+
+  return <OrdersDashboardPageInner />
+}
+
+function OrdersDashboardPageInner() {
   const customers = useCustomers()
 
   // ── Filters ─────────────────────────────────────────────────
@@ -152,6 +165,8 @@ export default function OrdersDashboardPage() {
       />
 
       <main className="max-w-4xl mx-auto px-4 py-4 pb-32 space-y-3">
+
+        <OrderCutoverBanner />
 
         {/* Date filter pills */}
         <section className="bg-white rounded-xl border border-slate-200 p-3 space-y-3">

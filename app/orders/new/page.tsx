@@ -23,9 +23,11 @@ import { useRouter } from 'next/navigation'
 import AppHeader            from '@/components/AppHeader'
 import RoleNav              from '@/components/RoleNav'
 import BottomSheetSelector  from '@/components/BottomSheetSelector'
+import OrderPipelinePausedNotice from '@/components/OrderPipelinePausedNotice'
 import { useCustomers, useProductsWithDetail } from '@/hooks/useReferenceData'
 import type { SelectableItem } from '@/components/BottomSheetSelector'
 import type { OrderUom }       from '@/lib/orders/types'
+import { isOrderPipelineEnabled } from '@/lib/orders/featureFlag'
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -55,6 +57,13 @@ function emptyLine(): DraftLine {
 // ─── Component ─────────────────────────────────────────────────
 
 export default function NewOrderPage() {
+  if (!isOrderPipelineEnabled()) {
+    return <OrderPipelinePausedNotice />
+  }
+  return <NewOrderPageInner />
+}
+
+function NewOrderPageInner() {
   const router    = useRouter()
   const customers = useCustomers()
   const products  = useProductsWithDetail()

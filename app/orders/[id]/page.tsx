@@ -23,9 +23,11 @@ import Link from 'next/link'
 
 import AppHeader from '@/components/AppHeader'
 import RoleNav   from '@/components/RoleNav'
+import OrderPipelinePausedNotice from '@/components/OrderPipelinePausedNotice'
 import { useProductsWithDetail } from '@/hooks/useReferenceData'
 
 import type { OrderState, OrderUom } from '@/lib/orders/types'
+import { isOrderPipelineEnabled } from '@/lib/orders/featureFlag'
 
 interface LineRow {
   id:                 string
@@ -60,6 +62,13 @@ interface OrderDetailPageProps {
 }
 
 export default function OrderDetailPage({ params }: OrderDetailPageProps) {
+  if (!isOrderPipelineEnabled()) {
+    return <OrderPipelinePausedNotice />
+  }
+  return <OrderDetailPageInner params={params} />
+}
+
+function OrderDetailPageInner({ params }: OrderDetailPageProps) {
   const { id } = usePromise(params)
   const [order,    setOrder]    = useState<OrderPayload | null>(null)
   const [loading,  setLoading]  = useState(true)
