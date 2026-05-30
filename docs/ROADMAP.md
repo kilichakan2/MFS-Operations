@@ -31,8 +31,8 @@ Single source of truth for what's been agreed to ship, what's in flight, and wha
 | # | Status | Item | Category | Size | Plan |
 |---|---|---|---|---|---|
 | 1 | 🧪 | Print button bottom-strip pattern | `app-ui` | M | [`docs/plans/2026-05-14-print-button-bottom-strip.md`](plans/2026-05-14-print-button-bottom-strip.md) |
-| 2 | 📋 | Van tracking via open-source GPS | `infra-hardware` | M-L | _(not yet written — next up)_ |
-| 3 | 📋 | Order pipeline + KDS production-room display | `app-feature` | XL | _(not yet written)_ |
+| 2 | ⏸️ | Van tracking — Phase 0 hardware in transit | `infra-hardware` | M-L | _(spec locked below; planner runs when hardware arrives)_ |
+| 3 | 📝 | Order pipeline + KDS production-room display | `app-feature` | XL | _(grilling now — see item below)_ |
 | 4 | 📋 | PWA icon mismatch (Capacitor default → MFS logo on V3) | `sunmi-hardware` | S | _(not yet written)_ |
 | 5 | 📋 | Silent V3 printing for mince + meat prep | `sunmi-hardware` | M | _(not yet written)_ |
 | 6 | 🔬 | V3 mobile formatting overhaul | `sunmi-hardware` | L | _(needs discovery pass first)_ |
@@ -52,25 +52,63 @@ Checklist (see plan for full version):
 
 ---
 
-## 2. 📋 Van tracking via open-source GPS
+## 2. ⏸️ Van tracking via open-source GPS
 
-**Why:** Currently no real-time visibility on where the delivery fleet is. Lost time when staff phone drivers asking "where are you", customers chase ETAs through dispatch, no playback for disputes ("driver says they delivered at 11am, customer says they didn't").
+**Status:** Spec locked at FORGE Gate 1 (Frame phase complete). Phase 0 hardware ordered and in transit. Resumes when hardware arrives. No software work to do until then.
 
-**Initial scope (subject to grilling):**
-- Pick an open-source tracking platform. Leading candidate: Traccar (self-hostable, MIT licence, supports 200+ device protocols).
-- Pick hardware per van. Two paths: dedicated GPS units (£20-40 each, OBD or hardwired, no monthly fees) or repurposed Android phone with a Traccar client app (cheaper if phones available, more variables).
-- Stand up a Traccar server (small DigitalOcean droplet, ~£5/month, or alongside existing infra).
-- Build a "Fleet" page in mfsops.com showing live van positions on a map, plus per-van trip history.
-- Integrate with delivery records — link each delivery to the GPS trail for that vehicle that day, enabling proof-of-delivery timestamps.
+### What was decided (Gate 1 deliverable)
 
-**Open questions before planning:**
-- How many vans? (Drives hardware quantity and server sizing.)
-- Are drivers using personal phones or work phones? (Determines whether phone-as-tracker is viable.)
-- Privacy/employment-law angle — drivers need to be informed in writing that vehicles are tracked. Worth a quick chat to the legal-advisor skill before we deploy.
-- Self-host vs Traccar's hosted offering? Self-host is free, hosted is ~£8/device/month but zero infra burden.
-- Do we want live customer-facing ETAs ("your driver is 20 minutes away") or is this internal-only for now?
+**Architecture:** Dedicated OBD trackers report to a self-hosted Traccar server. mfsops.com PWA reads Traccar's REST API to render live positions inside the **existing Map / Routes section** (not a new "Fleet" page). When a driver taps "delivered" in the PWA on their phone, we capture the live GPS coord from Traccar for that vehicle at that moment as proof-of-delivery.
 
-**Risk:** Medium. Hardware + new server infra + privacy implications + a new page in the app. Two-week effort if we do it properly.
+**Decisions made and the reasoning:**
+
+| Decision | Choice | Why |
+|---|---|---|
+| Tracking method | Dedicated OBD plug-in trackers, not PWA-based phone tracking | Background tracking on iOS basically doesn't work; Android is fragile. PWA phone tracking would go dark unpredictably. Hardware trackers are the standard answer for fleet-grade reliability. |
+| Hardware | Teltonika FMC003 (4G LTE Cat 1, OBD plug-and-play) | Currently in Traccar 6.11's natively supported device list (`teltonika` protocol, port 5027). 4G futureproof to 2030+. Plug into OBD port, no install, no hardwiring. Hakan ruled out hardwired alternatives. |
+| Fleet size | 6 vehicles — 3 vans + 3 sales rep cars | Confirmed |
+| Tracker stack — why not Teltonika FMC001 | FMC001 is **End-of-Life** — end of production Dec 2023, end of support Dec 2025. Buying it in 2026 means firmware updates have already stopped. Rejected. |
+| Tracker stack — why not Teltonika FMB003 | FMB003 is 2G-only. UK 2G stays alive to ~2030–2033 for IoT, so usable, but FMC003 is the cleaner future-proof answer. FMB003 is the fallback if FMC003 stock fails. |
+| SIM | 1NCE Lifetime IoT — €12 one-time per SIM for 10 years, 500 MB + 250 SMS, supports 2G/3G/4G/LTE-M/NB-IoT, UK coverage confirmed | Pay once, forget. Zero monthly admin. Decade horizon. |
+| Server hosting | Hetzner Cloud CX21, ~£4-5/month, EU/UK datacentre | Decided over self-hosted Beelink mini-PC in office. Easier remote debugging, professional uptime, snapshots one click. Migrate to office Beelink later is trivial (Traccar's database is plain Postgres). |
+| Phase 0 strategy | Buy 1 tracker, 1 SIM, prove the stack end-to-end before committing to fleet rollout | Validates "Traccar supports FMC003" against an actual device rather than a documentation page. Wrong hardware bought in bulk costs 6× more than wrong hardware bought in singles. |
+| Driver consent / privacy | Hakan handles employee sign-off in writing before any tracker goes live in a vehicle being driven by someone other than him | Required for UK GDPR + employment law. |
+| Tracking categories captured | Live position + proof-of-delivery + driver behaviour + history | All four use cases enabled by FMC003's standard feature set. |
+| Customer-facing ETAs | **NOT** in scope at launch — internal only | Phase 2 (customer-facing portal/SMS) can come later. |
+
+### Phase 0 — hardware proof-of-concept (ordered, in transit)
+
+**What's been bought:** 1 × Teltonika FMC003 from shop.thetechnologydoctors.co.uk (authorised UK Teltonika reseller, Hertfordshire-based, real registered business).
+
+**What still needs ordering when the tracker arrives:**
+- 1 × 1NCE Lifetime IoT SIM (€12, from 1nce.com direct)
+- 1 × Hetzner CX21 cloud droplet (£4/month, signed up at hetzner.com)
+
+**Phase 0 acceptance criteria — what we're proving:**
+- [ ] FMC003 receives power from OBD port, boots, connects to mobile network
+- [ ] Tracker reports to Traccar server (correct port + protocol decoded)
+- [ ] Position is accurate within ~10m, updates at configurable interval
+- [ ] Speed, heading, ignition on/off, voltage all decoded into Traccar
+- [ ] Trip detection fires when vehicle starts/stops
+- [ ] Hard braking / harsh acceleration events captured
+- [ ] Traccar REST API gives the shape of data the mfsops.com integration will need
+- [ ] OBD unplug detection fires (so we know if someone yanks it)
+- [ ] Driven in real conditions for 2–3 days in Hakan's own car, not stationary on a desk
+
+If all eight items pass → proceed to Phase 1 (build the integration in mfsops.com) → then Phase 2 (buy 5 more FMC003s + 5 more SIMs, sign driver consents, deploy to remaining vehicles).
+
+If anything fails → diagnose. If the failure is fundamental to the FMC003-Traccar combination (e.g. unsupported variant, firmware issue Traccar can't decode), pivot to **Teltonika FMB003 (2G fallback)** from wifi-stock.co.uk or LinITX before committing to a fleet rollout.
+
+### Open questions parked until Phase 1 planning kicks off
+- Exact poll interval / data plan sizing (depends on how 1NCE's 500 MB/year holds up in real use — Phase 0 will reveal this)
+- Whether to hard-code Traccar API base URL in `mfsops.com` env vars or hold it in Supabase config table
+- Driver privacy notice wording (Hakan owns this — legal-advisor skill can draft if helpful when fleet rollout is imminent)
+
+### Sub-branches (when Phase 1 starts)
+Likely structure when the integration work begins:
+- `feat/van-tracking-traccar-server` — server provision, install scripts, secrets
+- `feat/van-tracking-map-integration` — read Traccar's REST API into the existing Map / Routes section
+- `feat/van-tracking-pod-link` — capture GPS coord when driver taps "delivered"
 
 ---
 
@@ -144,6 +182,8 @@ Three connected pieces, likely four sub-branches off a long-lived `feat/order-pi
 
 ## Pick-up order
 
-Hakan's chosen pick-up order: **2 first** (van tracking), then 1 verification, then 4, then 5, then 3, then 6.
+Updated pick-up order: **3 first** (order pipeline + KDS — grilling starting now), parallel verification of item 1 (print strip on V3 device when Hakan gets to it), then resume item 2 (van tracking Phase 0) when the FMC003 arrives, then 4 → 5 → 6.
 
-Next session: grill van tracking. The open questions listed under item 2 will be the first pass.
+Van tracking is parked ⏸️ on hardware arrival — no software work to do until the FMC003 is in hand. The full Phase 0 acceptance protocol is captured in item 2 above so we can pick up exactly where we left off.
+
+Next session: continue grilling order/KDS toward FORGE Gate 1.
