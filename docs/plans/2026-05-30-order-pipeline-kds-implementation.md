@@ -180,24 +180,39 @@ The barcode is the "future-you will thank me" feature flagged at Gate 1 — Haka
 
 ### SB5 — KDS production-room display (`feat/order-pipeline-kds`)
 
-**Goal:** The touchscreen in the process room. Live order queue, line-level Done taps, orange flash on amendment.
+**Goal:** The touchscreen in the process room. Live order queue, line-level Done taps, orange flash on amendment, **butcher PIN login for tap attribution**.
 
 **Route:** `/kds` — full-screen kiosk mode
 
-**Auth:** No login required to view. The device is in a physical-access-controlled room. Browser pointed at `https://mfsops.com/kds`. RLS on the read side is wide-open via a public anon read policy on `orders` and `order_lines`. Writes (the Done taps) authenticate via a short-lived JWT issued at kiosk setup or pre-shared device token — to detail in this sub-branch.
+**Auth — butcher PIN login (added at Gate 2 sign-off):**
+
+The KDS device itself doesn't need a user-credentials login (it's in a physical-access-controlled room and runs in kiosk mode on a known URL). But individual line-Done taps must be attributed to a butcher for audit and shift handover.
+
+Pattern (mirrors existing HACCP admin pattern from the 0505 password used elsewhere in the app):
+- On shift start, butcher taps a "Sign in" tile on the KDS, enters 4-digit PIN
+- PIN authenticates against `users` table where `role = 'butcher'`
+- Session lasts 12 hours or until "Sign out" tapped
+- Multiple butchers can sign in simultaneously — KDS shows "Active: Daz, Adeel" in the corner
+- When a line is tapped Done, **the KDS asks "Which butcher?"** if more than one is signed in (single-tap selector, two-tap total). If only one, it auto-attributes.
+- `order_lines.done_by` records the butcher's user_id
+- Sign-out happens automatically at end-of-shift via cron (cleans up forgotten sessions) and also via explicit tap
+
+Read access still doesn't require login — the queue is always visible. Only the Done tap requires a signed-in butcher.
 
 **UI:**
 - Grid of cards, ordered by `delivery_date` then by `printed_at`
 - Each card shows: customer name (large), order ref, delivery date, order-level notes, list of line items
-- Each line item is its own row with a tappable area; tap → `order_lines.done_at = now()` via API call
+- Each line item is its own row with a tappable area; tap → `order_lines.done_at = now()`, `done_by = current_butcher_id` via API call
 - When all lines done → card animates to "completed" state, fades out after 30s (auto-archive — Frame spec O5)
 - If an order is edited after print, the card flashes orange for 30s — implemented via realtime subscription to the `order_audit_log` table
+- Top-right corner shows signed-in butchers + sign-in/sign-out tile
 
-**Tests:** integration test for the realtime flash (insert an audit log row, assert the KDS state machine flips to "flashing"). Unit test for the line-Done state transitions.
+**Tests:** integration test for the realtime flash (insert an audit log row, assert the KDS state machine flips to "flashing"). Unit test for the line-Done state transitions. Unit test for PIN auth + attribution. Test that line-Done without a signed-in butcher fails clearly.
 
 **Sub-branch acceptance:**
 - KDS renders with cards in correct order
-- Tap a line → it visually marks done, persists in DB, all other tabs / KDS instances reflect within 2s
+- Butcher signs in with PIN, can mark lines done, attribution lands in DB
+- Two butchers signed in simultaneously → tap prompts for attribution
 - Office amends an order in another tab → card flashes orange in KDS
 - Tsc / eslint / tests clean
 
@@ -225,6 +240,18 @@ The barcode is the "future-you will thank me" feature flagged at Gate 1 — Haka
 ---
 
 ## Integration → ANVIL → merge to main
+
+**Testing approach during the build** (decided 2026-05-30 — to be revisited per sub-branch):
+
+Three options available, no fixed commitment yet:
+
+| Option | Database | When to use |
+|---|---|---|
+| **A. Local dev on Mac** | Local Postgres via Supabase CLI, seed data | Fastest iteration. Use for most sub-branch work. |
+| **B. Vercel preview against production DB** | Real production data | Never — creates real orders in real DB |
+| **C. Vercel preview + Supabase staging branch** | Production schema, optional production data clone | Pre-merge 2-day smoke before the integration branch lands on main |
+
+We'll likely use **A** while building each sub-branch and **C** at the end. Decision deferred per sub-branch — easy to swap into either when needed.
 
 **Once all 6 sub-branches are merged into `feat/order-pipeline`:**
 
