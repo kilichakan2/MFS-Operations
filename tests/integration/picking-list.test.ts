@@ -41,10 +41,11 @@ describe('/api/orders/[id]/picking-list integration', () => {
 
   // ── Auth ────────────────────────────────────────────────────
 
-  it('rejects POST without cookies (401)', async () => {
+  it('redirects to /login when called without cookies (middleware 307)', async () => {
+    // Middleware is the first auth gate — no session cookie => 307 to /login.
     const id = await createPlacedOrder()
     const res = await api(`/api/orders/${id}/picking-list`, { method: 'POST' })
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(307)
   })
 
   it('rejects POST from sales role — only office/warehouse/admin can print (401)', async () => {

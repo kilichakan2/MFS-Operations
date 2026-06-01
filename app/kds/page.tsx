@@ -212,9 +212,15 @@ function KdsPageInner() {
 
   // ── Done tap handler ───────────────────────────────────────
 
-  async function markLineDone(orderId: string, lineId: string, butcherId: string) {
+  async function markLineDone(_orderId: string, lineId: string, butcherId: string) {
+    // _orderId kept in signature for symmetry with callers (handleLineTap +
+    // attribution modal) — the server no longer needs it in the URL since
+    // it derives the order from the line itself.
     try {
-      const res = await fetch(`/api/orders/${orderId}/lines/${lineId}/done`, {
+      // Endpoint lives under /api/kds/ (public — KDS terminal has no
+      // session cookie). orderId is no longer in the URL — the server
+      // derives it from the line.
+      const res = await fetch(`/api/kds/lines/${lineId}/done`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ butcher_id: butcherId }),

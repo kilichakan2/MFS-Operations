@@ -31,9 +31,12 @@ describe('/api/orders integration', () => {
 
   // ── Auth gates ──────────────────────────────────────────────
 
-  it('rejects POST without cookies (401)', async () => {
+  it('redirects to /login when called without cookies (middleware 307)', async () => {
+    // Middleware is the first auth gate — no session cookie => 307 to /login.
+    // (Route handler 401 only fires when cookies are present but the role is
+    // unauthorised, see 'rejects POST from driver role' below.)
     const res = await api('/api/orders', { method: 'POST', body: {} })
-    expect(res.status).toBe(401)
+    expect(res.status).toBe(307)
   })
 
   it('rejects POST from driver role (401)', async () => {

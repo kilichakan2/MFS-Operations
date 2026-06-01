@@ -22,6 +22,11 @@ export default defineConfig({
     testTimeout:    30_000,   // API calls + DB writes
     hookTimeout:    30_000,
     setupFiles:     ['./tests/integration/_loadEnv.ts'],
+    // Integration suites share DB state. Force single-fork serial
+    // execution to eliminate TOCTOU races in beforeAll fixture setup.
+    pool: 'forks',
+    isolate: false,
+    fileParallelism: false,
   },
   resolve: {
     alias: { '@': resolve(__dirname, '.') },

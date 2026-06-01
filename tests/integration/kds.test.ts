@@ -4,7 +4,7 @@
  * Integration tests for the KDS endpoints:
  *   - GET  /api/kds/orders
  *   - POST /api/auth/kds-pin
- *   - POST /api/orders/[id]/lines/[lineId]/done
+ *   - POST /api/kds/lines/[lineId]/done
  *
  * Covers the full butcher flow: KDS queue includes printed orders,
  * PIN auth returns butcher info, line-done updates DB + auto-
@@ -110,7 +110,7 @@ describe('KDS integration', () => {
     expect(res.status).toBe(400)
   })
 
-  // ── /api/orders/[id]/lines/[lineId]/done ────────────────────
+  // ── /api/kds/lines/[lineId]/done ─────────────────────
 
   it('marks a line done and auto-completes the order when last line done', async () => {
     const orderId = await createAndPrintOrder(2)
@@ -119,7 +119,7 @@ describe('KDS integration', () => {
     expect(lines).toHaveLength(2)
 
     // Mark first line done — order should stay printed
-    const r1 = await api(`/api/orders/${orderId}/lines/${lines![0].id}/done`, {
+    const r1 = await api(`/api/kds/lines/${lines![0].id}/done`, {
       method: 'POST', body: { butcher_id: users.butcher.id },
     })
     expect(r1.status).toBe(200)
@@ -128,7 +128,7 @@ describe('KDS integration', () => {
     expect(mid.data?.state).toBe('printed')
 
     // Mark second line done — should auto-complete
-    const r2 = await api(`/api/orders/${orderId}/lines/${lines![1].id}/done`, {
+    const r2 = await api(`/api/kds/lines/${lines![1].id}/done`, {
       method: 'POST', body: { butcher_id: users.butcher.id },
     })
     expect(r2.status).toBe(200)
@@ -143,7 +143,7 @@ describe('KDS integration', () => {
     const orderId = await createAndPrintOrder()
     const supa = getServiceClient()
     const { data: lines } = await supa.from('order_lines').select('id').eq('order_id', orderId)
-    const res = await api(`/api/orders/${orderId}/lines/${lines![0].id}/done`, {
+    const res = await api(`/api/kds/lines/${lines![0].id}/done`, {
       method: 'POST', body: { butcher_id: 'not-a-uuid' },
     })
     expect(res.status).toBe(400)
@@ -153,7 +153,7 @@ describe('KDS integration', () => {
     const orderId = await createAndPrintOrder()
     const supa = getServiceClient()
     const { data: lines } = await supa.from('order_lines').select('id').eq('order_id', orderId)
-    const res = await api(`/api/orders/${orderId}/lines/${lines![0].id}/done`, {
+    const res = await api(`/api/kds/lines/${lines![0].id}/done`, {
       method: 'POST', body: { butcher_id: users.sales.id },
     })
     expect(res.status).toBe(403)
@@ -171,7 +171,7 @@ describe('KDS integration', () => {
     const supa = getServiceClient()
     const { data: lines } = await supa.from('order_lines').select('id').eq('order_id', id)
 
-    const res = await api(`/api/orders/${id}/lines/${lines![0].id}/done`, {
+    const res = await api(`/api/kds/lines/${lines![0].id}/done`, {
       method: 'POST', body: { butcher_id: users.butcher.id },
     })
     expect(res.status).toBe(409)
@@ -182,10 +182,10 @@ describe('KDS integration', () => {
     const supa = getServiceClient()
     const { data: lines } = await supa.from('order_lines').select('id').eq('order_id', orderId)
 
-    const r1 = await api(`/api/orders/${orderId}/lines/${lines![0].id}/done`, {
+    const r1 = await api(`/api/kds/lines/${lines![0].id}/done`, {
       method: 'POST', body: { butcher_id: users.butcher.id },
     })
-    const r2 = await api(`/api/orders/${orderId}/lines/${lines![0].id}/done`, {
+    const r2 = await api(`/api/kds/lines/${lines![0].id}/done`, {
       method: 'POST', body: { butcher_id: users.butcher.id },
     })
     expect(r1.status).toBe(200)

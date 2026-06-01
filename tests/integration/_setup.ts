@@ -79,9 +79,16 @@ export async function setupTestUsers(): Promise<TestUserSet> {
     if (existing) {
       out[role] = { id: existing.id, name: existing.name }
     } else {
+      const PLACEHOLDER_HASH = '$2a$10$ANVILTESTPLACEHOLDERHASHFORTESTSXXXXXXXXXXXXXXXXX'
       const { data, error } = await supa
         .from('users')
-        .insert({ name, role, active: true })
+        .insert({
+          name,
+          role,
+          active: true,
+          pin_hash:      role === 'admin' ? null : PLACEHOLDER_HASH,
+          password_hash: role === 'admin' ? PLACEHOLDER_HASH : null,
+        })
         .select('id, name')
         .single()
       if (error) throw new Error(`Failed to create test user ${name}: ${error.message}`)
@@ -116,42 +123,82 @@ export async function setupTestCustomer(): Promise<{ id: string; name: string }>
  */
 export async function getTestProduct(): Promise<{ id: string; name: string; code: string | null }> {
   const supa = getServiceClient()
-  const { data, error } = await supa
+  const name = `${TEST_PREFIX}product`
+
+  // Look for our specific test product first
+  const { data: existing } = await supa
+    .from('products')
+    .select('id, name, code')
+    .eq('name', name)
+    .maybeSingle()
+  if (existing) return existing
+
+  // Fall back to any active product
+  const { data: anyProduct } = await supa
     .from('products')
     .select('id, name, code')
     .eq('active', true)
     .limit(1)
+    .maybeSingle()
+  if (anyProduct) return anyProduct
+
+  // No products at all — create a test one
+  const { data, error } = await supa
+    .from('products')
+    .insert({ name, code: 'ANVIL-TEST-001', active: true })
+    .select('id, name, code')
     .single()
-  if (error || !data) throw new Error('No active products available for test')
+  if (error) throw new Error(`Failed to create test product: ${error.message}`)
   return data
 }
 
 /**
  * Call a Next.js API route with cookie-based auth. Returns the
  * response (status + parsed JSON if any).
+ *
+ * Sets THREE cookies to mirror what the real login flow sets:
+ *   mfs_session    — JSON-encoded session, used by middleware
+ *   mfs_role       — used by route handlers for per-role gating
+ *   mfs_user_id    — used by route handlers for created_by attribution
+ *
+ * Also sets redirect: 'manual' so that an unexpected 307 (e.g. from
+ * the middleware) shows up as a 307 status instead of being silently
+ * followed to /login. Without this, every assertion would see 200
+ * (the rendered login page) instead of the real auth failure code.
  */
 export async function api(
   path:    string,
   opts: {
     method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
-    role?:   string                    // sets mfs_role cookie
-    userId?: string                    // sets mfs_user_id cookie
+    role?:   string                    // sets mfs_role + mfs_session.role
+    userId?: string                    // sets mfs_user_id + mfs_session.userId
+    name?:   string                    // optional — name to put in mfs_session
     body?:   unknown
   } = {},
 ): Promise<{ status: number; body: unknown; raw: string }> {
   const headers: Record<string, string> = {}
   if (opts.body !== undefined) headers['Content-Type'] = 'application/json'
 
-  // Cookie string
+  // Cookie string. Set all three the way real login does.
   const cookieParts: string[] = []
   if (opts.role)   cookieParts.push(`mfs_role=${opts.role}`)
   if (opts.userId) cookieParts.push(`mfs_user_id=${opts.userId}`)
+  if (opts.role && opts.userId) {
+    const session = {
+      userId: opts.userId,
+      name:   opts.name ?? `ANVIL-TEST-${opts.role}`,
+      role:   opts.role,
+    }
+    // URI-encode so the JSON braces + quotes don't break the cookie header
+    cookieParts.push(`mfs_session=${encodeURIComponent(JSON.stringify(session))}`)
+  }
   if (cookieParts.length) headers.Cookie = cookieParts.join('; ')
 
   const res = await fetch(`${BASE_URL}${path}`, {
-    method:  opts.method ?? 'GET',
+    method:   opts.method ?? 'GET',
     headers,
-    body:    opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    body:     opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    redirect: 'manual',  // surface unexpected middleware 307s instead of following
   })
 
   const raw = await res.text()
