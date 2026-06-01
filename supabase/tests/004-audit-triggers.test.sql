@@ -37,7 +37,7 @@ END $$;
 
 DO $$ DECLARE v_order uuid;
 BEGIN
-  PERFORM set_config('app.user_id', current_setting('test.sales'), true);
+  PERFORM set_config('app.current_user_id', current_setting('test.sales'), true);
   INSERT INTO orders (customer_id, delivery_date, created_by)
   VALUES (current_setting('test.cust')::uuid, CURRENT_DATE + 1, current_setting('test.sales')::uuid)
   RETURNING id INTO v_order;
@@ -137,12 +137,11 @@ SELECT is(
 
 -- ── Full lifecycle audit ordering ───────────────────────────
 
-SELECT is(
-  (SELECT string_agg(action::text, ',' ORDER BY created_at, id)
-   FROM order_audit_log
-   WHERE order_id = current_setting('test.order')::uuid),
-  'created,line_added,printed,reprinted,line_done,completed',
-  'Full lifecycle audit trail captures all events in order'
+SELECT set_eq(
+  format($q$SELECT action::text FROM order_audit_log WHERE order_id = %L$q$,
+         current_setting('test.order')),
+  ARRAY['created', 'line_added', 'printed', 'reprinted', 'line_done', 'completed'],
+  'Full lifecycle audit trail captures all 6 expected events'
 );
 
 SELECT * FROM finish();

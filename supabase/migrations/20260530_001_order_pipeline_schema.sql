@@ -52,6 +52,8 @@ CREATE SEQUENCE IF NOT EXISTS order_reference_seq;
 CREATE OR REPLACE FUNCTION generate_order_reference()
 RETURNS text
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_year integer;
@@ -161,21 +163,23 @@ CREATE INDEX IF NOT EXISTS order_audit_log_created_at_idx ON order_audit_log (cr
 --
 -- Two triggers — one on orders, one on order_lines. Each emits an
 -- audit row capturing the action and a payload. user_id is taken
--- from the session via current_setting('app.user_id', true) which
+-- from the session via current_setting('app.current_user_id', true) which
 -- API routes set via SET LOCAL at the start of each transaction.
 
 CREATE OR REPLACE FUNCTION orders_audit_trigger()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_user_id uuid;
   v_action  order_audit_action;
 BEGIN
-  -- API sets this via SET LOCAL app.user_id = '<uuid>'; nullable for
+  -- API sets this via SET LOCAL app.current_user_id = '<uuid>'; nullable for
   -- system actions (e.g. cron, migrations).
   BEGIN
-    v_user_id := nullif(current_setting('app.user_id', true), '')::uuid;
+    v_user_id := nullif(current_setting('app.current_user_id', true), '')::uuid;
   EXCEPTION WHEN OTHERS THEN
     v_user_id := NULL;
   END;
@@ -221,13 +225,15 @@ CREATE TRIGGER orders_audit
 CREATE OR REPLACE FUNCTION order_lines_audit_trigger()
 RETURNS trigger
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_user_id uuid;
   v_action  order_audit_action;
 BEGIN
   BEGIN
-    v_user_id := nullif(current_setting('app.user_id', true), '')::uuid;
+    v_user_id := nullif(current_setting('app.current_user_id', true), '')::uuid;
   EXCEPTION WHEN OTHERS THEN
     v_user_id := NULL;
   END;
@@ -291,7 +297,7 @@ CREATE POLICY orders_read ON orders
   USING (
     EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role IN ('admin', 'sales', 'office', 'warehouse', 'butcher')
     )
   );
@@ -301,7 +307,7 @@ CREATE POLICY orders_insert ON orders
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role IN ('admin', 'sales', 'office')
     )
   );
@@ -313,7 +319,7 @@ CREATE POLICY orders_update_placed ON orders
   USING (
     state = 'placed' AND EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role IN ('admin', 'sales', 'office')
     )
   );
@@ -323,7 +329,7 @@ CREATE POLICY orders_update_printed ON orders
   USING (
     state IN ('printed', 'completed') AND EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role IN ('admin', 'office', 'warehouse')
     )
   );
@@ -340,7 +346,7 @@ CREATE POLICY order_lines_read ON order_lines
   USING (
     EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role IN ('admin', 'sales', 'office', 'warehouse', 'butcher')
     )
   );
@@ -350,7 +356,7 @@ CREATE POLICY order_lines_insert ON order_lines
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role IN ('admin', 'sales', 'office')
     )
   );
@@ -361,7 +367,7 @@ CREATE POLICY order_lines_update_full ON order_lines
   USING (
     EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role IN ('admin', 'sales', 'office')
     )
   );
@@ -375,7 +381,7 @@ CREATE POLICY order_lines_update_done ON order_lines
   USING (
     EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role = 'butcher'
     )
   );
@@ -390,7 +396,7 @@ CREATE POLICY order_audit_log_read ON order_audit_log
   USING (
     EXISTS (
       SELECT 1 FROM users u
-      WHERE u.id = nullif(current_setting('app.user_id', true), '')::uuid
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
         AND u.role IN ('admin', 'office')
     )
   );

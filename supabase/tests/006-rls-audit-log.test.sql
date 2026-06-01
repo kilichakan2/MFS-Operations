@@ -8,6 +8,14 @@
 -- ============================================================
 
 BEGIN;
+
+-- Local Supabase doesn't auto-grant the order-pipeline tables to
+-- the authenticated role; production does. Replicate the prod
+-- GRANT explicitly so RLS-under-authenticated tests work.
+GRANT SELECT, INSERT, UPDATE, DELETE ON orders          TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON order_lines     TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON order_audit_log TO authenticated;
+
 SELECT plan(6);
 
 \ir _helpers.sql
@@ -37,7 +45,7 @@ SET LOCAL ROLE authenticated;
 -- ── Audit log has 1 row from trigger fire ───────────────────
 -- (Run as admin so RLS doesn't filter the row out before we count)
 
-PERFORM set_config('app.user_id', current_setting('test.admin'), true);
+SELECT set_config('app.current_user_id', current_setting('test.admin'), true);
 SELECT is(
   (SELECT COUNT(*)::int FROM order_audit_log
    WHERE order_id = current_setting('test.order')::uuid),
@@ -47,7 +55,7 @@ SELECT is(
 
 -- ── Office can also read ───────────────────────────────────
 
-PERFORM set_config('app.user_id', current_setting('test.office'), true);
+SELECT set_config('app.current_user_id', current_setting('test.office'), true);
 SELECT is(
   (SELECT COUNT(*)::int FROM order_audit_log
    WHERE order_id = current_setting('test.order')::uuid),
@@ -57,14 +65,14 @@ SELECT is(
 
 -- ── Sales / butcher cannot read ───────────────────────────
 
-PERFORM set_config('app.user_id', current_setting('test.sales'), true);
+SELECT set_config('app.current_user_id', current_setting('test.sales'), true);
 SELECT is_empty(
   format($$SELECT * FROM order_audit_log WHERE order_id = %L$$,
          current_setting('test.order')),
   'sales cannot read audit log (RLS filters all rows)'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.butcher'), true);
+SELECT set_config('app.current_user_id', current_setting('test.butcher'), true);
 SELECT is_empty(
   format($$SELECT * FROM order_audit_log WHERE order_id = %L$$,
          current_setting('test.order')),
@@ -75,7 +83,7 @@ SELECT is_empty(
 -- The order_audit_log_insert policy is WITH CHECK (false), so
 -- non-trigger inserts always fail regardless of role.
 
-PERFORM set_config('app.user_id', current_setting('test.admin'), true);
+SELECT set_config('app.current_user_id', current_setting('test.admin'), true);
 SELECT throws_ok(
   format($$
     INSERT INTO order_audit_log (order_id, user_id, action, payload)
@@ -88,7 +96,7 @@ SELECT throws_ok(
 
 -- ── Audit row from trigger contains the correct action ──────
 
-PERFORM set_config('app.user_id', current_setting('test.admin'), true);
+SELECT set_config('app.current_user_id', current_setting('test.admin'), true);
 SELECT is(
   (SELECT action::text FROM order_audit_log
    WHERE order_id = current_setting('test.order')::uuid LIMIT 1),

@@ -5,7 +5,7 @@
 --
 -- RLS is enforced ONLY for non-service-role connections — the
 -- service-role key bypasses RLS entirely (that's its definition).
--- These tests connect using set_session_role and set app.user_id
+-- These tests connect using set_session_role and set app.current_user_id
 -- to simulate an authenticated user calling via the anon key.
 --
 -- Visibility matrix (from Frame spec):
@@ -18,6 +18,14 @@
 -- ============================================================
 
 BEGIN;
+
+-- Local Supabase doesn't auto-grant the order-pipeline tables to
+-- the authenticated role; production does. Replicate the prod
+-- GRANT explicitly so RLS-under-authenticated tests work.
+GRANT SELECT, INSERT, UPDATE, DELETE ON orders          TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON order_lines     TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON order_audit_log TO authenticated;
+
 SELECT plan(14);
 
 \ir _helpers.sql
@@ -50,31 +58,31 @@ SET LOCAL ROLE authenticated;
 
 -- ── READ: every back-office role can SELECT orders ──────────
 
-PERFORM set_config('app.user_id', current_setting('test.admin'), true);
+SELECT set_config('app.current_user_id', current_setting('test.admin'), true);
 SELECT isnt_empty(
   $$SELECT * FROM orders$$,
   'admin can read orders'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.sales'), true);
+SELECT set_config('app.current_user_id', current_setting('test.sales'), true);
 SELECT isnt_empty(
   $$SELECT * FROM orders$$,
   'sales can read orders'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.office'), true);
+SELECT set_config('app.current_user_id', current_setting('test.office'), true);
 SELECT isnt_empty(
   $$SELECT * FROM orders$$,
   'office can read orders'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.warehouse'), true);
+SELECT set_config('app.current_user_id', current_setting('test.warehouse'), true);
 SELECT isnt_empty(
   $$SELECT * FROM orders$$,
   'warehouse can read orders'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.butcher'), true);
+SELECT set_config('app.current_user_id', current_setting('test.butcher'), true);
 SELECT isnt_empty(
   $$SELECT * FROM orders$$,
   'butcher can read orders'
@@ -82,7 +90,7 @@ SELECT isnt_empty(
 
 -- ── READ: driver cannot SELECT orders ──────────────────────
 
-PERFORM set_config('app.user_id', current_setting('test.driver'), true);
+SELECT set_config('app.current_user_id', current_setting('test.driver'), true);
 SELECT is_empty(
   $$SELECT * FROM orders$$,
   'driver cannot read orders (RLS filters all rows)'
@@ -90,7 +98,7 @@ SELECT is_empty(
 
 -- ── INSERT: sales / office / admin can insert ──────────────
 
-PERFORM set_config('app.user_id', current_setting('test.sales'), true);
+SELECT set_config('app.current_user_id', current_setting('test.sales'), true);
 SELECT lives_ok(
   format($$
     INSERT INTO orders (customer_id, delivery_date, created_by)
@@ -99,7 +107,7 @@ SELECT lives_ok(
   'sales can INSERT orders'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.office'), true);
+SELECT set_config('app.current_user_id', current_setting('test.office'), true);
 SELECT lives_ok(
   format($$
     INSERT INTO orders (customer_id, delivery_date, created_by)
@@ -108,7 +116,7 @@ SELECT lives_ok(
   'office can INSERT orders'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.admin'), true);
+SELECT set_config('app.current_user_id', current_setting('test.admin'), true);
 SELECT lives_ok(
   format($$
     INSERT INTO orders (customer_id, delivery_date, created_by)
@@ -119,7 +127,7 @@ SELECT lives_ok(
 
 -- ── INSERT: warehouse / butcher / driver cannot insert ─────
 
-PERFORM set_config('app.user_id', current_setting('test.warehouse'), true);
+SELECT set_config('app.current_user_id', current_setting('test.warehouse'), true);
 SELECT throws_ok(
   format($$
     INSERT INTO orders (customer_id, delivery_date, created_by)
@@ -130,7 +138,7 @@ SELECT throws_ok(
   'warehouse cannot INSERT orders (RLS denies)'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.butcher'), true);
+SELECT set_config('app.current_user_id', current_setting('test.butcher'), true);
 SELECT throws_ok(
   format($$
     INSERT INTO orders (customer_id, delivery_date, created_by)
@@ -141,7 +149,7 @@ SELECT throws_ok(
   'butcher cannot INSERT orders (RLS denies)'
 );
 
-PERFORM set_config('app.user_id', current_setting('test.driver'), true);
+SELECT set_config('app.current_user_id', current_setting('test.driver'), true);
 SELECT throws_ok(
   format($$
     INSERT INTO orders (customer_id, delivery_date, created_by)
@@ -154,6 +162,9 @@ SELECT throws_ok(
 
 -- ── UPDATE placed: sales can edit ──────────────────────────
 
+-- Switch to admin to read existing orders (driver was last set, denies SELECT)
+SELECT set_config('app.current_user_id', current_setting('test.admin'), true);
+
 -- Find the existing placed order
 DO $$ DECLARE v_order uuid;
 BEGIN
@@ -161,7 +172,7 @@ BEGIN
   PERFORM set_config('test.placed_order', v_order::text, true);
 END $$;
 
-PERFORM set_config('app.user_id', current_setting('test.sales'), true);
+SELECT set_config('app.current_user_id', current_setting('test.sales'), true);
 SELECT lives_ok(
   format($$
     UPDATE orders SET order_notes = 'sales edit' WHERE id = %L;
@@ -171,13 +182,19 @@ SELECT lives_ok(
 
 -- ── UPDATE placed: driver cannot edit ──────────────────────
 
-PERFORM set_config('app.user_id', current_setting('test.driver'), true);
+SELECT set_config('app.current_user_id', current_setting('test.driver'), true);
+DO $$ DECLARE v_affected int;
+BEGIN
+  WITH u AS (
+    UPDATE orders SET order_notes = 'driver edit attempt'
+    WHERE id = current_setting('test.placed_order')::uuid
+    RETURNING id
+  )
+  SELECT COUNT(*)::int INTO v_affected FROM u;
+  PERFORM set_config('test.driver_update_count', v_affected::text, true);
+END $$;
 SELECT is(
-  (WITH u AS (
-     UPDATE orders SET order_notes = 'driver edit attempt'
-     WHERE id = current_setting('test.placed_order')::uuid
-     RETURNING id
-   ) SELECT COUNT(*)::int FROM u),
+  current_setting('test.driver_update_count')::int,
   0,
   'driver UPDATE on placed order is RLS-filtered (no rows affected)'
 );

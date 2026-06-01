@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // SET LOCAL app.user_id is what the audit triggers read. The
+    // SET LOCAL app.current_user_id is what the audit triggers read. The
     // supabase-js client doesn't expose SET LOCAL through .from(),
     // so we run the inserts via a single RPC that sets the variable
     // and inserts atomically. For now use a single transaction via

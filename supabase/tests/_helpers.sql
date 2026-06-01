@@ -16,8 +16,15 @@ CREATE OR REPLACE FUNCTION test_helper_make_user(p_name text, p_role user_role)
 RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE v_id uuid;
 BEGIN
-  INSERT INTO users (name, role, active)
-  VALUES (p_name, p_role, true)
+  -- users_auth_check: admin => password_hash NOT NULL, otherwise pin_hash NOT NULL.
+  INSERT INTO users (name, role, active, pin_hash, password_hash)
+  VALUES (
+    p_name, p_role, true,
+    CASE WHEN p_role = 'admin' THEN NULL
+         ELSE '$2a$10$ANVILTESTPLACEHOLDERHASHFORTESTSXXXXXXXXXXXXXXXXX' END,
+    CASE WHEN p_role = 'admin' THEN '$2a$10$ANVILTESTPLACEHOLDERHASHFORTESTSXXXXXXXXXXXXXXXXX'
+         ELSE NULL END
+  )
   RETURNING id INTO v_id;
   RETURN v_id;
 END $$;
@@ -61,11 +68,11 @@ BEGIN
   RETURN v_id;
 END $$;
 
--- Impersonate a role for RLS testing by SETting app.user_id and
+-- Impersonate a role for RLS testing by SETting app.current_user_id and
 -- the connecting role's GUC so policies that check current_setting
 -- see the test user.
 CREATE OR REPLACE FUNCTION test_helper_set_user(p_user_id uuid)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
-  PERFORM set_config('app.user_id', p_user_id::text, true);  -- transaction-local
+  PERFORM set_config('app.current_user_id', p_user_id::text, true);  -- transaction-local
 END $$;
