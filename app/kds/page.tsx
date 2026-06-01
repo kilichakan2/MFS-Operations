@@ -142,6 +142,16 @@ function KdsPageInner() {
   const [showPinModal,        setShowPinModal]        = useState(false)
   const [attributingLine,     setAttributingLine]     = useState<{ orderId: string; lineId: string } | null>(null)
 
+  // ── Optimistic-UI tracking for Done taps ───────────────────
+  // A set of line IDs that have been optimistically marked done in
+  // local state but whose server commit hasn't yet been reflected in
+  // a poll cycle. When the polling loop runs and the server still
+  // shows done_at = null for these lines, we keep the local
+  // optimistic state so the green tick doesn't flicker. Cleared once
+  // the API confirms (success or failure) — on failure the line is
+  // explicitly reverted.
+  const pendingDoneIdsRef = useRef<Set<string>>(new Set())
+
   // ── Load signed-in butchers from sessionStorage on mount ────
   useEffect(() => {
     try {
@@ -174,7 +184,26 @@ function KdsPageInner() {
           setError(body?.error ?? `Server error (${res.status})`)
         } else {
           const payload = body as KdsPayload
-          setOrders(payload.orders)
+          // Reconcile server data with any pending optimistic done state.
+          // If a line is in pendingDoneIdsRef AND the server still reports
+          // done_at = null (commit hasn't propagated yet), keep the
+          // optimistic done_at from the previous local state. Avoids the
+          // green-tick-flicker race where polling fires between the tap
+          // and the server commit.
+          setOrders(prev => payload.orders.map(serverOrder => ({
+            ...serverOrder,
+            lines: serverOrder.lines.map(serverLine => {
+              if (pendingDoneIdsRef.current.has(serverLine.id) && !serverLine.done_at) {
+                const prevLine = prev
+                  .find(o => o.id === serverOrder.id)
+                  ?.lines.find(l => l.id === serverLine.id)
+                if (prevLine?.done_at) {
+                  return { ...serverLine, done_at: prevLine.done_at, done_by: prevLine.done_by }
+                }
+              }
+              return serverLine
+            }),
+          })))
           setRecentFlashes(payload.recent_flashes)
           setError(null)
         }
@@ -222,25 +251,68 @@ function KdsPageInner() {
     // _orderId kept in signature for symmetry with callers (handleLineTap +
     // attribution modal) — the server no longer needs it in the URL since
     // it derives the order from the line itself.
+    //
+    // Optimistic UI: set the line state to done IMMEDIATELY in local
+    // React state so the green tick appears on the same animation
+    // frame as the tap. Without this, the user sees a ~1.5s lag while
+    // the next polling cycle catches up. Race-safe via
+    // pendingDoneIdsRef — see load() polling reconciliation above.
+
+    const optimisticNow = new Date().toISOString()
+
+    // 1. Track pending + apply optimistic state
+    pendingDoneIdsRef.current.add(lineId)
+    setOrders(prev => prev.map(order => ({
+      ...order,
+      lines: order.lines.map(line =>
+        line.id === lineId
+          ? { ...line, done_at: optimisticNow, done_by: butcherId }
+          : line
+      ),
+    })))
+
+    // 2. Fire the API in the background
     try {
-      // Endpoint lives under /api/kds/ (public — KDS terminal has no
-      // session cookie). orderId is no longer in the URL — the server
-      // derives it from the line.
       const res = await fetch(`/api/kds/lines/${lineId}/done`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ butcher_id: butcherId }),
       })
-      if (!res.ok) {
+
+      if (res.ok) {
+        // Server confirmed. Polling will sync the real server timestamp
+        // shortly; for now the optimistic value is correct.
+        pendingDoneIdsRef.current.delete(lineId)
+      } else {
+        // 3. ROLLBACK — server rejected. Revert the optimistic state.
         const body = await res.json().catch(() => ({}))
         console.error('[KDS] markLineDone failed', body)
-        // Visible error — but don't disrupt the queue
+        pendingDoneIdsRef.current.delete(lineId)
+        setOrders(prev => prev.map(order => ({
+          ...order,
+          lines: order.lines.map(line =>
+            line.id === lineId
+              ? { ...line, done_at: null, done_by: null }
+              : line
+          ),
+        })))
         setError(body?.error ?? 'Failed to mark done')
         setTimeout(() => setError(null), 3000)
       }
-      // Polling will refresh the UI within 2s
     } catch (e) {
+      // 4. Network error — also revert.
       console.error('[KDS] markLineDone network error', e)
+      pendingDoneIdsRef.current.delete(lineId)
+      setOrders(prev => prev.map(order => ({
+        ...order,
+        lines: order.lines.map(line =>
+          line.id === lineId
+            ? { ...line, done_at: null, done_by: null }
+            : line
+        ),
+      })))
+      setError('Network error — could not mark done')
+      setTimeout(() => setError(null), 3000)
     }
   }
 
