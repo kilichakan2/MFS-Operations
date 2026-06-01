@@ -20,7 +20,7 @@
 BEGIN;
 SELECT plan(14);
 
-\i supabase/tests/_helpers.sql
+\ir _helpers.sql
 
 -- Fixtures: one user per role, plus a customer
 DO $$ DECLARE

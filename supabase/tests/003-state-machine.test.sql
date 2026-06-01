@@ -12,7 +12,7 @@
 BEGIN;
 SELECT plan(11);
 
-\i supabase/tests/_helpers.sql
+\ir _helpers.sql
 
 -- Test fixtures
 DO $$ DECLARE

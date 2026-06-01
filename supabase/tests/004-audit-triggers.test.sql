@@ -16,7 +16,7 @@
 BEGIN;
 SELECT plan(8);
 
-\i supabase/tests/_helpers.sql
+\ir _helpers.sql
 
 -- Fixtures
 DO $$ DECLARE

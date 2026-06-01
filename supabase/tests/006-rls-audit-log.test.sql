@@ -10,7 +10,7 @@
 BEGIN;
 SELECT plan(6);
 
-\i supabase/tests/_helpers.sql
+\ir _helpers.sql
 
 DO $$ DECLARE
   v_cust    uuid := test_helper_make_customer();

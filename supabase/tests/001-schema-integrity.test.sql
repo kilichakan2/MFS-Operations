@@ -8,7 +8,7 @@
 BEGIN;
 SELECT plan(20);
 
-\i supabase/tests/_helpers.sql
+\ir _helpers.sql
 
 -- ── Tables exist ─────────────────────────────────────────────
 

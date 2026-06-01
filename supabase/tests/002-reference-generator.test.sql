@@ -9,7 +9,7 @@
 BEGIN;
 SELECT plan(7);
 
-\i supabase/tests/_helpers.sql
+\ir _helpers.sql
 
 -- Reset the sequence for a deterministic test. The whole test
 -- runs inside this transaction and ROLLBACKs at the end, so this
