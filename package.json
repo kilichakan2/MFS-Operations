@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -45,6 +47,7 @@
     "@types/web-push": "^3.6.4",
     "@vitest/coverage-v8": "^4.1.2",
     "autoprefixer": "^10.0.1",
+    "dotenv": "^17.4.2",
     "eslint": "^8",
     "eslint-config-next": "15.0.0",
     "postcss": "^8",
