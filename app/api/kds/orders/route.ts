@@ -43,7 +43,8 @@ export async function GET(_req: NextRequest) {
         customer:customer_id ( id, name ),
         lines:order_lines (
           id, line_number, product_id, ad_hoc_description, quantity, uom, notes,
-          done_at, done_by
+          done_at, done_by,
+          product:product_id ( id, name )
         )
       `)
       .or(`state.eq.printed,and(state.eq.completed,completed_at.gte.${since})`)

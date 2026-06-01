@@ -58,6 +58,12 @@ interface KdsLine {
   notes:              string | null
   done_at:            string | null
   done_by:            string | null
+  /**
+   * Product name embedded by /api/kds/orders when product_id is set.
+   * Lets the kiosk show product names without an IndexedDB sync
+   * (the kiosk has no per-user session, so IndexedDB stays empty).
+   */
+  product:            { id: string; name: string } | null
 }
 
 interface KdsOrder {
@@ -399,8 +405,18 @@ function OrderCard({
           .slice()
           .sort((a, b) => a.line_number - b.line_number)
           .map(line => {
-            const product = line.product_id ? products.find(p => p.id === line.product_id) : null
-            const description = line.ad_hoc_description ?? product?.name ?? '(unknown product)'
+            // Prefer the product name embedded in the API response — the
+            // KDS kiosk has no user session and so doesn't sync the
+            // local IndexedDB product catalogue. Fall back to IndexedDB
+            // for any environment where the kiosk DOES have a session
+            // (e.g. dev workstation), and only show '(unknown product)'
+            // as a last resort.
+            const productFromLocal = line.product_id ? products.find(p => p.id === line.product_id) : null
+            const description =
+              line.ad_hoc_description ??
+              line.product?.name ??
+              productFromLocal?.name ??
+              '(unknown product)'
             const isDone = line.done_at !== null
 
             return (

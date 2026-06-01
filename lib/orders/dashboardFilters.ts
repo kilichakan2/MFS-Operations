@@ -35,8 +35,24 @@ export interface DashboardFilterOptions {
   now?:        Date
 }
 
+/**
+ * Format a Date as a YYYY-MM-DD string using LOCAL date components.
+ *
+ * Previously used d.toISOString().slice(0, 10), which converts to UTC
+ * — incorrect for any user in a non-UTC timezone (including the UK
+ * during BST = UTC+1, which is most of the year). Local midnight in
+ * BST is 23:00 the previous day in UTC, so toISOString() would shift
+ * the date back one day, and every order with a "tomorrow" delivery
+ * would silently fall outside the dashboard's "today + tomorrow"
+ * default filter.
+ *
+ * Caught by ANVIL E2E Layer 4 on 2026-06-01.
+ */
 function ymd(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  const y   = d.getFullYear()
+  const m   = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 /** Returns [from, to] inclusive YYYY-MM-DD bounds for a date filter; null = open-ended on that side. */

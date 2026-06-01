@@ -50,6 +50,49 @@ describe('dateRangeFromFilter', () => {
   it("all is open-ended on both sides", () => {
     expect(dateRangeFromFilter('all', NOW)).toEqual({ from: null, to: null })
   })
+
+  // Regression tests for ANVIL E2E Layer 4 finding:
+  // The original implementation used d.toISOString().slice(0, 10) which
+  // returns the UTC date. For a user in any positive-UTC timezone
+  // (BST = UTC+1, most UK office hours; CET = UTC+1; etc.), local
+  // midnight is the previous calendar day in UTC, so toISOString()
+  // shifted dates back by one. Every order with a "tomorrow" delivery
+  // would silently fall outside the dashboard's "today + tomorrow"
+  // default filter. These tests pin the new local-date behaviour.
+
+  it("BST regression — local 'now' late in the day still gives the local 'today'", () => {
+    // 2026-06-01T23:30 in BST = 2026-06-01T22:30Z. Local 'today' is
+    // 2026-06-01; setHours(0,0,0,0) yields a Date that, when fed
+    // through the old toISOString().slice(0,10), would return
+    // '2026-05-31' (one day too early).
+    const bstLateEvening = new Date(2026, 5, 1, 23, 30, 0)  // local
+    expect(dateRangeFromFilter('today', bstLateEvening)).toEqual({
+      from: '2026-06-01', to: '2026-06-01',
+    })
+  })
+
+  it("BST regression — 'today_tomorrow' includes the actual local tomorrow", () => {
+    const bstLateEvening = new Date(2026, 5, 1, 23, 30, 0)  // local
+    expect(dateRangeFromFilter('today_tomorrow', bstLateEvening)).toEqual({
+      from: '2026-06-01', to: '2026-06-02',
+    })
+  })
+
+  it("BST regression — order placed for 'tomorrow' passes through 'today_tomorrow' filter", () => {
+    const bstLateEvening = new Date(2026, 5, 1, 23, 30, 0)  // local
+    const ORDERS = [
+      makeOrder({ delivery_date: '2026-06-02', reference: 'TOMORROW-ORDER' }),
+    ]
+    const out = applyDashboardFilters(ORDERS, {
+      dateFilter: 'today_tomorrow',
+      stateFilter: 'all',
+      customerId: null,
+      search: '',
+      now: bstLateEvening,
+    })
+    expect(out).toHaveLength(1)
+    expect(out[0].reference).toBe('TOMORROW-ORDER')
+  })
 })
 
 // ── applyDashboardFilters: state filter ──────────────────────

@@ -64,20 +64,23 @@ test.describe('@critical picking-list print flow', () => {
     await loginAs(page, 'sales')
 
     await page.goto('/orders')
-    // Find a printed order and open it
+    // Find a printed order row
     const printedRow = page
       .locator('a[href^="/orders/"]')
       .filter({ has: page.getByText(/Printed/i) })
       .first()
     await expect(printedRow).toBeVisible({ timeout: 10_000 })
-    await printedRow.click()
 
-    // Open the edit page directly (button on detail says "View / amend (office only)")
-    const orderUrl = page.url()
-    await page.goto(`${orderUrl}/edit`)
+    // Read the href directly off the anchor — avoids a navigation race
+    // where page.url() captures /orders before the click-nav has settled.
+    const orderPath = await printedRow.getAttribute('href')
+    expect(orderPath).toMatch(/^\/orders\/[0-9a-f-]{36}$/)
+
+    // Go straight to the edit page for that order
+    await page.goto(`${orderPath}/edit`)
 
     // Lock banner is visible
-    await expect(page.getByText(/Order locked/i)).toBeVisible()
+    await expect(page.getByText(/Order locked/i)).toBeVisible({ timeout: 10_000 })
 
     // No save button (sales is locked out)
     await expect(page.getByRole('button', { name: /Save changes/i })).toHaveCount(0)

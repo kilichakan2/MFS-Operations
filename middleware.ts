@@ -6,12 +6,16 @@
  * Authenticated users are blocked from screens outside their role.
  *
  * Role → permitted paths (keep in sync with ROLE_PERMISSIONS below):
- *   warehouse → /screen1, /routes, /runs, /complaints, /compliments, /orders, /kds
- *   office    → /screen1, /complaints, /routes, /runs, /cash, /compliments, /pricing, /orders, /kds
+ *   warehouse → /screen1, /routes, /runs, /complaints, /compliments, /orders
+ *   office    → /screen1, /complaints, /routes, /runs, /cash, /compliments, /pricing, /orders
  *   sales     → /complaints, /visits, /routes, /runs, /compliments, /pricing, /orders
  *   admin     → all paths + /api/admin, /api/dashboard, /api/map
  *   driver    → /driver, /routes, /complaints, /compliments
- *   butcher   → /haccp, /kds
+ *   butcher   → /haccp
+ *
+ * PUBLIC paths (no auth) include /kds — the production-room KDS is a
+ * shared kiosk with no per-user session; butchers PIN-authenticate
+ * per-action via the modal on the page.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -22,16 +26,16 @@ import { NextRequest, NextResponse } from 'next/server'
 // session cookie. The individual cron routes validate their own auth via CRON_SECRET.
 // /sw.js must be public — browsers fetch the service worker without credentials.
 // Without this it 307s to /login and pushManager.subscribe() fails silently.
-const PUBLIC_PATHS = ['/login', '/haccp', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team', '/api/auth/haccp-team', '/api/auth/haccp-admin', '/api/auth/kds-pin', '/api/kds', '/api/cron', '/sw.js', '/api/haccp/visitor']
+const PUBLIC_PATHS = ['/login', '/haccp', '/api/auth/login', '/api/auth/type', '/api/auth/logout', '/api/auth/team', '/api/auth/haccp-team', '/api/auth/haccp-admin', '/api/auth/kds-pin', '/api/kds', '/kds', '/api/cron', '/sw.js', '/api/haccp/visitor']
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-  warehouse: ['/screen1', '/routes', '/runs', '/compliments', '/complaints', '/haccp', '/orders', '/kds'],
-  office:    ['/screen1', '/complaints', '/routes', '/runs', '/cash', '/compliments', '/pricing', '/orders', '/kds'],
+  warehouse: ['/screen1', '/routes', '/runs', '/compliments', '/complaints', '/haccp', '/orders'],
+  office:    ['/screen1', '/complaints', '/routes', '/runs', '/cash', '/compliments', '/pricing', '/orders'],
   sales:     ['/complaints', '/visits', '/routes', '/runs', '/compliments', '/pricing', '/orders'],
-  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/cash', '/compliments', '/pricing', '/haccp', '/orders', '/kds', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
+  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/cash', '/compliments', '/pricing', '/haccp', '/orders', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
   driver:    ['/driver', '/routes', '/complaints', '/compliments'],  // drivers: route view + complaints
-  butcher:   ['/haccp', '/kds'],  // butchers: HACCP tablet + production-room KDS
+  butcher:   ['/haccp'],  // butchers: HACCP tablet only — KDS is public kiosk (no per-user auth)
 }
 
 // Default landing page per role
