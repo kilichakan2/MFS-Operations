@@ -867,7 +867,7 @@ function RoutesPageInner() {
   }))
 
   return (
-    <div className="bg-[#EDEAE1] h-screen flex flex-col overflow-hidden">
+    <div className="bg-[#EDEAE1] h-screen flex flex-col">
       <AppHeader title="Routes" />
 
       {/* Tab bar — admin only */}
