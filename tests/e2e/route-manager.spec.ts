@@ -32,8 +32,8 @@ async function loginAsAdmin(page: Page) {
   // Enter PIN
   await page.getByLabel(/password|pin/i).fill(LOGIN_PIN)
   await page.getByRole('button', { name: /sign in|login/i }).click()
-  // Wait for redirect to admin home (/screen4)
-  await page.waitForURL('**/screen4', { timeout: 10_000 })
+  // Wait for redirect to admin home (/dashboard/admin)
+  await page.waitForURL('**/dashboard/admin', { timeout: 10_000 })
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

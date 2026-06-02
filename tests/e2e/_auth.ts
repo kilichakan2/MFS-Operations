@@ -101,7 +101,7 @@ export async function loginAs(page: Page, role: keyof typeof PIN_BY_ROLE): Promi
  *   1. /login → click "Admin login" button → AdminLogin screen
  *   2. Fill username + password inputs
  *   3. Click "Sign in"
- *   4. Wait for redirect to admin home (/screen4 by ROLE_HOME)
+ *   4. Wait for redirect to admin home (/dashboard/admin by ROLE_HOME)
  *
  * Caller must provide both user and password — derive from
  * E2E_USER_ADMIN and E2E_PASSWORD_ADMIN env vars at the call site
@@ -127,7 +127,7 @@ export async function loginAsAdmin(page: Page, user: string, password: string): 
   await page.locator('input[autocomplete="current-password"]').fill(password)
   await page.getByRole('button', { name: /sign in/i }).click()
 
-  // Admin's role-home is /screen4 (per middleware ROLE_HOME map)
+  // Admin's role-home is /dashboard/admin (per middleware ROLE_HOME map)
   await page.waitForURL(/\/(screen\d|orders|dashboard|home|$)/, {
     timeout: 10_000,
   })
