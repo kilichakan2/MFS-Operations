@@ -90,61 +90,46 @@ The route currently writes `printed_by = req.session.user_id`. Keep this. Now a 
 
 **Desired behaviour:** Orders and KDS only deal with meat products. Non-meat items are bloat in that context.
 
-### Open architectural decision — TWO OPTIONS
+### Architectural decision — LOCKED: one table with `is_meat` flag
 
-#### Option A — Two tables (Hakan's first instinct, raised in conversation)
+Hakan confirmed 2026-06-01: meat is just a category filter, not a structurally different shape of data. Going with the simpler one-table approach.
 
-Create a new `meat_products` table containing only the meat subset. Orders/KDS query `meat_products`. Both tables must stay in sync when the catalog changes.
+**Add `is_meat boolean NOT NULL DEFAULT false` to `products`.** Orders and KDS query `products WHERE is_meat = true AND active = true`. The existing `category` column keeps doing whatever it does (likely finer-grained classification: lamb, beef, offal, etc.) — `is_meat` is purely a binary "is this in the meat catalog" gate, independent of category values.
 
-**Pros:**
-- Strong data isolation (orders code physically can't see non-meat products)
-- Allows `meat_products` to grow its own columns over time (cut, primal, species, halal cert, etc.) without polluting the main catalog
+**Why this over two tables:**
 
-**Cons:**
-- Sync logic is non-trivial. Either:
-  - DB triggers on `products` insert/update/delete to mirror rows where `category = 'meat'` (fragile — trigger logic is hard to test)
-  - Application-level sync (Edge Function on changes — adds complexity)
-  - Manual sync via admin UI (error-prone, easy to drift)
-- Two sources of truth = inevitable drift unless sync is bulletproof
-- Adding a meat product = two writes; deleting = two deletes; risk of partial failure
-
-#### Option B — One table, flag column
-
-Add `is_meat boolean DEFAULT false` to `products` (or use the existing `category` column if it's structured enough). Orders/KDS query `products WHERE is_meat = true AND active = true`.
-
-**Pros:**
 - Single source of truth — no sync logic, no drift risk
-- Toggling a product in/out of the meat catalog is a single update
-- No migration of existing data needed beyond setting the flag
-- All product editing UI continues working unchanged
+- Toggling a product in/out of the meat catalog is one click
+- All existing product admin UI continues working unchanged
+- If meat needs its own columns later (cut, primal, halal cert), we can split tables then with a clean migration — `is_meat` rows copy to the new table, flag column drops. No bridges burned.
 
-**Cons:**
-- Orders code technically has visibility into non-meat products (mitigated by always filtering)
-- If meat products eventually need their own columns (cut, primal, species), those columns sit on `products` even though only meat rows use them. Nullable columns = data smell.
+**Migration**:
 
-#### Recommendation
+```sql
+ALTER TABLE products ADD COLUMN is_meat boolean NOT NULL DEFAULT false;
 
-**Start with option B if the meat product schema is the same shape as non-meat (just name, code, box_size, category — which is the current shape).** Add the flag, ship the filter, move on.
+-- Seed: mark existing meat products. Likely query is something like:
+UPDATE products SET is_meat = true WHERE category IN ('lamb','beef','offal', ...);
+-- (final list depends on what category values exist — query the DB first)
 
-**Move to option A if/when meat-specific columns become real needs.** At that point the migration is: create `meat_products` with the extra columns, copy meat rows over with a one-time migration, switch the orders/KDS query, drop `is_meat` from `products`.
+CREATE INDEX products_is_meat_active_idx ON products (is_meat, active) WHERE is_meat = true AND active = true;
+```
 
-This is the YAGNI principle — don't build the sync machinery until the schemas actually need to diverge.
+### Implementation surface
 
-**HAKAN'S DECISION NEEDED:** Does meat need different columns than non-meat? If yes → Option A. If "meat is just a filter on the existing data" → Option B.
-
-### Implementation surface (regardless of option)
-
-- Order capture (`app/orders/new/page.tsx`) — product picker query updated to meat-only
-- KDS (`/api/kds/orders/route.ts`) — already shows whatever lines exist; no change here unless the embed needs adjusting
-- Admin UI — needs a "is meat?" toggle on each product (option B) or a separate "meat catalog" section (option A)
-- Reference sync (`/api/reference`) — orders' IndexedDB sync needs to know which products to pull. Could split into two endpoints (`/api/reference/orders` returns meat-only) or just expose the flag and let the client filter
+- **Migration** (above) — adds column, seeds existing rows, indexes the common query
+- **Order capture** (`app/orders/new/page.tsx`) — product picker query updated to filter `is_meat = true`. Likely via the `useProductsWithDetail` hook in `hooks/useReferenceData.ts`.
+- **Reference sync** (`/api/reference` endpoint + `lib/localDb.ts` Dexie sync) — when syncing products into IndexedDB, only sync `is_meat = true` products (avoids the kiosk pulling down olive oil and paper goods it'll never use). Alternative: sync everything but filter on the client. Cleaner to filter at the API.
+- **KDS API** (`app/api/kds/orders/route.ts`) — already returns line.product names embedded; no change needed since lines reference products by ID. But: if a non-meat product somehow ended up on an order line (shouldn't be possible after this lands, but defensive), the KDS should render gracefully (it does — `line.product?.name ?? '(unknown product)'`).
+- **Admin UI** — wherever products are managed (likely an internal admin page), add an `is meat?` toggle on the product form. Existing list / detail / edit UIs stay the same otherwise.
 
 ### Tests to add
 
-- Integration: order capture product picker returns only meat products
-- Integration: KDS line for a non-meat product (would never happen in practice but defensive) renders gracefully
-- pgTAP (option A): meat_products sync trigger fires on products insert/update/delete with category='meat'
-- pgTAP (option B): `is_meat` column constraint correct
+- pgTAP: `is_meat` column exists with correct default, NOT NULL, index present
+- Integration: `/api/reference` returns only `is_meat = true` products
+- Integration: order capture's `POST /api/orders` accepts a meat `product_id` (existing test); add a test asserting it would also accept a non-meat one (RLS doesn't block it — the UI just doesn't surface them)
+- E2E: order capture product picker shows meat products only, doesn't show non-meat
+- E2E: after admin toggles a product to `is_meat = false`, that product no longer appears in the order picker (after next reference sync)
 
 ---
 
@@ -228,10 +213,6 @@ Other follow-ups from the original ANVIL cert (`docs/anvil/2026-05-30-order-pipe
 
 ---
 
-## Open questions still requiring Hakan's input
+## Status
 
-| # | Question | Where it blocks |
-|---|---|---|
-| 3 | Two tables vs one-table-flag for meat catalog | Cannot start item 3 without answer |
-
-The other items are clear enough to start FORGE planning on whenever Hakan greenlights.
+All four items are clear and ready to be picked up. Each gets its own FORGE plan + ANVIL run when work starts. Recommended sequence above (4 → 2 → 1 → 3).
