@@ -3,6 +3,7 @@
 import { useRouter }    from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { MoreVertical } from 'lucide-react'
 import { localDb }      from '@/lib/localDb'
 import { useLanguage }  from '@/lib/LanguageContext'
 import MfsLogo          from '@/components/MfsLogo'
@@ -82,9 +83,7 @@ function DotMenu() {
           open ? 'bg-white/25 text-white' : 'bg-white/10 text-white/70 hover:bg-white/20 hover:text-white',
         ].join(' ')}
       >
-        <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
-          <path d="M3 10a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM8.5 10a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0ZM15.5 8.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/>
-        </svg>
+        <MoreVertical className="w-5 h-5" />
       </button>
 
       {open && (
@@ -136,16 +135,16 @@ export default function AppHeader({
   actions,
 }: AppHeaderProps) {
   return (
-    <header className="bg-[#16205B] px-4 pb-3 sticky top-0 z-[999]" style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}>
-      <div className={`flex items-center justify-between gap-3 max-w-${maxWidth} mx-auto`}>
+    <header className="bg-mfs-navy px-4 pb-3 sticky top-0 z-[999]" style={{ paddingTop: "calc(0.75rem + env(safe-area-inset-top))" }}>
+      <div className={`flex items-center justify-between gap-3 max-w-${maxWidth} mx-auto min-h-[64px]`}>
 
         {/* Left: Logo + screen title */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <MfsLogo className="h-7 w-auto flex-shrink-0 text-[#EB6619]" />
+          <MfsLogo className="h-7 w-auto flex-shrink-0 text-mfs-orange" />
           {title && (
             <>
               <span className="text-white/20 select-none font-light">|</span>
-              <span className="text-white/80 text-sm font-semibold truncate">{title}</span>
+              <span className="text-white text-sm font-semibold uppercase tracking-wider truncate">{title}</span>
             </>
           )}
         </div>
