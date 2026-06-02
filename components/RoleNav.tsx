@@ -26,7 +26,7 @@ import {
   Settings, Globe,
 } from 'lucide-react'
 import { useLanguage }    from '@/lib/LanguageContext'
-import BottomNav, { type NavMatrix } from '@/components/BottomNav'
+import BottomNav, { type NavMatrix, type NavItem } from '@/components/BottomNav'
 import MoreDrawer         from '@/components/MoreDrawer'
 
 export type Role = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver' | ''
@@ -126,6 +126,77 @@ export function buildMatrix(role: Role, t: Translator): NavMatrix {
 
     default:
       return { visible: [], overflow: undefined }
+  }
+}
+
+// ─── Pure sidebar item builder (exported for unit tests) ──────────────────────
+
+/**
+ * Pure data builder — returns the flat NavItem list rendered by the
+ * desktop chrome's left sidebar for a given role. NO overflow split,
+ * NO "More" item — the sidebar shows every item in one column.
+ *
+ * Same label conventions as `buildMatrix`: driver's 'Kudos' and
+ * 'My Route' and sales' 'Orders' are hardcoded literals; everything
+ * else flows through `t(...)`.
+ */
+export function buildSidebarItems(role: Role, t: Translator): NavItem[] {
+  switch (role) {
+    case 'sales':
+      return [
+        { href: '/orders',      label: 'Orders',            icon: <ShoppingBag     size={24} strokeWidth={2} /> },
+        { href: '/visits',      label: t('navVisits'),      icon: <MapPin          size={24} strokeWidth={2} /> },
+        { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle     size={24} strokeWidth={2} /> },
+        { href: '/pricing',     label: t('navPricing'),     icon: <Tags            size={24} strokeWidth={2} /> },
+        { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp        size={24} strokeWidth={2} /> },
+        { href: '/routes',      label: t('navRoutes'),      icon: <Map             size={24} strokeWidth={2} /> },
+        { href: '/runs',        label: t('navRuns'),        icon: <Calendar        size={24} strokeWidth={2} /> },
+      ]
+
+    case 'office':
+      return [
+        { href: '/screen1',     label: t('navDispatch'),    icon: <ClipboardList   size={24} strokeWidth={2} /> },
+        { href: '/cash',        label: t('navCash'),        icon: <Banknote        size={24} strokeWidth={2} /> },
+        { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle     size={24} strokeWidth={2} /> },
+        { href: '/pricing',     label: t('navPricing'),     icon: <Tags            size={24} strokeWidth={2} /> },
+        { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp        size={24} strokeWidth={2} /> },
+        { href: '/routes',      label: t('navRoutes'),      icon: <Map             size={24} strokeWidth={2} /> },
+        { href: '/runs',        label: t('navRuns'),        icon: <Calendar        size={24} strokeWidth={2} /> },
+        { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+      ]
+
+    case 'warehouse':
+      return [
+        { href: '/screen1',     label: t('navDispatch'),    icon: <ClipboardList   size={24} strokeWidth={2} /> },
+        { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle     size={24} strokeWidth={2} /> },
+        { href: '/routes',      label: t('navRoutes'),      icon: <Map             size={24} strokeWidth={2} /> },
+        { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp        size={24} strokeWidth={2} /> },
+        { href: '/runs',        label: t('navRuns'),        icon: <Calendar        size={24} strokeWidth={2} /> },
+        { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+      ]
+
+    case 'driver':
+      return [
+        { href: '/driver',      label: 'My Route',          icon: <Navigation      size={24} strokeWidth={2} /> },
+        { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle     size={24} strokeWidth={2} /> },
+        { href: '/compliments', label: 'Kudos',             icon: <Heart           size={24} strokeWidth={2} /> },
+      ]
+
+    case 'admin':
+      return [
+        { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+        { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle     size={24} strokeWidth={2} /> },
+        { href: '/pricing',     label: t('navPricing'),     icon: <Tags            size={24} strokeWidth={2} /> },
+        { href: '/cash',        label: t('navCash'),        icon: <Banknote        size={24} strokeWidth={2} /> },
+        { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp        size={24} strokeWidth={2} /> },
+        { href: '/routes',      label: t('navRoutes'),      icon: <Map             size={24} strokeWidth={2} /> },
+        { href: '/runs',        label: t('navRuns'),        icon: <Calendar        size={24} strokeWidth={2} /> },
+        { href: '/screen5',     label: t('navAdmin'),       icon: <Settings        size={24} strokeWidth={2} /> },
+        { href: '/screen6',     label: t('navMap'),         icon: <Globe           size={24} strokeWidth={2} /> },
+      ]
+
+    default:
+      return []
   }
 }
 
