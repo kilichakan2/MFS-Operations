@@ -1,27 +1,49 @@
 'use client'
 
-import Link           from 'next/link'
+import Link            from 'next/link'
 import { usePathname } from 'next/navigation'
+import {
+  LayoutDashboard, Map, AlertCircle, Tags, ThumbsUp, Banknote,
+  Settings, MapPin, ClipboardList, Calendar, MoreHorizontal,
+} from 'lucide-react'
+
+// ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface NavItem {
-  href:   string
-  label:  string
-  icon:   React.ReactNode
-  badge?: string  // small sub-label (e.g. "Desktop")
+  href:         string
+  label:        string
+  icon:         React.ReactNode
+  desktopOnly?: boolean
+  /**
+   * @deprecated Use `desktopOnly`. Kept for `DesktopRouteNav.tsx`
+   *   compatibility only. Removed in Item 3 when DesktopRouteNav is
+   *   replaced by the new sidebar pattern.
+   */
+  badge?: string
+}
+
+export interface NavMatrix {
+  visible:   NavItem[]   // 3 (driver) or 4 (others) tabs
+  overflow?: NavItem[]   // undefined for driver
 }
 
 interface BottomNavProps {
-  items: NavItem[]
+  matrix:      NavMatrix
+  onOpenMore?: () => void
 }
 
-export default function BottomNav({ items }: BottomNavProps) {
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function BottomNav({ matrix, onOpenMore }: BottomNavProps) {
   const pathname = usePathname()
 
-  if (items.length === 0) return null
+  if (matrix.visible.length === 0) return null
+
+  const hasOverflow = !!matrix.overflow && matrix.overflow.length > 0
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-[9999] bg-white border-t border-[#EDEAE1]"
+      className="fixed bottom-0 left-0 right-0 z-[9999] bg-white border-t border-mfs-neutral-200"
       style={{
         paddingBottom: 'env(safe-area-inset-bottom)',
         // translateZ(0) forces a hardware compositing layer — ensures iOS Safari
@@ -33,119 +55,79 @@ export default function BottomNav({ items }: BottomNavProps) {
       aria-label="Main navigation"
     >
       <div className="flex">
-        {items.map((item) => {
+        {matrix.visible.map((item) => {
           const active = pathname === item.href
           return (
             <Link
               key={item.href}
               href={item.href}
               className={[
-                'flex-1 flex flex-col items-center justify-center py-2 gap-px min-h-[56px]',
-                'text-[10px] font-bold tracking-wide uppercase',
-                active ? 'text-[#EB6619]' : 'text-gray-500 active:text-[#EB6619]',
+                'relative flex-1 flex flex-col items-center justify-center gap-1 min-h-[56px]',
+                'text-[11px] font-medium uppercase tracking-[0.05em]',
+                active ? 'text-mfs-orange' : 'text-mfs-neutral-500',
               ].join(' ')}
               aria-current={active ? 'page' : undefined}
               style={{ touchAction: 'manipulation' }}
             >
-              <span className={['w-6 h-6 flex-shrink-0 pointer-events-none', active ? 'text-[#EB6619]' : 'text-gray-500'].join(' ')}>
+              {active && (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-0 left-0 right-0 h-[3px] bg-mfs-orange"
+                />
+              )}
+              <span className="w-6 h-6 flex-shrink-0 pointer-events-none">
                 {item.icon}
               </span>
-              {item.label}
-              {item.badge && (
-                <span className="text-[8px] text-gray-400 font-medium normal-case tracking-normal -mt-px">
-                  {item.badge}
-                </span>
-              )}
+              <span>{item.label}</span>
             </Link>
           )
         })}
+
+        {hasOverflow && (
+          <button
+            type="button"
+            onClick={onOpenMore}
+            className={[
+              'relative flex-1 flex flex-col items-center justify-center gap-1 min-h-[56px]',
+              'text-[11px] font-medium uppercase tracking-[0.05em]',
+              'text-mfs-neutral-500',
+            ].join(' ')}
+            style={{ touchAction: 'manipulation' }}
+            aria-label="More navigation options"
+          >
+            <span className="w-6 h-6 flex-shrink-0 pointer-events-none">
+              <MoreHorizontal size={24} strokeWidth={2} />
+            </span>
+            <span>More</span>
+          </button>
+        )}
       </div>
     </nav>
   )
 }
 
-// ─── Icon set ─────────────────────────────────────────────────────────────────
+// ─── @deprecated Icons shim ───────────────────────────────────────────────────
 
+/**
+ * @deprecated Kept for DesktopRouteNav.tsx compatibility ONLY.
+ *   Item 3 of the UI overhaul replaces DesktopRouteNav with the
+ *   new sidebar pattern and deletes this shim. New code should
+ *   import directly from 'lucide-react'.
+ *
+ *   The 10 keys below mirror the inline-SVG object this module
+ *   previously exported. Visuals tuned to size=24, strokeWidth=2
+ *   to match the original inline-SVG weight (zero visible regression
+ *   on /routes and /runs).
+ */
 export const Icons = {
-  dispatch: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M5 8h14M5 8a2 2 0 1 0 0-4h14a2 2 0 1 0 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/>
-      <path d="M10 12h4"/>
-    </svg>
-  ),
-  complaint: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      <line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-    </svg>
-  ),
-  visit: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-      <circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-  ),
-  dashboard: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-      <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-    </svg>
-  ),
-  admin: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3"/>
-      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/>
-      <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
-    </svg>
-  ),
-  map: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-      <line x1="9" y1="3" x2="9" y2="18"/>
-      <line x1="15" y1="6" x2="15" y2="21"/>
-    </svg>
-  ),
-  routes: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/>
-      <path d="M12 19h4.5a3.5 3.5 0 0 0 0-7h-8a3.5 3.5 0 0 1 0-7H12"/>
-    </svg>
-  ),
-  cash: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="6" width="20" height="12" rx="2"/>
-      <circle cx="12" cy="12" r="2"/>
-      <path d="M6 12h.01M18 12h.01"/>
-    </svg>
-  ),
-  runs: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-      <rect x="9" y="3" width="6" height="4" rx="1"/>
-      <path d="M9 12h6M9 16h4"/>
-    </svg>
-  ),
-  compliment: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-    </svg>
-  ),
-  pricing: (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
-      <line x1="7" y1="7" x2="7.01" y2="7"/>
-    </svg>
-  ),
-}
+  dashboard:  <LayoutDashboard size={24} strokeWidth={2} />,
+  routes:     <Map             size={24} strokeWidth={2} />,
+  complaint:  <AlertCircle     size={24} strokeWidth={2} />,
+  pricing:    <Tags            size={24} strokeWidth={2} />,
+  compliment: <ThumbsUp        size={24} strokeWidth={2} />,
+  cash:       <Banknote        size={24} strokeWidth={2} />,
+  admin:      <Settings        size={24} strokeWidth={2} />,
+  visit:      <MapPin          size={24} strokeWidth={2} />,
+  dispatch:   <ClipboardList   size={24} strokeWidth={2} />,
+  runs:       <Calendar        size={24} strokeWidth={2} />,
+} as const

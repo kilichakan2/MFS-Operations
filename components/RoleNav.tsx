@@ -6,79 +6,148 @@
  * Reads only the mfs_role cookie and renders that single role's nav.
  * Role picker guarantees sessions are always single-role — no union needed.
  *
- * Nav matrix:
- *   admin     → Dashboard | Routes | Complaints | Pricing | Compliments | Cash | Admin
- *   sales     → Complaints | Visits | Pricing | Compliments | Routes | Runs
- *   office    → Dispatch | Complaints | Pricing | Compliments | Cash | Routes | Runs
- *   warehouse → Dispatch | Complaints | Compliments | Routes | Runs
- *   driver    → My Route | Complaints | Kudos
+ * Per-role NavMatrix (visible tabs + optional overflow drawer rows):
+ *   admin     → visible: Dashboard, Complaints, Pricing
+ *               overflow: Cash, Compliments, Routes, Runs, Admin, Map
+ *   sales     → visible: Orders, Visits, Complaints
+ *               overflow: Pricing, Compliments, Routes (DESKTOP), Runs
+ *   office    → visible: Dispatch, Cash, Complaints
+ *               overflow: Pricing, Compliments, Routes (DESKTOP), Runs, Dashboard
+ *   warehouse → visible: Dispatch, Complaints, Routes
+ *               overflow: Compliments, Runs, Dashboard
+ *   driver    → visible: My Route, Complaints, Kudos
+ *               overflow: undefined   (3 tabs, NO More slot)
  */
 
 import { useState, useEffect } from 'react'
-import { useLanguage }          from '@/lib/LanguageContext'
-import BottomNav, { Icons, type NavItem } from '@/components/BottomNav'
+import {
+  ShoppingBag, MapPin, AlertCircle, ThumbsUp, Tags, Map, Calendar,
+  ClipboardList, Banknote, LayoutDashboard, Navigation, Heart,
+  Settings, Globe,
+} from 'lucide-react'
+import { useLanguage }    from '@/lib/LanguageContext'
+import BottomNav, { type NavMatrix } from '@/components/BottomNav'
 
-type Role = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver' | ''
+export type Role = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver' | ''
 
 function getClientRole(): Role {
   if (typeof document === 'undefined') return ''
   return (document.cookie.match(/(?:^|;\s*)mfs_role=([^;]+)/)?.[1] ?? '') as Role
 }
 
+// ─── Pure matrix builder (exported for unit tests) ────────────────────────────
+
+type Translator = (key: string) => string
+
+/**
+ * Pure data builder — returns the NavMatrix for a given role. Takes a
+ * translator function so tests can pass identity and assert by key,
+ * while the runtime passes useLanguage's `t` for localised labels.
+ *
+ * Driver's 'Kudos' and 'My Route', and sales' 'Orders' labels are
+ * intentionally hardcoded literals (NOT translated). All other labels
+ * go through `t(...)`. This matches the existing driver convention
+ * and the spec for the new mobile chrome.
+ */
+export function buildMatrix(role: Role, t: Translator): NavMatrix {
+  switch (role) {
+    case 'sales':
+      return {
+        visible: [
+          { href: '/orders',      label: 'Orders',            icon: <ShoppingBag    size={24} strokeWidth={2} /> },
+          { href: '/visits',      label: t('navVisits'),      icon: <MapPin         size={24} strokeWidth={2} /> },
+          { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle    size={24} strokeWidth={2} /> },
+        ],
+        overflow: [
+          { href: '/pricing',     label: t('navPricing'),     icon: <Tags           size={24} strokeWidth={2} /> },
+          { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp       size={24} strokeWidth={2} /> },
+          { href: '/routes',      label: t('navRoutes'),      icon: <Map            size={24} strokeWidth={2} />, desktopOnly: true },
+          { href: '/runs',        label: t('navRuns'),        icon: <Calendar       size={24} strokeWidth={2} /> },
+        ],
+      }
+
+    case 'office':
+      return {
+        visible: [
+          { href: '/screen1',     label: t('navDispatch'),    icon: <ClipboardList  size={24} strokeWidth={2} /> },
+          { href: '/cash',        label: t('navCash'),        icon: <Banknote       size={24} strokeWidth={2} /> },
+          { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle    size={24} strokeWidth={2} /> },
+        ],
+        overflow: [
+          { href: '/pricing',     label: t('navPricing'),     icon: <Tags           size={24} strokeWidth={2} /> },
+          { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp       size={24} strokeWidth={2} /> },
+          { href: '/routes',      label: t('navRoutes'),      icon: <Map            size={24} strokeWidth={2} />, desktopOnly: true },
+          { href: '/runs',        label: t('navRuns'),        icon: <Calendar       size={24} strokeWidth={2} /> },
+          { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+        ],
+      }
+
+    case 'warehouse':
+      return {
+        visible: [
+          { href: '/screen1',     label: t('navDispatch'),    icon: <ClipboardList  size={24} strokeWidth={2} /> },
+          { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle    size={24} strokeWidth={2} /> },
+          { href: '/routes',      label: t('navRoutes'),      icon: <Map            size={24} strokeWidth={2} /> },
+        ],
+        overflow: [
+          { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp       size={24} strokeWidth={2} /> },
+          { href: '/runs',        label: t('navRuns'),        icon: <Calendar       size={24} strokeWidth={2} /> },
+          { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+        ],
+      }
+
+    case 'driver':
+      return {
+        visible: [
+          { href: '/driver',      label: 'My Route',          icon: <Navigation     size={24} strokeWidth={2} /> },
+          { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle    size={24} strokeWidth={2} /> },
+          { href: '/compliments', label: 'Kudos',             icon: <Heart          size={24} strokeWidth={2} /> },
+        ],
+        overflow: undefined,
+      }
+
+    case 'admin':
+      return {
+        visible: [
+          { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+          { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle    size={24} strokeWidth={2} /> },
+          { href: '/pricing',     label: t('navPricing'),     icon: <Tags           size={24} strokeWidth={2} /> },
+        ],
+        overflow: [
+          { href: '/cash',        label: t('navCash'),        icon: <Banknote       size={24} strokeWidth={2} /> },
+          { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp       size={24} strokeWidth={2} /> },
+          { href: '/routes',      label: t('navRoutes'),      icon: <Map            size={24} strokeWidth={2} /> },
+          { href: '/runs',        label: t('navRuns'),        icon: <Calendar       size={24} strokeWidth={2} /> },
+          { href: '/screen5',     label: t('navAdmin'),       icon: <Settings       size={24} strokeWidth={2} /> },
+          { href: '/screen6',     label: t('navMap'),         icon: <Globe          size={24} strokeWidth={2} /> },
+        ],
+      }
+
+    default:
+      return { visible: [], overflow: undefined }
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function RoleNav() {
   const { t } = useLanguage()
-  const [items, setItems] = useState<NavItem[]>([])
+  const [matrix, setMatrix] = useState<NavMatrix>({ visible: [], overflow: undefined })
+  const [moreOpen, setMoreOpen] = useState(false)
 
   useEffect(() => {
     const role = getClientRole()
-    switch (role) {
-      case 'admin':
-        setItems([
-          { href: '/screen4',     label: t('navDashboard'),  icon: Icons.dashboard  },
-          { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes     },
-          { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
-          { href: '/pricing',     label: t('navPricing'),     icon: Icons.pricing    },
-          { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
-          { href: '/cash',        label: t('navCash'),        icon: Icons.cash       },
-          { href: '/screen5',     label: t('navAdmin'),       icon: Icons.admin      },
-        ]); break
-      case 'sales':
-        setItems([
-          { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
-          { href: '/visits',      label: t('navVisits'),      icon: Icons.visit      },
-          { href: '/pricing',     label: t('navPricing'),     icon: Icons.pricing    },
-          { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
-          { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },
-          { href: '/runs',        label: t('navRuns'),        icon: Icons.runs       },
-        ]); break
-      case 'office':
-        setItems([
-          { href: '/screen1',     label: t('navDispatch'),    icon: Icons.dispatch   },
-          { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
-          { href: '/pricing',     label: t('navPricing'),     icon: Icons.pricing    },
-          { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
-          { href: '/cash',        label: t('navCash'),        icon: Icons.cash       },
-          { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },
-          { href: '/runs',        label: t('navRuns'),        icon: Icons.runs       },
-        ]); break
-      case 'warehouse':
-        setItems([
-          { href: '/screen1',     label: t('navDispatch'),    icon: Icons.dispatch   },
-          { href: '/complaints',  label: t('navComplaints'),  icon: Icons.complaint  },
-          { href: '/compliments', label: t('navCompliments'), icon: Icons.compliment },
-          { href: '/routes',      label: t('navRoutes'),      icon: Icons.routes,    badge: 'Desktop' },
-          { href: '/runs',        label: t('navRuns'),        icon: Icons.runs       },
-        ]); break
-      case 'driver':
-        setItems([
-          { href: '/driver',      label: 'My Route',    icon: Icons.routes     },
-          { href: '/complaints',  label: 'Complaints',  icon: Icons.complaint  },
-          { href: '/compliments', label: 'Kudos',       icon: Icons.compliment },
-        ]); break
-      default:
-        setItems([]); break
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    setMatrix(buildMatrix(role, (k: string) => t(k as Parameters<typeof t>[0])))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  return <BottomNav items={items} />
+  if (matrix.visible.length === 0) return null
+
+  return (
+    <>
+      <BottomNav matrix={matrix} onOpenMore={() => setMoreOpen(true)} />
+      {/* MoreDrawer placeholder — real component lands in Step 5 commit. */}
+      {moreOpen && <div data-more-drawer-placeholder hidden />}
+    </>
+  )
 }
