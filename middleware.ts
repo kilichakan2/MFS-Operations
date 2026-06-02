@@ -6,8 +6,8 @@
  * Authenticated users are blocked from screens outside their role.
  *
  * Role → permitted paths (keep in sync with ROLE_PERMISSIONS below):
- *   warehouse → /screen1, /routes, /runs, /complaints, /compliments, /orders
- *   office    → /screen1, /complaints, /routes, /runs, /cash, /compliments, /pricing, /orders
+ *   warehouse → /dispatch, /routes, /runs, /complaints, /compliments, /orders
+ *   office    → /dispatch, /complaints, /routes, /runs, /cash, /compliments, /pricing, /orders
  *   sales     → /complaints, /visits, /routes, /runs, /compliments, /pricing, /orders
  *   admin     → all paths + /api/admin, /api/dashboard, /api/map
  *   driver    → /driver, /routes, /complaints, /compliments
@@ -30,20 +30,20 @@ const PUBLIC_PATHS = ['/login', '/haccp', '/api/auth/login', '/api/auth/type', '
 
 // Role → array of permitted path prefixes
 const ROLE_PERMISSIONS: Record<string, string[]> = {
-  warehouse: ['/screen1', '/routes', '/runs', '/compliments', '/complaints', '/haccp', '/orders'],
-  office:    ['/screen1', '/complaints', '/routes', '/runs', '/cash', '/compliments', '/pricing', '/orders'],
+  warehouse: ['/dispatch', '/routes', '/runs', '/compliments', '/complaints', '/haccp', '/orders'],
+  office:    ['/dispatch', '/complaints', '/routes', '/runs', '/cash', '/compliments', '/pricing', '/orders'],
   sales:     ['/complaints', '/visits', '/routes', '/runs', '/compliments', '/pricing', '/orders'],
-  admin:     ['/screen4', '/screen5', '/screen6', '/driver', '/routes', '/runs', '/complaints', '/visits', '/screen1', '/cash', '/compliments', '/pricing', '/haccp', '/orders', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
+  admin:     ['/dashboard/admin', '/admin', '/map', '/driver', '/routes', '/runs', '/complaints', '/visits', '/dispatch', '/cash', '/compliments', '/pricing', '/haccp', '/orders', '/api/reference', '/api/admin', '/api/dashboard', '/api/map', '/api/admin/runs'],
   driver:    ['/driver', '/routes', '/complaints', '/compliments'],  // drivers: route view + complaints
   butcher:   ['/haccp'],  // butchers: HACCP tablet only — KDS is public kiosk (no per-user auth)
 }
 
 // Default landing page per role
 const ROLE_HOME: Record<string, string> = {
-  warehouse: '/screen1',
-  office:    '/screen1',
+  warehouse: '/dispatch',
+  office:    '/dispatch',
   sales:     '/complaints',
-  admin:     '/screen4',
+  admin:     '/dashboard/admin',
   driver:    '/driver',
   butcher:   '/haccp',
 }
@@ -129,7 +129,7 @@ export function middleware(req: NextRequest) {
 
   // Root path — redirect to role home
   // Exception: warehouse/butcher who logged in via the HACCP kiosk door
-  // should go back to /haccp, not /screen1 (dispatch log)
+  // should go back to /haccp, not /dispatch (dispatch log)
   if (pathname === '/') {
     const isHaccpSession = req.cookies.get('mfs_haccp_session')?.value === '1'
     if (isHaccpSession && ['warehouse', 'butcher'].includes(role)) {
