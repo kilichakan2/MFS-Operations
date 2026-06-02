@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { useLanguage }    from '@/lib/LanguageContext'
 import BottomNav, { type NavMatrix } from '@/components/BottomNav'
+import MoreDrawer         from '@/components/MoreDrawer'
 
 export type Role = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver' | ''
 
@@ -146,8 +147,13 @@ export default function RoleNav() {
   return (
     <>
       <BottomNav matrix={matrix} onOpenMore={() => setMoreOpen(true)} />
-      {/* MoreDrawer placeholder — real component lands in Step 5 commit. */}
-      {moreOpen && <div data-more-drawer-placeholder hidden />}
+      {matrix.overflow && (
+        <MoreDrawer
+          open={moreOpen}
+          onClose={() => setMoreOpen(false)}
+          items={matrix.overflow}
+        />
+      )}
     </>
   )
 }
