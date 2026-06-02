@@ -264,7 +264,7 @@ export default function AppHeader({
 
       {/* Desktop chrome — md+ only */}
       <header
-        className="hidden md:flex bg-mfs-navy h-16 w-full sticky top-0 z-[999] shadow-mfs-1 items-center px-6 gap-6"
+        className="hidden md:flex bg-mfs-navy h-16 w-screen -ml-16 sticky top-0 z-[999] shadow-mfs-1 items-center px-6 gap-6"
       >
         {/* Left: MFS wordmark */}
         <div className="flex items-center flex-shrink-0">
