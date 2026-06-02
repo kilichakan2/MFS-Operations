@@ -18,7 +18,6 @@ import React, {
 import { useRouter, useSearchParams } from 'next/navigation'
 import AppHeader           from '@/components/AppHeader'
 import RoleNav          from '@/components/RoleNav'
-import DesktopRouteNav  from '@/components/DesktopRouteNav'
 import RunsContent      from '@/components/RunsContent'
 import MapTabContent    from '@/components/MapTabContent'
 import DetailModal      from '@/components/DetailModal'
@@ -1329,13 +1328,9 @@ function RoutesPageInner() {
         </div>
       )}
 
-      {/* Mobile nav — fixed, below content (mobile only) */}
-      <div className="lg:hidden">
-        <RoleNav />
-      </div>
-
-      {/* Desktop nav — in-flow Bottom Bread, never overlaps content */}
-      <DesktopRouteNav />
+      {/* Chrome nav — Item 2 mobile chrome renders at all viewports
+          until Item 3 introduces the desktop sidebar pattern. */}
+      <RoleNav />
     </div>
   )
 }
