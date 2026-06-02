@@ -33,7 +33,7 @@
  */
 
 import { test, expect, Page } from '@playwright/test'
-import { loginAs }            from './_auth'
+import { loginAs, loginAsAdmin } from './_auth'
 
 type Role = 'sales' | 'office' | 'warehouse' | 'driver' | 'admin'
 
@@ -45,20 +45,43 @@ const ROLE_ROUTES: Record<Role, string[]> = {
   admin:     ['/screen4', '/complaints', '/pricing', '/cash', '/compliments', '/routes', '/runs', '/screen5', '/screen6'],
 }
 
-function credsFor(role: Role): { user: string | undefined; pin: string | undefined } {
+function credsFor(role: Role): { user: string | undefined; secret: string | undefined; secretEnv: string } {
+  const user = process.env[`E2E_USER_${role.toUpperCase()}`]
+  // Admin uses password (per users_auth_check DB constraint); all others use PIN.
+  if (role === 'admin') {
+    return {
+      user,
+      secret:    process.env.E2E_PASSWORD_ADMIN,
+      secretEnv: 'E2E_PASSWORD_ADMIN',
+    }
+  }
   return {
-    user: process.env[`E2E_USER_${role.toUpperCase()}`],
-    pin:  process.env[`E2E_PIN_${role.toUpperCase()}`],
+    user,
+    secret:    process.env[`E2E_PIN_${role.toUpperCase()}`],
+    secretEnv: `E2E_PIN_${role.toUpperCase()}`,
   }
 }
 
 async function assertCredsOrFail(role: Role): Promise<void> {
-  const { user, pin } = credsFor(role)
-  if (!user || !pin) {
+  const { user, secret, secretEnv } = credsFor(role)
+  if (!user || !secret) {
     throw new Error(
-      `MISSING_CREDS: E2E_USER_${role.toUpperCase()} and/or E2E_PIN_${role.toUpperCase()} ` +
+      `MISSING_CREDS: E2E_USER_${role.toUpperCase()} and/or ${secretEnv} ` +
       `not set in .env.e2e.local. Add them so this role can be ANVIL-cleared.`,
     )
+  }
+}
+
+/**
+ * Dispatch login by role — admin uses password flow, all others use PIN.
+ * Caller must call assertCredsOrFail(role) first so a missing-env
+ * surfaces as MISSING_CREDS rather than a silent helper-internal throw.
+ */
+async function loginFor(page: Page, role: Role): Promise<void> {
+  if (role === 'admin') {
+    await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
+  } else {
+    await loginAs(page, role)
   }
 }
 
@@ -174,7 +197,7 @@ for (const roleKey of Object.keys(ROLE_ROUTES) as Role[]) {
     for (const route of routes) {
       test(`${route} — desktop chrome integrity (C1-C5)`, async ({ page }) => {
         await assertCredsOrFail(roleKey)
-        await loginAs(page, roleKey)
+        await loginFor(page, roleKey)
         await page.goto(route, { waitUntil: 'networkidle' })
         // Small settle to let any post-mount data-attribute effects fire.
         await page.waitForTimeout(200)
@@ -189,7 +212,7 @@ for (const roleKey of Object.keys(ROLE_ROUTES) as Role[]) {
     for (const route of routes) {
       test(`${route} — mobile chrome integrity (C6-C9)`, async ({ page }) => {
         await assertCredsOrFail(roleKey)
-        await loginAs(page, roleKey)
+        await loginFor(page, roleKey)
         await page.goto(route, { waitUntil: 'networkidle' })
         await page.waitForTimeout(200)
         await clearanceMobile(page, VIEWPORTS.mobile.height)
