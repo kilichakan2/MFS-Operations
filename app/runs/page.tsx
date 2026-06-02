@@ -147,7 +147,7 @@ export default function RunsPage() {
 
   return (
     <>
-    <div className="bg-[#EDEAE1] h-screen flex flex-col overflow-hidden">
+    <div className="bg-[#EDEAE1] h-screen flex flex-col">
       <AppHeader title="Runs" />
 
       <main className="flex-1 overflow-y-auto min-h-0 px-4 py-4 max-w-5xl mx-auto w-full pb-24 lg:pb-4">
