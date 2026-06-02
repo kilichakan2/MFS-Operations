@@ -118,6 +118,25 @@ test.describe('desktop chrome — sales role @1440', () => {
     )
     expect(padding).toBe('64px')
   })
+
+  test('top bar spans full viewport — no cream cut-out at top-left', async ({ page }) => {
+    await loginAs(page, 'sales')
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/orders')
+    // The visible <header> at desktop viewport is the md:flex desktop bar
+    // (mobile md:hidden sibling has display:none). Body has padding-left:64px
+    // at md+, so to cover x:0-64 the desktop header must use w-screen + -ml-16
+    // to escape the parent padding and span 0 → viewport width.
+    const box = await page.evaluate(() => {
+      const headers = Array.from(document.querySelectorAll('header'))
+      const visible = headers.find(h => h.getBoundingClientRect().width > 0)
+      const r = visible?.getBoundingClientRect()
+      return r ? { x: r.x, width: r.width } : null
+    })
+    expect(box).not.toBeNull()
+    expect(box!.x).toBe(0)
+    expect(box!.width).toBeGreaterThanOrEqual(1440)
+  })
 })
 
 test.describe('desktop chrome — admin role @1440', () => {
