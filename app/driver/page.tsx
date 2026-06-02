@@ -219,7 +219,7 @@ export default function DriverPage() {
 
   return (
     <>
-    <div className="bg-[#EDEAE1] h-[100dvh] flex flex-col overflow-hidden">
+    <div className="bg-[#EDEAE1] h-[100dvh] flex flex-col">
 
       {/* Top bread */}
       <AppHeader title="My Route" />
