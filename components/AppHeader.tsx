@@ -268,7 +268,7 @@ export default function AppHeader({
       >
         {/* Left: MFS wordmark */}
         <div className="flex items-center flex-shrink-0">
-          <span className="text-mfs-orange font-bold tracking-wider text-[22px]">MFS</span>
+          <MfsLogo className="h-7 w-auto flex-shrink-0 text-mfs-orange" />
         </div>
 
         {/* Middle: title (flex-1 to push the right slot to the edge) */}
