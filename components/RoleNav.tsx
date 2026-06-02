@@ -28,6 +28,7 @@ import {
 import { useLanguage }    from '@/lib/LanguageContext'
 import BottomNav, { type NavMatrix, type NavItem } from '@/components/BottomNav'
 import MoreDrawer         from '@/components/MoreDrawer'
+import DesktopSidebar     from '@/components/DesktopSidebar'
 
 export type Role = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver' | ''
 
@@ -205,26 +206,45 @@ export function buildSidebarItems(role: Role, t: Translator): NavItem[] {
 export default function RoleNav() {
   const { t } = useLanguage()
   const [matrix, setMatrix] = useState<NavMatrix>({ visible: [], overflow: undefined })
+  const [sidebarItems, setSidebarItems] = useState<NavItem[]>([])
   const [moreOpen, setMoreOpen] = useState(false)
 
   useEffect(() => {
     const role = getClientRole()
-    setMatrix(buildMatrix(role, (k: string) => t(k as Parameters<typeof t>[0])))
+    const tr: Translator = (k: string) => t(k as Parameters<typeof t>[0])
+    setMatrix(buildMatrix(role, tr))
+    setSidebarItems(buildSidebarItems(role, tr))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (matrix.visible.length === 0) return null
+  // Tag the body so global CSS can offset desktop content for the sidebar.
+  // Idempotent across re-mounts (each RoleNav-bearing page re-sets it).
+  useEffect(() => {
+    document.body.setAttribute('data-mfs-chrome', 'true')
+    return () => { document.body.removeAttribute('data-mfs-chrome') }
+  }, [])
+
+  // No role at all → render nothing on either side.
+  if (matrix.visible.length === 0 && sidebarItems.length === 0) return null
 
   return (
     <>
-      <BottomNav matrix={matrix} onOpenMore={() => setMoreOpen(true)} />
-      {matrix.overflow && (
-        <MoreDrawer
-          open={moreOpen}
-          onClose={() => setMoreOpen(false)}
-          items={matrix.overflow}
-        />
-      )}
+      {/* Mobile chrome (Item 2) — <md only */}
+      <div className="md:hidden">
+        <BottomNav matrix={matrix} onOpenMore={() => setMoreOpen(true)} />
+        {matrix.overflow && (
+          <MoreDrawer
+            open={moreOpen}
+            onClose={() => setMoreOpen(false)}
+            items={matrix.overflow}
+          />
+        )}
+      </div>
+
+      {/* Desktop chrome (Item 3) — md+ only */}
+      <div className="hidden md:block">
+        <DesktopSidebar items={sidebarItems} />
+      </div>
     </>
   )
 }
