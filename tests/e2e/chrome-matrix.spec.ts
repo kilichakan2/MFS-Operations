@@ -136,6 +136,29 @@ async function clearanceDesktop(page: Page, viewportHeight: number): Promise<voi
   // C5: body has data-mfs-chrome="true"
   const attr = await page.evaluate(() => document.body.getAttribute('data-mfs-chrome'))
   expect(attr, 'C5: body must have data-mfs-chrome="true"').toBe('true')
+
+  // C10: top-left corner pixel must be navy (chrome paints there)
+  // Catches ancestor overflow:hidden clipping the AppHeader's left
+  // overflow even when bounding-box checks (C1) pass. Walks the
+  // ancestor chain from elementFromPoint(10, 10) collecting the first
+  // non-transparent backgroundColor — the visually-rendered colour
+  // at that pixel.
+  const topLeftBg = await page.evaluate(() => {
+    const el = document.elementFromPoint(10, 10)
+    if (!el) return null
+    let cur: Element | null = el
+    while (cur) {
+      const bg = getComputedStyle(cur).backgroundColor
+      if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+        return bg
+      }
+      cur = cur.parentElement
+    }
+    return null
+  })
+  expect(topLeftBg, 'C10: top-left corner element must have a bg color').not.toBeNull()
+  // mfs-navy = #16205B = rgb(22, 32, 91)
+  expect(topLeftBg, 'C10: top-left corner must be navy (#16205B / rgb(22,32,91))').toBe('rgb(22, 32, 91)')
 }
 
 // ── Mobile clearance (C6-C9) ─────────────────────────────────────────────────
