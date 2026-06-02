@@ -2,10 +2,7 @@
 
 import Link            from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  LayoutDashboard, Map, AlertCircle, Tags, ThumbsUp, Banknote,
-  Settings, MapPin, ClipboardList, Calendar, MoreHorizontal,
-} from 'lucide-react'
+import { MoreHorizontal } from 'lucide-react'
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -14,12 +11,6 @@ export interface NavItem {
   label:        string
   icon:         React.ReactNode
   desktopOnly?: boolean
-  /**
-   * @deprecated Use `desktopOnly`. Kept for `DesktopRouteNav.tsx`
-   *   compatibility only. Removed in Item 3 when DesktopRouteNav is
-   *   replaced by the new sidebar pattern.
-   */
-  badge?: string
 }
 
 export interface NavMatrix {
@@ -105,29 +96,3 @@ export default function BottomNav({ matrix, onOpenMore }: BottomNavProps) {
     </nav>
   )
 }
-
-// ─── @deprecated Icons shim ───────────────────────────────────────────────────
-
-/**
- * @deprecated Kept for DesktopRouteNav.tsx compatibility ONLY.
- *   Item 3 of the UI overhaul replaces DesktopRouteNav with the
- *   new sidebar pattern and deletes this shim. New code should
- *   import directly from 'lucide-react'.
- *
- *   The 10 keys below mirror the inline-SVG object this module
- *   previously exported. Visuals tuned to size=24, strokeWidth=2
- *   to match the original inline-SVG weight (zero visible regression
- *   on /routes and /runs).
- */
-export const Icons = {
-  dashboard:  <LayoutDashboard size={24} strokeWidth={2} />,
-  routes:     <Map             size={24} strokeWidth={2} />,
-  complaint:  <AlertCircle     size={24} strokeWidth={2} />,
-  pricing:    <Tags            size={24} strokeWidth={2} />,
-  compliment: <ThumbsUp        size={24} strokeWidth={2} />,
-  cash:       <Banknote        size={24} strokeWidth={2} />,
-  admin:      <Settings        size={24} strokeWidth={2} />,
-  visit:      <MapPin          size={24} strokeWidth={2} />,
-  dispatch:   <ClipboardList   size={24} strokeWidth={2} />,
-  runs:       <Calendar        size={24} strokeWidth={2} />,
-} as const
