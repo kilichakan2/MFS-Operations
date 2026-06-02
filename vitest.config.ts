@@ -11,4 +11,9 @@ export default defineConfig({
   resolve: {
     alias: { '@': resolve(__dirname, '.') },
   },
+  oxc: {
+    jsx: {
+      runtime: 'automatic',
+    },
+  },
 })
