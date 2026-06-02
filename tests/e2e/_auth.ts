@@ -84,7 +84,7 @@ export async function loginAs(page: Page, role: keyof typeof PIN_BY_ROLE): Promi
 
   // Wait for any of the expected post-login routes — login completes
   // when middleware redirects us away from /login.
-  await page.waitForURL(/\/(screen\d|orders|haccp|complaints|visits|pricing|driver|kds|home|$)/, {
+  await page.waitForURL(/\/(screen\d|orders|haccp|complaints|visits|pricing|driver|kds|home|dispatch|dashboard|admin|map|$)/, {
     timeout: 10_000,
   })
 }
