@@ -75,75 +75,108 @@ Persistent banner, role switcher in user menu, permission impersonation per Cate
 
 ---
 
-## 2. Per-surface workflow — Flavour A (NEW surfaces — dashboards)
+## 2. Per-pattern iterative workflow
 
-This is the workflow for **net-new visual surfaces** that don't have a current version. Used by Items 5b and 5c.
+The build progresses **one pattern (or item) at a time**, with explicit gates between Claude (this assistant), Hakan, Claude Design (the product), and Claude Code (on the Mac). Every visible surface gets a Claude Design mock before FORGE writes any code — otherwise FORGE's implementer makes design decisions on the fly and surfaces drift apart.
 
-### Step 1 — Generate Claude Design prompt
-**Who:** Claude (this assistant), via `brand-prompt` skill.
-**Input:** The locked design tokens doc + the dashboard's content brief from the Categories 1–4 doc + Hakan's verbal sketches if any.
-**Output:** A precise, structured prompt formatted for Claude Design's input box. Includes: surface intent, content blocks, role context (desktop-primary or both), brand constraints (Navy chrome + Orange accents + functional palette + type ramp from tokens), responsive notes.
+### Two kinds of work item
 
-### Step 2 — Generate visual mocks
-**Who:** Hakan.
-**Action:** Open Claude Design (the product, claude.ai/design or similar), paste the prompt, generate mocks. Iterate via Claude Design's own loop if the first output isn't right.
-**Output:** One chosen mock (screenshot or shareable link).
+| Type | Description | Claude Design step | Items |
+|---|---|---|---|
+| **Tooling-only** | No visible UI change — config, redirects, build tooling | Skipped | Item 1, Item 4 |
+| **Pattern-mocked** | Visible UI surface or pattern — needs a mock as anchor | Required | Items 2, 3, 5a, 5b, 5c, 6 (per pattern), 7 |
 
-### Step 3 — Take it to Claude Code
-**Who:** Hakan.
-**Action:** Open Claude Code on Mac. Type:
+### Full iterative loop (pattern-mocked items)
+
 ```
-/forge build /dashboard/office following the attached mock 
-and docs/plans/2026-06-01-ui-overhaul-design-tokens.md. 
-Content brief in docs/plans/2026-06-01-ui-overhaul-locked-decisions.md 
-section 3.
+Step 1  Claude         → generates ONE Claude Design prompt
+                          (via brand-prompt skill + design tokens + content brief)
+
+Step 2  Hakan          → reviews & approves the prompt in chat
+                          OR pushes back, Claude revises
+
+Step 3  Hakan          → copies prompt into Claude Design (the product)
+                          generates mock, iterates inside Claude Design
+                          if needed, picks one
+
+Step 4  Hakan          → returns to chat, shows Claude the chosen mock
+                          (screenshot, link, or description)
+
+Step 5  Hakan + Claude → confirm together that the mock is right
+                          OR Hakan tweaks Claude Design output and loops
+
+Step 6  Claude         → generates the Claude Code /forge prompt
+                          referencing both the design tokens AND the mock
+
+Step 7  Hakan          → pastes /forge prompt into Claude Code on Mac
+                          attaches the mock as reference
+
+Step 8  Claude Code    → runs FORGE (frame → order → render → guard)
+                          with Hakan gating each phase
+
+Step 9  Claude Code    → runs ANVIL (light — L1 + L4 default)
+
+Step 10 Hakan          → reviews PR, merges → Vercel auto-deploys
+
+Step 11 Hakan          → returns to chat, confirms surface is live
+                          OR reports any issues for next-pattern adjustment
+
+Step 12 Move on to next pattern
 ```
-Drag the mock screenshot into the chat or paste the link.
 
-### Step 4 — FORGE runs (frame → order → render → guard)
-**Who:** Claude Code + skills.
-**Gates:**
-- After Frame: Hakan approves the spec (what's being built)
-- After Order: Hakan approves the plan (how it's being built)
-- After Render+Guard: Hakan reviews PR
-**Output:** Working code in a feature branch with the surface built.
+### Truncated loop (tooling-only items)
 
-### Step 5 — ANVIL runs (light)
-**Who:** Claude Code + skills.
-**Layers:** L1 unit (touched files), L4 E2E (new surface gets new spec). L2 pgTAP and L3 integration only if data layer touched (dashboards generally read existing endpoints, so usually skipped).
-**Output:** Test report + green flag, or a list of fixes needed.
+```
+Step 1  Claude         → generates Claude Code /forge prompt directly
+                          (skip Claude Design — nothing to mock)
 
-### Step 6 — Merge + deploy
-**Who:** Hakan via Claude Code.
-**Action:** Merge PR → main. Vercel auto-deploys.
+Step 2  Hakan          → pastes into Claude Code on Mac
+
+Step 3  Claude Code    → runs FORGE + ANVIL
+
+Step 4  Hakan          → merges PR, returns to chat with result
+
+Step 5  Move on to next item
+```
+
+### Gates and approvals
+
+- **Hakan approves the Claude Design prompt** before going to the product (Step 2)
+- **Hakan approves the mock** before Claude generates the FORGE prompt (Step 5)
+- **FORGE's own gates** fire inside Claude Code (after Frame, after Order, after Render+Guard)
+- **Hakan reviews + merges PR** (Step 10)
+- **No pattern advances** without all gates passing
+
+### Why "one pattern at a time" and not "10 mocks upfront"
+
+Trade-off:
+- **Batched upfront** — generates all mocks early, fewer chat round-trips. Risk: a decision in pattern 1 (e.g. how cards look) doesn't propagate to pattern 5 because the mocks were locked before pattern 5 was reviewed.
+- **Iterative (locked)** — slower per pattern but every pattern's mock can incorporate learnings from the previous one. The first one or two patterns set the visual language; later patterns inherit it. Higher consistency.
+
+Hakan chose iterative.
+
+### Pattern catalogue (referenced as Items 5–6 progress)
+
+These are the visual patterns that get mocks. Some are reused across multiple surfaces.
+
+| Pattern | Reused by surfaces |
+|---|---|
+| Mobile chrome (4-tab + More drawer) | All mobile surfaces |
+| Desktop chrome (sidebar + top bar) | All desktop surfaces |
+| Dashboard composition | /dashboard/admin, /dashboard/office, /dashboard/warehouse |
+| List + filters | /orders, /complaints, /visits, /pricing, /runs, /admin/audit |
+| Multi-step form | /orders/new, /complaints (new), /visits (new) |
+| Detail view | /orders/[id], /complaints/[id], /visits/[id] |
+| Admin CRUD table | /admin/users, /admin/customers, /admin/products |
+| Map view | /map, /routes, /driver |
+| Login + brand moment | /login |
+| Banner + dropdown (view-as) | Admin chrome only (Item 7) |
+
+Mock once per pattern; reuse across all surfaces sharing that pattern. Estimated total mocks needed: ~10.
 
 ---
 
-## 3. Per-surface workflow — Flavour B (EXISTING restyle)
-
-Used by Items 1, 2, 3, 4, 5a, 6, 7.
-
-### Step 1 — Take it straight to Claude Code
-No Claude Design step. Surface already exists. Hakan opens Claude Code, types something like:
-```
-/forge restyle /complaints per docs/plans/2026-06-01-ui-overhaul-design-tokens.md.
-Mobile-first. Preserve all current functionality. 
-Apply the new design tokens, the bottom tab + More drawer nav for mobile, 
-and the sidebar nav for desktop.
-```
-
-### Step 2 — FORGE runs
-Same as Flavour A Step 4. Same gates.
-
-### Step 3 — ANVIL runs (light)
-Same as Flavour A Step 5. Usually just L4 E2E to confirm the surface still works.
-
-### Step 4 — Merge + deploy
-Same as Flavour A Step 6.
-
----
-
-## 4. Locked execution decisions
+## 3. Locked execution decisions
 
 | Decision | Locked answer |
 |---|---|
@@ -156,7 +189,7 @@ Same as Flavour A Step 6.
 
 ---
 
-## 5. Skills usage matrix
+## 4. Skills usage matrix
 
 | Skill | When used | Who invokes |
 |---|---|---|
@@ -174,52 +207,48 @@ Same as Flavour A Step 6.
 
 ---
 
-## 6. How to start (tomorrow, or whenever Hakan picks this up)
+## 5. How to start (tomorrow, or whenever Hakan picks this up)
+
+### Standard pattern — every item
+
+Hakan opens a chat session with Claude. Says "ready for Item N" or similar. Claude generates the appropriate prompt (Claude Design prompt OR Claude Code FORGE prompt depending on item type). Hakan executes externally. Hakan returns to chat with the result. Move to next item.
 
 ### First session — Item 1 (design system foundation)
 
+Tooling-only — no Claude Design step.
+
 1. Open Claude Code on Mac.
-2. Type:
-   ```
-   /forge build the design system foundation. 
-   Read docs/plans/2026-06-01-ui-overhaul-design-tokens.md Appendix Section 8 
-   (the design-tokens.json block). Generate:
-     - tailwind.config.ts updates exposing every token as a Tailwind utility
-     - app/globals.css (or new file) with CSS variables for every token
-     - typography.css with @font-face for GTF Adieu + Inter loading
-   Do not change any UI yet — this is foundation only. 
-   No visible change should result from this PR.
-   ```
-3. Walk through FORGE gates.
-4. Run ANVIL (light — L1 only; tokens don't have runtime behaviour).
-5. Merge PR.
+2. Hakan asks Claude in chat: "ready for Item 1, give me the FORGE prompt."
+3. Claude generates the prompt (no mock needed for this one).
+4. Hakan pastes into Claude Code.
+5. Walk through FORGE gates.
+6. Run ANVIL (light — L1 only).
+7. Merge PR.
+8. Return to chat with the merge confirmation.
 
-### Second session — Item 2 (mobile nav)
+### Second session — Item 2 (mobile nav refactor)
 
-1. Open Claude Code:
-   ```
-   /forge refactor mobile navigation. 
-   Replace RoleNav.tsx + BottomNav.tsx with the new pattern: 
-   top 4 tabs + "More" overflow drawer. 
-   Use the role nav matrices in docs/plans/2026-06-01-ui-overhaul-locked-decisions.md 
-   section 4 ("Nav patterns"). 
-   Apply tokens from docs/plans/2026-06-01-ui-overhaul-design-tokens.md.
-   Visible on mobile only; desktop nav addressed in Item 3.
-   ```
-2. FORGE → ANVIL → merge.
+Pattern-mocked — needs the **Mobile Chrome** pattern mock.
 
-### Continue through Items 3, 4, 5a, 5b...
+1. Hakan asks Claude in chat: "ready for Item 2, give me the Claude Design prompt for the mobile chrome pattern."
+2. Claude generates the Claude Design prompt referencing locked design tokens.
+3. Hakan reviews + approves the prompt.
+4. Hakan opens Claude Design (product), pastes prompt, generates mock.
+5. Hakan returns to chat with the mock.
+6. Claude + Hakan confirm the mock is right (iterate if not).
+7. Claude generates the Claude Code FORGE prompt referencing the mock.
+8. Hakan pastes into Claude Code, attaches mock, runs FORGE.
+9. ANVIL light.
+10. Merge.
+11. Return to chat to confirm + start Item 3.
 
-When you reach Item 5b (the first NEW dashboard — `/dashboard/office`):
-- Come back to me in chat
-- I'll generate the Claude Design prompt via `brand-prompt` skill
-- You copy → Claude Design → mock → back to Claude Code
+### Items 3 onwards
 
-Repeat for 5c, then Item 6 surfaces one by one, then Item 7.
+Same loop as Item 2. Per-pattern. Claude is in the loop for **every item that needs a mock** — items 2, 3, 5a, 5b, 5c, and each pattern within Item 6 + Item 7. Tooling-only items (Item 1, Item 4) skip the mock step.
 
 ---
 
-## 7. Estimate
+## 6. Estimate
 
 Rough time investment, assuming you (Hakan) sit alongside Claude Code for each PR:
 
@@ -249,7 +278,7 @@ Risk multipliers:
 
 ---
 
-## 8. What's NOT in this overhaul
+## 7. What's NOT in this overhaul
 
 Bookmarking for future phases:
 
@@ -262,7 +291,7 @@ Bookmarking for future phases:
 
 ---
 
-## 9. Done state
+## 8. Done state
 
 The overhaul is "done" when:
 - All 7 items have merged PRs
@@ -274,7 +303,7 @@ There's no separate "v2 launch event." Hard-cutover means staff see incremental 
 
 ---
 
-## 10. Decision log
+## 9. Decision log
 
 All planning decisions across Categories 1–6 are now locked. No further planning conversations needed. If any decision needs revisiting once building starts, update the relevant doc:
 - Categories 1–4 decisions: `docs/plans/2026-06-01-ui-overhaul-locked-decisions.md`
