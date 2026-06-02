@@ -16,7 +16,6 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import AppHeader  from '@/components/AppHeader'
 import RoleNav    from '@/components/RoleNav'
-import DesktopRouteNav from '@/components/DesktopRouteNav'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -371,13 +370,11 @@ export default function RunsPage() {
           </>
         )}
       </main>
-
-      {/* Desktop nav — in-flow, stays inside flex sandwich */}
-      <DesktopRouteNav />
     </div>
-    {/* Mobile RoleNav MUST be outside overflow-hidden — position:fixed inside
-        overflow:hidden breaks touch events on iOS Safari/WebKit */}
-    <div className="lg:hidden"><RoleNav /></div>
+    {/* Chrome nav — MUST be outside overflow-hidden — position:fixed inside
+        overflow:hidden breaks touch events on iOS Safari/WebKit.
+        Item 2 chrome renders at all viewports until Item 3 desktop sidebar. */}
+    <RoleNav />
     </>
   )
 }
