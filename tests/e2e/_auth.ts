@@ -90,6 +90,50 @@ export async function loginAs(page: Page, role: keyof typeof PIN_BY_ROLE): Promi
 }
 
 /**
+ * Admin login uses the password flow, not PIN.
+ *
+ * Admins authenticate via password_hash per the users_auth_check DB
+ * constraint (admin → password_hash NOT NULL, non-admin → pin_hash
+ * NOT NULL). The /login page has a mode selector that routes admin
+ * to a username+password form (app/login/page.tsx AdminLogin).
+ *
+ * Flow:
+ *   1. /login → click "Admin login" button → AdminLogin screen
+ *   2. Fill username + password inputs
+ *   3. Click "Sign in"
+ *   4. Wait for redirect to admin home (/screen4 by ROLE_HOME)
+ *
+ * Caller must provide both user and password — derive from
+ * E2E_USER_ADMIN and E2E_PASSWORD_ADMIN env vars at the call site
+ * so a MISSING_CREDS failure surfaces with the env name in the
+ * error message (rather than a silent null deref here).
+ */
+export async function loginAsAdmin(page: Page, user: string, password: string): Promise<void> {
+  if (!user || !password) {
+    throw new Error(
+      'loginAsAdmin requires non-empty user + password. ' +
+      'Set E2E_USER_ADMIN and E2E_PASSWORD_ADMIN in .env.e2e.local.',
+    )
+  }
+
+  await page.goto('/login')
+
+  // Mode selector — pick admin path
+  await page.getByRole('button', { name: /admin login/i }).click()
+
+  // AdminLogin form — two text inputs (username, password) + Sign in
+  // Use autocomplete attributes for stable selectors per app/login/page.tsx.
+  await page.locator('input[autocomplete="username"]').fill(user)
+  await page.locator('input[autocomplete="current-password"]').fill(password)
+  await page.getByRole('button', { name: /sign in/i }).click()
+
+  // Admin's role-home is /screen4 (per middleware ROLE_HOME map)
+  await page.waitForURL(/\/(screen\d|orders|dashboard|home|$)/, {
+    timeout: 10_000,
+  })
+}
+
+/**
  * Helper to sign out, useful between tests in the same file.
  */
 export async function logout(page: Page): Promise<void> {
