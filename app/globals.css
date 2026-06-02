@@ -157,3 +157,10 @@ h1, h2, h3,
     --text-body-size:    15px;
   }
 }
+
+/* ── Desktop chrome — body padding when RoleNav is mounted ─────── */
+@media (min-width: 768px) {
+  body[data-mfs-chrome="true"] {
+    padding-left: 64px;
+  }
+}
