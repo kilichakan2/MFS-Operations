@@ -39,7 +39,7 @@ const t = {
   navRoutes:      { en: 'Routes',      tr: 'Rotalar' },
   navRuns:        { en: 'Runs',         tr: 'Seferler' },
   navCash:        { en: 'Cash',         tr: 'Kasa'     },
-  navCompliments: { en: 'Kudos',        tr: 'Tebrikler' },
+  navCompliments: { en: 'Compliments',  tr: 'Övgüler' },
   navPricing:     { en: 'Pricing',       tr: 'Fiyatlar'  },
 
   // ── Login screen ─────────────────────────────────────────────────────────
