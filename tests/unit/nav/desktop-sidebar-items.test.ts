@@ -32,25 +32,25 @@ describe('buildSidebarItems per-role shape', () => {
   it('office — 8 items in order', () => {
     const items = buildSidebarItems('office', id)
     expect(items.length).toBe(8)
-    expect(items[0]).toMatchObject({ href: '/screen1',     label: 'navDispatch' })
+    expect(items[0]).toMatchObject({ href: '/dispatch',    label: 'navDispatch' })
     expect(items[1]).toMatchObject({ href: '/cash',        label: 'navCash' })
     expect(items[2]).toMatchObject({ href: '/complaints',  label: 'navComplaints' })
     expect(items[3]).toMatchObject({ href: '/pricing',     label: 'navPricing' })
     expect(items[4]).toMatchObject({ href: '/compliments', label: 'navCompliments' })
     expect(items[5]).toMatchObject({ href: '/routes',      label: 'navRoutes' })
     expect(items[6]).toMatchObject({ href: '/runs',        label: 'navRuns' })
-    expect(items[7]).toMatchObject({ href: '/screen4',     label: 'navDashboard' })
+    expect(items[7]).toMatchObject({ href: '/dashboard/admin', label: 'navDashboard' })
   })
 
   it('warehouse — 6 items in order', () => {
     const items = buildSidebarItems('warehouse', id)
     expect(items.length).toBe(6)
-    expect(items[0]).toMatchObject({ href: '/screen1',     label: 'navDispatch' })
+    expect(items[0]).toMatchObject({ href: '/dispatch',    label: 'navDispatch' })
     expect(items[1]).toMatchObject({ href: '/complaints',  label: 'navComplaints' })
     expect(items[2]).toMatchObject({ href: '/routes',      label: 'navRoutes' })
     expect(items[3]).toMatchObject({ href: '/compliments', label: 'navCompliments' })
     expect(items[4]).toMatchObject({ href: '/runs',        label: 'navRuns' })
-    expect(items[5]).toMatchObject({ href: '/screen4',     label: 'navDashboard' })
+    expect(items[5]).toMatchObject({ href: '/dashboard/admin', label: 'navDashboard' })
   })
 
   it('driver — 3 items in order, hardcoded literals for My Route and Kudos', () => {
@@ -64,15 +64,15 @@ describe('buildSidebarItems per-role shape', () => {
   it('admin — 9 items in order', () => {
     const items = buildSidebarItems('admin', id)
     expect(items.length).toBe(9)
-    expect(items[0]).toMatchObject({ href: '/screen4',     label: 'navDashboard' })
+    expect(items[0]).toMatchObject({ href: '/dashboard/admin', label: 'navDashboard' })
     expect(items[1]).toMatchObject({ href: '/complaints',  label: 'navComplaints' })
     expect(items[2]).toMatchObject({ href: '/pricing',     label: 'navPricing' })
     expect(items[3]).toMatchObject({ href: '/cash',        label: 'navCash' })
     expect(items[4]).toMatchObject({ href: '/compliments', label: 'navCompliments' })
     expect(items[5]).toMatchObject({ href: '/routes',      label: 'navRoutes' })
     expect(items[6]).toMatchObject({ href: '/runs',        label: 'navRuns' })
-    expect(items[7]).toMatchObject({ href: '/screen5',     label: 'navAdmin' })
-    expect(items[8]).toMatchObject({ href: '/screen6',     label: 'navMap' })
+    expect(items[7]).toMatchObject({ href: '/admin',       label: 'navAdmin' })
+    expect(items[8]).toMatchObject({ href: '/map',         label: 'navMap' })
   })
 
   it('empty role returns []', () => {
