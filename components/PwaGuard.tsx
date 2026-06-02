@@ -18,18 +18,18 @@ import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 
 const ROLE_HOME: Record<string, string> = {
-  admin:     '/screen4',
-  warehouse: '/screen1',
-  office:    '/screen1',
+  admin:     '/dashboard/admin',
+  warehouse: '/dispatch',
+  office:    '/dispatch',
   sales:     '/complaints',
   driver:    '/driver',
   butcher:   '/haccp',
 }
 
 const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
-  admin:     ['/screen4', '/screen5', '/screen6', '/screen1', '/driver', '/routes', '/runs', '/complaints', '/visits', '/cash', '/compliments', '/pricing', '/haccp'],
-  warehouse: ['/screen1', '/routes', '/runs', '/compliments', '/complaints', '/haccp'],
-  office:    ['/screen1', '/complaints', '/routes', '/runs', '/cash', '/compliments', '/pricing'],
+  admin:     ['/dashboard/admin', '/admin', '/map', '/dispatch', '/driver', '/routes', '/runs', '/complaints', '/visits', '/cash', '/compliments', '/pricing', '/haccp'],
+  warehouse: ['/dispatch', '/routes', '/runs', '/compliments', '/complaints', '/haccp'],
+  office:    ['/dispatch', '/complaints', '/routes', '/runs', '/cash', '/compliments', '/pricing'],
   sales:     ['/complaints', '/visits', '/routes', '/runs', '/compliments', '/pricing'],
   driver:    ['/driver', '/routes', '/complaints', '/compliments'],
   butcher:   ['/haccp'],
