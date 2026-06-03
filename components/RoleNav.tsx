@@ -71,7 +71,7 @@ export function buildMatrix(role: Role, t: Translator): NavMatrix {
     case 'office':
       return {
         visible: [
-          { href: '/screen1',     label: t('navDispatch'),    icon: <ClipboardList  size={24} strokeWidth={2} /> },
+          { href: '/dispatch',    label: t('navDispatch'),    icon: <ClipboardList  size={24} strokeWidth={2} /> },
           { href: '/cash',        label: t('navCash'),        icon: <Banknote       size={24} strokeWidth={2} /> },
           { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle    size={24} strokeWidth={2} /> },
         ],
@@ -80,21 +80,21 @@ export function buildMatrix(role: Role, t: Translator): NavMatrix {
           { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp       size={24} strokeWidth={2} /> },
           { href: '/routes',      label: t('navRoutes'),      icon: <Map            size={24} strokeWidth={2} />, desktopOnly: true },
           { href: '/runs',        label: t('navRuns'),        icon: <Calendar       size={24} strokeWidth={2} /> },
-          { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+          { href: '/dashboard/admin', label: t('navDashboard'), icon: <LayoutDashboard size={24} strokeWidth={2} /> },
         ],
       }
 
     case 'warehouse':
       return {
         visible: [
-          { href: '/screen1',     label: t('navDispatch'),    icon: <ClipboardList  size={24} strokeWidth={2} /> },
+          { href: '/dispatch',    label: t('navDispatch'),    icon: <ClipboardList  size={24} strokeWidth={2} /> },
           { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle    size={24} strokeWidth={2} /> },
           { href: '/routes',      label: t('navRoutes'),      icon: <Map            size={24} strokeWidth={2} /> },
         ],
         overflow: [
           { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp       size={24} strokeWidth={2} /> },
           { href: '/runs',        label: t('navRuns'),        icon: <Calendar       size={24} strokeWidth={2} /> },
-          { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+          { href: '/dashboard/admin', label: t('navDashboard'), icon: <LayoutDashboard size={24} strokeWidth={2} /> },
         ],
       }
 
@@ -111,7 +111,7 @@ export function buildMatrix(role: Role, t: Translator): NavMatrix {
     case 'admin':
       return {
         visible: [
-          { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+          { href: '/dashboard/admin', label: t('navDashboard'), icon: <LayoutDashboard size={24} strokeWidth={2} /> },
           { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle    size={24} strokeWidth={2} /> },
           { href: '/pricing',     label: t('navPricing'),     icon: <Tags           size={24} strokeWidth={2} /> },
         ],
@@ -120,8 +120,8 @@ export function buildMatrix(role: Role, t: Translator): NavMatrix {
           { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp       size={24} strokeWidth={2} /> },
           { href: '/routes',      label: t('navRoutes'),      icon: <Map            size={24} strokeWidth={2} /> },
           { href: '/runs',        label: t('navRuns'),        icon: <Calendar       size={24} strokeWidth={2} /> },
-          { href: '/screen5',     label: t('navAdmin'),       icon: <Settings       size={24} strokeWidth={2} /> },
-          { href: '/screen6',     label: t('navMap'),         icon: <Globe          size={24} strokeWidth={2} /> },
+          { href: '/admin',       label: t('navAdmin'),       icon: <Settings       size={24} strokeWidth={2} /> },
+          { href: '/map',         label: t('navMap'),         icon: <Globe          size={24} strokeWidth={2} /> },
         ],
       }
 
@@ -156,24 +156,24 @@ export function buildSidebarItems(role: Role, t: Translator): NavItem[] {
 
     case 'office':
       return [
-        { href: '/screen1',     label: t('navDispatch'),    icon: <ClipboardList   size={24} strokeWidth={2} /> },
+        { href: '/dispatch',    label: t('navDispatch'),    icon: <ClipboardList   size={24} strokeWidth={2} /> },
         { href: '/cash',        label: t('navCash'),        icon: <Banknote        size={24} strokeWidth={2} /> },
         { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle     size={24} strokeWidth={2} /> },
         { href: '/pricing',     label: t('navPricing'),     icon: <Tags            size={24} strokeWidth={2} /> },
         { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp        size={24} strokeWidth={2} /> },
         { href: '/routes',      label: t('navRoutes'),      icon: <Map             size={24} strokeWidth={2} /> },
         { href: '/runs',        label: t('navRuns'),        icon: <Calendar        size={24} strokeWidth={2} /> },
-        { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+        { href: '/dashboard/admin', label: t('navDashboard'), icon: <LayoutDashboard size={24} strokeWidth={2} /> },
       ]
 
     case 'warehouse':
       return [
-        { href: '/screen1',     label: t('navDispatch'),    icon: <ClipboardList   size={24} strokeWidth={2} /> },
+        { href: '/dispatch',    label: t('navDispatch'),    icon: <ClipboardList   size={24} strokeWidth={2} /> },
         { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle     size={24} strokeWidth={2} /> },
         { href: '/routes',      label: t('navRoutes'),      icon: <Map             size={24} strokeWidth={2} /> },
         { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp        size={24} strokeWidth={2} /> },
         { href: '/runs',        label: t('navRuns'),        icon: <Calendar        size={24} strokeWidth={2} /> },
-        { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+        { href: '/dashboard/admin', label: t('navDashboard'), icon: <LayoutDashboard size={24} strokeWidth={2} /> },
       ]
 
     case 'driver':
@@ -185,15 +185,15 @@ export function buildSidebarItems(role: Role, t: Translator): NavItem[] {
 
     case 'admin':
       return [
-        { href: '/screen4',     label: t('navDashboard'),   icon: <LayoutDashboard size={24} strokeWidth={2} /> },
+        { href: '/dashboard/admin', label: t('navDashboard'), icon: <LayoutDashboard size={24} strokeWidth={2} /> },
         { href: '/complaints',  label: t('navComplaints'),  icon: <AlertCircle     size={24} strokeWidth={2} /> },
         { href: '/pricing',     label: t('navPricing'),     icon: <Tags            size={24} strokeWidth={2} /> },
         { href: '/cash',        label: t('navCash'),        icon: <Banknote        size={24} strokeWidth={2} /> },
         { href: '/compliments', label: t('navCompliments'), icon: <ThumbsUp        size={24} strokeWidth={2} /> },
         { href: '/routes',      label: t('navRoutes'),      icon: <Map             size={24} strokeWidth={2} /> },
         { href: '/runs',        label: t('navRuns'),        icon: <Calendar        size={24} strokeWidth={2} /> },
-        { href: '/screen5',     label: t('navAdmin'),       icon: <Settings        size={24} strokeWidth={2} /> },
-        { href: '/screen6',     label: t('navMap'),         icon: <Globe           size={24} strokeWidth={2} /> },
+        { href: '/admin',       label: t('navAdmin'),       icon: <Settings        size={24} strokeWidth={2} /> },
+        { href: '/map',         label: t('navMap'),         icon: <Globe           size={24} strokeWidth={2} /> },
       ]
 
     default:

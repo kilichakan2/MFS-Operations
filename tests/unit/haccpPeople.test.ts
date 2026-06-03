@@ -77,14 +77,14 @@ describe('illness_type mapping', () => {
 // ── PwaGuard role allowed prefixes ───────────────────────────────────────────
 
 const ROLE_ALLOWED_PREFIXES: Record<string, string[]> = {
-  admin:     ['/screen4', '/screen5', '/screen6', '/screen1', '/driver', '/routes', '/runs', '/complaints', '/visits', '/cash', '/compliments', '/pricing', '/haccp'],
-  warehouse: ['/screen1', '/routes', '/runs', '/compliments', '/complaints', '/haccp'],
+  admin:     ['/dashboard/admin', '/admin', '/map', '/dispatch', '/driver', '/routes', '/runs', '/complaints', '/visits', '/cash', '/compliments', '/pricing', '/haccp'],
+  warehouse: ['/dispatch', '/routes', '/runs', '/compliments', '/complaints', '/haccp'],
   butcher:   ['/haccp'],
 }
 
 const ROLE_HOME: Record<string, string> = {
-  admin:     '/screen4',
-  warehouse: '/screen1',
+  admin:     '/dashboard/admin',
+  warehouse: '/dispatch',
   butcher:   '/haccp',
 }
 
@@ -92,24 +92,24 @@ describe('PwaGuard — role URL validation', () => {
   it('butcher allowed on /haccp paths only', () => {
     const allowed = ROLE_ALLOWED_PREFIXES['butcher']
     expect(allowed.some(p => '/haccp/cold-storage'.startsWith(p))).toBe(true)
-    expect(allowed.some(p => '/screen4'.startsWith(p))).toBe(false)
+    expect(allowed.some(p => '/dashboard/admin'.startsWith(p))).toBe(false)
     expect(allowed.some(p => '/runs'.startsWith(p))).toBe(false)
   })
 
-  it('admin allowed on /screen4 and /haccp', () => {
+  it('admin allowed on /dashboard/admin and /haccp', () => {
     const allowed = ROLE_ALLOWED_PREFIXES['admin']
-    expect(allowed.some(p => '/screen4'.startsWith(p))).toBe(true)
+    expect(allowed.some(p => '/dashboard/admin'.startsWith(p))).toBe(true)
     expect(allowed.some(p => '/haccp/reviews'.startsWith(p))).toBe(true)
   })
 
-  it('warehouse not allowed on /screen4', () => {
+  it('warehouse not allowed on /dashboard/admin', () => {
     const allowed = ROLE_ALLOWED_PREFIXES['warehouse']
-    expect(allowed.some(p => '/screen4'.startsWith(p))).toBe(false)
+    expect(allowed.some(p => '/dashboard/admin'.startsWith(p))).toBe(false)
   })
 
   it('unknown URL for role triggers redirect to role home', () => {
     const role    = 'butcher'
-    const path    = '/screen4'
+    const path    = '/dashboard/admin'
     const allowed = ROLE_ALLOWED_PREFIXES[role]
     const isOk    = allowed.some(p => path.startsWith(p))
     expect(isOk).toBe(false)

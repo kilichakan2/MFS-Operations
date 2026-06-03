@@ -66,10 +66,10 @@ function recordSuccess(name: string): void {
 }
 
 const ROLE_ROUTES: Record<string, string> = {
-  warehouse: '/screen1',
-  office:    '/screen1',
+  warehouse: '/dispatch',
+  office:    '/dispatch',
   sales:     '/complaints',
-  admin:     '/screen4',
+  admin:     '/dashboard/admin',
   driver:    '/driver',
 }
 
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
     // ── Build response and set cookie ─────────────────────────────────────────
     // response.cookies.set() is the correct Next.js 15 Route Handler pattern.
     // The deprecated cookies() from next/headers does NOT attach to the response object.
-    const redirect = ROLE_ROUTES[activeRole] ?? '/screen4'
+    const redirect = ROLE_ROUTES[activeRole] ?? '/dashboard/admin'
     const sessionSecondaryRoles: string[] = []  // always empty — single-role session
 
     const response = NextResponse.json({

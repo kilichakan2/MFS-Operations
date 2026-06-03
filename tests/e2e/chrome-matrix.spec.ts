@@ -39,10 +39,10 @@ type Role = 'sales' | 'office' | 'warehouse' | 'driver' | 'admin'
 
 const ROLE_ROUTES: Record<Role, string[]> = {
   sales:     ['/orders', '/visits', '/complaints', '/pricing', '/compliments', '/routes', '/runs'],
-  office:    ['/screen1', '/cash', '/complaints', '/pricing', '/compliments', '/routes', '/runs', '/screen4'],
-  warehouse: ['/screen1', '/complaints', '/routes', '/compliments', '/runs', '/screen4'],
+  office:    ['/dispatch', '/cash', '/complaints', '/pricing', '/compliments', '/routes', '/runs', '/dashboard/admin'],
+  warehouse: ['/dispatch', '/complaints', '/routes', '/compliments', '/runs', '/dashboard/admin'],
   driver:    ['/driver', '/complaints', '/compliments'],
-  admin:     ['/screen4', '/complaints', '/pricing', '/cash', '/compliments', '/routes', '/runs', '/screen5', '/screen6'],
+  admin:     ['/dashboard/admin', '/complaints', '/pricing', '/cash', '/compliments', '/routes', '/runs', '/admin', '/map'],
 }
 
 function credsFor(role: Role): { user: string | undefined; secret: string | undefined; secretEnv: string } {

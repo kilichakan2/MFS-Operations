@@ -77,7 +77,7 @@ async function submitLogin(
         onPicker(data.roles)
         return
       }
-      const dest = from ?? data.redirect ?? '/screen1'
+      const dest = from ?? data.redirect ?? '/dispatch'
       console.log('[LOGIN] Success — forcing hard redirect to', dest)
       onSuccess(dest)
     } else {
