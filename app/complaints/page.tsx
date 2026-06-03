@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useCallback, useId, useEffect, useMemo } from 'react'
+import { useState, useCallback, useId, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import BottomSheetSelector from '@/components/BottomSheetSelector'
 import RoleNav             from '@/components/RoleNav'
@@ -571,7 +571,19 @@ function validate(form: FormState): ValidationErrors {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+// Next.js requires components calling useSearchParams() to sit inside a
+// <Suspense> boundary so the build's static-prerender pass can bail out
+// cleanly. The default export wraps the body component to satisfy that;
+// the body itself is identical to the pre-Suspense ComplaintsPage.
 export default function ComplaintsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ComplaintsPageBody />
+    </Suspense>
+  )
+}
+
+function ComplaintsPageBody() {
   const { t }       = useLanguage()
   const categories  = CATEGORIES(t)
   const receivedVia = RECEIVED_VIA(t)

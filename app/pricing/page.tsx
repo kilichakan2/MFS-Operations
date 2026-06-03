@@ -1,7 +1,7 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import AppHeader        from '@/components/AppHeader'
 import RoleNav          from '@/components/RoleNav'
@@ -1037,7 +1037,19 @@ function readFilterFromUrl(raw: string | null | undefined): ViewFilter {
   return VIEW_FILTERS.includes(raw as ViewFilter) ? (raw as ViewFilter) : 'all'
 }
 
+// Next.js requires components calling useSearchParams() to sit inside a
+// <Suspense> boundary so the build's static-prerender pass can bail out
+// cleanly. The default export wraps the body component to satisfy that;
+// the body itself is identical to the pre-Suspense PricingPage.
 export default function PricingPage() {
+  return (
+    <Suspense fallback={null}>
+      <PricingPageBody />
+    </Suspense>
+  )
+}
+
+function PricingPageBody() {
   const searchParams = useSearchParams()
   const [agreements,    setAgreements]    = useState<Agreement[]>([])
   const [loading,       setLoading]       = useState(true)
