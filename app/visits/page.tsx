@@ -2,7 +2,8 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useCallback, useId, useEffect, useRef, useMemo } from 'react'
+import { useState, useCallback, useId, useEffect, useRef, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import BottomSheetSelector from '@/components/BottomSheetSelector'
 import RoleNav             from '@/components/RoleNav'
 import { useLanguage }     from '@/lib/LanguageContext'
@@ -75,7 +76,7 @@ function getClientRole(): string {
 type VisitType    = 'routine'|'new_pitch'|'complaint_followup'|'delivery_issue'
 type Outcome      = 'positive'|'neutral'|'at_risk'|'lost'
 type CustomerMode = 'existing'|'prospect'
-type TimeChip     = 'today'|'yesterday'|'this_week'|'this_month'|'all_time'
+type TimeChip     = 'today'|'yesterday'|'this_week'|'this_month'|'this_quarter'|'all_time'
 
 interface FormState {
   customerMode:     CustomerMode
@@ -140,14 +141,33 @@ function getMondayStr(dateStr:string) {
   const d=new Date(dateStr+'T12:00:00'); const day=d.getDay(); d.setDate(d.getDate()-((day+6)%7)); return d.toLocaleDateString('en-CA')
 }
 function getFirstOfMonthStr(dateStr:string) { return dateStr.slice(0,8)+'01' }
+function getFirstOfQuarterStr(dateStr:string) {
+  const month = parseInt(dateStr.slice(5,7), 10)
+  const qStartMonth = String(Math.floor((month-1)/3)*3 + 1).padStart(2,'0')
+  return dateStr.slice(0,4) + '-' + qStartMonth + '-01'
+}
 function chipToRange(chip:TimeChip): { from:string; to:string }|null {
   const today=todayStr()
   switch(chip) {
-    case 'today':      return { from:today, to:today }
-    case 'yesterday':  return { from:addDaysStr(today,-1), to:addDaysStr(today,-1) }
-    case 'this_week':  return { from:getMondayStr(today), to:today }
-    case 'this_month': return { from:getFirstOfMonthStr(today), to:today }
-    case 'all_time':   return null
+    case 'today':        return { from:today, to:today }
+    case 'yesterday':    return { from:addDaysStr(today,-1), to:addDaysStr(today,-1) }
+    case 'this_week':    return { from:getMondayStr(today), to:today }
+    case 'this_month':   return { from:getFirstOfMonthStr(today), to:today }
+    case 'this_quarter': return { from:getFirstOfQuarterStr(today), to:today }
+    case 'all_time':     return null
+  }
+}
+
+// Maps the dashboard's RangeTabs preset vocabulary (today|week|month|quarter,
+// locked at Item 5a PR #10 C12) to the destination page's longer TimeChip
+// vocabulary. Returns null on unknown input so callers fall through to default.
+function presetToChip(preset: string|null|undefined): TimeChip|null {
+  switch (preset) {
+    case 'today':   return 'today'
+    case 'week':    return 'this_week'
+    case 'month':   return 'this_month'
+    case 'quarter': return 'this_quarter'
+    default:        return null
   }
 }
 function inRange(isoDate:string, range:{from:string;to:string}|null): boolean {
@@ -244,11 +264,12 @@ function SearchBar({value,onChange}:{value:string;onChange:(v:string)=>void}) {
 
 type TimeChipConfig = { id:TimeChip; key:string }
 const TIME_CHIP_CONFIGS: TimeChipConfig[] = [
-  {id:'today',      key:'chipToday'},
-  {id:'yesterday',  key:'chipYesterday'},
-  {id:'this_week',  key:'chipThisWeek'},
-  {id:'this_month', key:'chipThisMonth'},
-  {id:'all_time',   key:'chipAllTime'},
+  {id:'today',        key:'chipToday'},
+  {id:'yesterday',    key:'chipYesterday'},
+  {id:'this_week',    key:'chipThisWeek'},
+  {id:'this_month',   key:'chipThisMonth'},
+  {id:'this_quarter', key:'chipQuarter'},
+  {id:'all_time',     key:'chipAllTime'},
 ]
 function TimeChips({active,onChange}:{active:TimeChip;onChange:(c:TimeChip)=>void}) {
   const { t } = useLanguage()
@@ -644,8 +665,14 @@ function MyVisitsTab({
   onStatusUpdate:(id:string, status:string)=>void
 }) {
   const { t }               = useLanguage()
+  // The Item 5a Visits KPI tile sends ?range=today|week|month|quarter — map
+  // it to the destination's longer TimeChip vocabulary on mount, then let
+  // the user drive the chip with the normal UI.
+  const searchParams = useSearchParams()
   const [search,     setSearch]     = useState('')
-  const [chip,       setChip]       = useState<TimeChip>('today')
+  const [chip,       setChip]       = useState<TimeChip>(() =>
+    presetToChip(searchParams?.get('range')) ?? 'today',
+  )
   const [typeFilter, setTypeFilter] = useState<'all'|'routine'|'prospects'|'stalled'>('all')
 
   const range = chipToRange(chip)
@@ -742,7 +769,19 @@ function MyVisitsTab({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+// Next.js requires components calling useSearchParams() to sit inside a
+// <Suspense> boundary so the build's static-prerender pass can bail out
+// cleanly. The default export wraps the body component to satisfy that;
+// the body itself is identical to the pre-Suspense VisitsPage.
 export default function VisitsPage() {
+  return (
+    <Suspense fallback={null}>
+      <VisitsPageBody />
+    </Suspense>
+  )
+}
+
+function VisitsPageBody() {
   const { t }      = useLanguage()
   const visitTypes = VISIT_TYPES(t)
   const outcomes   = OUTCOMES(t)
@@ -752,7 +791,17 @@ export default function VisitsPage() {
   useEffect(()=>{ syncReferenceData().catch(console.error) },[])
   const customers = useCustomers()
 
-  const [activeTab,    setActiveTab]    = useState<'log'|'my'>('log')
+  // Item 5a's Visits KPI tile lands here with ?range=today|week|month|quarter.
+  // The outer tab defaults to 'log' (new-visit form); when any filter param
+  // is present (?tab=my explicitly OR an implicit ?range= filter), the user
+  // clearly wants the list — auto-switch on mount. Mirrors the equivalent
+  // behaviour in /complaints (Frame Q2).
+  const searchParamsOuter = useSearchParams()
+  const [activeTab,    setActiveTab]    = useState<'log'|'my'>(() => {
+    if (searchParamsOuter?.get('tab') === 'my') return 'my'
+    if (searchParamsOuter?.get('range')) return 'my'
+    return 'log'
+  })
   const [form,         setForm]         = useState<FormState>(EMPTY_FORM)
   const [errors,       setErrors]       = useState<ValidationErrors>({})
   const [sheetOpen,    setSheetOpen]    = useState(false)

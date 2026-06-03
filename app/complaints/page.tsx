@@ -2,7 +2,8 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useCallback, useId, useEffect, useMemo } from 'react'
+import { useState, useCallback, useId, useEffect, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import BottomSheetSelector from '@/components/BottomSheetSelector'
 import RoleNav             from '@/components/RoleNav'
 import { useLanguage }     from '@/lib/LanguageContext'
@@ -17,7 +18,7 @@ import type { SelectableItem } from '@/components/BottomSheetSelector'
 type Category    = 'weight'|'quality'|'delivery'|'missing_item'|'pricing'|'service'|'other'
 type ReceivedVia = 'phone'|'in_person'|'whatsapp'|'email'|'other'
 type Status      = 'open'|'resolved'
-type TimeChip    = 'today'|'yesterday'|'this_week'|'this_month'|'all_time'
+type TimeChip    = 'today'|'yesterday'|'this_week'|'this_month'|'this_quarter'|'all_time'
 
 interface FormState {
   customer:       SelectableItem | null
@@ -98,14 +99,33 @@ function getMondayStr(dateStr: string) {
 function getFirstOfMonthStr(dateStr: string) {
   return dateStr.slice(0, 8) + '01'
 }
+function getFirstOfQuarterStr(dateStr: string) {
+  const month = parseInt(dateStr.slice(5, 7), 10)
+  const qStartMonth = String(Math.floor((month - 1) / 3) * 3 + 1).padStart(2, '0')
+  return dateStr.slice(0, 4) + '-' + qStartMonth + '-01'
+}
 function chipToRange(chip: TimeChip): { from: string; to: string } | null {
   const today = todayStr()
   switch (chip) {
-    case 'today':      return { from: today, to: today }
-    case 'yesterday':  return { from: addDaysStr(today, -1), to: addDaysStr(today, -1) }
-    case 'this_week':  return { from: getMondayStr(today), to: today }
-    case 'this_month': return { from: getFirstOfMonthStr(today), to: today }
-    case 'all_time':   return null
+    case 'today':        return { from: today, to: today }
+    case 'yesterday':    return { from: addDaysStr(today, -1), to: addDaysStr(today, -1) }
+    case 'this_week':    return { from: getMondayStr(today), to: today }
+    case 'this_month':   return { from: getFirstOfMonthStr(today), to: today }
+    case 'this_quarter': return { from: getFirstOfQuarterStr(today), to: today }
+    case 'all_time':     return null
+  }
+}
+
+// Maps the dashboard's RangeTabs preset vocabulary (today|week|month|quarter,
+// locked at Item 5a PR #10 C12) to the destination page's longer TimeChip
+// vocabulary. Returns null on unknown input so callers fall through to default.
+function presetToChip(preset: string | null | undefined): TimeChip | null {
+  switch (preset) {
+    case 'today':   return 'today'
+    case 'week':    return 'this_week'
+    case 'month':   return 'this_month'
+    case 'quarter': return 'this_quarter'
+    default:        return null
   }
 }
 function inRange(isoDate: string, range: { from:string; to:string } | null): boolean {
@@ -187,11 +207,12 @@ function SearchBar({ value, onChange }: { value: string; onChange: (v:string)=>v
 
 type TimeChipConfig = { id: TimeChip; key: string }
 const TIME_CHIP_CONFIGS: TimeChipConfig[] = [
-  { id:'today',      key:'chipToday'     },
-  { id:'yesterday',  key:'chipYesterday' },
-  { id:'this_week',  key:'chipThisWeek'  },
-  { id:'this_month', key:'chipThisMonth' },
-  { id:'all_time',   key:'chipAllTime'   },
+  { id:'today',        key:'chipToday'     },
+  { id:'yesterday',    key:'chipYesterday' },
+  { id:'this_week',    key:'chipThisWeek'  },
+  { id:'this_month',   key:'chipThisMonth' },
+  { id:'this_quarter', key:'chipQuarter'   },
+  { id:'all_time',     key:'chipAllTime'   },
 ]
 
 function TimeChips({ active, onChange }: { active: TimeChip; onChange: (c:TimeChip)=>void }) {
@@ -202,6 +223,29 @@ function TimeChips({ active, onChange }: { active: TimeChip; onChange: (c:TimeCh
         <button key={cfg.id} type="button" onClick={()=>onChange(cfg.id)}
           className={['flex-shrink-0 h-7 px-3 rounded-full text-xs font-bold transition-all',
             active===cfg.id ? 'bg-[#16205B] text-white shadow-sm' : 'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
+          {t(cfg.key as Parameters<typeof t>[0])}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Status chips (Open / Resolved / All) — used in AllComplaintsTab ──────────
+
+type StatusFilterValue = 'all' | 'open' | 'resolved'
+const STATUS_CHIPS: { id: StatusFilterValue; key: string }[] = [
+  { id: 'all',      key: 'statusAll' },
+  { id: 'open',     key: 'open'      },
+  { id: 'resolved', key: 'resolved'  },
+]
+function StatusChips({ active, onChange }: { active: StatusFilterValue; onChange: (v: StatusFilterValue)=>void }) {
+  const { t } = useLanguage()
+  return (
+    <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+      {STATUS_CHIPS.map(cfg => (
+        <button key={cfg.id} type="button" onClick={() => onChange(cfg.id)}
+          className={['flex-shrink-0 h-7 px-3 rounded-full text-xs font-bold transition-all',
+            active === cfg.id ? 'bg-[#16205B] text-white shadow-sm' : 'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
           {t(cfg.key as Parameters<typeof t>[0])}
         </button>
       ))}
@@ -380,11 +424,22 @@ function ComplaintCard({
 
 function AllComplaintsTab() {
   const { t }                         = useLanguage()
+  // The Item 5a Open Complaints KPI tile sends ?status=open and (via the
+  // outer auto-switch in Complaints below) routes here. Init the chip
+  // and the new status filter from the URL on mount; both stay user-
+  // driven from then on via TimeChips / StatusChips.
+  const searchParams = useSearchParams()
   const [complaints,   setComplaints] = useState<ComplaintRow[]>([])
   const [loading,      setLoading]    = useState(true)
   const [error,        setError]      = useState('')
   const [search,       setSearch]     = useState('')
-  const [chip,         setChip]       = useState<TimeChip>('today')
+  const [chip,         setChip]       = useState<TimeChip>(() =>
+    presetToChip(searchParams?.get('range')) ?? 'today',
+  )
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(() => {
+    const s = searchParams?.get('status')
+    return (s === 'open' || s === 'resolved') ? s : 'all'
+  })
 
   async function load() {
     setLoading(true); setError('')
@@ -434,6 +489,7 @@ function AllComplaintsTab() {
     <div className="pb-24">
       <SearchBar value={search} onChange={setSearch} />
       <TimeChips active={chip} onChange={setChip} />
+      <StatusChips active={statusFilter} onChange={setStatusFilter} />
 
       {loading && (
         <div className="flex justify-center py-16">
@@ -466,8 +522,8 @@ function AllComplaintsTab() {
       {!loading && !error && filtered.length > 0 && (
         <div className="max-w-lg mx-auto px-4 space-y-4">
 
-          {/* Open section */}
-          {openComplaints.length > 0 && (
+          {/* Open section — gated by statusFilter (Item 5a.1 Bucket A) */}
+          {statusFilter !== 'resolved' && openComplaints.length > 0 && (
             <div>
               <p className="text-[10px] text-amber-700 font-bold uppercase tracking-widest px-1 mb-2 flex items-center gap-1">
                 🟡 Open · {openComplaints.length}
@@ -480,8 +536,8 @@ function AllComplaintsTab() {
             </div>
           )}
 
-          {/* Resolved section */}
-          {resolvedComplaints.length > 0 && (
+          {/* Resolved section — gated by statusFilter (Item 5a.1 Bucket A) */}
+          {statusFilter !== 'open' && resolvedComplaints.length > 0 && (
             <div>
               <p className="text-[10px] text-green-700 font-bold uppercase tracking-widest px-1 mb-2 flex items-center gap-1">
                 ✅ Resolved · {resolvedComplaints.length}
@@ -515,14 +571,36 @@ function validate(form: FormState): ValidationErrors {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+// Next.js requires components calling useSearchParams() to sit inside a
+// <Suspense> boundary so the build's static-prerender pass can bail out
+// cleanly. The default export wraps the body component to satisfy that;
+// the body itself is identical to the pre-Suspense ComplaintsPage.
 export default function ComplaintsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ComplaintsPageBody />
+    </Suspense>
+  )
+}
+
+function ComplaintsPageBody() {
   const { t }       = useLanguage()
   const categories  = CATEGORIES(t)
   const receivedVia = RECEIVED_VIA(t)
   const formId      = useId()
   useEffect(() => { syncReferenceData().catch(console.error) }, [])
 
-  const [activeTab,    setActiveTab]    = useState<'log'|'all'>('log')
+  // Item 5a's Open Complaints KPI tile lands here with ?status=open. The
+  // outer tab defaults to 'log' (new-complaint form); when any filter
+  // param is present (?tab=all explicitly OR an implicit ?status= /
+  // ?range= filter), the user clearly wants the list — auto-switch on
+  // mount. Per Frame Q2.
+  const searchParams = useSearchParams()
+  const [activeTab,    setActiveTab]    = useState<'log'|'all'>(() => {
+    if (searchParams?.get('tab') === 'all') return 'all'
+    if (searchParams?.get('status') || searchParams?.get('range')) return 'all'
+    return 'log'
+  })
   const customers   = useCustomers()
   const [form,      setForm]     = useState<FormState>(EMPTY_FORM)
   const [errors,    setErrors]   = useState<ValidationErrors>({})
