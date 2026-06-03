@@ -1,12 +1,14 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import RoleNav   from '@/components/RoleNav'
 import AppHeader from '@/components/AppHeader'
 import {
   Card, CardHead, RangeTabs, RangeLabel, PageHeading,
   EmptyState, RowHead, TableRow, ListRow,
 } from '@/app/dashboard/admin/_components/primitives'
+import { parseRangePreset } from '@/lib/adminFilters'
 
 // ─── Types (mirrors /api/admin/visits response shape) ────────────────────────
 
@@ -130,11 +132,18 @@ export default function AdminVisitsPage() {
 }
 
 function AdminVisitsPageBody() {
+  // Item 5a.1 PR B C12 — landing here via the dashboard's Visits
+  // KPI (/admin/visits?range=${preset}) inits the RangeTabs to the
+  // same window the dashboard was showing. Falls through to 'today'
+  // on absent or unknown ?range= value.
+  const searchParams = useSearchParams()
   const [rows,      setRows]      = useState<VisitRow[]>([])
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState('')
   const [lastFetch, setLastFetch] = useState<Date | null>(null)
-  const [preset,    setPreset]    = useState<Preset>('today')
+  const [preset,    setPreset]    = useState<Preset>(() =>
+    parseRangePreset(searchParams?.get('range')),
+  )
   const [typeFilter,    setTypeFilter]    = useState<'all' | 'routine' | 'new_pitch' | 'complaint_followup' | 'delivery_issue'>('all')
   const [outcomeFilter, setOutcomeFilter] = useState<'all' | 'positive' | 'neutral' | 'at_risk' | 'lost'>('all')
 

@@ -95,12 +95,27 @@ test.describe('Admin views (Item 5a.1 PR B)', () => {
     await expect(page.getByRole('button', { name: /^This quarter$/ })).toBeVisible()
   })
 
-  test('/admin/discrepancies?range=week initialises Range to "This week"', async ({ page }) => {
+  test('/admin/discrepancies?range=week initialises Range to "This week" (C12)', async ({ page }) => {
     await page.goto('/admin/discrepancies?range=week', { waitUntil: 'networkidle' })
-    // Note: /admin/discrepancies doesn't currently read ?range= from URL — it
-    // defaults to Today. This is a structural test: the page must render with
-    // its default state regardless of URL params. Future enhancement: wire
-    // ?range= to set the initial preset (out of scope for PR B).
-    await expect(page.getByRole('button', { name: /^Today$/ })).toBeVisible()
+    // C12 wired URL-init via parseRangePreset — landing with
+    // ?range=week selects the This week chip (aria-pressed=true).
+    await expect(page.getByRole('button', { name: /^This week$/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Today$/ })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('/admin/discrepancies?range=quarter initialises Range to "This quarter" (C12)', async ({ page }) => {
+    await page.goto('/admin/discrepancies?range=quarter', { waitUntil: 'networkidle' })
+    await expect(page.getByRole('button', { name: /^This quarter$/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('/admin/discrepancies?range=banana falls through to Today (C12 fallback)', async ({ page }) => {
+    await page.goto('/admin/discrepancies?range=banana', { waitUntil: 'networkidle' })
+    await expect(page.getByRole('button', { name: /^Today$/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('/admin/visits?range=month initialises Range to "This month" (C12)', async ({ page }) => {
+    await page.goto('/admin/visits?range=month', { waitUntil: 'networkidle' })
+    await expect(page.getByRole('button', { name: /^This month$/ })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: /^Today$/ })).toHaveAttribute('aria-pressed', 'false')
   })
 })

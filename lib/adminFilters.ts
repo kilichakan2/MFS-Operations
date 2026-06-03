@@ -58,3 +58,22 @@ export function isValidOutcome(raw: string | null | undefined): boolean {
   if (raw == null || raw === '') return true
   return OUTCOMES.has(raw)
 }
+
+/**
+ * Item 5a.1 PR B C12 — URL-init for the dashboard's locked range
+ * vocabulary. The new admin pages with RangeTabs (/admin/visits,
+ * /admin/discrepancies) accept ?range= from the dashboard KPI tile
+ * hand-off; this guard validates the URL value and falls through to
+ * 'today' on absence or unknown input.
+ *
+ * Parallel to /complaints + /visits + /pricing's URL-init pattern
+ * from PR A — same vocabulary the dashboard's RangeTabs strip uses
+ * (locked at Item 5a PR #10 C12).
+ */
+export type RangePreset = 'today' | 'week' | 'month' | 'quarter'
+const RANGE_PRESETS: ReadonlySet<RangePreset> = new Set(['today', 'week', 'month', 'quarter'] as const)
+
+export function parseRangePreset(raw: string | null | undefined): RangePreset {
+  if (raw && (RANGE_PRESETS as Set<string>).has(raw)) return raw as RangePreset
+  return 'today'
+}

@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest'
 import {
   isValidRepId, isValidVisitType, isValidOutcome,
   VISIT_TYPES, OUTCOMES,
+  parseRangePreset,
 } from '@/lib/adminFilters'
 
 describe('isValidRepId', () => {
@@ -67,5 +68,26 @@ describe('isValidOutcome', () => {
   it('rejects unknown values', () => {
     expect(isValidOutcome('happy')).toBe(false)
     expect(isValidOutcome('Positive')).toBe(false) // case-sensitive
+  })
+})
+
+describe('parseRangePreset', () => {
+  it('accepts the four locked range values', () => {
+    expect(parseRangePreset('today')).toBe('today')
+    expect(parseRangePreset('week')).toBe('week')
+    expect(parseRangePreset('month')).toBe('month')
+    expect(parseRangePreset('quarter')).toBe('quarter')
+  })
+
+  it('falls through to today on absent input', () => {
+    expect(parseRangePreset(null)).toBe('today')
+    expect(parseRangePreset(undefined)).toBe('today')
+    expect(parseRangePreset('')).toBe('today')
+  })
+
+  it('falls through to today on unknown values', () => {
+    expect(parseRangePreset('banana')).toBe('today')
+    expect(parseRangePreset('Today')).toBe('today') // case-sensitive
+    expect(parseRangePreset('this_week')).toBe('today') // dashboard preset vocabulary, not TimeChip
   })
 })
