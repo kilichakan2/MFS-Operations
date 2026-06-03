@@ -2,6 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import AppHeader        from '@/components/AppHeader'
 import RoleNav          from '@/components/RoleNav'
 import BottomSheetSelector from '@/components/BottomSheetSelector'
@@ -1028,12 +1029,23 @@ async function exportPdf(agreement: Agreement) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+const VIEW_FILTERS: ViewFilter[] = ['all', 'draft', 'active', 'expired', 'cancelled']
+
+// Initialises ViewFilter from the URL ?filter= param (locked at Item 5a
+// PR #10 C12). Falls back to 'all' when the param is absent or invalid.
+function readFilterFromUrl(raw: string | null | undefined): ViewFilter {
+  return VIEW_FILTERS.includes(raw as ViewFilter) ? (raw as ViewFilter) : 'all'
+}
+
 export default function PricingPage() {
+  const searchParams = useSearchParams()
   const [agreements,    setAgreements]    = useState<Agreement[]>([])
   const [loading,       setLoading]       = useState(true)
   const [loadError,     setLoadError]     = useState('')
   const [view,          setView]          = useState<'list' | 'new' | 'detail'>('list')
-  const [filter,        setFilter]        = useState<ViewFilter>('all')
+  const [filter,        setFilter]        = useState<ViewFilter>(() =>
+    readFilterFromUrl(searchParams?.get('filter')),
+  )
   const [search,        setSearch]        = useState('')
   const [selected,      setSelected]      = useState<Agreement | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
