@@ -245,3 +245,33 @@ The 302/permanent:false choice is deliberate for this reason. The spec contains 
 8. **`git mv app/screen4 app/dashboard/admin` parent auto-create.** Modern git (≥ 2.0) auto-creates intermediate directories. If the implementer's git is older or refuses, fallback: `mkdir app/dashboard && git mv app/screen4 app/dashboard/admin`. Either path is fine.
 
 9. **Chrome matrix re-runs require live creds.** `chrome-matrix.spec.ts` reads `E2E_USER_*` and `E2E_PIN_*` / `E2E_PASSWORD_ADMIN` from `.env.e2e.local`. If those creds are missing or stale, the spec emits `MISSING_CREDS:<var>` failing tests (by design — never silently skips). Implementer must confirm `.env.e2e.local` is populated before running step 5.
+
+---
+
+## Item 6 backlog (deferred — surfaced during Item 4 Gate 4 + Gate 5)
+
+### Critical
+- **Leaflet `Map container is already initialized` on admin chrome /map.**
+  react-leaflet + React StrictMode double-mount in `components/MapView.tsx:129`,
+  rendered from `app/map/page.tsx:174`. Reproduced on `main` at `/screen6` admin
+  (mobile clean repro; desktop after one retry through an unrelated auth flake).
+  Chrome matrix admin/map scenario stays red until fixed. Fix candidates: `key`
+  prop forcing remount, useEffect cleanup clearing `_leaflet_id` on the container
+  node, or an explicit "already initialized" guard.
+
+### Non-critical (cleanup)
+- `middleware.ts:154` and `components/PwaGuard.tsx:61` — `permitted.some(p => pathname.startsWith(p))` is a prefix match without a path-boundary check. Tighten to `pathname === p || pathname.startsWith(p + '/')` before adding any routes whose prefixes overlap.
+- `tests/e2e/_auth.ts:87` — `screen\d` alternation in post-login `waitForURL` regex is dead code after Item 4. Remove during cleanup pass.
+- Stale `screen[N]` comment / console refs (out of scope for Item 4 per plan exclusions):
+  - `app/haccp/page.tsx:771`
+  - `app/map/page.tsx:9`, `:12`, `:85`
+  - `app/dashboard/admin/page.tsx:294`
+  - `app/routes/page.tsx:467`
+  - `components/MapView.tsx:6`
+
+### Flaky tests observed (low priority)
+- `tests/e2e/chrome-matrix.spec.ts` — `sales role @desktop › /orders` flaked once during the Gate 5 matrix run on HEAD; passed on retry.
+- `tests/e2e/chrome-matrix.spec.ts` / `_auth.ts` — admin login `loginAsAdmin` timed out filling `input[autocomplete="username"]` once on `main` during the C17b run; passed on retry. Possibly environmental, may be the mode-selector transition not settling.
+
+### Pre-existing test failure (out of scope for Item 4, will land in separate one-line hotfix)
+- `tests/unit/annualReview.test.ts:773` — `expect(days).toBeGreaterThan(31)` against a 32-day-offset fixture. Math.floor of sub-day clock arithmetic rounds to exactly 31. Last touched by `07dd755`; red on both `main` and `feat/ui-overhaul-04-url-renames`. Fix: `>=` or pin to a fixed `Date.now()` in the fixture.
