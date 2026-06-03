@@ -193,6 +193,7 @@ const t = {
   chipYesterday:       { en: 'Yesterday',              tr: 'Dün'                          },
   chipThisWeek:        { en: 'This Week',              tr: 'Bu Hafta'                     },
   chipThisMonth:       { en: 'This Month',             tr: 'Bu Ay'                        },
+  chipQuarter:         { en: 'This Quarter',           tr: 'Bu Çeyrek'                    },
   chipAllTime:         { en: 'All Time',               tr: 'Tümü'                         },
   resolveAction:       { en: 'Resolve',                tr: 'Çöz'                          },
   editAction:          { en: 'Edit',                   tr: 'Düzenle'                      },
