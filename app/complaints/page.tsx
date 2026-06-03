@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useId, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import BottomSheetSelector from '@/components/BottomSheetSelector'
 import RoleNav             from '@/components/RoleNav'
 import { useLanguage }     from '@/lib/LanguageContext'
@@ -229,6 +230,28 @@ function TimeChips({ active, onChange }: { active: TimeChip; onChange: (c:TimeCh
   )
 }
 
+// ─── Status chips (Open / Resolved / All) — used in AllComplaintsTab ──────────
+
+type StatusFilterValue = 'all' | 'open' | 'resolved'
+const STATUS_CHIPS: { id: StatusFilterValue; label: string }[] = [
+  { id: 'all',      label: 'All'      },
+  { id: 'open',     label: 'Open'     },
+  { id: 'resolved', label: 'Resolved' },
+]
+function StatusChips({ active, onChange }: { active: StatusFilterValue; onChange: (v: StatusFilterValue)=>void }) {
+  return (
+    <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+      {STATUS_CHIPS.map(cfg => (
+        <button key={cfg.id} type="button" onClick={() => onChange(cfg.id)}
+          className={['flex-shrink-0 h-7 px-3 rounded-full text-xs font-bold transition-all',
+            active === cfg.id ? 'bg-[#16205B] text-white shadow-sm' : 'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
+          {cfg.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ─── Complaint card ───────────────────────────────────────────────────────────
 
 function fmtDate(iso: string) {
@@ -400,11 +423,22 @@ function ComplaintCard({
 
 function AllComplaintsTab() {
   const { t }                         = useLanguage()
+  // The Item 5a Open Complaints KPI tile sends ?status=open and (via the
+  // outer auto-switch in Complaints below) routes here. Init the chip
+  // and the new status filter from the URL on mount; both stay user-
+  // driven from then on via TimeChips / StatusChips.
+  const searchParams = useSearchParams()
   const [complaints,   setComplaints] = useState<ComplaintRow[]>([])
   const [loading,      setLoading]    = useState(true)
   const [error,        setError]      = useState('')
   const [search,       setSearch]     = useState('')
-  const [chip,         setChip]       = useState<TimeChip>('today')
+  const [chip,         setChip]       = useState<TimeChip>(() =>
+    presetToChip(searchParams?.get('range')) ?? 'today',
+  )
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(() => {
+    const s = searchParams?.get('status')
+    return (s === 'open' || s === 'resolved') ? s : 'all'
+  })
 
   async function load() {
     setLoading(true); setError('')
@@ -454,6 +488,7 @@ function AllComplaintsTab() {
     <div className="pb-24">
       <SearchBar value={search} onChange={setSearch} />
       <TimeChips active={chip} onChange={setChip} />
+      <StatusChips active={statusFilter} onChange={setStatusFilter} />
 
       {loading && (
         <div className="flex justify-center py-16">
@@ -486,8 +521,8 @@ function AllComplaintsTab() {
       {!loading && !error && filtered.length > 0 && (
         <div className="max-w-lg mx-auto px-4 space-y-4">
 
-          {/* Open section */}
-          {openComplaints.length > 0 && (
+          {/* Open section — gated by statusFilter (Item 5a.1 Bucket A) */}
+          {statusFilter !== 'resolved' && openComplaints.length > 0 && (
             <div>
               <p className="text-[10px] text-amber-700 font-bold uppercase tracking-widest px-1 mb-2 flex items-center gap-1">
                 🟡 Open · {openComplaints.length}
@@ -500,8 +535,8 @@ function AllComplaintsTab() {
             </div>
           )}
 
-          {/* Resolved section */}
-          {resolvedComplaints.length > 0 && (
+          {/* Resolved section — gated by statusFilter (Item 5a.1 Bucket A) */}
+          {statusFilter !== 'open' && resolvedComplaints.length > 0 && (
             <div>
               <p className="text-[10px] text-green-700 font-bold uppercase tracking-widest px-1 mb-2 flex items-center gap-1">
                 ✅ Resolved · {resolvedComplaints.length}
@@ -542,7 +577,17 @@ export default function ComplaintsPage() {
   const formId      = useId()
   useEffect(() => { syncReferenceData().catch(console.error) }, [])
 
-  const [activeTab,    setActiveTab]    = useState<'log'|'all'>('log')
+  // Item 5a's Open Complaints KPI tile lands here with ?status=open. The
+  // outer tab defaults to 'log' (new-complaint form); when any filter
+  // param is present (?tab=all explicitly OR an implicit ?status= /
+  // ?range= filter), the user clearly wants the list — auto-switch on
+  // mount. Per Frame Q2.
+  const searchParams = useSearchParams()
+  const [activeTab,    setActiveTab]    = useState<'log'|'all'>(() => {
+    if (searchParams?.get('tab') === 'all') return 'all'
+    if (searchParams?.get('status') || searchParams?.get('range')) return 'all'
+    return 'log'
+  })
   const customers   = useCustomers()
   const [form,      setForm]     = useState<FormState>(EMPTY_FORM)
   const [errors,    setErrors]   = useState<ValidationErrors>({})
