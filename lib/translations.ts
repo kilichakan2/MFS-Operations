@@ -195,6 +195,7 @@ const t = {
   chipThisMonth:       { en: 'This Month',             tr: 'Bu Ay'                        },
   chipQuarter:         { en: 'This Quarter',           tr: 'Bu Çeyrek'                    },
   chipAllTime:         { en: 'All Time',               tr: 'Tümü'                         },
+  statusAll:           { en: 'All',                    tr: 'Hepsi'                        },
   resolveAction:       { en: 'Resolve',                tr: 'Çöz'                          },
   editAction:          { en: 'Edit',                   tr: 'Düzenle'                      },
   deleteAction:        { en: 'Delete',                 tr: 'Sil'                          },

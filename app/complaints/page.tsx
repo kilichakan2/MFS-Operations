@@ -233,19 +233,20 @@ function TimeChips({ active, onChange }: { active: TimeChip; onChange: (c:TimeCh
 // ─── Status chips (Open / Resolved / All) — used in AllComplaintsTab ──────────
 
 type StatusFilterValue = 'all' | 'open' | 'resolved'
-const STATUS_CHIPS: { id: StatusFilterValue; label: string }[] = [
-  { id: 'all',      label: 'All'      },
-  { id: 'open',     label: 'Open'     },
-  { id: 'resolved', label: 'Resolved' },
+const STATUS_CHIPS: { id: StatusFilterValue; key: string }[] = [
+  { id: 'all',      key: 'statusAll' },
+  { id: 'open',     key: 'open'      },
+  { id: 'resolved', key: 'resolved'  },
 ]
 function StatusChips({ active, onChange }: { active: StatusFilterValue; onChange: (v: StatusFilterValue)=>void }) {
+  const { t } = useLanguage()
   return (
     <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
       {STATUS_CHIPS.map(cfg => (
         <button key={cfg.id} type="button" onClick={() => onChange(cfg.id)}
           className={['flex-shrink-0 h-7 px-3 rounded-full text-xs font-bold transition-all',
             active === cfg.id ? 'bg-[#16205B] text-white shadow-sm' : 'bg-white text-[#16205B]/60 border border-[#16205B]/10'].join(' ')}>
-          {cfg.label}
+          {t(cfg.key as Parameters<typeof t>[0])}
         </button>
       ))}
     </div>
