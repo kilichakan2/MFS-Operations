@@ -226,7 +226,6 @@ export default function AdminDashboardPage() {
               accent="navy"
               href="/orders"
               icon={<ShoppingBag size={14} strokeWidth={2} />}
-              tight
               compact
             />
           </div>

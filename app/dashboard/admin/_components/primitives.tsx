@@ -170,7 +170,7 @@ export function StagePill({ dotClassName, label }: { dotClassName: string; label
 // ─── KPI tile — Card variant + accent stripe + display-ramp value ───────────
 
 export function KpiTile({
-  value, label, sub, accent, icon, href, tight = false, compact = false,
+  value, label, sub, accent, icon, href, compact = false,
 }: {
   value: string | number
   label: string
@@ -178,14 +178,17 @@ export function KpiTile({
   accent: Accent
   icon?: ReactNode
   href: Route
-  tight?: boolean
   compact?: boolean
 }) {
   const cls = accentClassFor(accent)
   const padClass = compact ? 'p-4 pl-5' : 'p-5 pl-6'
   return (
     <Link href={href} className={[
-      'relative block overflow-hidden no-underline text-inherit',
+      // h-full lets the tile stretch to its row height when the
+      // grid item is wrapped (e.g. the Orders tile's col-span-2
+      // wrapper on mobile). Without it the Link sits at intrinsic
+      // height inside the stretched wrapper and breaks the row.
+      'relative block h-full overflow-hidden no-underline text-inherit',
       'bg-white border border-mfs-neutral-200 rounded-lg shadow-sm',
       'transition-shadow hover:shadow-md',
       padClass,
@@ -217,11 +220,14 @@ export function KpiTile({
         {value}
       </div>
 
-      {/* Sub-label */}
+      {/* Sub-label — always wraps; we removed the legacy `tight`
+          nowrap because at the desktop 1×5 grid each column is
+          ~186px wide and the Orders sub-label ("12 placed / 8
+          printed / 4 completed") overflowed under overflow-hidden. */}
       {sub && (
         <div className={[
           'text-mfs-neutral-700 mt-1.5',
-          tight ? 'text-xs whitespace-nowrap' : (compact ? 'text-xs' : 'text-[13px]'),
+          compact ? 'text-xs' : 'text-[13px]',
         ].join(' ')}>
           {sub}
         </div>
