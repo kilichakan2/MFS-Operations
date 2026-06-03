@@ -120,7 +120,35 @@ test.describe('Dashboard admin restyle (Item 5a) — structural', () => {
     await expect(banner.getByText('Dashboard', { exact: false }).first()).toBeVisible()
   })
 
-  // ── 6. Orders KPI tap-through ───────────────────────────────────────────────
+  // ── 6. KPI tap-through destinations ─────────────────────────────────────────
+
+  test('Open complaints KPI taps through to /complaints?status=open', async ({ page }) => {
+    await page.getByRole('link', { name: /^Open complaints/ }).click()
+    await page.waitForURL('**/complaints?status=open', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/complaints\?status=open(&|#|$)/)
+  })
+
+  test('Visits KPI taps through to /visits?range={preset}', async ({ page }) => {
+    // Switch preset away from default so we cover the dynamic href
+    // (the consultant spec is that ?range= reflects whichever preset
+    // is active at click time).
+    await page.getByRole('button', { name: /^This week$/ }).click()
+    await page.getByRole('link', { name: /^Visits/ }).click()
+    await page.waitForURL('**/visits?range=week', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/visits\?range=week(&|#|$)/)
+  })
+
+  test('Discrepancies KPI taps through to /dispatch', async ({ page }) => {
+    await page.getByRole('link', { name: /^Discrepancies/ }).click()
+    await page.waitForURL('**/dispatch', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/dispatch(\?|#|$)/)
+  })
+
+  test('Active pricing KPI taps through to /pricing?filter=active', async ({ page }) => {
+    await page.getByRole('link', { name: /^Active pricing/ }).click()
+    await page.waitForURL('**/pricing?filter=active', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/pricing\?filter=active(&|#|$)/)
+  })
 
   test('Orders KPI tile taps through to /orders', async ({ page }) => {
     const ordersTile = page.getByRole('link', { name: /^Orders today/ })

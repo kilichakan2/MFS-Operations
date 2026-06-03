@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import type { Route } from 'next'
 import { AlertCircle, MapPin, ClipboardList, Tags, ShoppingBag } from 'lucide-react'
 import RoleNav   from '@/components/RoleNav'
 import AppHeader from '@/components/AppHeader'
@@ -187,7 +188,9 @@ export default function AdminDashboardPage() {
             label="Open complaints"
             sub=">48h unresolved"
             accent={openAlertsCount > 0 ? 'danger' : 'success'}
-            href="/complaints"
+            // Forward-declared filter — /complaints will read ?status=open
+            // in a follow-up PR. Until then it lands on the unfiltered page.
+            href={'/complaints?status=open' as Route}
             icon={<AlertCircle size={14} strokeWidth={2} />}
             compact
           />
@@ -196,7 +199,9 @@ export default function AdminDashboardPage() {
             label="Visits"
             sub={`${activeReps} rep${activeReps !== 1 ? 's' : ''} active`}
             accent="navy"
-            href="/visits"
+            // Forward-declared filter — /visits will read ?range= and scope
+            // its query to the same window the dashboard is showing.
+            href={`/visits?range=${preset}` as Route}
             icon={<MapPin size={14} strokeWidth={2} />}
             compact
           />
@@ -205,6 +210,8 @@ export default function AdminDashboardPage() {
             label="Discrepancies"
             sub={range.label}
             accent={totalDiscToday > 0 ? 'warning' : 'success'}
+            // Stays at /dispatch — no good destination today; queued for
+            // a separate /admin/audit?type=discrepancy follow-up PR.
             href="/dispatch"
             icon={<ClipboardList size={14} strokeWidth={2} />}
             compact
@@ -214,7 +221,8 @@ export default function AdminDashboardPage() {
             label="Active pricing"
             sub={data.draftPricing > 0 ? `${data.draftPricing} draft` : 'agreements'}
             accent={data.expiredPricing > 0 ? 'warning' : 'success'}
-            href="/pricing"
+            // Forward-declared filter — /pricing will read ?filter=active.
+            href={'/pricing?filter=active' as Route}
             icon={<Tags size={14} strokeWidth={2} />}
             compact
           />
