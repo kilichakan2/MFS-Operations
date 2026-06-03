@@ -295,6 +295,43 @@ export function EmptyState({ rangeLabel }: { rangeLabel: string }) {
   )
 }
 
+// ─── Range label — shows the computed start–end of the active preset ─────────
+
+/**
+ * Formats a single ISO timestamp as "Mon 27 May" in Europe/London.
+ * Pure helper; tested.
+ */
+export function formatRangeDay(iso: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    weekday: 'short',
+    day:     'numeric',
+    month:   'short',
+    timeZone: 'Europe/London',
+  }).format(new Date(iso))
+}
+
+/**
+ * Renders the explicit start–end caption next to the RangeTabs strip
+ * so users can see exactly which window the dashboard is searching.
+ * Same caption typography as the surrounding "RANGE" eyebrow —
+ * uppercase, tracked-out, muted. Collapses to a single day when
+ * both ends format identically (e.g. "Today").
+ *
+ * Europe/London timezone is hard-coded — the orders/pricing UTC
+ * convention upstream is a separate known issue, but the user-
+ * facing caption must read in local time.
+ */
+export function RangeLabel({ from, to }: { from: string; to: string }) {
+  const fromStr = formatRangeDay(from)
+  const toStr   = formatRangeDay(to)
+  const text    = fromStr === toStr ? fromStr : `${fromStr} – ${toStr}`
+  return (
+    <span className="text-[10px] md:text-[11px] font-semibold tracking-[0.12em] uppercase text-mfs-neutral-500">
+      {text}
+    </span>
+  )
+}
+
 // ─── Re-export shared utility for cards/stat-blocks to compose ──────────────
 
 export type { CSSProperties }

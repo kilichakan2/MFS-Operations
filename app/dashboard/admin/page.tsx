@@ -5,7 +5,7 @@ import { AlertCircle, MapPin, ClipboardList, Tags, ShoppingBag } from 'lucide-re
 import RoleNav   from '@/components/RoleNav'
 import AppHeader from '@/components/AppHeader'
 import {
-  KpiTile, RangeTabs, PageHeading,
+  KpiTile, RangeTabs, RangeLabel, PageHeading,
 } from './_components/primitives'
 import {
   OpenComplaintsCard, AtRiskCard, CommitmentsCard,
@@ -231,12 +231,13 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Range tabs */}
+        {/* Range tabs + explicit start–end caption */}
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-[10px] md:text-[11px] font-semibold tracking-[0.12em] uppercase text-mfs-neutral-500">
             Range
           </span>
           <RangeTabs<Preset> value={preset} onChange={setPreset} ranges={RANGES} scrollOnSmall />
+          <RangeLabel from={range.from} to={range.to} />
         </div>
 
         {/* Stat blocks — 2-col mobile + split-bar full-width / 3-col desktop */}
