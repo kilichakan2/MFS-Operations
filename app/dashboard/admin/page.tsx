@@ -199,9 +199,10 @@ export default function AdminDashboardPage() {
             label="Visits"
             sub={`${activeReps} rep${activeReps !== 1 ? 's' : ''} active`}
             accent="navy"
-            // Forward-declared filter — /visits will read ?range= and scope
-            // its query to the same window the dashboard is showing.
-            href={`/visits?range=${preset}` as Route}
+            // Item 5a.1 PR B amendment: Visits KPI now points to the
+            // new dedicated /admin/visits page (Frame Q3 B1 — all-reps
+            // list view). Was /visits?range=${preset} pre-amendment.
+            href={`/admin/visits?range=${preset}` as Route}
             icon={<MapPin size={14} strokeWidth={2} />}
             compact
           />
@@ -210,9 +211,11 @@ export default function AdminDashboardPage() {
             label="Discrepancies"
             sub={range.label}
             accent={totalDiscToday > 0 ? 'warning' : 'success'}
-            // Stays at /dispatch — no good destination today; queued for
-            // a separate /admin/audit?type=discrepancy follow-up PR.
-            href="/dispatch"
+            // Item 5a.1 PR B amendment: Discrepancies KPI now points
+            // to the new dedicated /admin/discrepancies page (Bucket D
+            // D1). Was /dispatch placeholder pre-amendment per Item 5a
+            // Frame Q3.
+            href={`/admin/discrepancies?range=${preset}` as Route}
             icon={<ClipboardList size={14} strokeWidth={2} />}
             compact
           />
@@ -259,12 +262,12 @@ export default function AdminDashboardPage() {
 
         {/* Operational cards — 1-col mobile stack / 2-col desktop grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5 items-start">
-          <OpenComplaintsCard         items={data.openComplaints48h}        rangeLabel={range.label} />
-          <AtRiskCard                 items={data.atRiskAccounts}           rangeLabel={range.label} />
-          <CommitmentsCard            items={data.unreviewedCommitments}    rangeLabel={range.label} />
-          <ProspectsCard              items={data.prospectsThisWeek}        rangeLabel={range.label} />
-          <VisitsByRepCard            reps={data.weekVisitsByRep}           rangeLabel={range.label} />
-          <ComplaintCategoriesCard    categories={data.weekComplaintCategories} />
+          <OpenComplaintsCard      items={data.openComplaints48h}             rangeLabel={range.label} href={'/complaints?status=open&tab=all' as Route} />
+          <AtRiskCard              items={data.atRiskAccounts}                rangeLabel={range.label} href={'/admin/at-risk' as Route} />
+          <CommitmentsCard         items={data.unreviewedCommitments}         rangeLabel={range.label} href={'/admin/commitments' as Route} />
+          <ProspectsCard           items={data.prospectsThisWeek}             rangeLabel={range.label} href={'/admin/prospects' as Route} />
+          <VisitsByRepCard         reps={data.weekVisitsByRep}                rangeLabel={range.label} href={'/admin/visits' as Route} />
+          <ComplaintCategoriesCard categories={data.weekComplaintCategories}                          href={'/complaints?tab=all' as Route} />
         </div>
       </main>
       )}

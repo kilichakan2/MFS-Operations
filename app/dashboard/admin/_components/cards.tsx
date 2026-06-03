@@ -20,6 +20,7 @@
  * both breakpoints) without crushing the card padding.
  */
 
+import type { Route } from 'next'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 import {
   Card, CardHead, ListRow, RowHead, TableRow, StagePill, EmptyState,
@@ -75,10 +76,10 @@ interface Prospect { name: string; postcode: string; outcome: string; visitType:
 // ─── 1. Open complaints (>48h unresolved) ───────────────────────────────────
 
 export function OpenComplaintsCard({
-  items, compact = false, rangeLabel,
-}: { items: OpenComplaint[]; compact?: boolean; rangeLabel: string }) {
+  items, compact = false, rangeLabel, href,
+}: { items: OpenComplaint[]; compact?: boolean; rangeLabel: string; href?: Route }) {
   return (
-    <Card compact={compact}>
+    <Card compact={compact} href={href}>
       <CardHead title="Open complaints" count={items.length} compact={compact} />
       {items.length === 0 ? <EmptyState rangeLabel={rangeLabel} /> : (
         compact ? (
@@ -134,10 +135,10 @@ export function OpenComplaintsCard({
 // ─── 2. At-risk accounts ────────────────────────────────────────────────────
 
 export function AtRiskCard({
-  items, compact = false, rangeLabel,
-}: { items: AtRiskAccount[]; compact?: boolean; rangeLabel: string }) {
+  items, compact = false, rangeLabel, href,
+}: { items: AtRiskAccount[]; compact?: boolean; rangeLabel: string; href?: Route }) {
   return (
-    <Card compact={compact}>
+    <Card compact={compact} href={href}>
       <CardHead title="At-risk accounts" count={items.length} compact={compact} />
       {items.length === 0 ? <EmptyState rangeLabel={rangeLabel} /> : (
         compact ? (
@@ -194,10 +195,10 @@ export function AtRiskCard({
 // ─── 3. Unreviewed commitments ──────────────────────────────────────────────
 
 export function CommitmentsCard({
-  items, compact = false, rangeLabel,
-}: { items: UnreviewedCommitment[]; compact?: boolean; rangeLabel: string }) {
+  items, compact = false, rangeLabel, href,
+}: { items: UnreviewedCommitment[]; compact?: boolean; rangeLabel: string; href?: Route }) {
   return (
-    <Card compact={compact}>
+    <Card compact={compact} href={href}>
       <CardHead title="Unreviewed commitments" count={items.length} compact={compact} />
       {items.length === 0 ? <EmptyState rangeLabel={rangeLabel} /> : (
         <div>
@@ -240,12 +241,12 @@ export function CommitmentsCard({
 // ─── 4. Visits by rep (single bar, no warning treatment — Q6) ───────────────
 
 export function VisitsByRepCard({
-  reps, compact = false, rangeLabel,
-}: { reps: WeekVisitByRep[]; compact?: boolean; rangeLabel: string }) {
+  reps, compact = false, rangeLabel, href,
+}: { reps: WeekVisitByRep[]; compact?: boolean; rangeLabel: string; href?: Route }) {
   const sorted = sortRepsByCountDesc(reps)
   const max    = sorted.length > 0 ? Math.max(...sorted.map(r => r.total)) : 1
   return (
-    <Card compact={compact}>
+    <Card compact={compact} href={href}>
       <CardHead title="Visits by rep" count={sorted.length} compact={compact} />
       {sorted.length === 0 ? <EmptyState rangeLabel={rangeLabel} /> : (
         <div className="flex flex-col gap-4">
@@ -279,15 +280,15 @@ export function VisitsByRepCard({
 // ─── 5. Complaint categories (Recharts donut + legend) ──────────────────────
 
 export function ComplaintCategoriesCard({
-  categories, compact = false,
-}: { categories: WeekComplaintByCategory[]; compact?: boolean }) {
+  categories, compact = false, href,
+}: { categories: WeekComplaintByCategory[]; compact?: boolean; href?: Route }) {
   const total = categories.reduce((s, c) => s + c.count, 0)
   // Hide entirely when nothing to plot (Q14)
   if (total === 0) return null
 
   const size = compact ? 110 : 132
   return (
-    <Card compact={compact}>
+    <Card compact={compact} href={href}>
       <CardHead title="Complaint categories" count={total} compact={compact} />
       <div className="flex items-center gap-5 flex-wrap">
         <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
@@ -345,10 +346,10 @@ export function ComplaintCategoriesCard({
 // ─── 6. Prospects this week ─────────────────────────────────────────────────
 
 export function ProspectsCard({
-  items, compact = false, rangeLabel,
-}: { items: Prospect[]; compact?: boolean; rangeLabel: string }) {
+  items, compact = false, rangeLabel, href,
+}: { items: Prospect[]; compact?: boolean; rangeLabel: string; href?: Route }) {
   return (
-    <Card compact={compact}>
+    <Card compact={compact} href={href}>
       <CardHead title="Prospects this week" count={items.length} compact={compact} />
       {items.length === 0 ? <EmptyState rangeLabel={rangeLabel} /> : (
         compact ? (
