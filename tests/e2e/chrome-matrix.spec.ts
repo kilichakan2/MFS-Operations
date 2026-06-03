@@ -42,7 +42,7 @@ const ROLE_ROUTES: Record<Role, string[]> = {
   office:    ['/dispatch', '/cash', '/complaints', '/pricing', '/compliments', '/routes', '/runs', '/dashboard/admin'],
   warehouse: ['/dispatch', '/complaints', '/routes', '/compliments', '/runs', '/dashboard/admin'],
   driver:    ['/driver', '/complaints', '/compliments'],
-  admin:     ['/dashboard/admin', '/complaints', '/pricing', '/cash', '/compliments', '/routes', '/runs', '/admin', '/map'],
+  admin:     ['/dashboard/admin', '/complaints', '/pricing', '/cash', '/compliments', '/routes', '/runs', '/admin', '/map', '/admin/visits', '/admin/at-risk', '/admin/commitments', '/admin/prospects', '/admin/discrepancies'],
 }
 
 function credsFor(role: Role): { user: string | undefined; secret: string | undefined; secretEnv: string } {

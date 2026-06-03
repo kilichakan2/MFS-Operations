@@ -45,15 +45,16 @@ test.describe('Dashboard admin restyle (Item 5a) — structural', () => {
   // ── 1. KPI tiles ─────────────────────────────────────────────────────────
 
   test('renders all 5 KPI tile links', async ({ page }) => {
-    // Each KPI tile is a Link with the label text inside its
-    // accessible name. Selecting by role disambiguates from any
-    // CardHead title that uses the same wording further down the
-    // page (e.g. the Open complaints card).
-    await expect(page.getByRole('link', { name: /^Open complaints/ })).toBeVisible()
-    await expect(page.getByRole('link', { name: /^Visits/ })).toBeVisible()
-    await expect(page.getByRole('link', { name: /^Discrepancies/ })).toBeVisible()
-    await expect(page.getByRole('link', { name: /^Active pricing/ })).toBeVisible()
-    await expect(page.getByRole('link', { name: /^Orders today/ })).toBeVisible()
+    // After PR B C9 the 6 list cards also became <Link> elements,
+    // so several KPI labels now match more than one link on the
+    // page (e.g. "Visits" matches the KPI tile AND the "Visits by
+    // rep" card). KPI tiles render above cards — `.first()` picks
+    // the KPI consistently.
+    await expect(page.getByRole('link', { name: /^Open complaints/ }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /^Visits/ }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /^Discrepancies/ }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /^Active pricing/ }).first()).toBeVisible()
+    await expect(page.getByRole('link', { name: /^Orders today/ }).first()).toBeVisible()
   })
 
   // ── 2. Page heading — eyebrow yes, H1 no ──────────────────────────────────
@@ -123,40 +124,84 @@ test.describe('Dashboard admin restyle (Item 5a) — structural', () => {
   // ── 6. KPI tap-through destinations ─────────────────────────────────────────
 
   test('Open complaints KPI taps through to /complaints?status=open', async ({ page }) => {
-    await page.getByRole('link', { name: /^Open complaints/ }).click()
+    // `.first()` disambiguates from the Open complaints CARD that
+    // also rendered as a Link after PR B C9 (lower in the DOM).
+    await page.getByRole('link', { name: /^Open complaints/ }).first().click()
     await page.waitForURL('**/complaints?status=open', { timeout: 5_000 })
     expect(page.url()).toMatch(/\/complaints\?status=open(&|#|$)/)
   })
 
-  test('Visits KPI taps through to /visits?range={preset}', async ({ page }) => {
-    // Switch preset away from default so we cover the dynamic href
-    // (the consultant spec is that ?range= reflects whichever preset
-    // is active at click time).
+  test('Visits KPI taps through to /admin/visits?range={preset} (Item 5a.1 PR B amendment)', async ({ page }) => {
+    // Switch preset away from default so we cover the dynamic href.
     await page.getByRole('button', { name: /^This week$/ }).click()
-    await page.getByRole('link', { name: /^Visits/ }).click()
-    await page.waitForURL('**/visits?range=week', { timeout: 5_000 })
-    expect(page.url()).toMatch(/\/visits\?range=week(&|#|$)/)
+    await page.getByRole('link', { name: /^Visits/ }).first().click()
+    await page.waitForURL('**/admin/visits?range=week', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/admin\/visits\?range=week(&|#|$)/)
   })
 
-  test('Discrepancies KPI taps through to /dispatch', async ({ page }) => {
-    await page.getByRole('link', { name: /^Discrepancies/ }).click()
-    await page.waitForURL('**/dispatch', { timeout: 5_000 })
-    expect(page.url()).toMatch(/\/dispatch(\?|#|$)/)
+  test('Discrepancies KPI taps through to /admin/discrepancies?range={preset} (Item 5a.1 PR B amendment)', async ({ page }) => {
+    await page.getByRole('link', { name: /^Discrepancies/ }).first().click()
+    await page.waitForURL('**/admin/discrepancies?range=today', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/admin\/discrepancies\?range=today(&|#|$)/)
   })
 
   test('Active pricing KPI taps through to /pricing?filter=active', async ({ page }) => {
-    await page.getByRole('link', { name: /^Active pricing/ }).click()
+    await page.getByRole('link', { name: /^Active pricing/ }).first().click()
     await page.waitForURL('**/pricing?filter=active', { timeout: 5_000 })
     expect(page.url()).toMatch(/\/pricing\?filter=active(&|#|$)/)
   })
 
   test('Orders KPI tile taps through to /orders', async ({ page }) => {
-    const ordersTile = page.getByRole('link', { name: /^Orders today/ })
+    const ordersTile = page.getByRole('link', { name: /^Orders today/ }).first()
     await expect(ordersTile).toBeVisible()
     await ordersTile.click()
     await page.waitForURL('**/orders', { timeout: 5_000 })
     // We don't assert page contents — /orders is paused, that's fine.
     expect(page.url()).toMatch(/\/orders(\?|#|$)/)
+  })
+
+  // ── Item 5a.1 PR B C9 — 6 cards become clickable ──────────────────────────
+
+  test('Open complaints card taps through to /complaints?status=open&tab=all', async ({ page }) => {
+    // Both the KPI tile and the card carry "Open complaints"; the
+    // card is the later Link in the DOM. `.last()` picks it.
+    await page.locator('a', { hasText: 'Open complaints' }).last().click()
+    await page.waitForURL(/\/complaints\?(status=open&tab=all|tab=all&status=open)/, { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/complaints\?(status=open(&tab=all)?|tab=all&status=open)/)
+  })
+
+  test('At-risk accounts card taps through to /admin/at-risk', async ({ page }) => {
+    await page.locator('a', { hasText: 'At-risk accounts' }).first().click()
+    await page.waitForURL('**/admin/at-risk', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/admin\/at-risk(\?|#|$)/)
+  })
+
+  test('Unreviewed commitments card taps through to /admin/commitments', async ({ page }) => {
+    await page.locator('a', { hasText: 'Unreviewed commitments' }).first().click()
+    await page.waitForURL('**/admin/commitments', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/admin\/commitments(\?|#|$)/)
+  })
+
+  test('Prospects this week card taps through to /admin/prospects', async ({ page }) => {
+    await page.locator('a', { hasText: 'Prospects this week' }).first().click()
+    await page.waitForURL('**/admin/prospects', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/admin\/prospects(\?|#|$)/)
+  })
+
+  test('Visits by rep card taps through to /admin/visits', async ({ page }) => {
+    await page.locator('a', { hasText: 'Visits by rep' }).first().click()
+    await page.waitForURL('**/admin/visits', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/admin\/visits(\?|#|$)/)
+  })
+
+  test('Complaint categories card taps through to /complaints?tab=all (when rendered)', async ({ page }) => {
+    const card = page.locator('a', { hasText: 'Complaint categories' }).first()
+    if (await card.count() === 0) {
+      test.skip(true, 'Complaint categories card hides on empty data per Q14 — tap-through not assertable')
+    }
+    await card.click()
+    await page.waitForURL('**/complaints?tab=all', { timeout: 5_000 })
+    expect(page.url()).toMatch(/\/complaints\?tab=all(&|#|$)/)
   })
 
   // ── 7. Card grid (6 cards; Complaint categories optional per Q14) ──────────

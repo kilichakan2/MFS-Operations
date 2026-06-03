@@ -53,18 +53,32 @@ export function formatOrdersSubLabel(counts: {
 
 // ─── Card primitive (§7.3) ──────────────────────────────────────────────────
 
+/**
+ * Card root. When `href` is set, the root renders as a Next <Link>
+ * with cursor-pointer + hover-shadow (matching the KpiTile pattern);
+ * when absent, the root stays a plain <div> (Item 5a behaviour).
+ * Item 5a.1 C8 introduced the branch so the dashboard's six list
+ * cards can become clickable without restyling their contents.
+ */
 export function Card({
-  children, className = '', compact = false,
-}: { children: ReactNode; className?: string; compact?: boolean }) {
-  return (
-    <div className={[
-      'bg-white border border-mfs-neutral-200 rounded-lg shadow-sm',
-      compact ? 'p-4' : 'p-5',
-      className,
-    ].join(' ')}>
-      {children}
-    </div>
-  )
+  children, className = '', compact = false, href,
+}: { children: ReactNode; className?: string; compact?: boolean; href?: Route }) {
+  const shared = [
+    'block bg-white border border-mfs-neutral-200 rounded-lg shadow-sm',
+    compact ? 'p-4' : 'p-5',
+    className,
+  ].join(' ')
+  if (href) {
+    return (
+      <Link href={href} className={[
+        shared,
+        'cursor-pointer no-underline text-inherit transition-shadow hover:shadow-md',
+      ].join(' ')}>
+        {children}
+      </Link>
+    )
+  }
+  return <div className={shared}>{children}</div>
 }
 
 // ─── Section label (type ramp caption, muted) ───────────────────────────────
