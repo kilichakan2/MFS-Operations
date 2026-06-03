@@ -106,19 +106,43 @@ test.describe('Dashboard admin restyle (Item 5a) — structural', () => {
     expect(await segments.count()).toBeGreaterThan(0)
   })
 
-  // ── 5. AppHeader page title wired through actions slot (Q8 indirect) ──────
+  // ── 5. AppHeader actions slot + title — chrome hotfix coverage ────────────
 
-  test('AppHeader carries the "Dashboard" page title', async ({ page }) => {
-    // The HACCP + Refresh buttons live in the AppHeader's `actions`
-    // prop, which the chrome only renders on mobile viewport
-    // (`md:hidden`). Their byte-identical preservation is verified
-    // by code-critic at Gate 3 + the chrome matrix's mobile clearance
-    // assertions on /dashboard/admin. Here we just verify the
-    // AppHeader component itself is wired and renders the title
-    // ("Dashboard" — works at any viewport).
+  // The AppHeader chrome was hotfixed (fix/app-header-desktop-actions):
+  //   * Desktop variant now renders the `actions` slot (HACCP shortcut +
+  //     Refresh) — previously the desktop chrome dropped the prop entirely
+  //     so HACCP was only reachable from mobile.
+  //   * Mobile chrome drops the screen-title pipe + span because the
+  //     MfsLogo SVG (107px wide) leaves 0px for the title at < 414px,
+  //     and PageHeading inside the page already carries the identifier.
+  // These two tests pin both behaviours from this one admin page.
+
+  test('AppHeader renders HACCP shortcut on desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.reload({ waitUntil: 'networkidle' })
     const banner = page.getByRole('banner').first()
     await expect(banner).toBeVisible()
-    await expect(banner.getByText('Dashboard', { exact: false }).first()).toBeVisible()
+    await expect(banner.getByRole('link', { name: /HACCP/i })).toBeVisible()
+  })
+
+  test('AppHeader renders HACCP shortcut on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    await page.reload({ waitUntil: 'networkidle' })
+    const banner = page.getByRole('banner').first()
+    await expect(banner).toBeVisible()
+    await expect(banner.getByRole('link', { name: /HACCP/i })).toBeVisible()
+  })
+
+  test('AppHeader does NOT render the "Dashboard" title on mobile', async ({ page }) => {
+    // Negative assertion: the mobile chrome variant intentionally
+    // omits the title (logo + actions only). The desktop variant
+    // renders "DASHBOARD" in its middle slot — verified separately
+    // by the chrome matrix and by visual eyeball.
+    await page.setViewportSize({ width: 375, height: 812 })
+    await page.reload({ waitUntil: 'networkidle' })
+    const banner = page.getByRole('banner').first()
+    await expect(banner).toBeVisible()
+    await expect(banner.getByText(/^Dashboard$/i)).toHaveCount(0)
   })
 
   // ── 6. KPI tap-through destinations ─────────────────────────────────────────

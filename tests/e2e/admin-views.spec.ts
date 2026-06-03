@@ -118,4 +118,19 @@ test.describe('Admin views (Item 5a.1 PR B)', () => {
     await expect(page.getByRole('button', { name: /^This month$/ })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByRole('button', { name: /^Today$/ })).toHaveAttribute('aria-pressed', 'false')
   })
+
+  // ── Chrome hotfix: AppHeader desktop actions slot ────────────────────────
+  // Before fix/app-header-desktop-actions the desktop AppHeader variant
+  // dropped the `actions` prop entirely — HACCP + Refresh were
+  // reachable only from mobile. Pin desktop visibility from one admin
+  // list page so a regression on either the slot wiring or the action
+  // JSX in the admin pages would fail this assertion.
+
+  test('AppHeader renders HACCP shortcut on desktop (/admin/at-risk)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto('/admin/at-risk', { waitUntil: 'networkidle' })
+    const banner = page.getByRole('banner').first()
+    await expect(banner).toBeVisible()
+    await expect(banner.getByRole('link', { name: /HACCP/i })).toBeVisible()
+  })
 })
