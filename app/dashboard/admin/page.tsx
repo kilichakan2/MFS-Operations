@@ -1,32 +1,28 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import RoleNav from '@/components/RoleNav'
-import Link         from 'next/link'
-import AppHeader             from '@/components/AppHeader'
-import DetailModal, { type ModalType } from '@/components/DetailModal'
+import { AlertCircle, MapPin, ClipboardList, Tags, ShoppingBag } from 'lucide-react'
+import RoleNav   from '@/components/RoleNav'
+import AppHeader from '@/components/AppHeader'
+import {
+  KpiTile, RangeTabs, PageHeading,
+} from './_components/primitives'
+import {
+  OpenComplaintsCard, AtRiskCard, CommitmentsCard,
+  VisitsByRepCard, ComplaintCategoriesCard, ProspectsCard,
+} from './_components/cards'
+import {
+  HunterFarmerSplitBlock, ValueStatBlock,
+} from './_components/stat-blocks'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OpenComplaint        { id: string; customer: string; category: string; description: string; loggedBy: string; hoursAgo: number }
-// ─── Pipeline badge colours (matches /visits and DetailModal) ────────────────
-const PIPELINE_BADGE_CLASS: Record<string, string> = {
-  'Logged':             'bg-gray-100 text-gray-500',
-  'In Talks':           'bg-teal-50 text-teal-800',
-  'Not Progressing':    'bg-red-50 text-red-600',
-  'Trial Order Placed': 'bg-blue-50 text-blue-700',
-  'Awaiting Feedback':  'bg-amber-50 text-amber-700',
-  'Won':                'bg-green-50 text-green-700',
-  'Not Won':            'bg-gray-100 text-gray-500',
-}
-
 interface AtRiskAccount        { id: string; customer: string; outcome: 'at_risk'|'lost'; rep: string; hoursAgo: number }
 interface UnreviewedCommitment { id: string; customer: string; detail: string; rep: string; hoursAgo: number }
 interface Discrepancy          { id: string; customer: string; product: string; status: 'short'|'not_sent'; reason: string; orderedQty: number|null; sentQty: number|null; loggedBy: string; createdAt: string }
 interface TodayComplaint       { id: string; customer: string; category: string; status: 'open'|'resolved'; description: string; resolutionNote: string|null; loggedBy: string; createdAt: string }
-interface TodayVisitItem       { id: string; customer: string; visitType: string; outcome: string; pipelineStatus: string; notes: string | null }
-interface TodayVisit           { rep: string; count: number; outcomes: { positive: number; neutral: number; at_risk: number; lost: number }; visits: TodayVisitItem[] }
+interface TodayVisit           { rep: string; count: number; outcomes: { positive: number; neutral: number; at_risk: number; lost: number } }
 interface WeekDiscrepancyByReason   { reason: string; count: number }
 interface WeekDiscrepancyByProduct  { product: string; count: number }
 interface WeekComplaintByCategory   { category: string; count: number }
@@ -65,325 +61,20 @@ const EMPTY: DashboardData = {
   avgResolutionHours: null, totalComplaintsWeek: 0, openComplaintsWeek: 0,
 }
 
-function fmtTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString('en-GB', {
-      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-      timeZone: 'Europe/London',
-    }).replace(',', '')
-  } catch { return '' }
-}
+// ─── Range helpers ────────────────────────────────────────────────────────────
 
-function cap(s: string) {
-  return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-// ─── Primitives ───────────────────────────────────────────────────────────────
-
-function Badge({ label, tone }: { label: string; tone: 'red'|'amber'|'green'|'gray'|'navy' }) {
-  const s = tone==='red' ? 'bg-red-100 text-red-700' : tone==='amber' ? 'bg-amber-100 text-amber-700'
-    : tone==='green' ? 'bg-green-100 text-green-700' : tone==='navy' ? 'bg-blue-100 text-[#16205B]'
-    : 'bg-gray-100 text-gray-600'
-  return <span className={`inline-block text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full whitespace-nowrap ${s}`}>{label}</span>
-}
-
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-16">
-      <svg className="animate-spin w-6 h-6 text-[#16205B]/40" viewBox="0 0 24 24" fill="none">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-      </svg>
-    </div>
-  )
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-[#16205B]/50 mb-3">{children}</p>
-}
-
-function BreakdownRow({ label, count, max, colour='navy' }: {
-  label: string; count: number; max: number; colour?: 'navy'|'maroon'|'amber'|'red'
-}) {
-  const pct = max > 0 ? Math.round((count / max) * 100) : 0
-  const bar = colour==='maroon' ? 'bg-[#590129]' : colour==='amber' ? 'bg-amber-500'
-    : colour==='red' ? 'bg-red-500' : 'bg-[#16205B]'
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-gray-600 w-36 flex-shrink-0 truncate capitalize">{label}</span>
-      <div className="flex-1 h-1.5 bg-[#EDEAE1] rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-500 ${bar}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs font-bold text-gray-900 w-5 text-right flex-shrink-0">{count}</span>
-    </div>
-  )
-}
-
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
-
-function KpiCard({ value, label, sub, icon, accent, href }: {
-  value: string|number; label: string; sub?: string
-  accent: 'red'|'amber'|'blue'|'green'; icon: React.ReactNode; href?: string
-}) {
-  const ring   = accent==='red' ? 'bg-red-50' : accent==='amber' ? 'bg-amber-50' : accent==='green' ? 'bg-green-50' : 'bg-blue-50'
-  const icClr  = accent==='red' ? 'text-red-500' : accent==='amber' ? 'text-amber-500' : accent==='green' ? 'text-green-600' : 'text-blue-600'
-  const valClr = accent==='red' ? 'text-red-700' : accent==='amber' ? 'text-amber-700' : accent==='green' ? 'text-green-700' : 'text-[#16205B]'
-  const inner = (
-    <div className={['bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex flex-col gap-2 transition-colors', href ? 'hover:border-gray-300 active:bg-gray-50 cursor-pointer' : ''].join(' ')}>
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${ring}`}>
-        <span className={`w-4 h-4 ${icClr}`}>{icon}</span>
-      </div>
-      <span className={`text-3xl font-bold leading-none ${valClr}`}>{value}</span>
-      <div>
-        <p className="text-xs font-semibold text-gray-700 leading-tight">{label}</p>
-        {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
-      </div>
-    </div>
-  )
-  return href ? <Link href={href}>{inner}</Link> : inner
-}
-
-// ─── Alert group — grouped, capped, expandable ───────────────────────────────
-
-interface AlertItem {
-  id: string
-  primary: string
-  detail: string
-  excerpt?: string
-  badge?: string
-  badgeTone?: 'red'|'amber'|'green'|'gray'|'navy'
-  type: ModalType
-}
-
-function AlertGroup({ title, sub, tone, count, viewHref, items, onRowClick }: {
-  title:       string
-  sub:         string
-  tone:        'red'|'amber'
-  count:       number
-  viewHref:    string
-  items:       AlertItem[]
-  onRowClick:  (type: ModalType, id: string) => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const shown = expanded ? items : []
-
-  const headerBg   = tone === 'red' ? 'bg-red-50 border-red-200'    : 'bg-amber-50 border-amber-200'
-  const headerText = tone === 'red' ? 'text-red-800'                 : 'text-amber-800'
-  const dotClr     = tone === 'red' ? 'bg-red-500'                   : 'bg-amber-500'
-  const countBg    = tone === 'red' ? 'bg-red-100 text-red-700'      : 'bg-amber-100 text-amber-700'
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* Group header */}
-      <div className={`px-4 py-2.5 border-b flex items-center justify-between ${headerBg}`}>
-        <div className="flex items-center gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClr}`} />
-          <span className={`text-xs font-bold ${headerText}`}>{title}</span>
-          <span className={`text-[10px] ${headerText} opacity-60`}>{sub}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${countBg}`}>{count}</span>
-          <Link href={viewHref} className={`text-[10px] font-bold ${headerText} underline underline-offset-2 opacity-70 hover:opacity-100`}>
-            View all →
-          </Link>
-        </div>
-      </div>
-
-      {/* Rows — only visible when expanded */}
-      {expanded && (
-        <div className="divide-y divide-gray-50">
-          {shown.map(item => (
-            <button key={item.id} type="button"
-              onClick={() => onRowClick(item.type, item.id)}
-              className="w-full text-left px-4 py-3 flex items-start justify-between gap-3 hover:bg-[#EDEAE1] transition-colors min-h-[44px] active:bg-gray-100">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-900 truncate">{item.primary}</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">{item.detail}</p>
-                {item.excerpt && (
-                  <p className="text-[11px] text-gray-500 italic mt-0.5 line-clamp-1">&ldquo;{item.excerpt}&rdquo;</p>
-                )}
-              </div>
-              {item.badge && <Badge label={item.badge} tone={item.badgeTone ?? 'amber'} />}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Expand / collapse toggle */}
-      <button type="button" onClick={() => setExpanded(e => !e)}
-        className="w-full px-4 py-2.5 text-xs font-semibold text-gray-500 hover:bg-[#EDEAE1] transition-colors border-t border-gray-50 text-center flex items-center justify-center gap-1.5">
-        {expanded
-          ? <><svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M3.47 9.53a.75.75 0 0 0 1.06 1.06L8 7.12l3.47 3.47a.75.75 0 1 0 1.06-1.06l-4-4a.75.75 0 0 0-1.06 0l-4 4Z"/></svg> Show less</>
-          : <><svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M12.53 6.47a.75.75 0 0 0-1.06-1.06L8 8.88 4.53 5.41a.75.75 0 0 0-1.06 1.06l4 4a.75.75 0 0 0 1.06 0l4-4Z"/></svg> Show {items.length}</>
-        }
-      </button>
-    </div>
-  )
-}
-
-// ─── Alert row (kept for legacy use) ─────────────────────────────────────────
-
-function AlertRow({ tone, children }: { tone: 'red'|'amber'; children: React.ReactNode }) {
-  const dot  = tone==='red' ? 'bg-red-500' : 'bg-amber-500'
-  const text = tone==='red' ? 'text-red-800' : 'text-amber-900'
-  return (
-    <div className="flex items-start gap-3 py-3 border-b border-gray-50 last:border-0">
-      <div className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
-      <div className={`flex flex-col gap-0.5 min-w-0 flex-1 ${text}`}>{children}</div>
-    </div>
-  )
-}
-
-// ─── Tabbed today feed ────────────────────────────────────────────────────────
-
-type TodayTab = 'visits'|'complaints'|'discrepancies'
-
-function TodayTabs({ data, onRowClick, rangeLabel }: {
-  data:       DashboardData
-  onRowClick: (type: ModalType, id: string) => void
-  rangeLabel: string
-}) {
-  const [tab, setTab] = useState<TodayTab>('visits')
-  const totalVisits    = data.visitsToday.reduce((s, v) => s + v.count, 0)
-  const openComplaints = data.complaintsTodayList.filter(c => c.status === 'open').length
-
-  const TABS: { id: TodayTab; label: string; n: number; warn?: boolean }[] = [
-    { id: 'visits',        label: 'Visits',        n: totalVisits },
-    { id: 'complaints',    label: 'Complaints',    n: openComplaints, warn: openComplaints > 0 },
-    { id: 'discrepancies', label: 'Discrepancies', n: data.discrepanciesToday.length, warn: data.discrepanciesToday.length > 0 },
-  ]
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* Tab bar */}
-      <div className="flex border-b border-gray-100">
-        {TABS.map(t => (
-          <button key={t.id} type="button" onClick={() => setTab(t.id)}
-            className={['flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-semibold border-b-2 transition-colors',
-              tab === t.id ? 'border-[#EB6619] text-[#EB6619] bg-[#EB6619]/8' : 'border-transparent text-gray-400 hover:text-gray-600'
-            ].join(' ')}
-          >
-            {t.label}
-            {t.n > 0 && (
-              <span className={['w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center',
-                t.warn ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-              ].join(' ')}>{t.n}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Visits */}
-      {tab === 'visits' && (
-        <div className="divide-y divide-gray-50">
-          {data.visitsToday.length === 0
-            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No visits logged — {rangeLabel}</p>
-            : data.visitsToday.map(v => {
-                const warn = v.outcomes.at_risk > 0 || v.outcomes.lost > 0
-                return (
-                  <div key={v.rep} className="px-4 py-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">{v.rep}</span>
-                        {warn && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />}
-                      </div>
-                      <span className="text-sm font-bold text-[#16205B]">{v.count} visits</span>
-                    </div>
-                    <div className="space-y-0">
-                      {v.visits.map(vi => {
-                        const oc = vi.outcome==='positive' ? 'text-green-600 bg-green-50'
-                                 : vi.outcome==='at_risk'  ? 'text-amber-700 bg-amber-50'
-                                 : vi.outcome==='lost'     ? 'text-red-700 bg-red-50'
-                                 : 'text-gray-600 bg-white border border-[#EDEAE1]'
-                        return (
-                          <div key={vi.id} onClick={() => { console.log('[screen4] visit data:', vi); onRowClick('visit', vi.id) }} className="flex items-start justify-between gap-3 py-2.5 border-t border-[#EDEAE1] first:border-0 cursor-pointer hover:bg-[#EDEAE1] rounded-lg px-1 -mx-1 transition-colors min-h-[44px]">
-                            <div className="flex-1 min-w-0">
-                              <span className="text-xs font-semibold text-gray-800 truncate block capitalize">{vi.customer}</span>
-                              <div className="flex items-start gap-1 mt-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"
-                                  className="w-3 h-3 text-slate-400 flex-shrink-0 mt-0.5">
-                                  <path fillRule="evenodd" d="M1 8.74C1 6.01 3.26 3.75 5.99 3.75h4.02C12.74 3.75 15 6.01 15 8.74c0 2.73-2.26 4.99-4.99 4.99H9.5l-2.35 1.64a.5.5 0 0 1-.78-.44v-1.2H5.99C3.26 13.73 1 11.47 1 8.74Z" clipRule="evenodd"/>
-                                </svg>
-                                {vi.notes
-                                  ? <p className="text-xs text-slate-600 italic line-clamp-3 leading-relaxed">{vi.notes}</p>
-                                  : <p className="text-xs text-gray-300 italic">[No notes recorded]</p>
-                                }
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
-                              <span className="text-[10px] text-gray-400 capitalize">{vi.visitType}</span>
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full capitalize ${oc}`}>{vi.outcome.replace(/_/g,' ')}</span>
-                              {vi.pipelineStatus && vi.pipelineStatus !== 'Logged' && (
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap ${PIPELINE_BADGE_CLASS[vi.pipelineStatus] ?? 'bg-gray-100 text-gray-500'}`}>{vi.pipelineStatus}</span>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })
-          }
-        </div>
-      )}
-
-      {/* Complaints */}
-      {tab === 'complaints' && (
-        <div className="divide-y divide-gray-50">
-          {data.complaintsTodayList.length === 0
-            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No complaints — {rangeLabel}</p>
-            : data.complaintsTodayList.map(c => (
-                <div key={c.id} onClick={() => onRowClick('complaint', c.id)} className="px-4 py-3.5 flex items-start justify-between gap-3 cursor-pointer hover:bg-[#EDEAE1] transition-colors min-h-[52px]">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{c.customer}</p>
-                    <p className="text-xs text-gray-400">{cap(c.category)} · {c.loggedBy} · {fmtTime(c.createdAt)}</p>
-                    {c.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">&ldquo;{c.description}&rdquo;</p>}
-                    {c.status === 'resolved' && c.resolutionNote && (
-                      <p className="text-xs text-green-700 mt-0.5 line-clamp-1">↳ {c.resolutionNote}</p>
-                    )}
-                  </div>
-                  <Badge label={c.status === 'open' ? 'OPEN' : 'RESOLVED'} tone={c.status === 'open' ? 'amber' : 'green'} />
-                </div>
-              ))
-          }
-        </div>
-      )}
-
-      {/* Discrepancies */}
-      {tab === 'discrepancies' && (
-        <div className="divide-y divide-gray-50">
-          {data.discrepanciesToday.length === 0
-            ? <p className="px-4 py-6 text-sm text-gray-400 text-center">No discrepancies — {rangeLabel}</p>
-            : data.discrepanciesToday.map(d => (
-                <div key={d.id} onClick={() => onRowClick('discrepancy', d.id)} className="px-4 py-3.5 flex items-start justify-between gap-3 cursor-pointer hover:bg-[#EDEAE1] transition-colors min-h-[52px]">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{d.customer}</p>
-                    <p className="text-xs text-gray-400 truncate">{d.product} · {cap(d.reason)}</p>
-                    {d.status === 'short' && d.orderedQty != null && d.sentQty != null && (
-                      <p className="text-xs text-amber-700 font-medium mt-0.5">Ordered {d.orderedQty} · Sent {d.sentQty}</p>
-                    )}
-                    <p className="text-[10px] text-gray-500 mt-0.5">{d.loggedBy} · {fmtTime(d.createdAt)}</p>
-                  </div>
-                  <Badge label={d.status === 'not_sent' ? 'NOT SENT' : 'SHORT'} tone={d.status === 'not_sent' ? 'red' : 'amber'} />
-                </div>
-              ))
-          }
-        </div>
-      )}
-    </div>
-  )
-}
-
-
-// ─── Date range helpers ───────────────────────────────────────────────────────
-
-type Preset = 'today' | 'week' | 'month' | 'last_month' | 'custom'
+type Preset = 'today' | 'week' | 'month' | 'quarter'
 
 interface DateRange { from: string; to: string; label: string }
 
-/** Compute ISO boundaries in the browser's local timezone */
-function buildRange(preset: Preset, customFrom: string, customTo: string): DateRange {
+const RANGES: { id: Preset; label: string }[] = [
+  { id: 'today',   label: 'Today'         },
+  { id: 'week',    label: 'This week'     },
+  { id: 'month',   label: 'This month'    },
+  { id: 'quarter', label: 'This quarter'  },
+]
+
+function buildRange(preset: Preset): DateRange {
   const now   = new Date()
   const start = new Date(now)
 
@@ -395,116 +86,43 @@ function buildRange(preset: Preset, customFrom: string, customTo: string): DateR
     start.setHours(0, 0, 0, 0)
     // Monday of current week
     start.setDate(start.getDate() - start.getDay() + (start.getDay() === 0 ? -6 : 1))
-    return { from: start.toISOString(), to: now.toISOString(), label: 'This Week' }
+    return { from: start.toISOString(), to: now.toISOString(), label: 'This week' }
   }
   if (preset === 'month') {
     start.setDate(1)
     start.setHours(0, 0, 0, 0)
-    return { from: start.toISOString(), to: now.toISOString(), label: 'This Month' }
+    return { from: start.toISOString(), to: now.toISOString(), label: 'This month' }
   }
-  if (preset === 'last_month') {
-    const firstThisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const firstLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const lastLastMonth  = new Date(firstThisMonth.getTime() - 1)
-    return {
-      from:  firstLastMonth.toISOString(),
-      to:    lastLastMonth.toISOString(),
-      label: firstLastMonth.toLocaleString('en-GB', { month: 'long', year: 'numeric' }),
-    }
-  }
-  // Custom — customFrom/customTo are YYYY-MM-DD strings
-  if (customFrom && customTo) {
-    const f = new Date(customFrom + 'T00:00:00')
-    const t = new Date(customTo   + 'T23:59:59')
-    const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-    return { from: f.toISOString(), to: t.toISOString(), label: `${fmt(f)} – ${fmt(t)}` }
-  }
-  // Custom but incomplete — fall back to today
-  start.setHours(0, 0, 0, 0)
-  return { from: start.toISOString(), to: now.toISOString(), label: 'Today' }
+  // quarter
+  const q = Math.floor(now.getMonth() / 3)
+  const qStart = new Date(now.getFullYear(), q * 3, 1)
+  qStart.setHours(0, 0, 0, 0)
+  return { from: qStart.toISOString(), to: now.toISOString(), label: 'This quarter' }
 }
 
-// ─── Date Filter Bar ──────────────────────────────────────────────────────────
+// ─── Spinner ──────────────────────────────────────────────────────────────────
 
-const PRESETS: { id: Preset; label: string }[] = [
-  { id: 'today',      label: 'Today'      },
-  { id: 'week',       label: 'This Week'  },
-  { id: 'month',      label: 'This Month' },
-  { id: 'last_month', label: 'Last Month' },
-  { id: 'custom',     label: 'Custom'     },
-]
-
-function DateFilterBar({ preset, customFrom, customTo, onChange }: {
-  preset:     Preset
-  customFrom: string
-  customTo:   string
-  onChange:   (p: Preset, f: string, t: string) => void
-}) {
+function Spinner() {
   return (
-    <div className="bg-white border-b border-[#EDEAE1] px-4 py-3">
-      <div className="max-w-5xl mx-auto flex flex-wrap items-center gap-2">
-        {/* Preset buttons */}
-        {PRESETS.map(p => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onChange(p.id, customFrom, customTo)}
-            className={[
-              'px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors min-h-[44px] flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EB6619]',
-              preset === p.id
-                ? 'bg-[#16205B] text-white'
-                : 'bg-white border border-[#16205B]/20 text-gray-600 hover:bg-[#EDEAE1]',
-            ].join(' ')}
-          >
-            {p.label}
-          </button>
-        ))}
-
-        {/* Custom date inputs — only shown when Custom is active */}
-        {preset === 'custom' && (
-          <div className="flex items-center gap-2 ml-1">
-            <input
-              type="date"
-              value={customFrom}
-              max={customTo || undefined}
-              onChange={e => onChange('custom', e.target.value, customTo)}
-              className="text-xs border border-[#16205B]/20 rounded-lg px-3 py-2.5 min-h-[44px] text-gray-700 focus:outline-none focus:border-[#EB6619] focus-visible:ring-2 focus-visible:ring-[#EB6619]/30 bg-white"
-            />
-            <span className="text-xs text-gray-400">–</span>
-            <input
-              type="date"
-              value={customTo}
-              min={customFrom || undefined}
-              onChange={e => onChange('custom', customFrom, e.target.value)}
-              className="text-xs border border-[#16205B]/20 rounded-lg px-3 py-2.5 min-h-[44px] text-gray-700 focus:outline-none focus:border-[#EB6619] focus-visible:ring-2 focus-visible:ring-[#EB6619]/30 bg-white"
-            />
-          </div>
-        )}
-      </div>
+    <div className="flex items-center justify-center py-16">
+      <svg className="animate-spin w-6 h-6 text-mfs-navy/40" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+      </svg>
     </div>
   )
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function Screen4Page() {
-  const [data,       setData]       = useState<DashboardData>(EMPTY)
-  const [loading,    setLoading]    = useState(true)
-  const [error,      setError]      = useState('')
-  const [lastFetch,  setLastFetch]  = useState<Date | null>(null)
-  const [modal,      setModal]      = useState<{ type: ModalType; id: string } | null>(null)
-  const [preset,     setPreset]     = useState<Preset>('today')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo,   setCustomTo]   = useState('')
+export default function AdminDashboardPage() {
+  const [data,      setData]      = useState<DashboardData>(EMPTY)
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState('')
+  const [lastFetch, setLastFetch] = useState<Date | null>(null)
+  const [preset,    setPreset]    = useState<Preset>('today')
 
-  const range = useMemo(
-    () => buildRange(preset, customFrom, customTo),
-    [preset, customFrom, customTo]
-  )
-
-  function handleRangeChange(p: Preset, f: string, t: string) {
-    setPreset(p); setCustomFrom(f); setCustomTo(t)
-  }
+  const range = useMemo(() => buildRange(preset), [preset])
 
   const fetchData = useCallback(async () => {
     setLoading(true); setError('')
@@ -516,24 +134,17 @@ export default function Screen4Page() {
     finally { setLoading(false) }
   }, [range.from, range.to])
 
-  // Re-fetch whenever fetchData reference changes (i.e. whenever range changes)
+  // Re-fetch whenever range changes
   useEffect(() => { fetchData() }, [fetchData])
 
-  const totalVisitsToday = data.visitsToday.reduce((s, v) => s + v.count, 0)
+  // KPI tile data
+  const totalVisits      = data.visitsToday.reduce((s, v) => s + v.count, 0)
+  const activeReps       = data.visitsToday.length
   const openAlertsCount  = data.openComplaints48h.length
   const totalDiscToday   = data.discrepanciesToday.length
-  const hasAlerts        = openAlertsCount > 0 || data.atRiskAccounts.length > 0 || data.unreviewedCommitments.length > 0
-  const totalDiscWeek    = data.weekDiscrepancyReasons.reduce((s, r) => s + r.count, 0)
-  const maxDiscCount     = Math.max(...data.weekDiscrepancyReasons.map(r => r.count), 1)
-  const maxCompCount     = Math.max(...data.weekComplaintCategories.map(r => r.count), 1)
-  const { existing, prospects } = data.hunterFarmer
-  const hfTotal = existing + prospects
-  const hfData  = hfTotal > 0
-    ? [{ name: 'Existing', value: existing }, { name: 'Prospects', value: prospects }]
-    : []
 
   return (
-    <div className="min-h-screen bg-[#EDEAE1]">
+    <div className="min-h-screen bg-mfs-soft-neutral">
       <AppHeader title="Dashboard" maxWidth="4xl"
         actions={
           <div className="flex items-center gap-2">
@@ -554,14 +165,6 @@ export default function Screen4Page() {
         }
       />
 
-      {/* Date filter bar */}
-      <DateFilterBar
-        preset={preset}
-        customFrom={customFrom}
-        customTo={customTo}
-        onChange={handleRangeChange}
-      />
-
       {error && (
         <div className="max-w-2xl mx-auto px-4 pt-4">
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center justify-between gap-3">
@@ -572,269 +175,90 @@ export default function Screen4Page() {
       )}
 
       {loading && !lastFetch ? <Spinner /> : (
-      <main className="max-w-5xl mx-auto px-4 py-5 pb-24 space-y-8">
+      <main className="max-w-5xl mx-auto px-4 py-5 pb-24 space-y-5 md:space-y-6">
 
-        {/* KPI Row — 2×2 on mobile, 4-col on md+ */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiCard value={openAlertsCount} label="Open complaints" sub=">48h unresolved" accent={openAlertsCount > 0 ? 'red' : 'green'} href="/complaints"
-            icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/></svg>}
+        {/* Page heading — eyebrow only, no H1 (Q4) */}
+        <PageHeading />
+
+        {/* KPI row — 2-col mobile + Orders full-width below / 5-col desktop */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 md:gap-4">
+          <KpiTile
+            value={openAlertsCount}
+            label="Open complaints"
+            sub=">48h unresolved"
+            accent={openAlertsCount > 0 ? 'danger' : 'success'}
+            href="/complaints"
+            icon={<AlertCircle size={14} strokeWidth={2} />}
+            compact
           />
-          <KpiCard value={totalVisitsToday} label={`Visits — ${range.label}`} sub={`${data.visitsToday.length} rep${data.visitsToday.length !== 1 ? 's' : ''} active`} accent="blue" href="/visits"
-            icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path d="M10 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM1.49 15.326a.78.78 0 0 1-.358-.442 3 3 0 0 1 4.308-3.516 6.484 6.484 0 0 0-1.905 3.959c-.023.222-.014.442.025.654a4.97 4.97 0 0 1-2.07-.655ZM16.44 15.98a4.97 4.97 0 0 0 2.07-.654.78.78 0 0 0 .357-.442 3 3 0 0 0-4.308-3.517 6.484 6.484 0 0 1 1.907 3.96 2.32 2.32 0 0 1-.026.654ZM18 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM5.304 16.19a.844.844 0 0 1-.277-.71 5 5 0 0 1 9.947 0 .843.843 0 0 1-.277.71A6.975 6.975 0 0 1 10 18a6.974 6.974 0 0 1-4.696-1.81Z"/></svg>}
+          <KpiTile
+            value={totalVisits}
+            label="Visits"
+            sub={`${activeReps} rep${activeReps !== 1 ? 's' : ''} active`}
+            accent="navy"
+            href="/visits"
+            icon={<MapPin size={14} strokeWidth={2} />}
+            compact
           />
-          <KpiCard value={totalDiscToday} label="Discrepancies" sub={range.label} accent={totalDiscToday > 0 ? 'amber' : 'green'} href="/dispatch"
-            icon={<svg viewBox="0 0 20 20" fill="currentColor" className="w-full h-full"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd"/></svg>}
+          <KpiTile
+            value={totalDiscToday}
+            label="Discrepancies"
+            sub={range.label}
+            accent={totalDiscToday > 0 ? 'warning' : 'success'}
+            href="/dispatch"
+            icon={<ClipboardList size={14} strokeWidth={2} />}
+            compact
           />
-          <KpiCard value={data.activePricing} label="Active pricing" sub={data.draftPricing > 0 ? `${data.draftPricing} draft` : 'agreements'} accent={data.expiredPricing > 0 ? 'amber' : 'green'} href="/pricing"
-            icon={<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-full h-full"><path d="M17.25 11.25 11.25 17.25M17.25 11.25 10.5 4.5 3 4.5 3 12l6.75 6.75" strokeLinecap="round" strokeLinejoin="round"/><circle cx="7" cy="7.5" r="1" fill="currentColor" stroke="none"/></svg>}
+          <KpiTile
+            value={data.activePricing}
+            label="Active pricing"
+            sub={data.draftPricing > 0 ? `${data.draftPricing} draft` : 'agreements'}
+            accent={data.expiredPricing > 0 ? 'warning' : 'success'}
+            href="/pricing"
+            icon={<Tags size={14} strokeWidth={2} />}
+            compact
           />
+          <div className="col-span-2 md:col-auto">
+            <KpiTile
+              value={data.ordersToday.total}
+              label="Orders today"
+              sub={`${data.ordersToday.placed} placed / ${data.ordersToday.printed} printed / ${data.ordersToday.completed} completed`}
+              accent="navy"
+              href="/orders"
+              icon={<ShoppingBag size={14} strokeWidth={2} />}
+              tight
+              compact
+            />
+          </div>
         </div>
 
-        {/* Alerts — grouped, capped, tappable */}
-        {!hasAlerts ? (
-          <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-            <span className="text-green-600 text-sm">✅</span>
-            <p className="text-sm font-semibold text-green-700">All clear — no open complaints, at-risk accounts, or unreviewed commitments</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {/* Group 1: Open complaints >48h */}
-            {data.openComplaints48h.length > 0 && (
-              <AlertGroup
-                title="Open Complaints"
-                sub=">48h unresolved"
-                tone="amber"
-                count={data.openComplaints48h.length}
-                viewHref="/complaints"
-                items={data.openComplaints48h.map(c => ({
-                  id:       c.id,
-                  primary:  c.customer,
-                  detail:   `${c.category} · ${c.hoursAgo}h · ${c.loggedBy}`,
-                  excerpt:  c.description,
-                  type:     'complaint' as const,
-                }))}
-                onRowClick={(type, id) => setModal({ type, id })}
-              />
-            )}
-            {/* Group 2: At-risk accounts */}
-            {data.atRiskAccounts.length > 0 && (
-              <AlertGroup
-                title="At-Risk Accounts"
-                sub="recent visits flagged"
-                tone={data.atRiskAccounts.some(a => a.outcome === 'lost') ? 'red' : 'amber'}
-                count={data.atRiskAccounts.length}
-                viewHref="/visits"
-                items={data.atRiskAccounts.map(a => ({
-                  id:      a.id,
-                  primary: a.customer,
-                  detail:  `${a.rep} · ${a.hoursAgo}h ago`,
-                  badge:   a.outcome === 'lost' ? 'LOST' : 'AT RISK',
-                  badgeTone: a.outcome === 'lost' ? 'red' as const : 'amber' as const,
-                  type:    'visit' as const,
-                }))}
-                onRowClick={(type, id) => setModal({ type, id })}
-              />
-            )}
-            {/* Group 3: Unreviewed commitments */}
-            {data.unreviewedCommitments.length > 0 && (
-              <AlertGroup
-                title="Unreviewed Commitments"
-                sub=">24h without follow-up"
-                tone="amber"
-                count={data.unreviewedCommitments.length}
-                viewHref="/visits"
-                items={data.unreviewedCommitments.map(u => ({
-                  id:      u.id,
-                  primary: u.customer,
-                  detail:  `${u.rep} · ${u.hoursAgo}h ago`,
-                  excerpt: u.detail,
-                  type:    'visit' as const,
-                }))}
-                onRowClick={(type, id) => setModal({ type, id })}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Two-column layout on desktop: Today (left) | This Week (right) */}
-        <div className="md:grid md:grid-cols-2 md:gap-6 md:items-start space-y-5 md:space-y-0">
-
-        {/* Today — tabbed (left column) */}
-        <div className="md:sticky md:top-24">
-          <SectionLabel>{range.label}</SectionLabel>
-          <TodayTabs data={data} onRowClick={(type, id) => setModal({ type, id })} rangeLabel={range.label} />
+        {/* Range tabs */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-[10px] md:text-[11px] font-semibold tracking-[0.12em] uppercase text-mfs-neutral-500">
+            Range
+          </span>
+          <RangeTabs<Preset> value={preset} onChange={setPreset} ranges={RANGES} scrollOnSmall />
         </div>
 
-        {/* This Week (right column) */}
-        <div>
-          <SectionLabel>{range.label} — Breakdown</SectionLabel>
-
-          <div className="space-y-4">
-
-          {/* Summary strip — always visible */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
-              <span className={`text-2xl font-bold leading-none block ${totalDiscWeek > 5 ? 'text-amber-700' : 'text-[#16205B]'}`}>{totalDiscWeek}</span>
-              <p className="text-[10px] font-semibold text-gray-500 mt-1">Discrepancies</p>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
-              <span className={`text-2xl font-bold leading-none block ${data.openComplaintsWeek > 0 ? 'text-amber-700' : 'text-[#16205B]'}`}>{data.totalComplaintsWeek}</span>
-              <p className="text-[10px] font-semibold text-gray-500 mt-1">Complaints</p>
-              {data.openComplaintsWeek > 0 && <p className="text-[9px] text-amber-600 font-semibold">{data.openComplaintsWeek} open</p>}
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 text-center">
-              <span className="text-2xl font-bold leading-none block text-[#16205B]">{data.avgResolutionHours !== null ? `${data.avgResolutionHours}h` : '—'}</span>
-              <p className="text-[10px] font-semibold text-gray-500 mt-1">Avg resolve</p>
-            </div>
+        {/* Stat blocks — 2-col mobile + split-bar full-width / 3-col desktop */}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-4">
+          <div className="col-span-2 md:col-auto">
+            <HunterFarmerSplitBlock hunterFarmer={data.hunterFarmer} />
           </div>
-
-          {/* Discrepancy breakdown */}
-          {totalDiscWeek > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold text-gray-800">Discrepancies by reason</p>
-                <span className="text-base font-bold text-[#16205B]">{totalDiscWeek}</span>
-              </div>
-              <div className="space-y-2">
-                {data.weekDiscrepancyReasons.map(r => <BreakdownRow key={r.reason} label={r.reason} count={r.count} max={maxDiscCount} colour="maroon" />)}
-              </div>
-              {data.weekDiscrepancyProducts.length > 0 && (
-                <>
-                  <p className="text-[10px] font-bold tracking-widest uppercase text-gray-400 mt-4 mb-2">Most affected products</p>
-                  <div className="space-y-1.5">
-                    {data.weekDiscrepancyProducts.map((p, i) => (
-                      <div key={p.product} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] text-gray-500 font-bold w-4 flex-shrink-0">{i + 1}</span>
-                          <span className="text-xs text-gray-700 truncate">{p.product}</span>
-                        </div>
-                        <span className="text-xs font-bold text-gray-900 ml-2">{p.count}×</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Complaints breakdown */}
-          {data.totalComplaintsWeek > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <p className="text-xs font-bold text-gray-800 mb-3">Complaints by category</p>
-              <div className="space-y-2">
-                {data.weekComplaintCategories.map(c => <BreakdownRow key={c.category} label={c.category} count={c.count} max={maxCompCount} colour="navy" />)}
-              </div>
-            </div>
-          )}
-
-          {/* Sales activity by rep */}
-          {data.weekVisitsByRep.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <p className="text-xs font-bold text-gray-800 mb-3">Sales activity by rep</p>
-              <div className="space-y-4">
-                {data.weekVisitsByRep.map(r => {
-                  const mx = Math.max(r.types.routine, r.types.new_pitch, r.types.complaint_followup, r.types.delivery_issue, 1)
-                  return (
-                    <div key={r.rep}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm font-bold text-gray-900">{r.rep}</span>
-                        <span className="text-sm font-bold text-[#16205B]">{r.total}</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {([
-                          { key: 'routine',            label: 'Routine',       colour: 'navy'  },
-                          { key: 'new_pitch',          label: 'New pitch',     colour: 'navy'  },
-                          { key: 'complaint_followup', label: 'Complaint f/u', colour: 'amber' },
-                          { key: 'delivery_issue',     label: 'Delivery issue',colour: 'red'   },
-                        ] as const).map(({ key, label, colour }) => (
-                          <BreakdownRow key={key} label={label} count={r.types[key]} max={mx} colour={colour} />
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Prospects */}
-          {data.prospectsThisWeek.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold text-gray-800">Prospects visited</p>
-                <Badge label={`${data.prospectsThisWeek.length}`} tone="navy" />
-              </div>
-              <div>
-                {data.prospectsThisWeek.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between gap-3 py-2 border-b border-gray-50 last:border-0">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-gray-900 truncate">{p.name}</p>
-                      <p className="text-[10px] text-gray-400">{p.postcode} · {p.rep}{p.visitType ? ` · ${p.visitType}` : ''}</p>
-                    </div>
-                    <Badge label={cap(p.outcome)} tone={p.outcome==='positive' ? 'green' : p.outcome==='neutral' ? 'gray' : 'red'} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Hunter / Farmer donut */}
-          {hfTotal > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-bold text-gray-800">{range.label}&apos;s focus</p>
-                <span className="text-[10px] text-gray-400">{hfTotal} total visits</span>
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="w-24 h-24 flex-shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={hfData} cx="50%" cy="50%" innerRadius={28} outerRadius={42}
-                        paddingAngle={2} dataKey="value" startAngle={90} endAngle={-270}>
-                        <Cell fill="#16205B" />
-                        <Cell fill="#EB6619" />
-                      </Pie>
-                      <Tooltip formatter={(val: number, name: string) => [`${val} visits`, name]}
-                        contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb', padding: '4px 8px' }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-col gap-2.5 flex-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#16205B] flex-shrink-0" />
-                      <span className="text-xs text-gray-700 font-medium">Existing</span>
-                    </div>
-                    <span className="text-xs font-bold text-[#16205B]">{Math.round((existing / hfTotal) * 100)}% <span className="font-normal text-gray-400">({existing})</span></span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#EB6619] flex-shrink-0" />
-                      <span className="text-xs text-gray-700 font-medium">Prospects</span>
-                    </div>
-                    <span className="text-xs font-bold text-[#EB6619]">{Math.round((prospects / hfTotal) * 100)}% <span className="font-normal text-gray-400">({prospects})</span></span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          </div>{/* end space-y-4 wrapper */}
+          <ValueStatBlock label="Avg. resolution" value={data.avgResolutionHours} unit="hrs" />
+          <ValueStatBlock label="Complaints this week" value={data.totalComplaintsWeek} />
         </div>
 
-        </div>{/* end two-column grid */}
-
-        <div className="h-4" aria-hidden="true" />
+        {/* Operational cards — 1-col mobile stack / 2-col desktop grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5 items-start">
+          <OpenComplaintsCard         items={data.openComplaints48h}        rangeLabel={range.label} />
+          <AtRiskCard                 items={data.atRiskAccounts}           rangeLabel={range.label} />
+          <CommitmentsCard            items={data.unreviewedCommitments}    rangeLabel={range.label} />
+          <ProspectsCard              items={data.prospectsThisWeek}        rangeLabel={range.label} />
+          <VisitsByRepCard            reps={data.weekVisitsByRep}           rangeLabel={range.label} />
+          <ComplaintCategoriesCard    categories={data.weekComplaintCategories} />
+        </div>
       </main>
-      )}
-
-      {/* Drill-down modal */}
-      {modal && (
-        <DetailModal
-          type={modal.type}
-          id={modal.id}
-          onClose={() => setModal(null)}
-        />
       )}
 
       <RoleNav />
