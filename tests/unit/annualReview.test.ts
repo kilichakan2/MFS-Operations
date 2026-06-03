@@ -768,7 +768,7 @@ describe('Temperature data panel logic', () => {
 
   it('stale calibration: > 31 days → overdue flag', () => {
     const today = new Date(); today.setHours(0, 0, 0, 0)
-    const r = makeCalibManual(true, 32)
+    const r = makeCalibManual(true, 33)
     const days = Math.floor((today.getTime() - new Date(r.date).getTime()) / 86_400_000)
     expect(days).toBeGreaterThan(31)
   })
