@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useCallback, useId, useEffect, useRef, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import BottomSheetSelector from '@/components/BottomSheetSelector'
 import RoleNav             from '@/components/RoleNav'
 import { useLanguage }     from '@/lib/LanguageContext'
@@ -664,8 +665,14 @@ function MyVisitsTab({
   onStatusUpdate:(id:string, status:string)=>void
 }) {
   const { t }               = useLanguage()
+  // The Item 5a Visits KPI tile sends ?range=today|week|month|quarter — map
+  // it to the destination's longer TimeChip vocabulary on mount, then let
+  // the user drive the chip with the normal UI.
+  const searchParams = useSearchParams()
   const [search,     setSearch]     = useState('')
-  const [chip,       setChip]       = useState<TimeChip>('today')
+  const [chip,       setChip]       = useState<TimeChip>(() =>
+    presetToChip(searchParams?.get('range')) ?? 'today',
+  )
   const [typeFilter, setTypeFilter] = useState<'all'|'routine'|'prospects'|'stalled'>('all')
 
   const range = chipToRange(chip)
