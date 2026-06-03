@@ -241,21 +241,43 @@ export default function AppHeader({
       >
         <div className={`flex items-center justify-between gap-3 max-w-${maxWidth} mx-auto min-h-[64px]`}>
 
-          {/* Left: Logo + screen title */}
-          <div className="flex items-center gap-2.5 min-w-0">
+          {/* Left: Logo only on mobile.
+              The page title is intentionally NOT rendered in the
+              mobile chrome variant — the MfsLogo SVG is intrinsically
+              ~107px wide (its aspect ratio is preserved by w-auto on
+              h-7) and consumes the entire left cluster at < 414px
+              viewports, leaving 0px for a truncated title.
+              PageHeading inside each page body (Item 5a's eyebrow
+              pattern — e.g. "Admin · Daily glance") already shows
+              the screen identifier, so no UX loss. Desktop chrome
+              variant below still renders the title in its middle
+              slot. */}
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <MfsLogo className="h-7 w-auto flex-shrink-0 text-mfs-orange" />
-            {title && (
-              <>
-                <span className="text-white/20 select-none font-light">|</span>
-                <span className="text-white text-sm font-semibold uppercase tracking-wider truncate">{title}</span>
-              </>
-            )}
           </div>
 
-          {/* Right: sync dot + optional actions + dot menu */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Right: sync dot + optional actions + dot menu. */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <SyncDot />
-            {actions}
+            {/* Mobile-only compact override on the actions slot:
+                tighten descendant <a> / <button> horizontal padding
+                from the caller's desktop-sized px-3 to px-2, and
+                inner icon-to-text gap-1.5 to gap-1. Scoped to the
+                actions wrapper so DotMenu's 44×44px trigger button
+                (the next sibling) is not affected. The mobile right
+                cluster is flex-shrink-0 so it always renders at
+                intrinsic width; before this fix the page title on
+                the left was taking the entire shrinking burden,
+                producing visibly-crunched-against-title actions.
+                Tightening here doesn't require touching the page-
+                level action JSX (out of scope per hotfix directive). */}
+            {actions && (
+              <div className="flex items-center gap-1.5
+                [&_a]:px-2 [&_button]:px-2
+                [&_a]:gap-1 [&_button]:gap-1">
+                {actions}
+              </div>
+            )}
             <DotMenu />
           </div>
 
