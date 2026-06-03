@@ -280,8 +280,14 @@ export default function AppHeader({
           )}
         </div>
 
-        {/* Right: sync dot + lang pill + avatar */}
+        {/* Right: actions + sync dot + lang pill + avatar.
+            The actions slot sits leftmost so per-page actions (HACCP
+            shortcut, page Refresh) get visual primacy on desktop;
+            SyncDot is a passive indicator further right. Match the
+            cluster's gap-4 spacing convention. */}
         <div className="flex items-center gap-4 flex-shrink-0">
+          {actions}
+
           <SyncDot />
 
           {mounted && (
