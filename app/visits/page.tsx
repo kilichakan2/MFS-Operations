@@ -779,7 +779,17 @@ export default function VisitsPage() {
   useEffect(()=>{ syncReferenceData().catch(console.error) },[])
   const customers = useCustomers()
 
-  const [activeTab,    setActiveTab]    = useState<'log'|'my'>('log')
+  // Item 5a's Visits KPI tile lands here with ?range=today|week|month|quarter.
+  // The outer tab defaults to 'log' (new-visit form); when any filter param
+  // is present (?tab=my explicitly OR an implicit ?range= filter), the user
+  // clearly wants the list — auto-switch on mount. Mirrors the equivalent
+  // behaviour in /complaints (Frame Q2).
+  const searchParamsOuter = useSearchParams()
+  const [activeTab,    setActiveTab]    = useState<'log'|'my'>(() => {
+    if (searchParamsOuter?.get('tab') === 'my') return 'my'
+    if (searchParamsOuter?.get('range')) return 'my'
+    return 'log'
+  })
   const [form,         setForm]         = useState<FormState>(EMPTY_FORM)
   const [errors,       setErrors]       = useState<ValidationErrors>({})
   const [sheetOpen,    setSheetOpen]    = useState(false)
