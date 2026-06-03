@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
       weekVisitsRes,
       prospectsRes,
       pricingRes,
+      ordersTodayRes,
     ] = await Promise.all([
 
       // ── Zone 1: Open complaints > 48h ──────────────────────────────────────
@@ -140,6 +141,14 @@ export async function GET(req: NextRequest) {
       supabase
         .from('price_agreements')
         .select('id, status, valid_until'),
+
+      // ── Orders for today (Item 5a: Orders KPI tile) ──────────────────────
+      // delivery_date is the operational truth — KDS orders by it,
+      // /api/orders filters by it, picking-list reads it.
+      supabase
+        .from('orders')
+        .select('state')
+        .eq('delivery_date', now.toISOString().split('T')[0]),
     ])
 
     // ── Shape Zone 1 ──────────────────────────────────────────────────────────
@@ -327,6 +336,15 @@ export async function GET(req: NextRequest) {
     const draftPricing   = pricingRows.filter(p => p.status === 'draft').length
     const expiredPricing = pricingRows.filter(p => p.status === 'active' && p.valid_until != null && p.valid_until < todayStr).length
 
+    // ── Orders today (Item 5a Orders KPI) ────────────────────────────────────
+    const ordersRows = (ordersTodayRes.data ?? []) as { state: string }[]
+    const ordersToday = {
+      placed:    ordersRows.filter(o => o.state === 'placed').length,
+      printed:   ordersRows.filter(o => o.state === 'printed').length,
+      completed: ordersRows.filter(o => o.state === 'completed').length,
+      total:     ordersRows.length,
+    }
+
     return NextResponse.json({
       // Zone 1
       openComplaints48h,
@@ -347,6 +365,8 @@ export async function GET(req: NextRequest) {
       activePricing,
       draftPricing,
       expiredPricing,
+      // Item 5a — Orders KPI tile
+      ordersToday,
       // Extras
       avgResolutionHours,
       totalComplaintsWeek: Array.from(catMap.values()).reduce((s, n) => s + n, 0),

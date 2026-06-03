@@ -46,6 +46,10 @@ interface DashboardData {
   weekVisitsByRep:         WeekVisitByRep[]
   prospectsThisWeek:       Prospect[]
   hunterFarmer:            { existing: number; prospects: number }
+  activePricing:           number
+  draftPricing:            number
+  expiredPricing:          number
+  ordersToday:             { placed: number; printed: number; completed: number; total: number }
   avgResolutionHours:      number | null
   totalComplaintsWeek:     number
   openComplaintsWeek:      number
@@ -57,6 +61,7 @@ const EMPTY: DashboardData = {
   weekDiscrepancyReasons: [], weekDiscrepancyProducts: [], weekComplaintCategories: [],
   weekVisitsByRep: [], prospectsThisWeek: [], hunterFarmer: { existing: 0, prospects: 0 },
   activePricing: 0, draftPricing: 0, expiredPricing: 0,
+  ordersToday: { placed: 0, printed: 0, completed: 0, total: 0 },
   avgResolutionHours: null, totalComplaintsWeek: 0, openComplaintsWeek: 0,
 }
 
