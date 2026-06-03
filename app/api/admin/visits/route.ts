@@ -28,6 +28,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseService } from '@/lib/supabase'
+import { isValidRepId, isValidVisitType, isValidOutcome } from '@/lib/adminFilters'
 
 const supabase = supabaseService
 
@@ -46,6 +47,21 @@ export async function GET(req: NextRequest) {
     const repId   = params.get('rep_id')
     const type    = params.get('type')
     const outcome = params.get('outcome')
+
+    // Input validation — reject malformed params with a clean 400
+    // rather than letting Supabase return a 500 on a bad UUID/enum.
+    // The validators live in lib/adminFilters.ts as the canonical
+    // server-side source-of-truth, mirroring the page-private
+    // VisitType / Outcome unions in app/visits/page.tsx:76-77.
+    if (!isValidRepId(repId)) {
+      return NextResponse.json({ error: 'invalid rep_id' }, { status: 400 })
+    }
+    if (!isValidVisitType(type)) {
+      return NextResponse.json({ error: 'invalid type' }, { status: 400 })
+    }
+    if (!isValidOutcome(outcome)) {
+      return NextResponse.json({ error: 'invalid outcome' }, { status: 400 })
+    }
 
     let query = supabase
       .from('visits')
