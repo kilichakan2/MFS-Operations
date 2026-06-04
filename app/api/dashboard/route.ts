@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseService }           from '@/lib/supabase'
+import { londonToday }               from '@/lib/dates'
 
 const supabase = supabaseService
 
@@ -145,10 +146,13 @@ export async function GET(req: NextRequest) {
       // ── Orders for today (Item 5a: Orders KPI tile) ──────────────────────
       // delivery_date is the operational truth — KDS orders by it,
       // /api/orders filters by it, picking-list reads it.
+      // londonToday() instead of UTC: UK ops cross midnight before
+      // UTC does during BST, so a raw toISOString date drops the last
+      // hour of UK-local-today's orders.
       supabase
         .from('orders')
         .select('state')
-        .eq('delivery_date', now.toISOString().split('T')[0]),
+        .eq('delivery_date', londonToday(now)),
     ])
 
     // ── Shape Zone 1 ──────────────────────────────────────────────────────────
@@ -330,7 +334,10 @@ export async function GET(req: NextRequest) {
     })
 
     // ── Pricing snapshot ─────────────────────────────────────────────────────
-    const todayStr = now.toISOString().split('T')[0]
+    // londonToday() so that an agreement whose valid_until is
+    // UK-local-today doesn't get mis-flagged as expired in the
+    // late-evening UTC roll-over window during BST.
+    const todayStr = londonToday(now)
     const pricingRows = (pricingRes.data ?? []) as { id: string; status: string; valid_until: string | null }[]
     const activePricing  = pricingRows.filter(p => p.status === 'active' && !(p.valid_until && p.valid_until < todayStr)).length
     const draftPricing   = pricingRows.filter(p => p.status === 'draft').length
