@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { sendPricingEmail }           from '@/lib/pricing-email'
 import { supabaseService }           from '@/lib/supabase'
+import { londonToday }               from '@/lib/dates'
 
 const supabase = supabaseService
 
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = londonToday()
   const rep = data.rep as { id: string; name: string } | null
 
   return NextResponse.json({
