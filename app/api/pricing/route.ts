@@ -25,6 +25,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseService }           from '@/lib/supabase'
+import { londonToday }               from '@/lib/dates'
 
 const supabase = supabaseService
 
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to load' }, { status: 500 })
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = londonToday()
 
   const agreements = (data ?? []).map(a => ({
     id:               a.id,
