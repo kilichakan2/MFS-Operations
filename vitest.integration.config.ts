@@ -21,7 +21,11 @@ export default defineConfig({
     reporters:      ['verbose'],
     testTimeout:    30_000,   // API calls + DB writes
     hookTimeout:    30_000,
-    setupFiles:     ['./tests/integration/_loadEnv.ts'],
+    // _loadEnv first — populates NEXT_PUBLIC_SUPABASE_URL from
+    // .env.test.local. _assertStack second — fast-fails if the local
+    // Supabase stack isn't reachable, so devs don't wait 30s on a
+    // misleading timeout deep inside a test.
+    setupFiles:     ['./tests/integration/_loadEnv.ts', './tests/integration/_assertStack.ts'],
     // Integration suites share DB state. Force single-fork serial
     // execution to eliminate TOCTOU races in beforeAll fixture setup.
     pool: 'forks',

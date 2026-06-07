@@ -42,6 +42,44 @@ if (SUPABASE_URL.includes('uqgecljspgtevoylwkep')) {
   )
 }
 
+/**
+ * Fail-fast probe that the local Supabase stack is reachable.
+ *
+ * Invoked once per test run via vitest setupFiles
+ * (tests/integration/_assertStack.ts). Throws with a clear, actionable
+ * message if the stack isn't up so developers don't waste 30s on
+ * timeouts deep inside a test.
+ *
+ * Probe endpoint: Supabase's own /auth/v1/health — returns HTTP 200
+ * with `{}` when up. Chosen because it's a tiny, stable, no-auth
+ * endpoint already present on every Supabase install (local or remote).
+ */
+export async function assertLocalStackReachable(timeoutMs = 3_000): Promise<void> {
+  const url = `${SUPABASE_URL}/auth/v1/health`
+  const controller = new AbortController()
+  const t = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) {
+      throw new Error(
+        `Supabase local stack returned HTTP ${res.status} at ${url}. ` +
+        'Run `npm run db:up` to start it, or check `supabase status`.'
+      )
+    }
+  } catch (err: unknown) {
+    const e = err as { name?: string; code?: string; message?: string }
+    if (e?.name === 'AbortError' || e?.code === 'ECONNREFUSED' || /fetch failed/i.test(e?.message ?? '')) {
+      throw new Error(
+        `Supabase local stack unreachable at ${SUPABASE_URL}. ` +
+        'Run `npm run db:up` first (wraps `supabase start`).'
+      )
+    }
+    throw err
+  } finally {
+    clearTimeout(t)
+  }
+}
+
 export const TEST_PREFIX = 'ANVIL-TEST-'
 
 export function getServiceClient() {

@@ -13,6 +13,10 @@ next-env.d.ts
 *.tsbuildinfo
 .env.local
 
+# Playwright artifacts (F-INFRA-01) — local test reports + traces/videos/screenshots
+playwright-report/
+test-results/
+
 # Android build artifacts (Capacitor android/ project is committed, outputs are not)
 android/.gradle/
 android/app/build/
