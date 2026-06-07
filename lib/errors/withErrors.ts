@@ -24,9 +24,11 @@
  * before this code sees them. For unknown errors, the wrapper returns
  * only `'Internal Server Error'` — never the raw `err.message`.
  *
- * Logger: `console.error` is a stub. F-FND-03 (observability) replaces
- * it with structured logging + correlation IDs. Do not "optimise" this
- * to a no-op — the log line is the only diagnostic until F-FND-03.
+ * Logger: unknown errors are emitted via the structured logger from
+ * `lib/observability` — the log line carries the active `Caller`
+ * (userId, role, correlationId) automatically when withRequestContext
+ * has wrapped the route. Without withRequestContext, the line is
+ * still emitted but without correlationId.
  *
  * Usage:
  *   export const POST = withErrors(async (req: NextRequest) => {
@@ -38,6 +40,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { AppError } from './AppError'
+import { log }      from '@/lib/observability'
 
 export type RouteHandler<Args extends unknown[] = []> = (
   req: NextRequest,
@@ -54,8 +57,8 @@ export function withErrors<Args extends unknown[]>(
       if (err instanceof AppError) {
         return NextResponse.json(err.toJSON(), { status: err.httpStatus })
       }
-      // Unknown error — log original, return safe 500.
-      console.error('[withErrors] unknown error', err)
+      // Unknown error — log original via structured logger, return safe 500.
+      log.error('[withErrors] unknown error', { error: serialiseError(err) })
       const safeBody = {
         code:    'INTERNAL_ERROR',
         message: 'Internal Server Error',
@@ -63,4 +66,18 @@ export function withErrors<Args extends unknown[]>(
       return NextResponse.json(safeBody, { status: 500 })
     }
   }
+}
+
+/**
+ * Serialise an unknown thrown value into a structured log-safe shape.
+ * For Error instances we keep `name`, `message`, `stack` so debugging
+ * stays possible. Non-Error throws (string literals, plain objects)
+ * are passed through unchanged — JSON.stringify in the logger handles
+ * the rest.
+ */
+function serialiseError(err: unknown): unknown {
+  if (err instanceof Error) {
+    return { name: err.name, message: err.message, stack: err.stack }
+  }
+  return err
 }
