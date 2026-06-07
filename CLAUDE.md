@@ -22,3 +22,15 @@ Three layers, strict top-to-bottom. Each layer only knows the one below it throu
 ### Acceptance test
 
 For every external dependency: **"If I rip out [the DB / auth / payment provider] tomorrow and replace it, how many files change?"** The answer must be: one adapter + one config line. More than that = the coupling is wrong, fix it before moving on.
+
+## Local test infrastructure
+
+Prereq: Supabase CLI (`brew install supabase/tap/supabase`) and Docker Desktop running. Daily commands:
+
+- `npm run db:up` — start local Supabase (Postgres + Auth + Storage + Studio)
+- `npm run db:reset` — re-run migrations + seed on the local DB
+- `npm run db:down` — stop local Supabase
+- `npm run test:e2e:api` — Playwright API smoke (auto-boots dev server)
+- `npm run test:e2e:ui` — Playwright UI smoke (auto-boots dev server + chromium)
+
+Playwright's `webServer` block sources `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from `.env.test.local` and passes them explicitly to the spawned dev server — never `.env.local`'s prod values. Smokes also assert the URL points at localhost as a belt-and-braces guard.
