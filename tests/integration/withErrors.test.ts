@@ -103,7 +103,11 @@ describe('withErrors', () => {
       message: 'Internal Server Error',
     })
     // Original error logged server-side so debugging is possible.
-    expect(spy).toHaveBeenCalledWith('[withErrors] unknown error', original)
+    // F-FND-03: log emits one JSON line; assert msg + serialised error.
+    expect(spy).toHaveBeenCalledTimes(1)
+    const parsed = JSON.parse(spy.mock.calls[0][0] as string)
+    expect(parsed.msg).toBe('[withErrors] unknown error')
+    expect(parsed.error).toMatchObject({ name: 'Error', message: 'vendor secret leak' })
   })
 
   it('catches a non-Error throw (string literal) → safe 500', async () => {
