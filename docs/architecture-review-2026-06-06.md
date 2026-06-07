@@ -4,6 +4,7 @@
 
 **Revisions:**
 - **v1.1 (2026-06-06)** — folded in APOSD + hexagonal lens. Added cross-cutting design rules section (depth rule, design-it-twice, contract tests, inbound validation, idempotency, typed errors, twin-hexagon for client). Added **Phase 0a (Foundations)** ahead of Phase 0 with ADR seed, typed-error contract, observability scaffolding. Added **Phase 0.5 (Parallel safety track)** running alongside Phase 1+ to fix the service-role/RLS hole. Annotated F-05..F-08 with new requirements. Original F-NN numbering preserved.
+- **v1.2 (2026-06-07)** — added **Phase 0b (Test infrastructure, F-INFRA-01)** — Supabase CLI local stack + Playwright API/UI scaffolding, must land before F-05. Added **Side track: Tech debt cleanup (F-TD-01)** — clears the ~60 pre-existing `tsc` errors + ESLint nits surfaced when F-FND-02 added those gates to ANVIL. Updated estimated total to ~38 PRs. Both units surfaced during F-FND-02 implementation.
 
 ## 🩺 Verdict (plain English)
 
@@ -319,6 +320,12 @@ The service-role + dormant-RLS pattern is a Day-1 production hole, not a Day-30 
 - **F-RLS-04..n** Migrate tables to RLS one bounded-context at a time, sequenced to align with the matching Lego phase (Orders RLS lands with Phase 1, Users RLS with F-13, etc.). Each migration is its own PR with rollback path.
 - **F-RLS-final** Retire service-role from all user-facing paths. Service-role remains only in admin-tagged routes, behind an explicit `requireServiceRole()` helper. (1 PR — also tighten lint rule to forbid service-role outside `lib/admin/`.)
 
+### Phase 0b — Test infrastructure (must land before Phase 1)
+
+Phase 1 onwards tests real adapters against a real database and routes via real HTTP. That needs infrastructure local to dev plus a runner for the HTTP path. Land this before F-05 so the seam can be verified end-to-end.
+
+- **F-INFRA-01** Local test infrastructure + Playwright scaffolding. Bring up the **Supabase CLI local stack** (`supabase start` — Postgres + Auth + Storage + Studio in one command, matches production Supabase exactly, less drift risk than a hand-rolled `docker-compose.yml`). Add `npm run db:up` / `db:reset` / `db:down` wrappers. Extend `tests/integration/_setup.ts` so adapter tests boot against the local stack. Install **Playwright** with two projects: API (`tests/e2e/api/`) for route-level HTTP tests, UI (`tests/e2e/ui/`) for browser flows; `playwright.config.ts` at root, `npm run test:e2e:api` and `npm run test:e2e:ui` scripts. One smoke test per project to prove the setup works. CI bring-up deferred to a separate unit. (1 PR — infrastructure + scaffolding only, no application code touched.)
+
 ### Phase 1 — prove the seam (first domain end-to-end)
 
 - **F-05** Define ports: `lib/ports/OrdersRepository.ts`, `lib/ports/CustomersRepository.ts`, `lib/ports/ProductsRepository.ts`. Define domain types (`Order`, `OrderLine`, `Customer`, `Product`). No implementations yet. **Apply the depth rule** — each method exposes a business operation, never a 1:1 vendor call. **Design-it-twice** — sketch two interface options per port, pick the better one. Write the interface comment BEFORE the type. (1 PR — types + interface comments only.)
@@ -359,7 +366,13 @@ Each of the following gets its own ports → adapter → service → route-rewri
 
 - **F-27** Tighten the F-04 ESLint rule to also forbid `resend`, `@anthropic-ai/sdk`, `bcryptjs`, `web-push`, `jspdf`, `xlsx`, `leaflet`, `react-leaflet`, `dexie`, `@supabase/supabase-js` outside `lib/adapters/**`. From this point on, the rip-out test is enforced by CI, not by review discipline. (1 PR — the moment this lands, the Lego principle has teeth.)
 
-**Estimated total (v1.1):** ~36 PRs over 8–12 weeks — original ~30 plus Phase 0a (3 foundation PRs) and Phase 0.5 (parallel RLS track, ~3–5 PRs). Most are small. The two biggest are HACCP (F-19) and Dashboard (F-21). Nothing here requires a stop-the-world rewrite.
+### Side track — Tech debt cleanup (runs in parallel, anytime)
+
+Pre-existing tsc and ESLint issues on `main` (surfaced when F-FND-02 first added these commands to the ANVIL gate). Not blocking the migration, but resolving them unlocks strict pass criteria for layers 3 and 4 of ANVIL going forward.
+
+- **F-TD-01** Tech debt cleanup. Clear the ~60 pre-existing `tsc --noEmit` errors plus the ESLint nits across `app/admin/**`, `app/haccp/**`, `app/pricing/**`, and `components/**`. Resolve each genuinely, or annotate with `// @ts-expect-error` / `// eslint-disable-next-line` carrying a written justification. Goal: `npm run lint` and `npx tsc --noEmit` both exit 0 on main. Once this lands, ANVIL drops the calibrated-pass-criteria on layers 3 and 4 — strict exit-0 becomes the default. (1 PR; may include multiple commits for reviewability.)
+
+**Estimated total (v1.2):** ~38 PRs over 8–12 weeks — v1.1's ~36 plus Phase 0b (test infrastructure, 1 PR) and the parallel tech-debt cleanup track (1 PR). Most are small. The two biggest are HACCP (F-19) and Dashboard (F-21). Nothing here requires a stop-the-world rewrite.
 
 ---
 
