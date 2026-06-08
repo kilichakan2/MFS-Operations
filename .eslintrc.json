@@ -1,3 +1,24 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@supabase/supabase-js",
+            "message": "Use supabaseService from @/lib/supabase for app code, or add an adapter under lib/adapters/supabase/ for vendor-specific operations. See ADR-0003 (FREEZE rule)."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["lib/supabase.ts", "lib/adapters/supabase/**/*.ts", "tests/**"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
 }
