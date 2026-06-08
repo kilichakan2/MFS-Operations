@@ -23,6 +23,34 @@ Three layers, strict top-to-bottom. Each layer only knows the one below it throu
 
 For every external dependency: **"If I rip out [the DB / auth / payment provider] tomorrow and replace it, how many files change?"** The answer must be: one adapter + one config line. More than that = the coupling is wrong, fix it before moving on.
 
+### Folder layout
+
+The three layers above live in these paths. Every file belongs to exactly one:
+
+- `lib/domain/` — domain types the app owns (`Order`, `Customer`, `Product`, `Role`). Pure TypeScript, no framework imports, no vendor imports.
+- `lib/ports/` — the interfaces (**ports**) the app owns, defined in terms of business operations. Pure TypeScript, no framework imports, no vendor imports.
+- `lib/services/` — business logic that depends on ports. Never on vendors directly. Services do not import other services (use a `lib/usecases/` use-case to compose).
+- `lib/usecases/` — orchestration that composes multiple services or ports for a single business operation.
+- `lib/adapters/<vendor>/` — concrete implementations (**adapters**) of the ports. The only place a vendor SDK is ever imported. One sub-folder per vendor (`lib/adapters/supabase/`, `lib/adapters/resend/`, etc.).
+- `app/` (Next.js App Router) and `components/` — presentation. Never imports adapters directly; goes via services or use-cases.
+
+When skills say "which port?" they mean the interface in `lib/ports/`. When they say "which adapter?" they mean the implementation in `lib/adapters/<vendor>/`. See ADR-0002 (`docs/adr/0002-hexagonal-shape-and-naming.md` line 19) for the full naming + dependency rule.
+
+### Dependency justification
+
+Every new entry in `package.json` needs a one-line written reason — in the PR description, the plan, or a `// reason:` comment next to the import. Silent vendor additions are a code-critic blocker.
+
+Single-use vendor libraries (imported in exactly one file) must sit behind an owned wrapper at `lib/adapters/<vendor>/`. The rest of the app depends on the wrapper, not the library.
+
+### Blockers (code-critic will reject)
+
+- Anything in `lib/domain/**` or `lib/ports/**` importing from `lib/adapters/**` (the dependency rule points inward)
+- Anything in `app/**` or `components/**` importing from `lib/adapters/**` directly (must go via `lib/services/` or `lib/usecases/`)
+- A vendor package (e.g. `@supabase/*`, `stripe`, `@vercel/*`) imported outside `lib/adapters/<vendor>/` (F-04 enforces this for `@supabase/supabase-js` at lint time; F-27 extends to all vendors)
+- A new `package.json` entry with no written justification
+- A single-use vendor library not wrapped
+- A rip-out test answer that costs more than one adapter + one config line
+
 ## Local test infrastructure
 
 Prereq: Supabase CLI (`brew install supabase/tap/supabase`) and Docker Desktop running. Daily commands:
