@@ -38,46 +38,38 @@
  * route `export const runtime = 'edge'`.
  */
 
-import { NextRequest } from 'next/server'
-import { randomBytes } from 'node:crypto'
-import { makeCaller, type Role } from './Caller'
-import { runWithCaller } from './context'
+import { NextRequest } from "next/server";
+import { randomBytes } from "node:crypto";
+import { makeCaller, isKnownRole } from "./Caller";
+import { runWithCaller } from "./context";
 
 export type RouteHandler<Args extends unknown[] = []> = (
   req: NextRequest,
   ...rest: Args
-) => Promise<Response>
-
-const KNOWN_ROLES: readonly Role[] = [
-  'warehouse', 'office', 'sales', 'admin', 'driver', 'butcher',
-]
-
-function isKnownRole(v: string | null): v is Role {
-  return v !== null && (KNOWN_ROLES as readonly string[]).includes(v)
-}
+) => Promise<Response>;
 
 function deriveCorrelationId(req: NextRequest): string {
-  const hdr = req.headers.get('x-request-id')?.trim()
-  if (hdr && hdr.length > 0 && hdr.length <= 128) return hdr
-  return randomBytes(8).toString('hex')
+  const hdr = req.headers.get("x-request-id")?.trim();
+  if (hdr && hdr.length > 0 && hdr.length <= 128) return hdr;
+  return randomBytes(8).toString("hex");
 }
 
 export function withRequestContext<Args extends unknown[]>(
-  handler: RouteHandler<Args>
+  handler: RouteHandler<Args>,
 ): RouteHandler<Args> {
   return async (req: NextRequest, ...rest: Args): Promise<Response> => {
-    const correlationId = deriveCorrelationId(req)
-    const userId        = req.headers.get('x-mfs-user-id') || null
-    const roleHdr       = req.headers.get('x-mfs-user-role')
-    const role          = isKnownRole(roleHdr) ? roleHdr : null
+    const correlationId = deriveCorrelationId(req);
+    const userId = req.headers.get("x-mfs-user-id") || null;
+    const roleHdr = req.headers.get("x-mfs-user-role");
+    const role = isKnownRole(roleHdr) ? roleHdr : null;
 
-    const caller = makeCaller({ userId, role, correlationId })
+    const caller = makeCaller({ userId, role, correlationId });
 
-    const res = await runWithCaller(caller, () => handler(req, ...rest))
+    const res = await runWithCaller(caller, () => handler(req, ...rest));
     // Echo correlation ID on outgoing response (idempotent: only set if absent).
-    if (!res.headers.has('x-request-id')) {
-      res.headers.set('x-request-id', correlationId)
+    if (!res.headers.has("x-request-id")) {
+      res.headers.set("x-request-id", correlationId);
     }
-    return res
-  }
+    return res;
+  };
 }

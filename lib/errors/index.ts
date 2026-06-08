@@ -5,9 +5,11 @@
  * Import surface for callers: `import { NotFoundError, withErrors }
  * from '@/lib/errors'`.
  */
-export { AppError, type ErrorBody }                   from './AppError'
-export { NotFoundError }                              from './NotFoundError'
-export { ConflictError }                              from './ConflictError'
-export { ValidationError, type ValidationErrorBody }  from './ValidationError'
-export { ServiceError }                               from './ServiceError'
-export { withErrors, type RouteHandler }              from './withErrors'
+export { AppError, type ErrorBody } from "./AppError";
+export { NotFoundError } from "./NotFoundError";
+export { ConflictError } from "./ConflictError";
+export { UnauthorizedError } from "./UnauthorizedError";
+export { ForbiddenError } from "./ForbiddenError";
+export { ValidationError, type ValidationErrorBody } from "./ValidationError";
+export { ServiceError } from "./ServiceError";
+export { withErrors, type RouteHandler } from "./withErrors";

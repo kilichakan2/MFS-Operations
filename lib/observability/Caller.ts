@@ -24,17 +24,53 @@
  */
 
 export type Role =
-  | 'warehouse'
-  | 'office'
-  | 'sales'
-  | 'admin'
-  | 'driver'
-  | 'butcher'
+  | "warehouse"
+  | "office"
+  | "sales"
+  | "admin"
+  | "driver"
+  | "butcher";
+
+/**
+ * Runtime allow-list mirror of the `Role` union. Used by `isKnownRole`
+ * to filter unsafe `string | null` inputs (e.g. request headers) into
+ * the `Role` union.
+ *
+ * Single source of truth: if a role is added to the union above, it
+ * MUST be added here too (and vice versa) — see
+ * `tests/unit/observability/Caller.test.ts` which asserts both
+ * surfaces enumerate the six known literals.
+ *
+ * Moved to this file in F-03 from `withRequestContext.ts` to keep the
+ * union and its runtime filter together (see header doc above re. the
+ * F-13 forward path).
+ */
+export const KNOWN_ROLES: readonly Role[] = [
+  "warehouse",
+  "office",
+  "sales",
+  "admin",
+  "driver",
+  "butcher",
+];
+
+/**
+ * Type-predicate: returns `true` iff `v` is a known `Role` literal.
+ * Use it at any boundary where untrusted strings (request headers,
+ * URL params, cookies) need narrowing into the `Role` union.
+ */
+export function isKnownRole(v: string | null | undefined): v is Role {
+  return (
+    v !== null &&
+    v !== undefined &&
+    (KNOWN_ROLES as readonly string[]).includes(v)
+  );
+}
 
 export interface Caller {
-  readonly userId:        string | null
-  readonly role:          Role   | null
-  readonly correlationId: string
+  readonly userId: string | null;
+  readonly role: Role | null;
+  readonly correlationId: string;
 }
 
 /**
@@ -43,13 +79,13 @@ export interface Caller {
  * unauthenticated requests (public paths, kiosk traffic, cron).
  */
 export function makeCaller(input: {
-  userId?:        string | null
-  role?:          Role   | null
-  correlationId:  string
+  userId?: string | null;
+  role?: Role | null;
+  correlationId: string;
 }): Caller {
   return {
-    userId:        input.userId        ?? null,
-    role:          input.role          ?? null,
+    userId: input.userId ?? null,
+    role: input.role ?? null,
     correlationId: input.correlationId,
-  }
+  };
 }
