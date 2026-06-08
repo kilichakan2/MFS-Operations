@@ -1,0 +1,71 @@
+# ADR-0005 — F-01 narrowed; raw-fetch consolidation deferred to per-domain port extractions
+
+- **Status:** Accepted
+- **Date:** 2026-06-07
+- **Deciders:** Hakan Kilic, FORGE grill session 2026-06-07
+
+## Context
+
+The v1.2 roadmap (`docs/architecture-review-2026-06-06.md` line 308) defines F-01 as "Consolidate 14 inline Supabase clients onto `supabaseService`. (1 PR — ~1 day, low risk, pure refactor)." Critical Finding C2 (review lines 36 to 69) lists the offending sites and frames the unit as cosmetic plumbing — point fourteen places at the central client, delete the duplicates, the "centralised" comment at `lib/supabase.ts:9` stops being a lie.
+
+When grilled at the start of the F-01 FORGE loop on 2026-06-07, that framing was found to be materially wrong. The fourteen sites are not the same shape and do not have the same migration cost. Thirteen of them — five `screen2` routes, three `detail` routes, one `admin/geocode-all` route, one `map/data` route, and the three email helpers in `lib/` — do not import `@supabase/supabase-js` at all. They hit PostgREST directly with raw `fetch()` calls of the form `${SUPA_URL}/rest/v1/<table>?<params>` with the service-role key passed in both the `apikey` and the `Authorization: Bearer` headers. Many of those `fetch` calls carry embedded PostgREST resource queries — for example `select=id,customers(name),logged_by:users!complaints_user_id_fkey(name)` from `app/api/screen2/all/route.ts` — that map onto the SDK's `.select()` chain but only after careful per-call translation. The response shape changes too: raw `fetch` yields whatever `res.json()` decodes; the SDK wraps the result in `{ data, error }` and changes how error and empty-result cases are observed. The realistic effort to translate those thirteen sites is closer to two days than one, and the risk of silent behavioural drift (timeout defaults, retry behaviour, error message shape, connection reuse) is non-trivial.
+
+Only one of the fourteen sites — `lib/road-times.ts` lines 36 to 39 — actually imports the SDK and constructs its own client. That one is the four-line swap the roadmap had in mind. The roadmap also tracks it separately as F-02 (review line 309) and explicitly suggests folding F-02 into F-01.
+
+A second context point shaped the decision. ADR-0002 (hexagonal shape and naming) and ADR-0003 (strangler-fig migration and FREEZE rule) together describe the target architecture: every route handler will eventually call a domain service that depends on a port (`OrdersRepository`, `CustomersRepository`, etc.); the Supabase adapter behind that port is the only file allowed to construct or import the SDK. The strangler-fig sequencing in ADR-0003 starts that work in Phase 1 (F-05 to F-08 for the Orders domain) and continues through Phase 3 (F-13 to F-21) for the remaining nine domains. Each of those domain units rewrites its routes from the inside out — defining ports, writing the Supabase adapter, lifting the route handler into a thin shell over the service. The thirteen raw-fetch sites all sit inside domains that Phase 1 onward will rewrite.
+
+Doing the raw-fetch consolidation now in F-01 — translating PostgREST URL strings into SDK chains, keeping the route handler shape, leaving `supabaseService` imports in the application layer — would force the same thirteen files to be rewritten a second time when their owning domain reaches Phase 1+ and their queries move behind a port. The first rewrite turns raw `fetch` into `supabaseService.from(...).select(...)`. The second rewrite turns `supabaseService.from(...).select(...)` into `ordersRepository.findOpen()` (or the equivalent in the matching domain). Each translation is non-trivial; each carries regression risk; the first one produces no architectural value because it still fails the rip-out test (ADR-0002).
+
+The third context point is F-04 (review line 311) — the ESLint guard that activates the FREEZE rule. As originally written, F-04 forbids `from '@supabase/supabase-js'` outside `lib/adapters/supabase/**` and `lib/supabase.ts`. That rule catches future SDK leaks but does not catch the thirteen raw-fetch sites — they do not import the SDK and therefore do not trip the rule. To cover the raw-fetch surface, F-04 would need a second rule forbidding references to `process.env.NEXT_PUBLIC_SUPABASE_URL` (or the raw `/rest/v1/` URL pattern) outside `lib/supabase.ts`. If F-01 leaves the thirteen raw-fetch sites in place, rule B cannot land cleanly until those sites have been ported domain by domain.
+
+The trade-off therefore is real and explicit. Either F-01 does the original bundled rewrite, accepts that the thirteen sites will be rewritten twice, ships a single coherent "centralised client now true" milestone, and lets F-04 land both rules at once — at a cost of double-write and additional regression risk. Or F-01 ships the four-line `road-times.ts` swap only, defers the raw-fetch consolidation into the Phase 1+ domain units that will rewrite those routes properly behind ports anyway, lets F-04 ship rule A only, and pushes rule B into the seal-the-boundary unit at the end of the migration.
+
+## Decision
+
+**F-01 is narrowed to the SDK-side swap only.** The unit consists of the four-line client substitution in `lib/road-times.ts` (replacing the local `createClient(...)` with the central `supabaseService` import), a small observability migration of the two `console.*` calls in the same file to `log.info` and `log.warn` from `lib/observability/log.ts`, and a single new integration test at `tests/integration/road-times.test.ts` covering three cases (happy-path load, missing-pair `null` return, DB-error empty-matrix fallback) that runs against the F-INFRA-01 local Supabase stack. The intentional swallow-and-fallback behaviour of `loadRoadTimes()` is preserved verbatim — exact-TSP must continue to fall back to haversine when the cache lookup fails, because failing a delivery-route optimisation because a cache table failed to load is a user-visible regression that the original code deliberately avoids.
+
+**F-02 is folded into F-01.** The roadmap previously tracked the `lib/road-times.ts` createClient bug as a separate one-PR unit. With the narrowing, F-01 and F-02 are the same change. F-02 is retired as a standalone entry.
+
+**The thirteen raw-fetch sites are deferred to the Phase 1+ unit that owns each one's domain.** Each Phase 1+ unit's port-extraction work absorbs the raw-fetch cleanup in the same pull request — once, behind a port, into a service that throws typed errors and depends on the new repository. No site is rewritten twice. The Per-Site Map below records the assignments so that every Phase 1+ planner knows which raw-fetch files they inherit.
+
+| Raw-fetch site                        | Future home (Phase + Unit)                | Notes                                                                                           |
+| ------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `app/api/screen2/note/route.ts`       | F-17 Complaints                           | Note-add endpoint; uses embedded complaint-notes resource join.                                 |
+| `app/api/screen2/resolve/route.ts`    | F-17 Complaints                           | Resolve transition; touches `complaints` and `complaint_notes`.                                 |
+| `app/api/screen2/all/route.ts`        | F-17 Complaints                           | List-all with notes thread; embedded join across two tables.                                    |
+| `app/api/screen2/sync/route.ts`       | F-17 Complaints                           | New-complaint endpoint; also calls `lib/complaint-email.ts`.                                    |
+| `app/api/screen2/open/route.ts`       | F-17 Complaints                           | Open-only list view.                                                                            |
+| `app/api/admin/geocode-all/route.ts`  | F-20 Admin                                | Admin batch-geocode endpoint.                                                                   |
+| `app/api/map/data/route.ts`           | F-20 Admin                                | Admin-only Screen 6 map data; admin role gate.                                                  |
+| `app/api/detail/visit/route.ts`       | F-18 Visits                               | Detail-by-id read for visits.                                                                   |
+| `app/api/detail/complaint/route.ts`   | F-17 Complaints                           | Detail-by-id read for complaints.                                                               |
+| `app/api/detail/discrepancy/route.ts` | F-16 Cash                                 | Detail-by-id read for cash/order discrepancies.                                                 |
+| `lib/complaint-email.ts`              | F-17 Complaints + F-11 Mailer             | Fetches recipients via raw `fetch`, sends via `Resend`. Both fetches go behind ports in one PR. |
+| `lib/compliment-email.ts`             | F-17 Complaints/Compliments + F-11 Mailer | Same shape as complaint-email.                                                                  |
+| `lib/pricing-email.ts`                | F-15 Pricing + F-11 Mailer                | Same shape; recipient list is pricing-team-scoped.                                              |
+
+**F-04's ESLint guard ships rule A only.** When F-04 reaches its FORGE loop, it adds a single `no-restricted-imports` rule forbidding `from '@supabase/supabase-js'` outside `lib/supabase.ts` and (when they exist) `lib/adapters/supabase/**`. The second rule — forbidding references to `process.env.NEXT_PUBLIC_SUPABASE_URL` outside the central client module — is deferred to F-27 (Phase 5, seal-the-boundary), at which point every raw-fetch site has been replaced by its domain's repository-backed handler and rule B can land with zero existing offenders.
+
+**The architecture review document is updated.** A dated addendum is appended to `docs/architecture-review-2026-06-06.md` just above the Handoff section, summarising the narrowing and pointing at this ADR for the full rationale and the per-site map. The original F-01 and F-02 lines in the body of the review are not edited — they remain as a historical record of the v1.2 framing, with the addendum overriding them as of 2026-06-07.
+
+## Consequences
+
+**Easier.** Phase 1 and Phase 3 unit work absorb the raw-fetch cleanup naturally as part of the port-extraction they would do anyway. Every raw-fetch site is rewritten exactly once, behind a port, into a service that uses the typed-error contract from F-FND-02 and the observability context from F-FND-03. No file is touched twice. The F-01 PR itself shrinks from a two-day fourteen-file rewrite to a single-day single-file swap with one integration test, and the diff stays small enough that the reviewer can reason about the behavioural change line by line. F-INFRA-01's local Supabase stack gets exercised for the first time by a real adapter test, which de-risks every later integration test that will follow the same pattern.
+
+**Easier (eventually).** When F-27 lands at the end of Phase 5 with rule B added to the ESLint guard, every raw-fetch site is gone and rule B sees zero offenders the moment it's enabled. The lint rule and the underlying architectural invariant become true together, instead of the rule shipping in a permissive state that gets tightened later.
+
+**Harder.** The "centralised client is now true" milestone from Critical Finding C2 does not arrive at the end of Phase 0. It arrives gradually as each Phase 1+ domain ships its port extraction, and the milestone fully closes only when the last of F-17/F-18/F-20/F-15/F-16/F-11 ship. Until then, the `lib/supabase.ts:9` comment continues to overstate the reality, and any reviewer looking at the codebase during that window will see mixed patterns — `supabaseService` calls in some routes, raw `fetch` against `${SUPA_URL}/rest/v1/...` in others, and a slowly-shrinking ratio of the second over time. The mitigation is this ADR's Per-Site Map and the addendum to the architecture review: anyone landing in the codebase mid-migration can read either document and understand both why the inconsistency exists and exactly which Phase 1+ unit owns each remaining raw-fetch site.
+
+**Harder.** F-04's ESLint guard is partial when it lands. Rule A protects the SDK leak path; rule B does not exist yet. A motivated new contributor could write a new raw `fetch` against PostgREST and not trip the lint. The mitigation is that ADR-0003 already names raw-fetch sites as part of Critical Finding C2 and explicitly anchors them to the strangler-fig migration; code review is the human check until rule B lands in F-27. Acceptable, given that no new raw-fetch sites have been added since the architecture review and the team is small enough that the convention is reviewable.
+
+**Harder.** The roadmap's Phase 0 timeline is now slightly less of a "stop the bleeding" sprint and more of a "stop the easy bleeding now, defer the rest into the work that was going to rewrite it anyway." Honest framing, but it means anyone scanning the roadmap for "what did Phase 0 actually deliver" gets a smaller answer (one PR plus F-03 and F-04) than the v1.2 document originally implied (four PRs of consolidation).
+
+## References
+
+- ADR-0002 — Hexagonal shape and naming (the Lego rule and the rip-out test).
+- ADR-0003 — Strangler-fig migration and the FREEZE rule (why F-04 exists and why it ships permissive).
+- `docs/architecture-review-2026-06-06.md` Critical Finding C2 (the parallel-mechanisms finding that motivated F-01).
+- `docs/architecture-review-2026-06-06.md` Phase 0 and Phase 1 sequencing.
+- `docs/architecture-review-2026-06-06.md` Addendum 2026-06-07 (the inline summary that points back at this ADR).
+- F-INFRA-01 cert (`docs/anvil/2026-06-07-f-infra-01-cert.md`) — the local Supabase stack F-01's integration test runs against.
+- F-FND-03 cert (`docs/anvil/2026-06-07-f-fnd-03-cert.md`) — the `log.info` / `log.warn` implementation F-01 migrates the two `console.*` calls to.
