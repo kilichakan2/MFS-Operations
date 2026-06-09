@@ -408,7 +408,12 @@ export function ordersRepositoryContract(
         );
         expect(printed.state).toBe("printed");
         expect(printed.printedBy).toBe(ctx.userId);
-        expect(printed.printedAt).toBe(when.toISOString());
+        // ISO timestamp formats vary across adapters (Postgres
+        // returns `+00:00`, JS `Date.toISOString()` returns `Z`).
+        // Compare instants, not text — both represent the same UTC
+        // moment.
+        expect(printed.printedAt).not.toBeNull();
+        expect(new Date(printed.printedAt!).getTime()).toBe(when.getTime());
         expect(printed.completedAt).toBeNull();
       });
 
@@ -423,7 +428,8 @@ export function ordersRepositoryContract(
           t2,
         );
         expect(reprinted.state).toBe("printed");
-        expect(reprinted.printedAt).toBe(t2.toISOString());
+        expect(reprinted.printedAt).not.toBeNull();
+        expect(new Date(reprinted.printedAt!).getTime()).toBe(t2.getTime());
         expect(reprinted.printedBy).toBe(ctx.userId);
       });
 
@@ -608,7 +614,8 @@ export function ordersRepositoryContract(
         const when = new Date("2030-06-01T12:00:00.000Z");
         const completed = await ctx.repo.markOrderCompleted(created.id, when);
         expect(completed.state).toBe("completed");
-        expect(completed.completedAt).toBe(when.toISOString());
+        expect(completed.completedAt).not.toBeNull();
+        expect(new Date(completed.completedAt!).getTime()).toBe(when.getTime());
       });
     });
 
