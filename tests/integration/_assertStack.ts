@@ -9,8 +9,11 @@
  * Wired in `vitest.integration.config.ts` setupFiles. Runs AFTER
  * `_loadEnv.ts` so NEXT_PUBLIC_SUPABASE_URL is populated.
  */
-import { assertLocalStackReachable } from './_setup'
+import { assertLocalStackReachable, assertAppServerReachable } from "./_setup";
 
 // Top-level await inside a setupFile is supported by vitest — it blocks
 // test collection until the probe resolves (or throws).
-await assertLocalStackReachable()
+await assertLocalStackReachable();
+// App server second — booted by _globalSetup.ts; this probe only fires
+// if vitest was invoked in a way that skipped globalSetup.
+await assertAppServerReachable();

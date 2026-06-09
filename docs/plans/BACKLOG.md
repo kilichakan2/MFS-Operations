@@ -36,9 +36,9 @@ the trail matters.
 - **Deferred:** 2026-06-09 (during F-06)
 - **What:** 23 integration tests in `tests/integration/orders/**` fail because they require `npm run dev` running separately to hit the Next.js dev server via the `api()` helper. F-INFRA-01 didn't auto-boot the dev server for integration runs.
 - **Why deferred:** F-06's contract tests use the direct-adapter pattern and bypass the broken HTTP layer entirely. F-07 doesn't touch routes.
-- **Detail:** `docs/anvil/2026-06-09-f-06-cert.md` §F-TD-03 + F-06 plan §10
+- **Detail:** `docs/anvil/2026-06-09-f-06-cert.md` §F-TD-03 + F-06 plan §10. Root cause confirmed 2026-06-09: no auto-booted dev server (every failure is connection-refused on port 3000); the documented manual `npm run dev` procedure would wire the server to PRODUCTION Supabase — live-data hazard. Failure count now 30/92 (suite grew since the 23/49 snapshot).
 - **Owner unit:** **F-08 hard prerequisite** — F-08 cannot ship until these pass
-- **Status:** open
+- **Status:** in-progress (F-TD-03 — plan `docs/plans/2026-06-09-f-td-03-integration-test-runner.md`)
 
 ### F-TD-04 — `lib/supabase.ts` eager `createClient` at module load
 
@@ -68,6 +68,15 @@ the trail matters.
 - **Fix shape:** emit one entry per missing ID: `{ "lines.products": missing.map(id => `Unknown product id: ${id}`) }` — array length matches count.
 - **Detail:** F-07 plan §1 + code-critic Guard report
 - **Owner unit:** F-08 — natural to fix when routes adopt the service (routes can rely on cleaner array shape)
+- **Status:** open
+
+### F-TD-07 — Production hygiene check for leftover `ANVIL-TEST-*` rows
+
+- **Deferred:** 2026-06-09 (during F-TD-03 planning)
+- **What:** Before F-TD-03, the documented integration-test procedure booted the dev server against `.env.local` (production Supabase). Any past run that followed it may have written `ANVIL-TEST-*` fixture rows (users, customer, orders) into the PRODUCTION database via the dev server. One-off audit: query production for `name LIKE 'ANVIL-TEST-%'` across `users`, `customers`, `products` and orders referencing them; review findings with Hakan before deleting anything.
+- **Why deferred:** F-TD-03 is forbidden from touching production (scope boundary locked at Gate 1).
+- **Detail:** `docs/plans/2026-06-09-f-td-03-integration-test-runner.md` (Risks)
+- **Owner unit:** unscheduled — small, read-first, needs Hakan present for the delete decision
 - **Status:** open
 
 ---

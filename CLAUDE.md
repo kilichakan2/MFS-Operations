@@ -58,7 +58,8 @@ Prereq: Supabase CLI (`brew install supabase/tap/supabase`) and Docker Desktop r
 - `npm run db:up` — start local Supabase (Postgres + Auth + Storage + Studio)
 - `npm run db:reset` — re-run migrations + seed on the local DB
 - `npm run db:down` — stop local Supabase
+- `npm run test:integration` — vitest integration suite (auto-boots a dev server on port 3100 wired to local Supabase from `.env.test.local`; prerequisites: `npm run db:up` once, and `npm run db:reset` if you want a fresh seed)
 - `npm run test:e2e:api` — Playwright API smoke (auto-boots dev server)
 - `npm run test:e2e:ui` — Playwright UI smoke (auto-boots dev server + chromium)
 
-Playwright's `webServer` block sources `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from `.env.test.local` and passes them explicitly to the spawned dev server — never `.env.local`'s prod values. Smokes also assert the URL points at localhost as a belt-and-braces guard.
+Playwright's `webServer` block sources `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from `.env.test.local` and passes them explicitly to the spawned dev server — never `.env.local`'s prod values. Smokes also assert the URL points at localhost as a belt-and-braces guard. The vitest integration runner shares the same `.env.test.local` invariant **plus** a server-side DB identity probe: a sentinel row planted in the local DB must be readable through the booted server before any test traffic flows, otherwise the run aborts.
