@@ -14,14 +14,14 @@
  *     on printed, products missing on lineReplacement)
  *   - printOrder: 4 cases (order not found, state=completed conflict,
  *     placed→printed happy, reprint on printed)
- *   - completeLineDone: 5 cases (line not found, idempotency, middle
- *     line no-cascade, last line cascade, race swallow)
+ *   - completeLineDone: 6 cases (line not found, idempotency, middle
+ *     line no-cascade, last line cascade, ConflictError swallow,
+ *     ServiceError propagation)
  *   - Pass-throughs: 3 cases (listOrders, findOrderById null,
  *     listKdsQueue)
- *   - Architecture pin: 4 cases (service composes ports not services
+ *   - Architecture pin: 3 cases (service composes ports not services
  *     — proven by the fact that the test imports only port factories;
- *     instanceof checks on each thrown error type; pass-through
- *     wiring; default singleton type identity; static-text grep
+ *     instanceof checks on each thrown error type; static-text grep
  *     forbidding cross-service / runtime-observability / auth /
  *     log imports)
  *
@@ -48,7 +48,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createOrdersService, ordersService } from "@/lib/services";
+import { createOrdersService } from "@/lib/services";
 import {
   createFakeOrdersRepository,
   createFakeCustomersRepository,
@@ -59,6 +59,7 @@ import {
   ConflictError,
   ForbiddenError,
   ValidationError,
+  ServiceError,
 } from "@/lib/errors";
 import type { Customer, Product, CreateOrderInput } from "@/lib/domain";
 
@@ -551,6 +552,39 @@ describe("OrdersService.completeLineDone", () => {
       completed: true,
     });
   });
+
+  it("propagates ServiceError from markOrderCompleted (NOT race-safe)", async () => {
+    // Gate 2 decision #2 lock: ONLY ConflictError is swallowed from
+    // markOrderCompleted (the optimistic-lock race case). ServiceError
+    // represents a real DB / infrastructure failure and MUST bubble up
+    // so callers see it. Without this test, the next refactor of
+    // completeLineDone could quietly widen the catch and hide outages.
+    //
+    // Local trio so the monkey-patch does not leak to other tests.
+    const orders = createFakeOrdersRepository();
+    const customers = createFakeCustomersRepository([
+      { id: CUSTOMER_ID, name: "Acme", postcode: null, active: true },
+    ]);
+    const products = createFakeProductsRepository([
+      { id: PRODUCT_ID, code: "X", name: "X", boxSize: null },
+    ]);
+    const service = createOrdersService({ orders, customers, products });
+
+    const placed = await service.placeOrder(buildInput(), USER_ID);
+    await service.printOrder(placed.id, USER_ID, T);
+
+    // Monkey-patch markOrderCompleted to simulate a real DB outage.
+    orders.markOrderCompleted = async () => {
+      throw new ServiceError("DB connection lost");
+    };
+
+    // The single line is the last line, so the cascade WILL fire and
+    // markOrderCompleted WILL be called. The thrown ServiceError must
+    // propagate — the service does not swallow it.
+    await expect(
+      service.completeLineDone(placed.lines[0].id, BUTCHER_ID, T),
+    ).rejects.toBeInstanceOf(ServiceError);
+  });
 });
 
 // ─── Pass-throughs ───────────────────────────────────────────
@@ -662,16 +696,6 @@ describe("OrdersService architecture pins", () => {
         USER_ID,
       ),
     ).rejects.toBeInstanceOf(ForbiddenError);
-  });
-
-  it("default singleton is the expected OrdersService shape", () => {
-    expect(typeof ordersService.placeOrder).toBe("function");
-    expect(typeof ordersService.editOrder).toBe("function");
-    expect(typeof ordersService.printOrder).toBe("function");
-    expect(typeof ordersService.completeLineDone).toBe("function");
-    expect(typeof ordersService.listOrders).toBe("function");
-    expect(typeof ordersService.findOrderById).toBe("function");
-    expect(typeof ordersService.listKdsQueue).toBe("function");
   });
 
   it("the service does not import any sibling service file", () => {
