@@ -38,7 +38,7 @@ the trail matters.
 - **Why deferred:** F-06's contract tests use the direct-adapter pattern and bypass the broken HTTP layer entirely. F-07 doesn't touch routes.
 - **Detail:** `docs/anvil/2026-06-09-f-06-cert.md` §F-TD-03 + F-06 plan §10. Root cause confirmed 2026-06-09: no auto-booted dev server (every failure is connection-refused on port 3000); the documented manual `npm run dev` procedure would wire the server to PRODUCTION Supabase — live-data hazard. Failure count now 30/92 (suite grew since the 23/49 snapshot).
 - **Owner unit:** **F-08 hard prerequisite** — F-08 cannot ship until these pass
-- **Status:** in-progress (F-TD-03 — plan `docs/plans/2026-06-09-f-td-03-integration-test-runner.md`)
+- **Status:** done (PR #25 / `58b1168` — self-contained runner, 92/92 green; cert `docs/anvil/2026-06-10-f-td-03-cert.md`)
 
 ### F-TD-04 — `lib/supabase.ts` eager `createClient` at module load
 
