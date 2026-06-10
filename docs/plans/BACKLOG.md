@@ -9,6 +9,7 @@ forget it. Each entry points to where the detail lives.
 - **F-TD-** prefix = tech debt (numbered, claimable as its own PR)
 - **F-PROD-** prefix = product feature (not part of hexagonal migration)
 - **ARCH-FU-** prefix = architecture follow-up (deferred from an ADR or plan)
+- **F-INFRA-** prefix = test/deploy infrastructure unit (numbered, claimable as its own PR)
 - Date on each entry = when it was deferred (so age is visible)
 - Owner-unit = the migration unit that will absorb the fix, or `unscheduled`
 - Status: `open` / `in-progress (<unit>)` / `done (<PR>)` / `obsolete`
@@ -133,6 +134,19 @@ the trail matters.
 
 ---
 
+## Infrastructure follow-ups (F-INFRA-)
+
+### F-INFRA-03 — Run the preview smoke in CI (GitHub Actions)
+
+- **Deferred:** 2026-06-10 (during F-INFRA-02)
+- **What:** The Gate-4 preview smoke is conductor-run from a local machine (`npm run test:e2e:preview -- <preview-url>`). Future unit: run it in CI (GitHub Actions) instead of / in addition to conductor-run, so every PR gets the smoke automatically. The Vercel Protection Bypass secret moves from `.env.e2e.local` to repo secrets; `.github/workflows/` is currently intentionally empty.
+- **Why deferred:** Gate-1 lock for F-INFRA-02 explicitly scoped the smoke as FORGE-run with no CI.
+- **Detail:** `docs/plans/2026-06-10-f-infra-02-preview-smoke-plumbing.md` + ADR-0006
+- **Owner unit:** F-INFRA-03 (unscheduled)
+- **Status:** open
+
+---
+
 ## Product features (F-PROD-)
 
 ### F-PROD-01 — HACCP Allergen Assessment version history UI
@@ -162,6 +176,6 @@ Not new entries — pointers. F-08 cannot ship until these are green:
 
 1. **F-TD-03** (above) fixed — 23 broken Orders integration tests pass
 2. **Playwright `@critical` suite must PASS at Gate 3** — not skipped, not deferred
-3. **F-INFRA-02** OR manual smoke procedure — wires Playwright harness into dev server via `webServer`; if F-INFRA-02 not ready by F-08, F-08 must include a documented click-through path with checkboxes as compensating control
+3. **F-INFRA-02 shipped** — the per-PR preview smoke is live (`npm run test:e2e:preview`, `docs/runbooks/preview-smoke.md`); the manual click-through compensating control is no longer required
 
 Owner unit for F-INFRA-02 itself: separate infra ticket, pre-F-08.
