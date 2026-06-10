@@ -74,9 +74,12 @@ const PROD_HOSTNAMES    = ['mfs-operations.vercel.app']
 const PROD_SUPABASE_REF = 'uqgecljspgtevoylwkep'
 // Vercel preview hosts for this project: either the git-branch alias
 // (mfs-operations-git-<branch>-<scope>.vercel.app) or the unique
-// deployment URL (mfs-operations-<hash9>-<scope>.vercel.app).
+// deployment URL (mfs-operations-<hash9>-<scope>.vercel.app). The
+// scope slug is pinned to this project's exact Vercel scope
+// (confirmed against the live Vercel project) so preview URLs from
+// any OTHER scope are refused too.
 const PREVIEW_HOST_RE =
-  /^mfs-operations(-git-[a-z0-9-]+|-[a-z0-9]{9})-[a-z0-9-]+\.vercel\.app$/
+  /^mfs-operations(-git-[a-z0-9-]+|-[a-z0-9]{9})-hakan-kilics-projects-2c54f03f\.vercel\.app$/
 
 const BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? ''
 

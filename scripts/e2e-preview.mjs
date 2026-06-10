@@ -32,8 +32,10 @@ dotenv.config({ path: '.env.e2e.local' })
 
 const PROD_HOSTNAMES = ['mfs-operations.vercel.app']
 const PROD_SUPABASE_REF = 'uqgecljspgtevoylwkep'
+// Scope slug pinned to this project's exact Vercel scope (confirmed
+// against the live Vercel project) — same rule as playwright.config.ts.
 const PREVIEW_HOST_RE =
-  /^mfs-operations(-git-[a-z0-9-]+|-[a-z0-9]{9})-[a-z0-9-]+\.vercel\.app$/
+  /^mfs-operations(-git-[a-z0-9-]+|-[a-z0-9]{9})-hakan-kilics-projects-2c54f03f\.vercel\.app$/
 
 function die(msg) {
   console.error(`[e2e-preview] ${msg}`)

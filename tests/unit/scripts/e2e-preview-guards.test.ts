@@ -92,8 +92,11 @@ function expectFailClosedRefusal(run: RunResult, messageClass: RegExp): void {
 
 // A URL that legitimately matches the project's Vercel preview pattern —
 // used to prove the secret guard fires even when the URL itself is fine.
+// The scope slug must be the project's exact pinned Vercel scope: a URL
+// with any other scope slug is refused by the hostname guard (see the
+// foreign-scope test below).
 const VALID_PREVIEW_URL =
-  "https://mfs-operations-git-feat-f-infra-02-preview-smoke-hakans-projects.vercel.app";
+  "https://mfs-operations-git-foo-hakan-kilics-projects-2c54f03f.vercel.app";
 
 describe("scripts/e2e-preview.mjs fail-closed guards (black-box)", () => {
   it("refuses the production hostname mfs-operations.vercel.app", () => {
@@ -103,14 +106,14 @@ describe("scripts/e2e-preview.mjs fail-closed guards (black-box)", () => {
 
   it("refuses any hostname containing -git-main- (production alias)", () => {
     const run = runScript([
-      "https://mfs-operations-git-main-hakans-projects.vercel.app",
+      "https://mfs-operations-git-main-hakan-kilics-projects-2c54f03f.vercel.app",
     ]);
     expectFailClosedRefusal(run, /looks like PRODUCTION/);
   });
 
   it("refuses a plain http:// URL — preview smokes are https-only", () => {
     const run = runScript([
-      "http://mfs-operations-git-feat-x-hakans-projects.vercel.app",
+      "http://mfs-operations-git-foo-hakan-kilics-projects-2c54f03f.vercel.app",
     ]);
     expectFailClosedRefusal(run, /https-only/);
   });
@@ -133,9 +136,21 @@ describe("scripts/e2e-preview.mjs fail-closed guards (black-box)", () => {
     );
   });
 
+  it("refuses a preview-shaped vercel.app URL from a FOREIGN Vercel scope slug", () => {
+    // Looks exactly like one of our previews except the scope slug is not
+    // this project's pinned slug — must be refused by the hostname guard.
+    const run = runScript([
+      "https://mfs-operations-git-foo-other-scope.vercel.app",
+    ]);
+    expectFailClosedRefusal(
+      run,
+      /does not match this project's Vercel preview/,
+    );
+  });
+
   it("refuses a URL containing the production Supabase project ref", () => {
     const run = runScript([
-      "https://mfs-operations-git-feat-x-hakans-projects.vercel.app/?ref=uqgecljspgtevoylwkep",
+      "https://mfs-operations-git-foo-hakan-kilics-projects-2c54f03f.vercel.app/?ref=uqgecljspgtevoylwkep",
     ]);
     expectFailClosedRefusal(run, /looks like PRODUCTION/);
   });
