@@ -80,6 +80,15 @@ the trail matters.
 - **Owner unit:** unscheduled — small, read-first, needs Hakan present for the delete decision
 - **Status:** open
 
+### F-TD-08 — `kds.test.ts` clobbers ANVIL-TEST-butcher's `pin_hash` (breaks subsequent local `@critical` runs)
+
+- **Deferred:** 2026-06-10 (during F-INFRA-02 Guard)
+- **What:** `tests/integration/kds.test.ts:22,36-37` overwrites ANVIL-TEST-butcher's `pin_hash` with a bcrypt of its own committed plaintext PIN (`'8129'`) and never restores it (`cleanupTestData` only deletes orders). Pre-existing on main; impact activated by F-INFRA-02's freshly-minted `E2E_PIN_BUTCHER`: any local `@critical` Playwright run AFTER `npm run test:integration` fails at spec 03 until `npm run db:reset`.
+- **Fix shape:** derive the test's PIN from `E2E_PIN_BUTCHER`, or restore the original `pin_hash` in `afterAll`.
+- **Detail:** code-critic Guard report for PR #26 (W3) + `docs/plans/2026-06-10-f-infra-02-preview-smoke-plumbing.md`
+- **Owner unit:** unscheduled (small standalone PR)
+- **Status:** open
+
 ---
 
 ## Architecture follow-ups (ARCH-FU-)

@@ -66,7 +66,10 @@ const REMOTE   = !!baseUrl && !['localhost', '127.0.0.1'].includes(baseUrl.hostn
 
 // Hard-coded production identifiers (deny-list). The preview smoke
 // must be physically unable to target the live site or anything that
-// references the production Supabase project.
+// references the production Supabase project. Vercel ALSO serves
+// production at the git-main alias (mfs-operations-git-main-<scope>
+// .vercel.app) and its unique deployment URLs — so any hostname
+// containing '-git-main-' is refused too.
 const PROD_HOSTNAMES    = ['mfs-operations.vercel.app']
 const PROD_SUPABASE_REF = 'uqgecljspgtevoylwkep'
 // Vercel preview hosts for this project: either the git-branch alias
@@ -86,6 +89,7 @@ if (REMOTE && baseUrl) {
   }
   if (
     PROD_HOSTNAMES.includes(baseUrl.hostname) ||
+    baseUrl.hostname.includes('-git-main-') ||
     (RAW_BASE ?? '').includes(PROD_SUPABASE_REF)
   ) {
     throw new Error(

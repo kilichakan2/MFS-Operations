@@ -47,7 +47,7 @@ npm run test:e2e:preview -- https://<preview-url>
 
 Expected: the DB identity probe passes (4 checks: gate, seeded users,
 hash identity, seed sentinel), then the three `@critical` specs run
-(6 tests) and pass.
+(8 tests) and pass.
 
 ## 4. Interpret the result
 

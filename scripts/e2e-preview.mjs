@@ -58,7 +58,13 @@ try {
 if (url.protocol !== 'https:') {
   die('preview smokes are https-only — refusing a plain-http target (fail closed).')
 }
-if (PROD_HOSTNAMES.includes(url.hostname) || rawUrl.includes(PROD_SUPABASE_REF)) {
+// Vercel also serves production at the git-main alias
+// (mfs-operations-git-main-<scope>.vercel.app) — refuse it too.
+if (
+  PROD_HOSTNAMES.includes(url.hostname) ||
+  url.hostname.includes('-git-main-') ||
+  rawUrl.includes(PROD_SUPABASE_REF)
+) {
   die(
     'that URL looks like PRODUCTION — preview smokes target ' +
       '-git-….vercel.app preview deployments only. Refusing to run.',
