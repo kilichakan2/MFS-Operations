@@ -29,9 +29,31 @@ specs are a relay — 01 creates the order 02 prints and 03 works).
   closed** — do not proceed; investigate the Supabase GitHub-integration
   / branching wiring (dashboard → Integrations) before trying again.
 
-- `.env.e2e.local` (gitignored) holds `VERCEL_AUTOMATION_BYPASS_SECRET`
-  plus the `E2E_PIN_*` test PINs whose bcrypt hashes live in
-  `supabase/seed.sql`.
+- `.env.e2e.local` (gitignored) holds the `E2E_PIN_*` test PINs whose
+  bcrypt hashes live in `supabase/seed.sql` — plus, in **protected mode
+  only**, `VERCEL_AUTOMATION_BYPASS_SECRET` (see "Two modes" below).
+
+## 1a. Two modes: protected (default) vs `--unprotected`
+
+| Mode                                | When                                                                                                                | Secret                                                                       | Headers                                            |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------- |
+| **Protected** (default)             | Vercel Deployment Protection is ON and a Protection Bypass for Automation secret exists                             | `VERCEL_AUTOMATION_BYPASS_SECRET` required in `.env.e2e.local` (fail closed) | `x-vercel-protection-bypass` sent on every request |
+| **`--unprotected`** (current state) | Deployment Protection is **disabled entirely** on the Vercel project (the plan exposes no usable automation bypass) | No secret required                                                           | No bypass headers sent                             |
+
+```
+npm run test:e2e:preview -- https://<preview-url> --unprotected
+```
+
+`--unprotected` is temporary and tracked as **BACKLOG F-INFRA-04** —
+re-enable protection + the bypass secret after the re-architecture and
+drop the flag from this invocation. **Warning:** while protection is
+off, preview deployments are publicly reachable by anyone with the URL
+(low risk today: previews hold only ANVIL-TEST dummy data from
+`supabase/seed.sql`, never production data). The flag changes ONLY the
+secret/header logic — every hostname/https/prod-ref guard and all four
+DB identity probe checks apply identically in both modes (probe check 1
+asserts the deployment is alive without bypass headers; a 401 there
+means protection is actually ON and the flag is wrong).
 
 ## 2. Find the preview URL
 
@@ -41,12 +63,22 @@ domain, typo'd host, plain http) is refused automatically.
 
 ## 3. Run
 
+Protected mode (default — once Deployment Protection is back on, see
+F-INFRA-04):
+
 ```
 npm run test:e2e:preview -- https://<preview-url>
 ```
 
-Expected: the DB identity probe passes (4 checks: gate, seeded users,
-hash identity, seed sentinel), then the three `@critical` specs run
+Current state (Deployment Protection OFF):
+
+```
+npm run test:e2e:preview -- https://<preview-url> --unprotected
+```
+
+Expected: a one-line `--unprotected` warning (current state only), then
+the DB identity probe passes (4 checks: gate, seeded users, hash
+identity, seed sentinel), then the three `@critical` specs run
 (8 tests) and pass.
 
 ## 4. Interpret the result

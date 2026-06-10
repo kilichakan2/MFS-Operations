@@ -16,6 +16,16 @@
  *    with BASE_URL + VERCEL_AUTOMATION_BYPASS_SECRET in env and exits
  *    with Playwright's exit code.
  *
+ * --unprotected mode (temporary — tracked as BACKLOG F-INFRA-04):
+ * Vercel Deployment Protection is currently DISABLED on this project
+ * (the plan exposes no usable Protection Bypass for Automation), so
+ * there is no bypass secret to send. Passing `--unprotected` after the
+ * URL skips the bypass-secret requirement and tells the config/probe
+ * layer (via E2E_PREVIEW_UNPROTECTED=1) not to send bypass headers.
+ * Every hostname/https/prod-ref guard still applies — ONLY the
+ * secret/header logic changes. Without the flag, behaviour is
+ * byte-identical to the protected mode (secret required, fail closed).
+ *
  * The bypass secret is never printed. See docs/runbooks/preview-smoke.md.
  */
 
@@ -42,7 +52,9 @@ function die(msg) {
   process.exit(1)
 }
 
-const rawUrl = process.argv[2] ?? shellBaseUrl
+const cliArgs = process.argv.slice(2)
+const unprotected = cliArgs.includes('--unprotected')
+const rawUrl = cliArgs.find((a) => a !== '--unprotected') ?? shellBaseUrl
 if (!rawUrl) {
   die(
     'no preview URL given.\nUsage: npm run test:e2e:preview -- <preview-url>\n' +
@@ -81,10 +93,16 @@ if (!PREVIEW_HOST_RE.test(url.hostname)) {
 }
 
 const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? ''
-if (secret.length < 20 || /\s/.test(secret)) {
+if (!unprotected && (secret.length < 20 || /\s/.test(secret))) {
   die(
     'bypass secret missing — set VERCEL_AUTOMATION_BYPASS_SECRET in ' +
       '.env.e2e.local; the smoke fails closed without it.',
+  )
+}
+
+if (unprotected) {
+  console.warn(
+    '[e2e-preview] WARNING: --unprotected mode — assuming Vercel Deployment Protection is OFF; no bypass secret/headers will be sent (deliberate, tracked as BACKLOG F-INFRA-04).',
   )
 }
 
@@ -98,7 +116,12 @@ const child = spawn(
     env: {
       ...process.env,
       BASE_URL: url.origin,
-      VERCEL_AUTOMATION_BYPASS_SECRET: secret,
+      // Protected (default) mode passes the secret through; --unprotected
+      // strips it and flags the config/probe layer instead, so no
+      // x-vercel-protection-bypass header is ever sent in that mode.
+      ...(unprotected
+        ? { E2E_PREVIEW_UNPROTECTED: '1', VERCEL_AUTOMATION_BYPASS_SECRET: '' }
+        : { VERCEL_AUTOMATION_BYPASS_SECRET: secret }),
     },
   },
 )

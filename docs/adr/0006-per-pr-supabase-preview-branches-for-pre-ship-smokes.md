@@ -88,3 +88,18 @@ Harder / costs:
 - `docs/anvil/2026-06-10-f-td-03-cert.md` — prerequisite #1 (done)
 - `playwright.config.ts` — existing BASE_URL + webServer env invariant
 - ADR-0003 — strangler-fig migration (why F-08 needs this net first)
+
+## Addendum 2026-06-10 — Deployment Protection temporarily OFF
+
+Deviation from the decision above: Vercel Deployment Protection has been
+**disabled entirely** on the project (temporary) because the current
+Vercel plan exposes no usable Protection Bypass for Automation secret.
+The smoke wrapper gained an explicit `--unprotected` mode
+(`scripts/e2e-preview.mjs`) that skips the bypass-secret requirement and
+sends no bypass headers; without the flag, the protected fail-closed
+behaviour is unchanged. **BACKLOG F-INFRA-04** tracks restoring
+protection + the bypass secret after the re-architecture. The
+production-data invariant of this ADR is unaffected: the DB identity
+probe and the per-PR Supabase preview branches do not depend on
+Deployment Protection — previews are publicly URL-reachable while
+protection is off, but hold only ANVIL-TEST seed data.

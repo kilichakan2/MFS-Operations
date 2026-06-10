@@ -178,6 +178,42 @@ describe("scripts/e2e-preview.mjs fail-closed guards (black-box)", () => {
     expect(run.stderr).toContain("Usage: npm run test:e2e:preview");
   });
 
+  // ── --unprotected mode (Deployment Protection OFF — F-INFRA-04) ──
+
+  it("--unprotected + valid preview URL passes the secret guard with NO secret and proceeds", () => {
+    // PATH is emptied so the eventual `npx playwright` spawn fails instantly
+    // (ENOENT) instead of reaching the network — the test only needs proof
+    // the script got PAST the secret guard and printed the launch banner.
+    const run = runScript([VALID_PREVIEW_URL, "--unprotected"], { PATH: "" });
+    // The secret guard must NOT fire…
+    expect(run.stderr).not.toContain("bypass secret missing");
+    // …the loud protection-off warning must be printed…
+    expect(run.stderr).toContain("--unprotected mode");
+    expect(run.stderr).toContain("F-INFRA-04");
+    // …and the launch banner proves every guard was cleared and the script
+    // proceeded toward the Playwright/network step.
+    expect(run.stdout).toContain("running @critical specs");
+    // Still no real network round-trip in this sandbox.
+    expect(run.timedOut).toBe(false);
+    expect(run.durationMs).toBeLessThan(REFUSAL_MS);
+  });
+
+  it("--unprotected does NOT weaken the production-hostname guard", () => {
+    const run = runScript([
+      "https://mfs-operations.vercel.app",
+      "--unprotected",
+    ]);
+    expectFailClosedRefusal(run, /looks like PRODUCTION/);
+  });
+
+  it("--unprotected does NOT weaken the -git-main- production-alias guard", () => {
+    const run = runScript([
+      "https://mfs-operations-git-main-hakan-kilics-projects-2c54f03f.vercel.app",
+      "--unprotected",
+    ]);
+    expectFailClosedRefusal(run, /looks like PRODUCTION/);
+  });
+
   it("never prints the bypass secret in any refusal output", () => {
     const secret = "super-secret-value-that-must-never-leak-0123456789";
     const run = runScript(["https://mfs-operations.vercel.app"], {

@@ -11,7 +11,11 @@
  * Checks (read-through-the-server, modelled on F-TD-03's D4 rule —
  * read through the deployed app, never write business data):
  *   1. Gate:     GET /login answers < 500 with the bypass headers
- *                (401 = bypass secret wrong — distinct error).
+ *                (401 = bypass secret wrong — distinct error). In
+ *                --unprotected mode (E2E_PREVIEW_UNPROTECTED=1, see
+ *                BACKLOG F-INFRA-04) no bypass headers exist, so this
+ *                check asserts the deployment is alive without them —
+ *                a 401 then means Protection is actually ON.
  *   2. Seeded:   GET /api/auth/team (public) lists ANVIL-TEST-sales.
  *   3. Hash:     POST /api/auth/kds-pin with E2E_PIN_BUTCHER returns
  *                ANVIL-TEST-butcher — the DB holds the exact bcrypt
@@ -37,6 +41,8 @@ interface ProbeEnv {
   bypassSecret?: string;
   pinSales?: string;
   pinButcher?: string;
+  /** Deployment Protection is OFF — no bypass headers (F-INFRA-04). */
+  unprotected?: boolean;
 }
 
 function fail(check: string, detail: string): never {
@@ -81,6 +87,12 @@ export async function probePreviewDb(
   // ── Check 1: gate ──────────────────────────────────────────────
   const gate = await fetch(`${base}/login`, { headers, redirect: "manual" });
   if (gate.status === 401) {
+    if (env.unprotected) {
+      fail(
+        "check 1 (gate)",
+        "GET /login returned 401 with NO bypass headers — Vercel Deployment Protection appears to be ON, but --unprotected was passed. Drop --unprotected and set VERCEL_AUTOMATION_BYPASS_SECRET in .env.e2e.local (see BACKLOG F-INFRA-04).",
+      );
+    }
     fail(
       "check 1 (gate)",
       `GET /login returned 401 — Vercel rejected the bypass: the VERCEL_AUTOMATION_BYPASS_SECRET in .env.e2e.local is wrong or was rotated.`,
@@ -198,5 +210,6 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     bypassSecret: process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
     pinSales: process.env.E2E_PIN_SALES,
     pinButcher: process.env.E2E_PIN_BUTCHER,
+    unprotected: process.env.E2E_PREVIEW_UNPROTECTED === "1",
   });
 }

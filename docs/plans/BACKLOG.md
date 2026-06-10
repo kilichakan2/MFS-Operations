@@ -154,6 +154,15 @@ the trail matters.
 - **Owner unit:** F-INFRA-03 (unscheduled)
 - **Status:** open
 
+### F-INFRA-04 — Re-enable Vercel Deployment Protection (+ automation bypass) after the re-architecture
+
+- **Deferred:** 2026-06-10 (during F-INFRA-02)
+- **What:** Deployment Protection is disabled entirely on the Vercel project because Hakan's plan exposed no usable Protection Bypass for Automation; previews are publicly URL-reachable (low risk: post-F-INFRA-02 previews hold only ANVIL-TEST dummy data). The preview smoke runs with the `--unprotected` flag in the meantime.
+- **Goal:** when the migration completes (or if previews ever carry sensitive data), re-enable protection, generate the bypass secret into `.env.e2e.local` as `VERCEL_AUTOMATION_BYPASS_SECRET`, and drop the `--unprotected` flag from the Gate-4 runbook invocation.
+- **Detail:** `docs/runbooks/preview-smoke.md` "Two modes" + ADR-0006 addendum
+- **Owner unit:** unscheduled (post-migration ops)
+- **Status:** open
+
 ---
 
 ## Product features (F-PROD-)

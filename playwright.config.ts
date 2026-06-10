@@ -45,6 +45,12 @@
  * (or localhost) every value below is byte-identical to the previous
  * local-only config. Run: npm run test:e2e:preview -- <preview-url>
  * (see docs/runbooks/preview-smoke.md).
+ *
+ * E2E_PREVIEW_UNPROTECTED=1 (set by scripts/e2e-preview.mjs when the
+ * conductor passes --unprotected): Vercel Deployment Protection is
+ * temporarily OFF (BACKLOG F-INFRA-04), so the bypass-secret guard is
+ * skipped and NO x-vercel-protection-bypass headers are sent. All
+ * hostname/https/prod-ref guards still apply unchanged.
  */
 import { defineConfig, devices } from '@playwright/test'
 import dotenv from 'dotenv'
@@ -82,6 +88,9 @@ const PREVIEW_HOST_RE =
   /^mfs-operations(-git-[a-z0-9-]+|-[a-z0-9]{9})-hakan-kilics-projects-2c54f03f\.vercel\.app$/
 
 const BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? ''
+// Set by scripts/e2e-preview.mjs --unprotected (Deployment Protection is
+// OFF on the Vercel project — temporary, tracked as BACKLOG F-INFRA-04).
+const UNPROTECTED   = process.env.E2E_PREVIEW_UNPROTECTED === '1'
 
 if (REMOTE && baseUrl) {
   if (baseUrl.protocol !== 'https:') {
@@ -107,7 +116,7 @@ if (REMOTE && baseUrl) {
       'Refusing to run (fail closed) — check the URL for typos.',
     )
   }
-  if (BYPASS_SECRET.length < 20 || /\s/.test(BYPASS_SECRET)) {
+  if (!UNPROTECTED && (BYPASS_SECRET.length < 20 || /\s/.test(BYPASS_SECRET))) {
     throw new Error(
       'bypass secret missing — set VERCEL_AUTOMATION_BYPASS_SECRET in ' +
       '.env.e2e.local; the smoke fails closed without it.',
@@ -132,8 +141,10 @@ export default defineConfig({
     trace:         'on-first-retry',
     // F-INFRA-02: remote mode shows the Vercel gate pass on every
     // request AND asks Vercel to set the _vercel_jwt bypass cookie so
-    // request paths that miss the header stay authorized.
-    ...(REMOTE
+    // request paths that miss the header stay authorized. In
+    // --unprotected mode (Deployment Protection OFF — F-INFRA-04) no
+    // bypass headers are sent at all.
+    ...(REMOTE && !UNPROTECTED
       ? {
           extraHTTPHeaders: {
             'x-vercel-protection-bypass': BYPASS_SECRET,
