@@ -33,6 +33,18 @@
  *
  * Mobile Safari project is defined but requires `npx playwright
  * install webkit` to use. Default ANVIL runs use --project=chromium.
+ *
+ * F-INFRA-02 update — remote preview mode. When BASE_URL points at a
+ * non-localhost host the config flips to REMOTE: no local webServer is
+ * booted, every request carries the Vercel Protection Bypass headers,
+ * and a globalSetup DB-identity probe (tests/e2e/_previewProbe.ts)
+ * must pass before any spec runs. Module-scope guards refuse plain
+ * http, production-looking hostnames, anything that is not a
+ * *.vercel.app preview host, and a missing/malformed bypass secret —
+ * all BEFORE any network call (fail closed). When BASE_URL is unset
+ * (or localhost) every value below is byte-identical to the previous
+ * local-only config. Run: npm run test:e2e:preview -- <preview-url>
+ * (see docs/runbooks/preview-smoke.md).
  */
 import { defineConfig, devices } from '@playwright/test'
 import dotenv from 'dotenv'
@@ -44,6 +56,57 @@ import dotenv from 'dotenv'
 // .env.e2e.local for the existing 13 specs (PINs + user names).
 dotenv.config({ path: '.env.test.local' })
 dotenv.config({ path: '.env.e2e.local' })
+
+// ── F-INFRA-02: remote preview mode detection + fail-closed guards ──
+// REMOTE = BASE_URL is set and not localhost. new URL() throws on a
+// malformed BASE_URL — that is deliberate (fail closed, never guess).
+const RAW_BASE = process.env.BASE_URL
+const baseUrl  = RAW_BASE ? new URL(RAW_BASE) : null
+const REMOTE   = !!baseUrl && !['localhost', '127.0.0.1'].includes(baseUrl.hostname)
+
+// Hard-coded production identifiers (deny-list). The preview smoke
+// must be physically unable to target the live site or anything that
+// references the production Supabase project.
+const PROD_HOSTNAMES    = ['mfs-operations.vercel.app']
+const PROD_SUPABASE_REF = 'uqgecljspgtevoylwkep'
+// Vercel preview hosts for this project: either the git-branch alias
+// (mfs-operations-git-<branch>-<scope>.vercel.app) or the unique
+// deployment URL (mfs-operations-<hash9>-<scope>.vercel.app).
+const PREVIEW_HOST_RE =
+  /^mfs-operations(-git-[a-z0-9-]+|-[a-z0-9]{9})-[a-z0-9-]+\.vercel\.app$/
+
+const BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? ''
+
+if (REMOTE && baseUrl) {
+  if (baseUrl.protocol !== 'https:') {
+    throw new Error(
+      `Refusing to run against a plain-${baseUrl.protocol} remote target — ` +
+      'preview smokes are https-only (fail closed).',
+    )
+  }
+  if (
+    PROD_HOSTNAMES.includes(baseUrl.hostname) ||
+    (RAW_BASE ?? '').includes(PROD_SUPABASE_REF)
+  ) {
+    throw new Error(
+      'Refusing to run @critical specs against a production-looking URL — ' +
+      'preview smokes target -git-….vercel.app preview deployments only.',
+    )
+  }
+  if (!PREVIEW_HOST_RE.test(baseUrl.hostname)) {
+    throw new Error(
+      `Hostname '${baseUrl.hostname}' does not match this project's Vercel ` +
+      'preview pattern (mfs-operations-git-<branch>-<scope>.vercel.app). ' +
+      'Refusing to run (fail closed) — check the URL for typos.',
+    )
+  }
+  if (BYPASS_SECRET.length < 20 || /\s/.test(BYPASS_SECRET)) {
+    throw new Error(
+      'bypass secret missing — set VERCEL_AUTOMATION_BYPASS_SECRET in ' +
+      '.env.e2e.local; the smoke fails closed without it.',
+    )
+  }
+}
 
 export default defineConfig({
   testDir:    './tests/e2e',
@@ -60,13 +123,29 @@ export default defineConfig({
     screenshot:    'only-on-failure',
     video:         'retain-on-failure',
     trace:         'on-first-retry',
+    // F-INFRA-02: remote mode shows the Vercel gate pass on every
+    // request AND asks Vercel to set the _vercel_jwt bypass cookie so
+    // request paths that miss the header stay authorized.
+    ...(REMOTE
+      ? {
+          extraHTTPHeaders: {
+            'x-vercel-protection-bypass': BYPASS_SECRET,
+            'x-vercel-set-bypass-cookie': 'true',
+          },
+        }
+      : {}),
   },
+  // F-INFRA-02: the DB-identity probe runs before any spec, remote
+  // mode only. Local runs have no globalSetup, exactly as before.
+  ...(REMOTE ? { globalSetup: './tests/e2e/_previewProbe.ts' } : {}),
   // Auto-boot the dev server if it isn't already up. `reuseExistingServer`
   // keeps the inner loop fast when a dev server is already running.
   // The explicit `env` block is THE production-safety boundary: the
   // spawned dev server inherits local Supabase URL + service-role key,
   // never .env.local's prod values.
-  webServer: {
+  // F-INFRA-02: remote mode tests the deployed build — no local dev
+  // server is booted. Local mode keeps the exact block below.
+  ...(REMOTE ? {} : { webServer: {
     command:             'npm run dev',
     url:                 'http://localhost:3000/login',
     reuseExistingServer: true,
@@ -75,7 +154,7 @@ export default defineConfig({
       NEXT_PUBLIC_SUPABASE_URL:  process.env.NEXT_PUBLIC_SUPABASE_URL  ?? 'http://localhost:54321',
       SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
     },
-  },
+  } }),
   projects: [
     // F-INFRA-01: API smoke — request fixture only, no browser.
     {
