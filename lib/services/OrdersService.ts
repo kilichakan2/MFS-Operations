@@ -56,8 +56,8 @@
  *     constructed against that client.
  *   - Production wiring lives in `lib/wiring/orders.ts` (the
  *     composition root) — NEVER as a pre-wired singleton in this
- *     file. Service files import ports only, never
- *     `@/lib/adapters/*` (ESLint-enforced, pinned by
+ *     file. Service files import ports only, never the adapters
+ *     folder (ESLint-enforced, pinned by
  *     tests/unit/lint/no-adapter-imports.test.ts). F-13+ services
  *     copy this pattern: factory here, wiring in
  *     `lib/wiring/<domain>.ts`.
