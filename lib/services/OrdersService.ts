@@ -49,16 +49,18 @@
  *     extract-product-ids + missing-products computation is inlined
  *     at the two call sites.
  *
- * Construction (hybrid factory + singleton, matching F-06's
- * `createSupabase…Repository` pattern).
+ * Construction (factory + composition root — ADR-0002, F-TD-11).
  *   - `createOrdersService(repos)` factory — tests pass Fake repos
  *     for unit testing; alternative production wirings (e.g. a
  *     per-request authenticated client under F-RLS-03) pass adapters
  *     constructed against that client.
- *   - `ordersService` singleton — pre-wired against the default
- *     Supabase adapters from `@/lib/adapters/supabase`. F-08 routes
- *     import this. App code never imports `createOrdersService`
- *     directly outside tests.
+ *   - Production wiring lives in `lib/wiring/orders.ts` (the
+ *     composition root) — NEVER as a pre-wired singleton in this
+ *     file. Service files import ports only, never
+ *     `@/lib/adapters/*` (ESLint-enforced, pinned by
+ *     tests/unit/lint/no-adapter-imports.test.ts). F-13+ services
+ *     copy this pattern: factory here, wiring in
+ *     `lib/wiring/<domain>.ts`.
  *
  * Auth posture (Gate 1 locked).
  *   - Service methods take primitives: `callerRole: Role` and
@@ -140,11 +142,6 @@ import type {
   ProductsRepository,
   KdsOrderQueueSnapshot,
 } from "@/lib/ports";
-import {
-  supabaseOrdersRepository,
-  supabaseCustomersRepository,
-  supabaseProductsRepository,
-} from "@/lib/adapters/supabase";
 
 // ─── State×role gating constants (module scope) ──────────────
 
@@ -525,18 +522,3 @@ export function createOrdersService(repos: OrdersServiceRepos): OrdersService {
     },
   };
 }
-
-// ─── Default singleton ──────────────────────────────────────
-
-/**
- * Default singleton wired against the production Supabase adapters
- * (which themselves wrap `supabaseService` from `@/lib/supabase`).
- * F-08 routes import this. Tests construct their own service via
- * `createOrdersService({ orders, customers, products })` with Fake
- * adapters.
- */
-export const ordersService: OrdersService = createOrdersService({
-  orders: supabaseOrdersRepository,
-  customers: supabaseCustomersRepository,
-  products: supabaseProductsRepository,
-});

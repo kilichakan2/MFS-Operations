@@ -16,13 +16,12 @@
  *   - inactive account → ForbiddenError → 403
  *   - wrong role       → ForbiddenError → 403
  *
- * Construction: factory + pre-wired singleton (F-07 template).
+ * Construction: factory (F-07 template); production wiring in
+ * `lib/wiring/orders.ts` (F-TD-11).
  */
 import { NotFoundError, ForbiddenError } from "@/lib/errors";
 import type { UsersRepository } from "@/lib/ports";
 import type { OrdersService } from "@/lib/services";
-import { ordersService } from "@/lib/services";
-import { supabaseUsersRepository } from "@/lib/adapters/supabase";
 
 /** Roles whose taps the KDS accepts (legacy allow-list verbatim). */
 const KDS_ALLOWED_ROLES: readonly string[] = ["butcher", "warehouse"];
@@ -72,9 +71,3 @@ export function createKdsLineDoneUsecase(
     },
   };
 }
-
-/** Pre-wired singleton against the production service + adapters. */
-export const kdsLineDoneUsecase: KdsLineDoneUsecase = createKdsLineDoneUsecase({
-  ordersService,
-  users: supabaseUsersRepository,
-});

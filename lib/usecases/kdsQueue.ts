@@ -13,13 +13,12 @@
  * snapshot (one round-trip, never N+1); the route's DTO
  * (lib/api/kds/dto.ts) restores the embed.
  *
- * Construction: factory + pre-wired singleton (F-07 template).
+ * Construction: factory (F-07 template); production wiring in
+ * `lib/wiring/orders.ts` (F-TD-11).
  */
 import type { Product } from "@/lib/domain";
 import type { KdsOrderQueueSnapshot, ProductsRepository } from "@/lib/ports";
 import type { OrdersService } from "@/lib/services";
-import { ordersService } from "@/lib/services";
-import { supabaseProductsRepository } from "@/lib/adapters/supabase";
 
 export interface KdsQueueBundle {
   readonly snapshot: KdsOrderQueueSnapshot;
@@ -66,9 +65,3 @@ export function createKdsQueueUsecase(
     },
   };
 }
-
-/** Pre-wired singleton against the production service + adapters. */
-export const kdsQueueUsecase: KdsQueueUsecase = createKdsQueueUsecase({
-  ordersService,
-  products: supabaseProductsRepository,
-});
