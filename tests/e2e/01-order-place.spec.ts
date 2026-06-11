@@ -19,8 +19,11 @@
  *   - UOM buttons are exact text "kg" and "unit".
  *   - The "Catalogue" tap-button opens the product picker directly.
  *
- * Prerequisites: ANVIL-TEST-customer, ANVIL-TEST-product, and
- * ANVIL-TEST-sales user with PIN bcrypt('8129') all in local DB.
+ * Prerequisites: ANVIL-TEST-customer, ANVIL-TEST-product, and an
+ * ANVIL-TEST-sales user whose pin_hash bcrypt-matches E2E_PIN_SALES
+ * (gitignored .env.e2e.local) — all planted by supabase/seed.sql on
+ * a fresh `npm run db:reset` (F-INFRA-02). Plaintext test PINs live
+ * only in .env.e2e.local, never in this repo.
  */
 
 import { test, expect } from '@playwright/test'
