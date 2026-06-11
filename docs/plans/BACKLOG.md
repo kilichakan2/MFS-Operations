@@ -111,7 +111,7 @@ the trail matters.
 - **Fix shape:** ~15 lines in the form + one integration/E2E test proving a retried submit with the same key returns the original order.
 - **Detail:** `docs/anvil/2026-06-11-f-08-cert.md` + F-08 plan §10 (optional header)
 - **Owner unit:** unscheduled — **next small PR after F-08 merges** (Hakan's call at Gate 4)
-- **Status:** open
+- **Status:** done (PR #28 — `lib/orders/idempotencyKey.ts` key source + form wiring; reset on success/edit, reused across retries; unit tests + form-shaped replay integration test)
 
 ---
 
