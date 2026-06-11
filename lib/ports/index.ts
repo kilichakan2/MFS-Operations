@@ -14,3 +14,4 @@ export type {
 } from "./OrdersRepository";
 export type { CustomersRepository } from "./CustomersRepository";
 export type { ProductsRepository } from "./ProductsRepository";
+export type { UsersRepository } from "./UsersRepository";

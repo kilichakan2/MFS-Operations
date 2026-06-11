@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 /**
  * app/orders/page.tsx
@@ -17,66 +17,68 @@
  * Plan: docs/plans/2026-05-30-order-pipeline-kds-implementation.md (SB3)
  */
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
-import AppHeader            from '@/components/AppHeader'
-import RoleNav              from '@/components/RoleNav'
-import BottomSheetSelector  from '@/components/BottomSheetSelector'
-import OrderPipelinePausedNotice from '@/components/OrderPipelinePausedNotice'
-import OrderCutoverBanner   from '@/components/OrderCutoverBanner'
-import { useCustomers }     from '@/hooks/useReferenceData'
-import { isOrderPipelineEnabled } from '@/lib/orders/featureFlag'
+import AppHeader from "@/components/AppHeader";
+import RoleNav from "@/components/RoleNav";
+import BottomSheetSelector from "@/components/BottomSheetSelector";
+import OrderPipelinePausedNotice from "@/components/OrderPipelinePausedNotice";
+import OrderCutoverBanner from "@/components/OrderCutoverBanner";
+import { useCustomers } from "@/hooks/useReferenceData";
+import { isOrderPipelineEnabled } from "@/lib/orders/featureFlag";
 
-import type { OrderState, OrderUom } from '@/lib/orders/types'
+import type { OrderState, OrderUom } from "@/lib/orders/types";
 import {
   applyDashboardFilters,
   type DashboardDateFilter,
   type DashboardStateFilter,
-} from '@/lib/orders/dashboardFilters'
+} from "@/lib/orders/dashboardFilters";
 
-const POLL_INTERVAL_MS = 8000
+const POLL_INTERVAL_MS = 8000;
 
 // ─── Types ─────────────────────────────────────────────────────
 
 interface OrderLine {
-  id:                 string
-  line_number:        number
-  product_id:         string | null
-  ad_hoc_description: string | null
-  quantity:           number
-  uom:                OrderUom
-  notes:              string | null
-  done_at:            string | null
-  done_by:            string | null
+  id: string;
+  line_number: number;
+  product_id: string | null;
+  ad_hoc_description: string | null;
+  quantity: number;
+  uom: OrderUom;
+  notes: string | null;
+  done_at: string | null;
+  done_by: string | null;
 }
 
 interface OrderRow {
-  id:             string
-  reference:      string
-  delivery_date:  string
-  delivery_notes: string | null
-  order_notes:    string | null
-  state:          OrderState
-  created_at:     string
-  printed_at:     string | null
-  completed_at:   string | null
-  customer:       { id: string; name: string; postcode: string | null } | null
-  creator:        { id: string; name: string } | null
-  lines:          OrderLine[]
+  id: string;
+  reference: string;
+  delivery_date: string;
+  delivery_notes: string | null;
+  order_notes: string | null;
+  state: OrderState;
+  created_at: string;
+  printed_at: string | null;
+  completed_at: string | null;
+  customer: { id: string; name: string; postcode: string | null } | null;
+  creator: { id: string; name: string } | null;
+  lines: OrderLine[];
 }
 
-type DateFilter  = DashboardDateFilter
-type StateFilter = DashboardStateFilter
+type DateFilter = DashboardDateFilter;
+type StateFilter = DashboardStateFilter;
 
 // ─── Helpers ──────────────────────────────────────────────────
 
 function fmtDeliveryDate(date: string): string {
-  return new Date(date + 'T00:00:00').toLocaleDateString('en-GB', {
-    weekday: 'short', day: 'numeric', month: 'short',
-  })
+  return new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
 }
 
 // ─── Page ─────────────────────────────────────────────────────
@@ -85,67 +87,77 @@ export default function OrdersDashboardPage() {
   // Feature flag — when disabled, render the paused notice and bail
   // before any of the data-loading hooks run
   if (!isOrderPipelineEnabled()) {
-    return <OrderPipelinePausedNotice />
+    return <OrderPipelinePausedNotice />;
   }
 
-  return <OrdersDashboardPageInner />
+  return <OrdersDashboardPageInner />;
 }
 
 function OrdersDashboardPageInner() {
-  const customers = useCustomers()
+  const customers = useCustomers();
 
   // ── Filters ─────────────────────────────────────────────────
-  const [dateFilter,  setDateFilter]   = useState<DateFilter>('today_tomorrow')
-  const [stateFilter, setStateFilter]  = useState<StateFilter>('active')
-  const [customerId,  setCustomerId]   = useState<string | null>(null)
-  const [search,      setSearch]       = useState('')
-  const [showCustomerPicker, setShowCustomerPicker] = useState(false)
+  const [dateFilter, setDateFilter] = useState<DateFilter>("today_tomorrow");
+  const [stateFilter, setStateFilter] = useState<StateFilter>("active");
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
 
   // ── Data ────────────────────────────────────────────────────
-  const [orders,    setOrders]    = useState<OrderRow[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState<string | null>(null)
-  const [lastLoad,  setLastLoad]  = useState<number>(0)
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastLoad, setLastLoad] = useState<number>(0);
 
   // Polling — 8s interval, pauses while tab is in background
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     async function load() {
       try {
-        const res  = await fetch('/api/orders?limit=200', { cache: 'no-store' })
-        const body = await res.json().catch(() => ({}))
-        if (cancelled) return
+        const res = await fetch("/api/orders?limit=200", { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
         if (!res.ok) {
-          setError(body?.error ?? `Server error (${res.status})`)
+          setError(body?.message ?? `Server error (${res.status})`);
         } else {
-          setOrders(body.orders ?? [])
-          setError(null)
-          setLastLoad(Date.now())
+          setOrders(body.orders ?? []);
+          setError(null);
+          setLastLoad(Date.now());
         }
       } catch (e) {
-        console.error('[OrdersDashboardPage] load failed', e)
-        if (!cancelled) setError('Network error')
+        console.error("[OrdersDashboardPage] load failed", e);
+        if (!cancelled) setError("Network error");
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setLoading(false);
       }
     }
 
-    void load()
+    void load();
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') void load()
-    }, POLL_INTERVAL_MS)
+      if (document.visibilityState === "visible") void load();
+    }, POLL_INTERVAL_MS);
 
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [])
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
-  const filtered = useMemo(() => applyDashboardFilters(orders, {
-    dateFilter, stateFilter, customerId, search,
-  }), [orders, dateFilter, stateFilter, customerId, search])
+  const filtered = useMemo(
+    () =>
+      applyDashboardFilters(orders, {
+        dateFilter,
+        stateFilter,
+        customerId,
+        search,
+      }),
+    [orders, dateFilter, stateFilter, customerId, search],
+  );
 
   const selectedCustomerName = customerId
-    ? customers.find(c => c.id === customerId)?.label
-    : null
+    ? customers.find((c) => c.id === customerId)?.label
+    : null;
 
   // ─────────────────────────────────────────────────────────────
 
@@ -165,29 +177,32 @@ function OrdersDashboardPageInner() {
       />
 
       <main className="max-w-4xl mx-auto px-4 py-4 pb-32 space-y-3">
-
         <OrderCutoverBanner />
 
         {/* Date filter pills */}
         <section className="bg-white rounded-xl border border-slate-200 p-3 space-y-3">
           <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Delivery date</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Delivery date
+            </p>
             <div className="flex gap-1.5 flex-wrap">
-              {([
-                ['today',           'Today'],
-                ['tomorrow',        'Tomorrow'],
-                ['today_tomorrow',  'Today + tomorrow'],
-                ['this_week',       'This week'],
-                ['all',             'All'],
-              ] as Array<[DateFilter, string]>).map(([k, label]) => (
+              {(
+                [
+                  ["today", "Today"],
+                  ["tomorrow", "Tomorrow"],
+                  ["today_tomorrow", "Today + tomorrow"],
+                  ["this_week", "This week"],
+                  ["all", "All"],
+                ] as Array<[DateFilter, string]>
+              ).map(([k, label]) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => setDateFilter(k)}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
                     dateFilter === k
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >
                   {label}
@@ -197,23 +212,27 @@ function OrdersDashboardPageInner() {
           </div>
 
           <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Status</p>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+              Status
+            </p>
             <div className="flex gap-1.5 flex-wrap">
-              {([
-                ['active',    'Active'],
-                ['placed',    'Placed'],
-                ['printed',   'Printed'],
-                ['completed', 'Completed'],
-                ['all',       'All'],
-              ] as Array<[StateFilter, string]>).map(([k, label]) => (
+              {(
+                [
+                  ["active", "Active"],
+                  ["placed", "Placed"],
+                  ["printed", "Printed"],
+                  ["completed", "Completed"],
+                  ["all", "All"],
+                ] as Array<[StateFilter, string]>
+              ).map(([k, label]) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => setStateFilter(k)}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition-colors ${
                     stateFilter === k
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   }`}
                 >
                   {label}
@@ -229,7 +248,9 @@ function OrdersDashboardPageInner() {
               className="flex-1 text-left rounded-xl border-2 border-slate-200 px-3 py-2 text-sm hover:border-slate-300"
             >
               {selectedCustomerName ? (
-                <span className="font-semibold text-slate-900">{selectedCustomerName}</span>
+                <span className="font-semibold text-slate-900">
+                  {selectedCustomerName}
+                </span>
               ) : (
                 <span className="text-slate-400">Filter by customer…</span>
               )}
@@ -248,7 +269,7 @@ function OrdersDashboardPageInner() {
           <input
             type="search"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search reference, customer, sales rep…"
             className="w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-sm"
           />
@@ -257,7 +278,9 @@ function OrdersDashboardPageInner() {
         {/* Status / count line */}
         <div className="flex items-center justify-between px-2 text-xs text-slate-500">
           <span>
-            {loading ? 'Loading…' : `${filtered.length} order${filtered.length === 1 ? '' : 's'}`}
+            {loading
+              ? "Loading…"
+              : `${filtered.length} order${filtered.length === 1 ? "" : "s"}`}
           </span>
           {lastLoad > 0 && (
             <span className="text-[10px]">
@@ -276,7 +299,9 @@ function OrdersDashboardPageInner() {
         {/* Empty state */}
         {!loading && !error && filtered.length === 0 && (
           <div className="bg-white rounded-xl border border-dashed border-slate-300 p-10 text-center">
-            <p className="text-slate-400 text-sm">No orders match these filters.</p>
+            <p className="text-slate-400 text-sm">
+              No orders match these filters.
+            </p>
             <Link
               href="/orders/new"
               className="inline-block mt-3 text-sm font-bold text-blue-600 hover:text-blue-700"
@@ -288,7 +313,7 @@ function OrdersDashboardPageInner() {
 
         {/* Order list */}
         <ul className="space-y-2">
-          {filtered.map(order => (
+          {filtered.map((order) => (
             <li key={order.id}>
               <OrderCard order={order} />
             </li>
@@ -299,7 +324,10 @@ function OrdersDashboardPageInner() {
       {showCustomerPicker && (
         <BottomSheetSelector
           items={customers}
-          onSelect={(c) => { setCustomerId(c.id); setShowCustomerPicker(false) }}
+          onSelect={(c) => {
+            setCustomerId(c.id);
+            setShowCustomerPicker(false);
+          }}
           onDismiss={() => setShowCustomerPicker(false)}
           searchPlaceholder="Search customers"
           title="Filter by customer"
@@ -309,14 +337,14 @@ function OrdersDashboardPageInner() {
 
       <RoleNav />
     </>
-  )
+  );
 }
 
 // ─── Card ─────────────────────────────────────────────────────
 
 function OrderCard({ order }: { order: OrderRow }) {
-  const doneLineCount  = order.lines.filter(l => l.done_at !== null).length
-  const totalLineCount = order.lines.length
+  const doneLineCount = order.lines.filter((l) => l.done_at !== null).length;
+  const totalLineCount = order.lines.length;
 
   return (
     <Link
@@ -333,15 +361,18 @@ function OrderCard({ order }: { order: OrderRow }) {
               {fmtDeliveryDate(order.delivery_date)}
             </span>
             <p className="text-slate-900 font-semibold text-sm truncate">
-              {order.customer?.name ?? '—'}
+              {order.customer?.name ?? "—"}
             </p>
           </div>
 
           <div className="mt-1 flex items-center gap-3 text-xs">
             <span className="text-slate-500">
-              {totalLineCount} line{totalLineCount === 1 ? '' : 's'}
-              {order.state === 'printed' && totalLineCount > 0 && (
-                <span className="text-slate-400"> · {doneLineCount}/{totalLineCount} done</span>
+              {totalLineCount} line{totalLineCount === 1 ? "" : "s"}
+              {order.state === "printed" && totalLineCount > 0 && (
+                <span className="text-slate-400">
+                  {" "}
+                  · {doneLineCount}/{totalLineCount} done
+                </span>
               )}
             </span>
             {order.creator?.name && (
@@ -359,33 +390,37 @@ function OrderCard({ order }: { order: OrderRow }) {
         <StateChip state={order.state} />
       </div>
     </Link>
-  )
+  );
 }
 
 function StateChip({ state }: { state: OrderState }) {
   const styles: Record<OrderState, string> = {
-    placed:    'bg-blue-100  text-blue-700',
-    printed:   'bg-amber-100 text-amber-800',
-    completed: 'bg-green-100 text-green-700',
-  }
+    placed: "bg-blue-100  text-blue-700",
+    printed: "bg-amber-100 text-amber-800",
+    completed: "bg-green-100 text-green-700",
+  };
   const label: Record<OrderState, string> = {
-    placed: 'Placed', printed: 'Printed', completed: 'Completed',
-  }
+    placed: "Placed",
+    printed: "Printed",
+    completed: "Completed",
+  };
   return (
-    <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${styles[state]}`}>
+    <span
+      className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${styles[state]}`}
+    >
       {label[state]}
     </span>
-  )
+  );
 }
 
 // ─── Time-since helper ───────────────────────────────────────
 
 function timeSince(epochMs: number): string {
-  const seconds = Math.floor((Date.now() - epochMs) / 1000)
-  if (seconds < 5)  return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const mins = Math.floor(seconds / 60)
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  return `${hrs}h ago`
+  const seconds = Math.floor((Date.now() - epochMs) / 1000);
+  if (seconds < 5) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const mins = Math.floor(seconds / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ago`;
 }

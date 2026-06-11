@@ -21,6 +21,11 @@ logins (prefixed `ANVIL-TEST-`) that automated tests need in whatever
 database they run against. Planted by `supabase/seed.sql` on local resets and
 preview branches; must never exist in production (F-TD-07 audits for that).
 
+**Idempotency key** — a unique fingerprint the order form sends with each
+"place order" request. If the same fingerprint arrives twice (double-tap,
+flaky-wifi retry), the second request creates nothing and gets back the
+order the first one created. Guarantees one tap = at most one order.
+
 **Seed sentinel** — a single fixture row with a fixed, hard-coded ID that can
 only ever exist in a database created from this repo's seed file
 (`supabase/seed.sql`). Its presence proves "this database was born from

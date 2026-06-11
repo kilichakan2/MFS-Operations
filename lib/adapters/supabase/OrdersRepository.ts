@@ -187,6 +187,134 @@ function rowToOrder(r: OrderRow): Order {
   };
 }
 
+// ─── Idempotency-key helpers (F-08) ──────────────────────────
+// Internal to this adapter. The `order_idempotency_keys` table
+// (migration 20260611_001) is the storage half of the createOrder
+// idempotency contract; the PK on `key` is the race arbiter.
+
+type IdempotencyKeyRow = {
+  key: string;
+  order_id: string;
+  created_by: string;
+  expires_at: string;
+};
+
+function isExpired(row: IdempotencyKeyRow): boolean {
+  return new Date(row.expires_at).getTime() <= Date.now();
+}
+
+async function readIdempotencyKey(
+  client: SupabaseClient,
+  key: string,
+): Promise<IdempotencyKeyRow | null> {
+  const { data, error } = await client
+    .from("order_idempotency_keys")
+    .select("key, order_id, created_by, expires_at")
+    .eq("key", key)
+    .maybeSingle();
+  if (error) {
+    log.error("OrdersRepository idempotency-key read DB error", {
+      error: error.message,
+    });
+    throw new ServiceError("Idempotency-key lookup failed", { cause: error });
+  }
+  return (data as IdempotencyKeyRow | null) ?? null;
+}
+
+async function deleteIdempotencyKey(
+  client: SupabaseClient,
+  key: string,
+): Promise<void> {
+  const { error } = await client
+    .from("order_idempotency_keys")
+    .delete()
+    .eq("key", key);
+  if (error) {
+    log.error("OrdersRepository idempotency-key delete DB error", {
+      error: error.message,
+    });
+    throw new ServiceError("Idempotency-key reclaim failed", { cause: error });
+  }
+}
+
+/**
+ * Record `key → orderId` after a successful create. Returns the order
+ * id the key finally resolved to:
+ *   - our `orderId` when the insert wins (the common case);
+ *   - the WINNER's order id when a concurrent duplicate won the PK
+ *     race first (the loser path: our just-created order is deleted —
+ *     CASCADE removes its lines — and the caller returns the winner's
+ *     order, so both concurrent calls resolve to the same id).
+ *
+ * Loser-path ordering note (refines plan §5 D1 step 3 a/b): the
+ * winner's row is re-read BEFORE our own order is deleted, because the
+ * pathological retry arm (winner's row vanished mid-flight) re-inserts
+ * with our order_id — which must still exist for the FK. Outcomes are
+ * identical to the plan's; only the delete is deferred to the arms
+ * that resolve away from our order.
+ *
+ * @throws ConflictError if the winning key row belongs to a different
+ *   caller (never reveal another user's order).
+ * @throws ServiceError on any other failure (our order is rolled back
+ *   first so a client retry cannot leave duplicates behind).
+ */
+async function claimIdempotencyKey(
+  client: SupabaseClient,
+  key: string,
+  orderId: string,
+  createdBy: string,
+): Promise<string> {
+  const rollbackOwnOrder = async (): Promise<void> => {
+    const { error } = await client.from("orders").delete().eq("id", orderId);
+    if (error) {
+      // Non-fatal for the caller's control flow, but loud: an orphan
+      // order survived a losing race / failed claim.
+      log.error("OrdersRepository idempotency loser rollback failed", {
+        orderId,
+        error: error.message,
+      });
+    }
+  };
+
+  const MAX_ATTEMPTS = 2; // initial insert + one pathological retry
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const { error: insertErr } = await client
+      .from("order_idempotency_keys")
+      .insert({ key, order_id: orderId, created_by: createdBy });
+    if (!insertErr) return orderId; // we won (or were unopposed)
+
+    if (insertErr.code !== "23505") {
+      // Real failure (not the unique-violation race). Roll back our
+      // order so a client retry cannot create duplicates.
+      await rollbackOwnOrder();
+      log.error("OrdersRepository idempotency-key insert DB error", {
+        error: insertErr.message,
+      });
+      throw new ServiceError("Idempotency-key record failed", {
+        cause: insertErr,
+      });
+    }
+
+    // 23505 — the concurrent race, loser path. Re-read the winner.
+    const winner = await readIdempotencyKey(client, key);
+    if (winner !== null) {
+      await rollbackOwnOrder();
+      if (winner.created_by !== createdBy) {
+        throw new ConflictError("Idempotency-Key already used");
+      }
+      return winner.order_id;
+    }
+    // Winner's row vanished mid-flight (expired/rolled back —
+    // pathological). Loop retries the insert once.
+  }
+
+  await rollbackOwnOrder();
+  log.error("OrdersRepository idempotency claim unresolved after retry", {
+    orderId,
+  });
+  throw new ServiceError("Idempotency-key claim failed");
+}
+
 // ─── Factory ─────────────────────────────────────────────────
 
 export function createSupabaseOrdersRepository(
@@ -238,7 +366,29 @@ export function createSupabaseOrdersRepository(
     async createOrder(
       input: CreateOrderInput,
       createdBy: string,
+      idempotencyKey?: string,
     ): Promise<Order> {
+      // 0. Idempotency claim/replay check (F-08 port contract).
+      //    Plan §5 D1: SELECT the key row first; expired → reclaim,
+      //    cross-user → Conflict, same-caller live → replay.
+      if (idempotencyKey !== undefined) {
+        const existing = await readIdempotencyKey(client, idempotencyKey);
+        if (existing !== null) {
+          if (isExpired(existing)) {
+            // Expired — reclaim opportunistically, fall through to create.
+            await deleteIdempotencyKey(client, idempotencyKey);
+          } else if (existing.created_by !== createdBy) {
+            // Never reveal the other user's order.
+            throw new ConflictError("Idempotency-Key already used");
+          } else {
+            const original = await this.findOrderById(existing.order_id);
+            if (original !== null) return original; // replay, no-op
+            // Order vanished (deleted meanwhile) — reclaim stale key.
+            await deleteIdempotencyKey(client, idempotencyKey);
+          }
+        }
+      }
+
       // 1. Insert the orders row; reference is DB-generated.
       const { data: created, error: insertErr } = await client
         .from("orders")
@@ -304,7 +454,31 @@ export function createSupabaseOrdersRepository(
         });
       }
 
-      // 3. Read back the full Order with embeds.
+      // 3. Record the idempotency key. The PK on `key` is the race
+      //    arbiter: on unique-violation we are the LOSER — delete our
+      //    own order (CASCADE removes its lines) and resolve to the
+      //    winner's order (plan §5 D1 step 3).
+      if (idempotencyKey !== undefined) {
+        const winnerOrderId = await claimIdempotencyKey(
+          client,
+          idempotencyKey,
+          newId,
+          createdBy,
+        );
+        if (winnerOrderId !== newId) {
+          const readBackWinner = await this.findOrderById(winnerOrderId);
+          if (readBackWinner === null) {
+            log.error(
+              "OrdersRepository.createOrder race winner order unreadable",
+              { idempotencyKey, winnerOrderId },
+            );
+            throw new ServiceError("Order created but could not be read back");
+          }
+          return readBackWinner;
+        }
+      }
+
+      // 4. Read back the full Order with embeds.
       const readBack = await this.findOrderById(newId);
       if (readBack === null) {
         // Should not happen — the row was just inserted in this

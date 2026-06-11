@@ -31,3 +31,7 @@ export {
   createSupabaseProductsRepository,
   supabaseProductsRepository,
 } from "./ProductsRepository";
+export {
+  createSupabaseUsersRepository,
+  supabaseUsersRepository,
+} from "./UsersRepository";

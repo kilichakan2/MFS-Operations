@@ -69,7 +69,7 @@ the trail matters.
 - **Fix shape:** emit one entry per missing ID: `{ "lines.products": missing.map(id => `Unknown product id: ${id}`) }` — array length matches count.
 - **Detail:** F-07 plan §1 + code-critic Guard report
 - **Owner unit:** F-08 — natural to fix when routes adopt the service (routes can rely on cleaner array shape)
-- **Status:** open
+- **Status:** done (F-08 PR — `placeOrder`/`editOrder` emit one `Unknown product id: <id>` entry per missing id; unit + integration tests pin the shape)
 
 ### F-TD-07 — Production hygiene check for leftover `ANVIL-TEST-*` rows
 
@@ -89,6 +89,30 @@ the trail matters.
 - **Owner unit:** unscheduled (small standalone PR)
 - **Status:** open
 
+### F-TD-09 — Scheduled purge of expired `order_idempotency_keys` rows
+
+- **Deferred:** 2026-06-11 (during F-08)
+- **What:** the `order_idempotency_keys` ledger (migration `20260611_001`) expires rows after 24h at READ time and reclaims them opportunistically when an expired key is reused — but nothing sweeps rows whose key is never reused. At this system's order volume the table grows by a handful of rows a day, so this is hygiene, not a hazard.
+- **Fix shape:** a tiny scheduled job (pg_cron or a `/api/cron` route) running `DELETE FROM order_idempotency_keys WHERE expires_at < now()` daily.
+- **Also absorbs (code-critic Guard findings on PR #27, all non-blocking):**
+  - **W1 (TOCTOU at the expiry boundary):** `lib/adapters/supabase/OrdersRepository.ts` `createOrder` step 0 — the expired-key and stale-order reclaim arms delete by `key` alone; a concurrent same-key request can have its fresh row deleted, letting one key resolve to two orders. Only reachable when the same key races itself at the exact 24h boundary — impossible for real double-taps. Fix: make the deletes conditional (`.lte('expires_at', now)` for the expiry arm, `.eq('order_id', existing.order_id)` for the stale-order arm).
+  - **N1:** same file, pathological-arm error log includes the raw `idempotencyKey` — log a hash or the order id instead.
+  - **N2:** `rollbackOwnOrder` failure is log-only (`[rollbackOwnOrder]` line) — correct trade-off, but that log line is the only alarm for a surviving duplicate; check for it when reviewing logs.
+  - **N3:** two comments in `lib/domain/Order.ts` (~234, ~263) still reference the deleted `lib/orders/validation.ts`.
+- **Detail:** `docs/plans/2026-06-11-f-08-orders-route-rewrites.md` §5 D1 (TTL / cleanup decision) + code-critic Guard report for PR #27
+- **Owner unit:** unscheduled (tiny)
+- **Status:** open
+
+### F-TD-10 — Wire `Idempotency-Key` into the order form (activate the F-08 duplicate guard)
+
+- **Deferred:** 2026-06-11 (at F-08 Gate 4, decided by Hakan — ship API-side first)
+- **What:** F-08 shipped full server-side idempotent order placement, but no screen sends the header yet — the guard is dormant. `app/orders/new/page.tsx` `handleSubmit` (~line 175) must generate a fingerprint (`crypto.randomUUID()`) when an order submission starts and REUSE it across retries of that same order (the "Network error — please try again" path is the exact duplicate-creating case), resetting only after success or when the user edits the order content.
+- **Why deferred:** F-08's locked scope kept screens untouched (wire-format decision); the API contract is complete and tested (replay, race, cross-user, expiry). No regression vs today — only delayed benefit.
+- **Fix shape:** ~15 lines in the form + one integration/E2E test proving a retried submit with the same key returns the original order.
+- **Detail:** `docs/anvil/2026-06-11-f-08-cert.md` + F-08 plan §10 (optional header)
+- **Owner unit:** unscheduled — **next small PR after F-08 merges** (Hakan's call at Gate 4)
+- **Status:** open
+
 ---
 
 ## Architecture follow-ups (ARCH-FU-)
@@ -102,6 +126,7 @@ the trail matters.
 - **Detail:** `lib/observability/Caller.ts:11-16` + F-07 plan §1.5
 - **Owner unit:** F-13 (UsersService — naturally touches Role anyway)
 - **Status:** open
+- **F-13 note (added 2026-06-11, F-08):** F-08 shipped a minimal read-only `UsersRepository` port (`lib/ports/UsersRepository.ts`, `findUserById` only) with Supabase + Fake adapters and a shared contract suite. **F-13 absorbs and expands this port** — it is the Users domain's absorption seed; `UserSummary.role` (plain `string`) tightens to the `Role` union when Role moves to `lib/domain/`.
 
 ### ARCH-FU-02 — Raw `fetch()` sites awaiting port extractions (F-01 narrowing)
 
@@ -139,7 +164,7 @@ the trail matters.
 - **Fix shape:** parametrised `it.each(['warehouse', 'butcher', 'driver'])` case in editOrder describe block.
 - **Detail:** F-07 cert (when written) + code-critic Guard report
 - **Owner unit:** unscheduled — pickup at F-08 when routes go live (good time to harden), or F-13 (template).
-- **Status:** open
+- **Status:** done (F-08 PR — `it.each(['warehouse','butcher','driver'])` placed-state ForbiddenError cases in `tests/unit/services/OrdersService.test.ts`)
 
 ---
 

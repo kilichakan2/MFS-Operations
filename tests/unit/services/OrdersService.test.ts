@@ -152,7 +152,7 @@ describe("OrdersService.placeOrder", () => {
     ).rejects.toThrowError("Customer is inactive");
   });
 
-  it("throws ValidationError listing one missing product id", async () => {
+  it("throws ValidationError listing one missing product id (F-TD-06 shape)", async () => {
     const { service } = make();
     const input = buildInput({
       lines: [
@@ -174,10 +174,13 @@ describe("OrdersService.placeOrder", () => {
     expect(caught).toBeInstanceOf(ValidationError);
     const err = caught as ValidationError;
     expect(err.message).toBe("Unknown product_id(s)");
-    expect(err.fields).toEqual({ "lines.products": [UNKNOWN_ID] });
+    // F-TD-06: one entry per missing id, each naming the id.
+    expect(err.fields).toEqual({
+      "lines.products": [`Unknown product id: ${UNKNOWN_ID}`],
+    });
   });
 
-  it("throws ValidationError listing all missing product ids", async () => {
+  it("throws ValidationError with one entry per missing product id (F-TD-06 shape)", async () => {
     const { service } = make();
     const input = buildInput({
       lines: [
@@ -205,9 +208,12 @@ describe("OrdersService.placeOrder", () => {
     }
     expect(caught).toBeInstanceOf(ValidationError);
     const err = caught as ValidationError;
-    expect(err.fields["lines.products"][0]).toContain(UNKNOWN_ID);
-    expect(err.fields["lines.products"][0]).toContain(UNKNOWN_ID_2);
-    expect(err.fields["lines.products"][0]).toContain(", ");
+    expect(err.fields).toEqual({
+      "lines.products": [
+        `Unknown product id: ${UNKNOWN_ID}`,
+        `Unknown product id: ${UNKNOWN_ID_2}`,
+      ],
+    });
   });
 
   it("persists an order with all catalogued lines and returns the full Order", async () => {
@@ -241,6 +247,25 @@ describe("OrdersService.placeOrder", () => {
     const result = await service.placeOrder(input, USER_ID);
     expect(result.lines[0].adHocDescription).toBe("Special cut");
     expect(result.lines[0].productId).toBeNull();
+  });
+
+  // ─── Idempotency pass-through (F-08) ───────────────────────
+
+  it("forwards the idempotency key to the port — same key twice returns the same order", async () => {
+    const { service } = make();
+    const key = "service-passthrough-key";
+    const first = await service.placeOrder(buildInput(), USER_ID, key);
+    const second = await service.placeOrder(buildInput(), USER_ID, key);
+    expect(second.id).toBe(first.id);
+    const all = await service.listOrders({});
+    expect(all.length).toBe(1);
+  });
+
+  it("no idempotency key takes the same path as today — every call creates", async () => {
+    const { service } = make();
+    const first = await service.placeOrder(buildInput(), USER_ID);
+    const second = await service.placeOrder(buildInput(), USER_ID);
+    expect(second.id).not.toBe(first.id);
   });
 });
 
@@ -332,11 +357,12 @@ describe("OrdersService.editOrder", () => {
     expect(updated.deliveryNotes).toBe("fast track");
   });
 
-  it("throws ValidationError when lineReplacement references an unknown product", async () => {
+  it("throws ValidationError when lineReplacement references an unknown product (F-TD-06 shape)", async () => {
     const { service } = make();
     const placed = await service.placeOrder(buildInput(), USER_ID);
-    await expect(
-      service.editOrder(
+    let caught: unknown = null;
+    try {
+      await service.editOrder(
         placed.id,
         {},
         [
@@ -350,9 +376,35 @@ describe("OrdersService.editOrder", () => {
         ],
         "admin",
         USER_ID,
-      ),
-    ).rejects.toThrowError(ValidationError);
+      );
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    const err = caught as ValidationError;
+    expect(err.fields).toEqual({
+      "lines.products": [`Unknown product id: ${UNKNOWN_ID}`],
+    });
   });
+
+  // ─── ARCH-FU-05: forbidden roles can never edit ─────────────
+
+  it.each(["warehouse", "butcher", "driver"] as const)(
+    "throws ForbiddenError when %s tries to edit a placed order",
+    async (role) => {
+      const { service } = make();
+      const placed = await service.placeOrder(buildInput(), USER_ID);
+      await expect(
+        service.editOrder(
+          placed.id,
+          { deliveryNotes: "x" },
+          undefined,
+          role,
+          USER_ID,
+        ),
+      ).rejects.toThrowError(ForbiddenError);
+    },
+  );
 });
 
 // ─── printOrder ──────────────────────────────────────────────

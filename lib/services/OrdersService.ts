@@ -237,13 +237,25 @@ export interface OrdersService {
    *        products.findProductsByIds(productIds).
    *        Compute missing = requested - returned.
    *        If missing.length > 0 → ValidationError("Unknown product_id(s)",
-   *          { "lines.products": [missing.join(", ")] }).
-   *   4. orders.createOrder(input, callerUserId). The port handles the
-   *      atomic two-step insert + rollback. Returns the persisted Order.
+   *          { "lines.products": ["Unknown product id: <id>", …] })
+   *        — one entry per missing id (F-TD-06).
+   *   4. orders.createOrder(input, callerUserId, idempotencyKey). The
+   *      port handles the atomic two-step insert + rollback AND the
+   *      idempotency claim/replay/race dance (see the port JSDoc).
+   *      Returns the persisted Order.
+   *
+   * `idempotencyKey` (F-08): optional pure pass-through to the port.
+   * Requests without it take literally the same code path as before.
+   * The route layer reads the `Idempotency-Key` header and validates
+   * its length BEFORE calling this method.
    *
    * Throws: NotFoundError | ConflictError | ValidationError | ServiceError.
    */
-  placeOrder(input: CreateOrderInput, callerUserId: string): Promise<Order>;
+  placeOrder(
+    input: CreateOrderInput,
+    callerUserId: string,
+    idempotencyKey?: string,
+  ): Promise<Order>;
 
   /**
    * Edit an existing order. Patches the orders row (delivery date /
@@ -386,7 +398,7 @@ export function createOrdersService(repos: OrdersServiceRepos): OrdersService {
 
     // ─── placeOrder ────────────────────────────────────────────
 
-    async placeOrder(input, callerUserId) {
+    async placeOrder(input, callerUserId, idempotencyKey) {
       const customer = await customers.findCustomerById(input.customerId);
       if (customer === null) {
         throw new NotFoundError("Customer not found");
@@ -403,13 +415,15 @@ export function createOrdersService(repos: OrdersServiceRepos): OrdersService {
         const foundSet = new Set(found.map((p) => p.id));
         const missing = productIds.filter((id) => !foundSet.has(id));
         if (missing.length > 0) {
+          // F-TD-06: one entry per missing id so clients can render
+          // each unknown product separately.
           throw new ValidationError("Unknown product_id(s)", {
-            "lines.products": [missing.join(", ")],
+            "lines.products": missing.map((id) => `Unknown product id: ${id}`),
           });
         }
       }
 
-      return orders.createOrder(input, callerUserId);
+      return orders.createOrder(input, callerUserId, idempotencyKey);
     },
 
     // ─── editOrder ─────────────────────────────────────────────
@@ -446,8 +460,11 @@ export function createOrdersService(repos: OrdersServiceRepos): OrdersService {
           const foundSet = new Set(found.map((p) => p.id));
           const missing = productIds.filter((id) => !foundSet.has(id));
           if (missing.length > 0) {
+            // F-TD-06: one entry per missing id (see placeOrder).
             throw new ValidationError("Unknown product_id(s)", {
-              "lines.products": [missing.join(", ")],
+              "lines.products": missing.map(
+                (id) => `Unknown product id: ${id}`,
+              ),
             });
           }
         }

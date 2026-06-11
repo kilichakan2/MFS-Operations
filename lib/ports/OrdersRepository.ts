@@ -177,16 +177,49 @@ export interface OrdersRepository {
    *   and exposes the two-step internal — the depth rule says hide
    *   it.
    *
-   * @param input      The validated order shape.
-   * @param createdBy  User id of the creator. The service layer
-   *                   passes `caller.userId`.
+   * Idempotency contract (F-08 — claim/replay/race):
+   *   When `idempotencyKey` is provided, the adapter guarantees
+   *   "one key = at most one order", durable across retries and
+   *   concurrent duplicates:
+   *     - CLAIM: the first successful create records the key against
+   *       the created order (24h TTL at the storage layer; the Fake
+   *       does not model TTL).
+   *     - REPLAY: a later call with the same live key by the SAME
+   *       caller creates nothing and returns the original order. If
+   *       the original order has meanwhile been deleted (or the key
+   *       expired), the stale key is reclaimed and a fresh order is
+   *       created.
+   *     - CROSS-USER: a live key recorded by a DIFFERENT caller
+   *       throws ConflictError("Idempotency-Key already used") and
+   *       never reveals the other user's order.
+   *     - RACE: two concurrent creates with the same key both briefly
+   *       create an order; the storage-level uniqueness on the key is
+   *       the arbiter. The loser deletes its own order and returns
+   *       the winner's, so both calls resolve to the same order id
+   *       and exactly one order survives.
+   *   When `idempotencyKey` is absent, the code path is identical to
+   *   the pre-F-08 behaviour: every call creates a new order.
+   *
+   * @param input           The validated order shape.
+   * @param createdBy       User id of the creator. The service layer
+   *                        passes `caller.userId`.
+   * @param idempotencyKey  Optional client-supplied dedupe fingerprint
+   *                        (1–200 chars; length is validated at the
+   *                        route boundary, uniqueness at the adapter).
    * @returns The persisted Order with its generated id, reference,
    *   created_at, and the inserted lines (read back from the DB so
-   *   the caller sees the assigned line numbers).
+   *   the caller sees the assigned line numbers). On replay/race,
+   *   the ORIGINAL (winner's) order.
+   * @throws ConflictError if `idempotencyKey` is live and owned by a
+   *   different caller.
    * @throws ServiceError if the order or any line insertion fails
    *   (rollback already attempted by the adapter).
    */
-  createOrder(input: CreateOrderInput, createdBy: string): Promise<Order>;
+  createOrder(
+    input: CreateOrderInput,
+    createdBy: string,
+    idempotencyKey?: string,
+  ): Promise<Order>;
 
   /**
    * Update an existing order — orders-row patch plus optional full

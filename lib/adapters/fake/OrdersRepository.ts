@@ -53,6 +53,12 @@ import type { OrdersRepository, KdsOrderQueueSnapshot } from "@/lib/ports";
 interface FakeState {
   orders: Map<string, Order>;
   nextOrderSeq: number;
+  /**
+   * Idempotency-key ledger (F-08). Models claim + replay + cross-user
+   * conflict; does NOT model TTL (the 24h expiry is a storage-layer
+   * concern exercised by the Supabase vendor tests).
+   */
+  idempotencyKeys: Map<string, { orderId: string; createdBy: string }>;
 }
 
 function nextFakeReference(state: FakeState): string {
@@ -73,7 +79,11 @@ function newId(): string {
 }
 
 export function createFakeOrdersRepository(): OrdersRepository {
-  const state: FakeState = { orders: new Map(), nextOrderSeq: 1 };
+  const state: FakeState = {
+    orders: new Map(),
+    nextOrderSeq: 1,
+    idempotencyKeys: new Map(),
+  };
 
   return {
     async listOrders(filter: OrderFilter): Promise<readonly Order[]> {
@@ -101,7 +111,23 @@ export function createFakeOrdersRepository(): OrdersRepository {
     async createOrder(
       input: CreateOrderInput,
       createdBy: string,
+      idempotencyKey?: string,
     ): Promise<Order> {
+      // Idempotency dance (F-08 port contract). The Fake is
+      // single-threaded, so claim/replay needs no race arm.
+      if (idempotencyKey !== undefined) {
+        const claimed = state.idempotencyKeys.get(idempotencyKey);
+        if (claimed) {
+          if (claimed.createdBy !== createdBy) {
+            throw new ConflictError("Idempotency-Key already used");
+          }
+          const original = state.orders.get(claimed.orderId);
+          if (original) return original;
+          // Order vanished — reclaim the stale key, fall through.
+          state.idempotencyKeys.delete(idempotencyKey);
+        }
+      }
+
       const id = newId();
       const reference = nextFakeReference(state);
       const createdAt = new Date().toISOString();
@@ -136,6 +162,12 @@ export function createFakeOrdersRepository(): OrdersRepository {
         lines,
       };
       state.orders.set(id, order);
+      if (idempotencyKey !== undefined) {
+        state.idempotencyKeys.set(idempotencyKey, {
+          orderId: id,
+          createdBy,
+        });
+      }
       return order;
     },
 
