@@ -249,6 +249,18 @@ describe("/api/orders integration", () => {
     expect(order.customer.name).toBe(customer.name);
   });
 
+  it("GET of a missing order returns 404 with the structured envelope", async () => {
+    const res = await api("/api/orders/00000000-0000-0000-0000-0000000000aa", {
+      method: "GET",
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(res.status).toBe(404);
+    const body = res.body as { code: string; message: string };
+    expect(body.code).toBe("NOT_FOUND");
+    expect(body.message).toBe("Order not found");
+  });
+
   // ── State-aware edit permissions ────────────────────────────
 
   it("allows sales to edit a placed order", async () => {
@@ -329,5 +341,49 @@ describe("/api/orders integration", () => {
       body: { order_notes: "office amendment" },
     });
     expect(update.status).toBe(200);
+  });
+
+  it("refuses editing a completed order with 409 (was 403 pre-F-08 — plan §10.4)", async () => {
+    // Refused because of the ORDER's state, not the user's permissions.
+    const create = await api("/api/orders", {
+      method: "POST",
+      role: "sales",
+      userId: users.sales.id,
+      body: {
+        customer_id: customer.id,
+        delivery_date: "2026-12-31",
+        lines: [{ product_id: product.id, quantity: 1, uom: "kg" }],
+      },
+    });
+    const { id } = create.body as { id: string };
+
+    await api(`/api/orders/${id}/picking-list`, {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+    });
+
+    // Complete via the KDS done flow (the single line auto-completes).
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", id);
+    const done = await api(`/api/kds/lines/${lines![0]!.id}/done`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    expect(done.status).toBe(200);
+
+    const update = await api(`/api/orders/${id}`, {
+      method: "PUT",
+      role: "admin",
+      userId: users.admin.id,
+      body: { order_notes: "too late" },
+    });
+    expect(update.status).toBe(409);
+    const body = update.body as { code: string; message: string };
+    expect(body.code).toBe("CONFLICT");
+    expect(body.message).toBe("Order is completed and cannot be edited");
   });
 });
