@@ -207,6 +207,10 @@ describe("KDS integration", () => {
       body: { butcher_id: "not-a-uuid" },
     });
     expect(res.status).toBe(400);
+    // F-08 error envelope: {code, message, fields}.
+    const body = res.body as { code: string; fields: Record<string, string[]> };
+    expect(body.code).toBe("VALIDATION_ERROR");
+    expect(body.fields["butcher_id"]![0]).toMatch(/butcher_id required/);
   });
 
   it("rejects line-done from a sales user_id (403)", async () => {
@@ -221,6 +225,9 @@ describe("KDS integration", () => {
       body: { butcher_id: users.sales.id },
     });
     expect(res.status).toBe(403);
+    const body = res.body as { code: string; message: string };
+    expect(body.code).toBe("FORBIDDEN");
+    expect(body.message).toBe("User cannot mark lines done");
   });
 
   it("rejects line-done on a placed (not printed) order (409)", async () => {
@@ -246,6 +253,7 @@ describe("KDS integration", () => {
       body: { butcher_id: users.butcher.id },
     });
     expect(res.status).toBe(409);
+    expect((res.body as { code: string }).code).toBe("CONFLICT");
   });
 
   it("is idempotent — second tap on already-done line returns ok", async () => {
