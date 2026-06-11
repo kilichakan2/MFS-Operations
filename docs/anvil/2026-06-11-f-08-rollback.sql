@@ -1,0 +1,23 @@
+-- ============================================================
+-- ANVIL rollback — F-08 (PR #27)
+-- Reverses: supabase/migrations/20260611_001_order_idempotency_keys.sql
+-- ============================================================
+--
+-- The forward migration is ADDITIVE ONLY: it creates one new table
+-- (order_idempotency_keys) and enables RLS on it. No existing table,
+-- column, policy, or row is touched. This rollback therefore carries
+-- no data-loss risk for any pre-existing data.
+--
+-- What IS lost on rollback: the idempotency-key rows themselves.
+-- Consequence: a client retrying a "place order" request after this
+-- rollback would create a duplicate order instead of replaying the
+-- original — i.e. the system reverts to pre-F-08 behaviour. Keys
+-- self-expire after 24h anyway, so the exposure window is bounded.
+--
+-- Code/schema ordering: the F-08 route code degrades gracefully only
+-- if the Idempotency-Key header path is unused; if the table is
+-- dropped while F-08 code is still deployed, requests SENDING the
+-- header will 500. Roll back the code (vercel rollback) BEFORE or
+-- together with running this script.
+
+DROP TABLE IF EXISTS public.order_idempotency_keys;
