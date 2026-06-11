@@ -121,7 +121,7 @@ function NewOrderPageInner() {
     }
   }
 
-  // ── Validation (client-side, mirrors lib/orders/validation) ─
+  // ── Validation (client-side, mirrors lib/api/orders/schemas.ts) ─
 
   function validate(): string | null {
     if (!customer) return "Pick a customer";
