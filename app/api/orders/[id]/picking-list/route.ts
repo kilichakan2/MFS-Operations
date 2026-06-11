@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { withErrors } from "@/lib/errors";
 import { withRequestContext } from "@/lib/observability";
-import { pickingListUsecase } from "@/lib/usecases/pickingList";
+import { pickingListUsecase } from "@/lib/wiring/orders";
 import { parseOrThrow } from "@/lib/api/validate";
 import { orderIdParamSchema } from "@/lib/api/orders/schemas";
 import { toPickingListData } from "@/lib/api/orders/dto";

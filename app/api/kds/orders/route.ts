@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { withErrors } from "@/lib/errors";
 import { withRequestContext } from "@/lib/observability";
-import { kdsQueueUsecase } from "@/lib/usecases/kdsQueue";
+import { kdsQueueUsecase } from "@/lib/wiring/orders";
 import { toKdsQueueResponse } from "@/lib/api/kds/dto";
 
 export const GET = withRequestContext(
