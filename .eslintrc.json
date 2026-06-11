@@ -19,6 +19,33 @@
       "rules": {
         "no-restricted-imports": "off"
       }
+    },
+    {
+      "files": ["lib/services/**/*.ts", "lib/usecases/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@supabase/supabase-js",
+                "message": "Use supabaseService from @/lib/supabase for app code, or add an adapter under lib/adapters/supabase/ for vendor-specific operations. See ADR-0003 (FREEZE rule)."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@/lib/adapters",
+                  "@/lib/adapters/**",
+                  "**/adapters",
+                  "**/adapters/**"
+                ],
+                "message": "Services and use-cases depend on ports, never on adapters (ADR-0002). Wire concretions in the composition root lib/wiring/ instead. See F-TD-11."
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }
