@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 /**
  * app/kds/page.tsx
@@ -24,13 +24,13 @@
  * Plan: docs/plans/2026-05-30-order-pipeline-kds-implementation.md (SB5)
  */
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from "react";
 
-import type { OrderState, OrderUom } from '@/lib/orders/types'
-import { useProductsWithDetail } from '@/hooks/useReferenceData'
-import { isOrderPipelineEnabled } from '@/lib/orders/featureFlag'
+import type { OrderState, OrderUom } from "@/lib/orders/types";
+import { useProductsWithDetail } from "@/hooks/useReferenceData";
+import { isOrderPipelineEnabled } from "@/lib/orders/featureFlag";
 import {
   isCardFlashing,
   cardFadeOpacity,
@@ -39,73 +39,73 @@ import {
   COMPLETED_FADE_MS,
   type KdsFlashEvent,
   type KdsCardOrder,
-} from '@/lib/orders/kdsLogic'
+} from "@/lib/orders/kdsLogic";
 
 // ─── Constants ─────────────────────────────────────────────────
 
-const POLL_INTERVAL_MS    = 2000
-const SESSION_STORAGE_KEY = 'mfs.kds.butchers'
+const POLL_INTERVAL_MS = 2000;
+const SESSION_STORAGE_KEY = "mfs.kds.butchers";
 
 // ─── Types ─────────────────────────────────────────────────────
 
 interface KdsLine {
-  id:                 string
-  line_number:        number
-  product_id:         string | null
-  ad_hoc_description: string | null
-  quantity:           number
-  uom:                OrderUom
-  notes:              string | null
-  done_at:            string | null
-  done_by:            string | null
+  id: string;
+  line_number: number;
+  product_id: string | null;
+  ad_hoc_description: string | null;
+  quantity: number;
+  uom: OrderUom;
+  notes: string | null;
+  done_at: string | null;
+  done_by: string | null;
   /**
    * Product name embedded by /api/kds/orders when product_id is set.
    * Lets the kiosk show product names without an IndexedDB sync
    * (the kiosk has no per-user session, so IndexedDB stays empty).
    */
-  product:            { id: string; name: string } | null
+  product: { id: string; name: string } | null;
 }
 
 interface KdsOrder {
-  id:             string
-  reference:      string
-  state:          OrderState
-  delivery_date:  string
-  delivery_notes: string | null
-  order_notes:    string | null
-  printed_at:     string | null
-  completed_at:   string | null
-  customer:       { id: string; name: string } | null
-  lines:          KdsLine[]
+  id: string;
+  reference: string;
+  state: OrderState;
+  delivery_date: string;
+  delivery_notes: string | null;
+  order_notes: string | null;
+  printed_at: string | null;
+  completed_at: string | null;
+  customer: { id: string; name: string } | null;
+  lines: KdsLine[];
 }
 
 interface FlashEntry {
-  order_id:   string
-  action:     string
-  created_at: string
+  order_id: string;
+  action: string;
+  created_at: string;
 }
 
 interface KdsPayload {
-  orders:         KdsOrder[]
-  recent_flashes: FlashEntry[]
-  server_time:    string
+  orders: KdsOrder[];
+  recent_flashes: FlashEntry[];
+  server_time: string;
 }
 
 interface SignedInButcher {
-  id:   string
-  name: string
-  role: string
+  id: string;
+  name: string;
+  role: string;
   /** ISO timestamp when this butcher signed in */
-  since: string
+  since: string;
 }
 
 // ─── Component ─────────────────────────────────────────────────
 
 export default function KdsPage() {
   if (!isOrderPipelineEnabled()) {
-    return <KdsPausedScreen />
+    return <KdsPausedScreen />;
   }
-  return <KdsPageInner />
+  return <KdsPageInner />;
 }
 
 function KdsPausedScreen() {
@@ -113,34 +113,43 @@ function KdsPausedScreen() {
     <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center p-8">
       <div className="max-w-md text-center">
         <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-amber-500/20 border-4 border-amber-500 flex items-center justify-center">
-          <svg className="w-10 h-10 text-amber-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <svg
+            className="w-10 h-10 text-amber-400"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            viewBox="0 0 24 24"
+          >
             <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="6"  x2="12" y2="14" />
+            <line x1="12" y1="6" x2="12" y2="14" />
             <line x1="12" y1="17" x2="12" y2="17.01" />
           </svg>
         </div>
         <h1 className="text-3xl font-bold mb-3">KDS paused</h1>
         <p className="text-lg text-slate-400 leading-relaxed">
-          The production-room screen is temporarily disabled.
-          Work from the printed picking sheets from the office until further notice.
+          The production-room screen is temporarily disabled. Work from the
+          printed picking sheets from the office until further notice.
         </p>
       </div>
     </div>
-  )
+  );
 }
 
 function KdsPageInner() {
-  const [orders,         setOrders]         = useState<KdsOrder[]>([])
-  const [recentFlashes,  setRecentFlashes]  = useState<FlashEntry[]>([])
-  const [loading,        setLoading]        = useState(true)
-  const [error,          setError]          = useState<string | null>(null)
-  const [now,            setNow]            = useState(Date.now())
+  const [orders, setOrders] = useState<KdsOrder[]>([]);
+  const [recentFlashes, setRecentFlashes] = useState<FlashEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
 
   // Signed-in butchers (persisted to sessionStorage so a tab refresh
   // doesn't kick everyone off)
-  const [butchers, setButchers] = useState<SignedInButcher[]>([])
-  const [showPinModal,        setShowPinModal]        = useState(false)
-  const [attributingLine,     setAttributingLine]     = useState<{ orderId: string; lineId: string } | null>(null)
+  const [butchers, setButchers] = useState<SignedInButcher[]>([]);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [attributingLine, setAttributingLine] = useState<{
+    orderId: string;
+    lineId: string;
+  } | null>(null);
 
   // ── Optimistic-UI tracking for Done taps ───────────────────
   // A set of line IDs that have been optimistically marked done in
@@ -150,104 +159,120 @@ function KdsPageInner() {
   // optimistic state so the green tick doesn't flicker. Cleared once
   // the API confirms (success or failure) — on failure the line is
   // explicitly reverted.
-  const pendingDoneIdsRef = useRef<Set<string>>(new Set())
+  const pendingDoneIdsRef = useRef<Set<string>>(new Set());
 
   // ── Load signed-in butchers from sessionStorage on mount ────
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(SESSION_STORAGE_KEY)
-      if (raw) setButchers(JSON.parse(raw))
+      const raw = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (raw) setButchers(JSON.parse(raw));
     } catch (e) {
-      console.error('[KDS] failed to read butchers from sessionStorage', e)
+      console.error("[KDS] failed to read butchers from sessionStorage", e);
     }
-  }, [])
+  }, []);
 
   // Persist butchers list
   useEffect(() => {
     try {
-      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(butchers))
+      sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(butchers));
     } catch {
       // sessionStorage may be unavailable — non-fatal
     }
-  }, [butchers])
+  }, [butchers]);
 
   // ── Poll the KDS queue ─────────────────────────────────────
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     async function load() {
       try {
-        const res = await fetch('/api/kds/orders', { cache: 'no-store' })
-        const body = await res.json().catch(() => ({}))
-        if (cancelled) return
+        const res = await fetch("/api/kds/orders", { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
         if (!res.ok) {
-          setError(body?.error ?? `Server error (${res.status})`)
+          setError(body?.message ?? `Server error (${res.status})`);
         } else {
-          const payload = body as KdsPayload
+          const payload = body as KdsPayload;
           // Reconcile server data with any pending optimistic done state.
           // If a line is in pendingDoneIdsRef AND the server still reports
           // done_at = null (commit hasn't propagated yet), keep the
           // optimistic done_at from the previous local state. Avoids the
           // green-tick-flicker race where polling fires between the tap
           // and the server commit.
-          setOrders(prev => payload.orders.map(serverOrder => ({
-            ...serverOrder,
-            lines: serverOrder.lines.map(serverLine => {
-              if (pendingDoneIdsRef.current.has(serverLine.id) && !serverLine.done_at) {
-                const prevLine = prev
-                  .find(o => o.id === serverOrder.id)
-                  ?.lines.find(l => l.id === serverLine.id)
-                if (prevLine?.done_at) {
-                  return { ...serverLine, done_at: prevLine.done_at, done_by: prevLine.done_by }
+          setOrders((prev) =>
+            payload.orders.map((serverOrder) => ({
+              ...serverOrder,
+              lines: serverOrder.lines.map((serverLine) => {
+                if (
+                  pendingDoneIdsRef.current.has(serverLine.id) &&
+                  !serverLine.done_at
+                ) {
+                  const prevLine = prev
+                    .find((o) => o.id === serverOrder.id)
+                    ?.lines.find((l) => l.id === serverLine.id);
+                  if (prevLine?.done_at) {
+                    return {
+                      ...serverLine,
+                      done_at: prevLine.done_at,
+                      done_by: prevLine.done_by,
+                    };
+                  }
                 }
-              }
-              return serverLine
-            }),
-          })))
-          setRecentFlashes(payload.recent_flashes)
-          setError(null)
+                return serverLine;
+              }),
+            })),
+          );
+          setRecentFlashes(payload.recent_flashes);
+          setError(null);
         }
       } catch (e) {
-        console.error('[KDS] poll failed', e)
-        if (!cancelled) setError('Network error — retrying')
+        console.error("[KDS] poll failed", e);
+        if (!cancelled) setError("Network error — retrying");
       } finally {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setLoading(false);
       }
     }
 
-    void load()
+    void load();
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') void load()
-    }, POLL_INTERVAL_MS)
+      if (document.visibilityState === "visible") void load();
+    }, POLL_INTERVAL_MS);
 
-    return () => { cancelled = true; clearInterval(interval) }
-  }, [])
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
 
   // Tick `now` every second so flash + fade timers expire on screen
   // without needing a manual re-render trigger
   useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(tick)
-  }, [])
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
 
   // ── Sign-in handlers ───────────────────────────────────────
 
   function signIn(butcher: { id: string; name: string; role: string }) {
-    setButchers(prev => {
+    setButchers((prev) => {
       // Already signed in? Update timestamp.
-      const filtered = prev.filter(b => b.id !== butcher.id)
-      return [...filtered, { ...butcher, since: new Date().toISOString() }]
-    })
-    setShowPinModal(false)
+      const filtered = prev.filter((b) => b.id !== butcher.id);
+      return [...filtered, { ...butcher, since: new Date().toISOString() }];
+    });
+    setShowPinModal(false);
   }
 
   function signOut(id: string) {
-    setButchers(prev => prev.filter(b => b.id !== id))
+    setButchers((prev) => prev.filter((b) => b.id !== id));
   }
 
   // ── Done tap handler ───────────────────────────────────────
 
-  async function markLineDone(_orderId: string, lineId: string, butcherId: string) {
+  async function markLineDone(
+    _orderId: string,
+    lineId: string,
+    butcherId: string,
+  ) {
     // _orderId kept in signature for symmetry with callers (handleLineTap +
     // attribution modal) — the server no longer needs it in the URL since
     // it derives the order from the line itself.
@@ -258,82 +283,88 @@ function KdsPageInner() {
     // the next polling cycle catches up. Race-safe via
     // pendingDoneIdsRef — see load() polling reconciliation above.
 
-    const optimisticNow = new Date().toISOString()
+    const optimisticNow = new Date().toISOString();
 
     // 1. Track pending + apply optimistic state
-    pendingDoneIdsRef.current.add(lineId)
-    setOrders(prev => prev.map(order => ({
-      ...order,
-      lines: order.lines.map(line =>
-        line.id === lineId
-          ? { ...line, done_at: optimisticNow, done_by: butcherId }
-          : line
-      ),
-    })))
+    pendingDoneIdsRef.current.add(lineId);
+    setOrders((prev) =>
+      prev.map((order) => ({
+        ...order,
+        lines: order.lines.map((line) =>
+          line.id === lineId
+            ? { ...line, done_at: optimisticNow, done_by: butcherId }
+            : line,
+        ),
+      })),
+    );
 
     // 2. Fire the API in the background
     try {
       const res = await fetch(`/api/kds/lines/${lineId}/done`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ butcher_id: butcherId }),
-      })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ butcher_id: butcherId }),
+      });
 
       if (res.ok) {
         // Server confirmed. Polling will sync the real server timestamp
         // shortly; for now the optimistic value is correct.
-        pendingDoneIdsRef.current.delete(lineId)
+        pendingDoneIdsRef.current.delete(lineId);
       } else {
         // 3. ROLLBACK — server rejected. Revert the optimistic state.
-        const body = await res.json().catch(() => ({}))
-        console.error('[KDS] markLineDone failed', body)
-        pendingDoneIdsRef.current.delete(lineId)
-        setOrders(prev => prev.map(order => ({
-          ...order,
-          lines: order.lines.map(line =>
-            line.id === lineId
-              ? { ...line, done_at: null, done_by: null }
-              : line
-          ),
-        })))
-        setError(body?.error ?? 'Failed to mark done')
-        setTimeout(() => setError(null), 3000)
+        const body = await res.json().catch(() => ({}));
+        console.error("[KDS] markLineDone failed", body);
+        pendingDoneIdsRef.current.delete(lineId);
+        setOrders((prev) =>
+          prev.map((order) => ({
+            ...order,
+            lines: order.lines.map((line) =>
+              line.id === lineId
+                ? { ...line, done_at: null, done_by: null }
+                : line,
+            ),
+          })),
+        );
+        setError(body?.message ?? "Failed to mark done");
+        setTimeout(() => setError(null), 3000);
       }
     } catch (e) {
       // 4. Network error — also revert.
-      console.error('[KDS] markLineDone network error', e)
-      pendingDoneIdsRef.current.delete(lineId)
-      setOrders(prev => prev.map(order => ({
-        ...order,
-        lines: order.lines.map(line =>
-          line.id === lineId
-            ? { ...line, done_at: null, done_by: null }
-            : line
-        ),
-      })))
-      setError('Network error — could not mark done')
-      setTimeout(() => setError(null), 3000)
+      console.error("[KDS] markLineDone network error", e);
+      pendingDoneIdsRef.current.delete(lineId);
+      setOrders((prev) =>
+        prev.map((order) => ({
+          ...order,
+          lines: order.lines.map((line) =>
+            line.id === lineId
+              ? { ...line, done_at: null, done_by: null }
+              : line,
+          ),
+        })),
+      );
+      setError("Network error — could not mark done");
+      setTimeout(() => setError(null), 3000);
     }
   }
 
   function handleLineTap(orderId: string, lineId: string) {
     if (butchers.length === 0) {
-      setShowPinModal(true)
-      return
+      setShowPinModal(true);
+      return;
     }
     if (butchers.length === 1) {
-      void markLineDone(orderId, lineId, butchers[0].id)
-      return
+      void markLineDone(orderId, lineId, butchers[0].id);
+      return;
     }
     // Multiple butchers — prompt for attribution
-    setAttributingLine({ orderId, lineId })
+    setAttributingLine({ orderId, lineId });
   }
 
   // ── Filter visible orders ─────────────────────────────────
 
   const visibleOrders = useMemo(() => {
-    return orders.filter(o => isCardVisible(o, now))
-  }, [orders, now])
+    return orders.filter((o) => isCardVisible(o, now));
+  }, [orders, now]);
 
   // ── Render ────────────────────────────────────────────────
 
@@ -344,10 +375,12 @@ function KdsPageInner() {
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold tracking-tight">Production queue</h1>
           {loading && <span className="text-xs text-slate-400">Loading…</span>}
-          {error && <span className="text-xs text-red-400 font-bold">{error}</span>}
+          {error && (
+            <span className="text-xs text-red-400 font-bold">{error}</span>
+          )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {butchers.map(b => (
+          {butchers.map((b) => (
             <button
               key={b.id}
               type="button"
@@ -375,11 +408,13 @@ function KdsPageInner() {
         {visibleOrders.length === 0 && !loading && (
           <div className="text-center py-20 text-slate-500">
             <p className="text-2xl">No orders to cut.</p>
-            <p className="text-sm mt-2">Cards appear here when the office prints a picking sheet.</p>
+            <p className="text-sm mt-2">
+              Cards appear here when the office prints a picking sheet.
+            </p>
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleOrders.map(order => (
+          {visibleOrders.map((order) => (
             <OrderCard
               key={order.id}
               order={order}
@@ -393,10 +428,7 @@ function KdsPageInner() {
 
       {/* PIN modal */}
       {showPinModal && (
-        <PinModal
-          onSuccess={signIn}
-          onDismiss={() => setShowPinModal(false)}
-        />
+        <PinModal onSuccess={signIn} onDismiss={() => setShowPinModal(false)} />
       )}
 
       {/* Attribution modal */}
@@ -404,70 +436,92 @@ function KdsPageInner() {
         <AttributionModal
           butchers={butchers}
           onPick={(butcherId) => {
-            void markLineDone(attributingLine.orderId, attributingLine.lineId, butcherId)
-            setAttributingLine(null)
+            void markLineDone(
+              attributingLine.orderId,
+              attributingLine.lineId,
+              butcherId,
+            );
+            setAttributingLine(null);
           }}
           onDismiss={() => setAttributingLine(null)}
         />
       )}
     </div>
-  )
+  );
 }
 
 // ─── Order card ────────────────────────────────────────────
 
 function OrderCard({
-  order, flashes, now, onLineTap,
+  order,
+  flashes,
+  now,
+  onLineTap,
 }: {
-  order:    KdsOrder
-  flashes:  FlashEntry[]
-  now:      number
-  onLineTap: (orderId: string, lineId: string) => void
+  order: KdsOrder;
+  flashes: FlashEntry[];
+  now: number;
+  onLineTap: (orderId: string, lineId: string) => void;
 }) {
-  const products = useProductsWithDetail()
+  const products = useProductsWithDetail();
 
   // Detect if this card should be flashing orange right now
-  const isFlashing = isCardFlashing(order.id, flashes, now)
-  const isCompleted = order.state === 'completed'
-  const opacity = cardFadeOpacity(order, now)
+  const isFlashing = isCardFlashing(order.id, flashes, now);
+  const isCompleted = order.state === "completed";
+  const opacity = cardFadeOpacity(order, now);
 
-  const { done: doneCount, total: totalCount } = aggregateDoneCount(order)
+  const { done: doneCount, total: totalCount } = aggregateDoneCount(order);
 
   return (
     <div
       style={{ opacity }}
       className={`bg-slate-800 rounded-xl p-4 border-4 transition-all ${
         isFlashing
-          ? 'border-orange-500 animate-pulse shadow-lg shadow-orange-500/30'
+          ? "border-orange-500 animate-pulse shadow-lg shadow-orange-500/30"
           : isCompleted
-            ? 'border-green-500'
-            : 'border-slate-700'
+            ? "border-green-500"
+            : "border-slate-700"
       }`}
     >
       {/* Card header */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-slate-400 font-mono">{order.reference}</p>
-          <h2 className="text-lg font-bold text-white truncate">{order.customer?.name ?? '—'}</h2>
+          <p className="text-xs font-bold text-slate-400 font-mono">
+            {order.reference}
+          </p>
+          <h2 className="text-lg font-bold text-white truncate">
+            {order.customer?.name ?? "—"}
+          </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Delivery {new Date(order.delivery_date + 'T00:00:00').toLocaleDateString('en-GB', {
-              weekday: 'short', day: 'numeric', month: 'short',
-            })}
+            Delivery{" "}
+            {new Date(order.delivery_date + "T00:00:00").toLocaleDateString(
+              "en-GB",
+              {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+              },
+            )}
           </p>
           {order.delivery_notes && (
-            <p className="text-xs text-amber-400 mt-1 italic">⏰ {order.delivery_notes}</p>
+            <p className="text-xs text-amber-400 mt-1 italic">
+              ⏰ {order.delivery_notes}
+            </p>
           )}
         </div>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
-          isCompleted ? 'bg-green-600 text-white' : 'bg-orange-600 text-white'
-        }`}>
+        <span
+          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
+            isCompleted ? "bg-green-600 text-white" : "bg-orange-600 text-white"
+          }`}
+        >
           {doneCount}/{totalCount}
         </span>
       </div>
 
       {order.order_notes && (
         <div className="mb-3 rounded-lg bg-slate-900/50 px-3 py-2 text-xs text-slate-300">
-          <span className="font-bold text-slate-400">Note:</span> {order.order_notes}
+          <span className="font-bold text-slate-400">Note:</span>{" "}
+          {order.order_notes}
         </div>
       )}
 
@@ -476,58 +530,79 @@ function OrderCard({
         {order.lines
           .slice()
           .sort((a, b) => a.line_number - b.line_number)
-          .map(line => {
+          .map((line) => {
             // Prefer the product name embedded in the API response — the
             // KDS kiosk has no user session and so doesn't sync the
             // local IndexedDB product catalogue. Fall back to IndexedDB
             // for any environment where the kiosk DOES have a session
             // (e.g. dev workstation), and only show '(unknown product)'
             // as a last resort.
-            const productFromLocal = line.product_id ? products.find(p => p.id === line.product_id) : null
+            const productFromLocal = line.product_id
+              ? products.find((p) => p.id === line.product_id)
+              : null;
             const description =
               line.ad_hoc_description ??
               line.product?.name ??
               productFromLocal?.name ??
-              '(unknown product)'
-            const isDone = line.done_at !== null
+              "(unknown product)";
+            const isDone = line.done_at !== null;
 
             return (
               <li key={line.id}>
                 <button
                   type="button"
-                  onClick={() => !isDone && !isCompleted && onLineTap(order.id, line.id)}
+                  onClick={() =>
+                    !isDone && !isCompleted && onLineTap(order.id, line.id)
+                  }
                   disabled={isDone || isCompleted}
                   className={`w-full text-left flex items-center gap-3 rounded-lg px-3 py-3 transition-colors ${
                     isDone
-                      ? 'bg-green-900/30 border border-green-700/50 cursor-default'
-                      : 'bg-slate-700 hover:bg-slate-600 active:scale-[0.98]'
+                      ? "bg-green-900/30 border border-green-700/50 cursor-default"
+                      : "bg-slate-700 hover:bg-slate-600 active:scale-[0.98]"
                   }`}
                 >
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    isDone ? 'bg-green-600' : 'bg-slate-600 border-2 border-slate-500'
-                  }`}>
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      isDone
+                        ? "bg-green-600"
+                        : "bg-slate-600 border-2 border-slate-500"
+                    }`}
+                  >
                     {isDone && (
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                        <polyline points="20 6 9 17 4 12"/>
+                      <svg
+                        className="w-4 h-4 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={3}
+                        viewBox="0 0 24 24"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-bold text-sm truncate ${isDone ? 'text-green-300 line-through' : 'text-white'}`}>
+                    <p
+                      className={`font-bold text-sm truncate ${isDone ? "text-green-300 line-through" : "text-white"}`}
+                    >
                       {description}
                     </p>
                     {line.notes && (
-                      <p className="text-xs text-slate-400 italic truncate">{line.notes}</p>
+                      <p className="text-xs text-slate-400 italic truncate">
+                        {line.notes}
+                      </p>
                     )}
                   </div>
-                  <div className={`text-right ${isDone ? 'text-green-300' : 'text-white'}`}>
+                  <div
+                    className={`text-right ${isDone ? "text-green-300" : "text-white"}`}
+                  >
                     <p className="text-base font-bold font-mono">
-                      {line.quantity}<span className="text-xs ml-0.5">{line.uom}</span>
+                      {line.quantity}
+                      <span className="text-xs ml-0.5">{line.uom}</span>
                     </p>
                   </div>
                 </button>
               </li>
-            )
+            );
           })}
       </ul>
 
@@ -537,7 +612,7 @@ function OrderCard({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ─── PIN modal ─────────────────────────────────────────────
@@ -546,54 +621,56 @@ function PinModal({
   onSuccess,
   onDismiss,
 }: {
-  onSuccess: (b: { id: string; name: string; role: string }) => void
-  onDismiss: () => void
+  onSuccess: (b: { id: string; name: string; role: string }) => void;
+  onDismiss: () => void;
 }) {
-  const [pin, setPin]             = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError]         = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [pin, setPin] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { inputRef.current?.focus() }, [])
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   async function trySubmit(value: string) {
-    if (!value || value.length < 3) return
-    setSubmitting(true)
-    setError(null)
+    if (!value || value.length < 3) return;
+    setSubmitting(true);
+    setError(null);
     try {
-      const res = await fetch('/api/auth/kds-pin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/auth/kds-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin: value }),
-      })
-      const body = await res.json().catch(() => ({}))
+      });
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body?.error ?? 'Invalid PIN')
-        setPin('')
-        setSubmitting(false)
-        return
+        setError(body?.error ?? "Invalid PIN");
+        setPin("");
+        setSubmitting(false);
+        return;
       }
-      onSuccess(body as { id: string; name: string; role: string })
+      onSuccess(body as { id: string; name: string; role: string });
     } catch (e) {
-      console.error('[KDS PinModal] submit failed', e)
-      setError('Network error')
-      setSubmitting(false)
+      console.error("[KDS PinModal] submit failed", e);
+      setError("Network error");
+      setSubmitting(false);
     }
   }
 
   function pressDigit(d: string) {
-    if (submitting) return
-    const next = (pin + d).slice(0, 8)
-    setPin(next)
+    if (submitting) return;
+    const next = (pin + d).slice(0, 8);
+    setPin(next);
     if (next.length >= 4) {
       // Auto-submit when 4+ digits — most PINs are 4
-      void trySubmit(next)
+      void trySubmit(next);
     }
   }
 
   function pressBack() {
-    if (submitting) return
-    setPin(p => p.slice(0, -1))
+    if (submitting) return;
+    setPin((p) => p.slice(0, -1));
   }
 
   return (
@@ -601,7 +678,13 @@ function PinModal({
       <div className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold text-white">Butcher sign-in</h3>
-          <button type="button" onClick={onDismiss} className="text-slate-400 hover:text-white text-2xl leading-none">✕</button>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="text-slate-400 hover:text-white text-2xl leading-none"
+          >
+            ✕
+          </button>
         </div>
         <p className="text-sm text-slate-400 mb-4">Enter your PIN</p>
 
@@ -615,32 +698,51 @@ function PinModal({
         />
 
         <div className="grid grid-cols-3 gap-2">
-          {['1','2','3','4','5','6','7','8','9'].map(d => (
-            <button key={d} type="button" onClick={() => pressDigit(d)} disabled={submitting}
-              className="h-16 rounded-xl bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-white text-2xl font-bold transition-colors disabled:opacity-50">
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => pressDigit(d)}
+              disabled={submitting}
+              className="h-16 rounded-xl bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-white text-2xl font-bold transition-colors disabled:opacity-50"
+            >
               {d}
             </button>
           ))}
-          <button type="button" onClick={pressBack} disabled={submitting}
-            className="h-16 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xl font-bold disabled:opacity-50">
+          <button
+            type="button"
+            onClick={pressBack}
+            disabled={submitting}
+            className="h-16 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-xl font-bold disabled:opacity-50"
+          >
             ⌫
           </button>
-          <button type="button" onClick={() => pressDigit('0')} disabled={submitting}
-            className="h-16 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-2xl font-bold disabled:opacity-50">
+          <button
+            type="button"
+            onClick={() => pressDigit("0")}
+            disabled={submitting}
+            className="h-16 rounded-xl bg-slate-700 hover:bg-slate-600 text-white text-2xl font-bold disabled:opacity-50"
+          >
             0
           </button>
-          <button type="button" onClick={() => trySubmit(pin)} disabled={submitting || pin.length < 3}
-            className="h-16 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-base font-bold disabled:opacity-50">
-            {submitting ? '…' : 'OK'}
+          <button
+            type="button"
+            onClick={() => trySubmit(pin)}
+            disabled={submitting || pin.length < 3}
+            className="h-16 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-base font-bold disabled:opacity-50"
+          >
+            {submitting ? "…" : "OK"}
           </button>
         </div>
 
         {error && (
-          <p className="mt-3 text-center text-sm text-red-400 font-bold">{error}</p>
+          <p className="mt-3 text-center text-sm text-red-400 font-bold">
+            {error}
+          </p>
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // ─── Attribution modal ─────────────────────────────────────
@@ -650,19 +752,27 @@ function AttributionModal({
   onPick,
   onDismiss,
 }: {
-  butchers: SignedInButcher[]
-  onPick:    (butcherId: string) => void
-  onDismiss: () => void
+  butchers: SignedInButcher[];
+  onPick: (butcherId: string) => void;
+  onDismiss: () => void;
 }) {
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
       <div className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-white">Who marked this done?</h3>
-          <button type="button" onClick={onDismiss} className="text-slate-400 hover:text-white text-2xl leading-none">✕</button>
+          <h3 className="text-lg font-bold text-white">
+            Who marked this done?
+          </h3>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="text-slate-400 hover:text-white text-2xl leading-none"
+          >
+            ✕
+          </button>
         </div>
         <div className="space-y-2">
-          {butchers.map(b => (
+          {butchers.map((b) => (
             <button
               key={b.id}
               type="button"
@@ -675,5 +785,5 @@ function AttributionModal({
         </div>
       </div>
     </div>
-  )
+  );
 }
