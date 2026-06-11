@@ -17,7 +17,7 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState, useId } from "react";
+import { useState, useEffect, useId } from "react";
 import { useRouter } from "next/navigation";
 
 import AppHeader from "@/components/AppHeader";
@@ -28,6 +28,7 @@ import { useCustomers, useProductsWithDetail } from "@/hooks/useReferenceData";
 import type { SelectableItem } from "@/components/BottomSheetSelector";
 import type { OrderUom } from "@/lib/orders/types";
 import { isOrderPipelineEnabled } from "@/lib/orders/featureFlag";
+import { createIdempotencyKeySource } from "@/lib/orders/idempotencyKey";
 
 // ─── Types ─────────────────────────────────────────────────────
 
@@ -94,6 +95,18 @@ function NewOrderPageInner() {
   >(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // ── Idempotency key (F-TD-10) ───────────────────────────────
+  // One fingerprint per order attempt: a failed submit retried as-is
+  // reuses the key (the F-08 server guard then returns the original
+  // order), while any content edit below forgets it.
+  const [keySource] = useState(createIdempotencyKeySource);
+  // Dep array mirrors the `payload` object built in handleSubmit —
+  // if you add a field to the payload, add it here too, or an edited
+  // resubmit would be silently swallowed as a replay of the old order.
+  useEffect(() => {
+    keySource.reset();
+  }, [keySource, customer, deliveryDate, deliveryNotes, orderNotes, lines]);
 
   const formId = useId();
 
@@ -175,7 +188,10 @@ function NewOrderPageInner() {
 
       const res = await fetch("/api/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": keySource.current(),
+        },
         body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
@@ -194,6 +210,7 @@ function NewOrderPageInner() {
         return;
       }
 
+      keySource.reset();
       router.push(`/orders/${body.id}`);
     } catch (e) {
       console.error("[NewOrderPage] submit failed", e);

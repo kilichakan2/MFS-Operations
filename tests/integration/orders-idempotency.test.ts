@@ -58,6 +58,8 @@ describe("/api/orders Idempotency-Key integration", () => {
     role: string;
     userId: string;
     idempotencyKey?: string;
+    /** Request body override — defaults to the suite's minimal orderBody(). */
+    body?: Record<string, unknown>;
   }): Promise<{ status: number; body: unknown }> {
     const session = {
       userId: opts.userId,
@@ -78,7 +80,7 @@ describe("/api/orders Idempotency-Key integration", () => {
     const res = await fetch(`${INTEGRATION_BASE_URL}/api/orders`, {
       method: "POST",
       headers,
-      body: JSON.stringify(orderBody()),
+      body: JSON.stringify(opts.body ?? orderBody()),
       redirect: "manual",
     });
     const raw = await res.text();
@@ -172,5 +174,50 @@ describe("/api/orders Idempotency-Key integration", () => {
     });
     expect(res.status).toBe(400);
     expect((res.body as { code: string }).code).toBe("VALIDATION_ERROR");
+  });
+
+  it("replays the exact form wire shape with a real UUID key as one order (F-TD-10)", async () => {
+    // The byte-for-byte payload shape app/orders/new/page.tsx builds in
+    // handleSubmit, with a key from the same generator the form uses.
+    // The F-08 cases above use a minimal body and timestamp keys; this
+    // pins the form's actual contract against the guard.
+    const key = crypto.randomUUID();
+    const formBody = {
+      customer_id: customer.id,
+      delivery_date: "2026-12-31",
+      delivery_notes: "ring bell",
+      order_notes: null,
+      lines: [
+        {
+          product_id: product.id,
+          ad_hoc_description: null,
+          quantity: 1,
+          uom: "kg" as const,
+          notes: "tied",
+        },
+      ],
+    };
+    const first = await postOrder({
+      role: "sales",
+      userId: users.sales.id,
+      idempotencyKey: key,
+      body: formBody,
+    });
+    const second = await postOrder({
+      role: "sales",
+      userId: users.sales.id,
+      idempotencyKey: key,
+      body: formBody,
+    });
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
+    expect(second.body).toEqual(first.body);
+    const orderId = (first.body as { id: string }).id;
+    const supa = getServiceClient();
+    const { count } = await supa
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("id", orderId);
+    expect(count).toBe(1);
   });
 });
