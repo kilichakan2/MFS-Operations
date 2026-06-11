@@ -103,6 +103,16 @@ the trail matters.
 - **Owner unit:** unscheduled (tiny)
 - **Status:** open
 
+### F-TD-10 — Wire `Idempotency-Key` into the order form (activate the F-08 duplicate guard)
+
+- **Deferred:** 2026-06-11 (at F-08 Gate 4, decided by Hakan — ship API-side first)
+- **What:** F-08 shipped full server-side idempotent order placement, but no screen sends the header yet — the guard is dormant. `app/orders/new/page.tsx` `handleSubmit` (~line 175) must generate a fingerprint (`crypto.randomUUID()`) when an order submission starts and REUSE it across retries of that same order (the "Network error — please try again" path is the exact duplicate-creating case), resetting only after success or when the user edits the order content.
+- **Why deferred:** F-08's locked scope kept screens untouched (wire-format decision); the API contract is complete and tested (replay, race, cross-user, expiry). No regression vs today — only delayed benefit.
+- **Fix shape:** ~15 lines in the form + one integration/E2E test proving a retried submit with the same key returns the original order.
+- **Detail:** `docs/anvil/2026-06-11-f-08-cert.md` + F-08 plan §10 (optional header)
+- **Owner unit:** unscheduled — **next small PR after F-08 merges** (Hakan's call at Gate 4)
+- **Status:** open
+
 ---
 
 ## Architecture follow-ups (ARCH-FU-)
