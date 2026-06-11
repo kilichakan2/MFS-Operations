@@ -88,3 +88,6 @@ VALUES
   (gen_random_uuid(), 'ANVIL-TEST-warehouse', 'warehouse', NULL, '$2a$10$uzDajOezDyJvqy9TlFdPPumWJyMuzVYB5I/HYln6Z2.TSaTs9STHi', true),
   (gen_random_uuid(), 'ANVIL-TEST-butcher',   'butcher',   NULL, '$2a$10$PvHk6PoHsaZ/JiFG9xQQVuHpy./wEZGqI6wq4ZyMU4RJoeQVHPixG', true),
   (gen_random_uuid(), 'ANVIL-TEST-driver',    'driver',    NULL, '$2a$10$4dz5jU252RS3.c8CN/Y6GObKcIOesqXzD4zNpZfAmzDq35x9sN.mq', true);
+
+-- Preview branches: this file runs automatically on every Supabase preview branch creation
+-- (after migrations), seeding the ANVIL-TEST fixtures the Gate-4 preview smoke depends on.
