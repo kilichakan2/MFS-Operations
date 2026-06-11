@@ -296,6 +296,48 @@ export function ordersRepositoryContract(
       });
     });
 
+    // ─── createOrder idempotency — 3 cases (F-08, port JSDoc) ───
+
+    describe("createOrder idempotency", () => {
+      it("same key twice (same caller) returns the same order and creates only one", async () => {
+        const key = `contract-replay-${Date.now()}-${Math.random()}`;
+        const input = buildInput({ deliveryDate: "2030-07-01" });
+        const first = await ctx.repo.createOrder(input, ctx.userId, key);
+        const second = await ctx.repo.createOrder(input, ctx.userId, key);
+        expect(second.id).toBe(first.id);
+        expect(second.reference).toBe(first.reference);
+        // Only one order exists for this customer + delivery date.
+        const all = await ctx.repo.listOrders({
+          customerId: ctx.customerId,
+          deliveryDate: "2030-07-01",
+        });
+        expect(all.length).toBe(1);
+      });
+
+      it("different keys create different orders", async () => {
+        const stamp = `${Date.now()}-${Math.random()}`;
+        const input = buildInput({ deliveryDate: "2030-07-02" });
+        const a = await ctx.repo.createOrder(
+          input,
+          ctx.userId,
+          `contract-a-${stamp}`,
+        );
+        const b = await ctx.repo.createOrder(
+          input,
+          ctx.userId,
+          `contract-b-${stamp}`,
+        );
+        expect(a.id).not.toBe(b.id);
+      });
+
+      it("no key always creates a new order (today's behaviour, bit-for-bit)", async () => {
+        const input = buildInput({ deliveryDate: "2030-07-03" });
+        const a = await ctx.repo.createOrder(input, ctx.userId);
+        const b = await ctx.repo.createOrder(input, ctx.userId);
+        expect(a.id).not.toBe(b.id);
+      });
+    });
+
     // ─── updateOrder — 5 cases (port file lines 191-241) ──────
 
     describe("updateOrder", () => {
