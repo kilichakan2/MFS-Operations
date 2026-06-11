@@ -60,6 +60,7 @@ the trail matters.
 - **Fix shape:** convert the test to read every file in `lib/services/`, OR convert to an ESLint `no-restricted-imports` rule (cleaner — fails at lint not at test time).
 - **Detail:** F-07 cert + code-critic Guard report (when cert written)
 - **Owner unit:** F-13 (UsersService) — must tighten BEFORE second service ships
+- **Progress (2026-06-12, F-TD-11):** adapter-import dimension now ESLint-enforced for `lib/services/**` + `lib/usecases/**` (`.eslintrc.json` override, pinned by `tests/unit/lint/no-adapter-imports.test.ts` against the real config); cross-service-import dimension still open — owner F-13 unchanged.
 - **Status:** open
 
 ### F-TD-06 — `ValidationError` comma-joined string shape (`{ "lines.products": ["a, b, c"] }`)
@@ -121,7 +122,7 @@ the trail matters.
 - **Fix shape:** one composition-root file (e.g. `lib/wiring/orders.ts`) imports the adapter singletons once and constructs `ordersService` + the three use-case singletons; service/use-case files keep their factories, lose their adapter imports; routes import singletons from the composition root. Same PR: tighten the architecture pin (or an ESLint `no-restricted-imports` rule) to forbid `lib/adapters` imports from `lib/services/**` and `lib/usecases/**` — the current pin codifies rather than catches this pattern (interacts with F-TD-05). ~5 files, zero behaviour change, covered by existing unit suite.
 - **Detail:** `docs/anvil/2026-06-11-f-09-rip-out-audit.md` (BLOCKER-1)
 - **Owner unit:** F-TD-11 (dedicated PR) — **must land before F-13 clones the template**; F-09 re-gates after it merges
-- **Status:** in-progress (F-TD-11)
+- **Status:** shipped-pending-merge (F-TD-11 PR — `lib/wiring/orders.ts` composition root + ESLint guard pinned by `tests/unit/lint/no-adapter-imports.test.ts`; rip-out re-enumeration = 1 adapter folder + 1 wiring file; final flip post-merge)
 
 ### F-TD-12 — Retire legacy `lib/orders/types.ts` wire shapes from the UI
 
