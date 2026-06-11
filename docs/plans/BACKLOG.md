@@ -48,6 +48,7 @@ the trail matters.
 - **Why deferred:** F-07 hit this when its singleton import broke `npm test` on a clean clone. We patched it with Option C (vitest setupFiles stubs the env vars before test load); the root cause is still there. Option B — refactor `lib/supabase.ts` to a lazy `getSupabaseService()` getter — is the architecturally correct fix but touches every supabase adapter file (6 files).
 - **Goal:** `lib/supabase.ts` exports `getSupabaseService()` lazy factory. All adapters call the getter inside method bodies. Module-load is env-clean.
 - **Detail:** F-07 plan §5 Risk #7 (updated) + F-07 cert (when written)
+- **Also (from F-09 audit, 2026-06-11):** when the lazy-getter fix lands, ALSO move `lib/supabase.ts` → `lib/adapters/supabase/client.ts` so all Supabase code lives inside the one adapter folder (today the shared client is Supabase code living outside the box labelled Supabase).
 - **Owner unit:** unscheduled — pick up after Phase 1 closes (F-09)
 - **Status:** open
 
@@ -112,6 +113,24 @@ the trail matters.
 - **Detail:** `docs/anvil/2026-06-11-f-08-cert.md` + F-08 plan §10 (optional header)
 - **Owner unit:** unscheduled — **next small PR after F-08 merges** (Hakan's call at Gate 4)
 - **Status:** done (PR #28 — `lib/orders/idempotencyKey.ts` key source + form wiring; reset on success/edit, reused across retries; unit tests + form-shaped replay integration test)
+
+### F-TD-11 — Single composition root for Orders wiring (F-09 BLOCKER fix)
+
+- **Deferred:** 2026-06-11 (F-09 rip-out audit, BLOCKER-1 — picked up immediately by Hakan's decision)
+- **What:** the rip-out test fails 1+4 vs the mandated 1+1: `@/lib/adapters/supabase` is imported by name in four business-logic files — `lib/services/OrdersService.ts:143-147,538-542`, `lib/usecases/pickingList.ts:27-30,120-124`, `lib/usecases/kdsLineDone.ts:25,77-80`, `lib/usecases/kdsQueue.ts:22,71-74` — because the F-07 "factory + pre-wired singleton" template embeds vendor wiring in every service/use-case file. The template is the worked example for every future service; left as-is the wiring-site count grows to ~30 by Phase 5.
+- **Fix shape:** one composition-root file (e.g. `lib/wiring/orders.ts`) imports the adapter singletons once and constructs `ordersService` + the three use-case singletons; service/use-case files keep their factories, lose their adapter imports; routes import singletons from the composition root. Same PR: tighten the architecture pin (or an ESLint `no-restricted-imports` rule) to forbid `lib/adapters` imports from `lib/services/**` and `lib/usecases/**` — the current pin codifies rather than catches this pattern (interacts with F-TD-05). ~5 files, zero behaviour change, covered by existing unit suite.
+- **Detail:** `docs/anvil/2026-06-11-f-09-rip-out-audit.md` (BLOCKER-1)
+- **Owner unit:** F-TD-11 (dedicated PR) — **must land before F-13 clones the template**; F-09 re-gates after it merges
+- **Status:** in-progress (F-TD-11)
+
+### F-TD-12 — Retire legacy `lib/orders/types.ts` wire shapes from the UI
+
+- **Deferred:** 2026-06-11 (F-09 rip-out audit, informational note)
+- **What:** `lib/orders/types.ts` (legacy DB-mirror wire shapes — app-owned, no SDK content, NOT a Lego violation) is still imported by all 5 Orders/KDS UI pages + `components/EditLockBanner.tsx`. Routes no longer import it; `lib/domain/Order.ts:25-27` records the intent to retire it once nothing does.
+- **Fix shape:** move the UI pages to DTO-derived types, then delete `lib/orders/types.ts`.
+- **Detail:** `docs/anvil/2026-06-11-f-09-rip-out-audit.md` (item 7 notes)
+- **Owner unit:** unscheduled — low priority, fold into the UI phase
+- **Status:** open
 
 ---
 
