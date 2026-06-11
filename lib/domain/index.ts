@@ -19,3 +19,4 @@ export type {
 } from "./Order";
 export type { Customer } from "./Customer";
 export type { Product } from "./Product";
+export type { UserSummary } from "./User";

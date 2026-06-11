@@ -28,3 +28,7 @@ export {
   createFakeProductsRepository,
   fakeProductsRepository,
 } from "./ProductsRepository";
+export {
+  createFakeUsersRepository,
+  fakeUsersRepository,
+} from "./UsersRepository";
