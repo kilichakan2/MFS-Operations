@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt                        from 'bcryptjs'
 import { supabaseService }           from '@/lib/supabase'
+import { sessionTokens }             from '@/lib/wiring/session'
 
 // Service role key — bypasses RLS. Never expose to the client.
 const supabase = supabaseService
@@ -204,7 +205,7 @@ export async function POST(req: NextRequest) {
       redirect,
     })
 
-    response.cookies.set('mfs_session', JSON.stringify({
+    response.cookies.set('mfs_session', await sessionTokens.issue({
       userId:         user.id,
       name:           user.name,
       role:           activeRole,

@@ -20,6 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { sessionTokens } from '@/lib/wiring/session'
 
 // Paths that are public (no auth required)
 // /api/cron/* is included here because external cron services (e.g. cron-job.org) have no
@@ -81,7 +82,7 @@ const SHARED_API_PATHS = [
   '/api/orders',
 ]
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
   // Always allow public paths and Next.js internals
@@ -113,13 +114,21 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  let session: { userId: string; name: string; role: string; secondaryRoles?: string[] }
+  // Verify the HMAC-signed session cookie (T1). ANY failure — forged
+  // payload, tampered signature, legacy unsigned JSON, malformed input —
+  // is treated like having no session: clear the cookie and redirect,
+  // preserving the HACCP kiosk nuance of the no-cookie branch above.
+  const session = await sessionTokens.verify(sessionCookie)
 
-  try {
-    session = JSON.parse(sessionCookie)
-  } catch {
-    // Malformed cookie — clear it and redirect to login
-    const response = NextResponse.redirect(new URL('/login', req.url))
+  if (!session) {
+    if (pathname.startsWith('/haccp')) {
+      const response = NextResponse.redirect(new URL('/haccp', req.url))
+      response.cookies.delete('mfs_session')
+      return response
+    }
+    const loginUrl = new URL('/login', req.url)
+    loginUrl.searchParams.set('from', pathname)
+    const response = NextResponse.redirect(loginUrl)
     response.cookies.delete('mfs_session')
     return response
   }
