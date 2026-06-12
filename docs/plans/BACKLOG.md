@@ -88,8 +88,8 @@ the trail matters.
 - **What:** `tests/integration/kds.test.ts:22,36-37` overwrites ANVIL-TEST-butcher's `pin_hash` with a bcrypt of its own committed plaintext PIN (`'8129'`) and never restores it (`cleanupTestData` only deletes orders). Pre-existing on main; impact activated by F-INFRA-02's freshly-minted `E2E_PIN_BUTCHER`: any local `@critical` Playwright run AFTER `npm run test:integration` fails at spec 03 until `npm run db:reset`.
 - **Fix shape:** derive the test's PIN from `E2E_PIN_BUTCHER`, or restore the original `pin_hash` in `afterAll`.
 - **Detail:** code-critic Guard report for PR #26 (W3) + `docs/plans/2026-06-10-f-infra-02-preview-smoke-plumbing.md`
-- **Owner unit:** unscheduled (small standalone PR)
-- **Status:** open
+- **Owner unit:** Day 1 of the 16-day sprint
+- **Status:** done (`tests/integration/kds.test.ts` captures the butcher's original `pin_hash` in `beforeAll` and restores it in `afterAll`; verified from a clean baseline — post-run hash restored to sentinel, no `bcrypt('8129')` residue)
 
 ### F-TD-09 — Scheduled purge of expired `order_idempotency_keys` rows
 
@@ -139,8 +139,8 @@ the trail matters.
 - **What:** 2 `trainingRefreshStatus` tests in `tests/unit/annualReview.test.ts` fail when the suite runs between 00:00 and 01:00 local (BST): the test helper derives "today" via `toISOString()` (UTC) while the implementation (`lib/annualReview/sections.ts`) uses the local date — for one hour a day the two disagree. Verified failing on untouched main at 00:36 and green at 01:00+.
 - **Fix shape:** make the test helper derive "today" the same way the implementation does (local date), or freeze the clock in the test with vitest fake timers.
 - **Detail:** PR #29 description (implementer note) + `docs/anvil/2026-06-12-f-td-11-cert.md` (known gaps §1)
-- **Owner unit:** unscheduled (tiny standalone PR)
-- **Status:** open
+- **Owner unit:** Day 1 of the 16-day sprint
+- **Status:** done (`daysFromToday` helper now derives the date via `toLocaleDateString('en-CA')` — local, matching the implementation and the rest of the file — instead of `toISOString()` UTC; 182/182 unit tests green)
 
 ---
 
