@@ -17,17 +17,13 @@
  * `toPickingListData` (lib/api/orders/dto.ts) and renders with
  * `renderPickingListHtml` — HTML stays at the presentation layer.
  *
- * Construction: factory + pre-wired singleton (F-07 template).
+ * Construction: factory (F-07 template); production wiring in
+ * `lib/wiring/orders.ts` (F-TD-11).
  */
 import { NotFoundError } from "@/lib/errors";
 import type { Order, Product } from "@/lib/domain";
 import type { ProductsRepository, UsersRepository } from "@/lib/ports";
 import type { OrdersService } from "@/lib/services";
-import { ordersService } from "@/lib/services";
-import {
-  supabaseProductsRepository,
-  supabaseUsersRepository,
-} from "@/lib/adapters/supabase";
 
 /** Everything one picking-sheet render needs, pre-joined. */
 export interface PickingListAssembly {
@@ -115,10 +111,3 @@ export function createPickingListUsecase(
     },
   };
 }
-
-/** Pre-wired singleton against the production service + adapters. */
-export const pickingListUsecase: PickingListUsecase = createPickingListUsecase({
-  ordersService,
-  products: supabaseProductsRepository,
-  users: supabaseUsersRepository,
-});

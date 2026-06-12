@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { withErrors } from "@/lib/errors";
 import { withRequestContext } from "@/lib/observability";
-import { ordersService } from "@/lib/services";
+import { ordersService } from "@/lib/wiring/orders";
 import { parseOrThrow } from "@/lib/api/validate";
 import {
   listOrdersQuerySchema,

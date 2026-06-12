@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { withErrors } from "@/lib/errors";
 import { withRequestContext } from "@/lib/observability";
-import { kdsLineDoneUsecase } from "@/lib/usecases/kdsLineDone";
+import { kdsLineDoneUsecase } from "@/lib/wiring/orders";
 import { parseOrThrow } from "@/lib/api/validate";
 import {
   kdsLineIdParamSchema,
