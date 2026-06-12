@@ -63,11 +63,20 @@ function loadAndGuardEnv(): { supabaseUrl: string; serviceKey: string } {
   const parsed = parse(readFileSync(ENV_FILE));
   const supabaseUrl = parsed.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const serviceKey = parsed.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  const sessionSecret = parsed.SESSION_SECRET ?? "";
 
   if (!supabaseUrl || !serviceKey) {
     throw new Error(
       `.env.test.local is missing ${!supabaseUrl ? "NEXT_PUBLIC_SUPABASE_URL" : "SUPABASE_SERVICE_ROLE_KEY"}. ` +
         "Both are required to boot the integration dev server against local Supabase.",
+    );
+  }
+  if (!sessionSecret) {
+    throw new Error(
+      ".env.test.local is missing SESSION_SECRET. The spawned dev server and " +
+        "the test signing helper must share one secret or every fabricated " +
+        "session bounces at the middleware (T1). Add any stable random string " +
+        "≥32 bytes, e.g. from `openssl rand -base64 48`.",
     );
   }
   if (supabaseUrl.includes(PROD_REF)) {
@@ -85,9 +94,12 @@ function loadAndGuardEnv(): { supabaseUrl: string; serviceKey: string } {
   }
 
   // Populate this process's env too: _setup.ts (imported dynamically
-  // below) reads these at module load.
+  // below) reads these at module load. SESSION_SECRET reaches both the
+  // vitest process (signing helper) and the spawned dev server (via
+  // the `...process.env` spread in the spawn env).
   process.env.NEXT_PUBLIC_SUPABASE_URL = supabaseUrl;
   process.env.SUPABASE_SERVICE_ROLE_KEY = serviceKey;
+  process.env.SESSION_SECRET = sessionSecret;
 
   return { supabaseUrl, serviceKey };
 }
