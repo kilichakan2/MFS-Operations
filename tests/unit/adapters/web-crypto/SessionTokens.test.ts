@@ -168,4 +168,40 @@ describe("createWebCryptoSessionTokens", () => {
     const token = await tokens.issue(CLAIMS);
     expect(token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
   });
+
+  it("rejects a payload paired with the signature of a DIFFERENT valid token", async () => {
+    // Both tokens are genuinely issued under the same secret — swapping
+    // the seal from one onto the other must still fail (HMAC binds the
+    // signature to the exact payload bytes).
+    const salesToken = await tokens.issue({
+      userId: CLAIMS.userId,
+      name: "ANVIL-TEST-sales",
+      role: "sales",
+    });
+    const adminToken = await tokens.issue(CLAIMS);
+    const [salesPayload] = salesToken.split(".");
+    const [, adminSig] = adminToken.split(".");
+    expect(await tokens.verify(`${salesPayload}.${adminSig}`)).toBeNull();
+  });
+
+  it("rejects reordered claims (same facts, different JSON key order) with the original signature", async () => {
+    const token = await tokens.issue(CLAIMS);
+    const [payload, sig] = token.split(".");
+    const claims = JSON.parse(b64urlDecode(payload)) as Record<string, unknown>;
+    // Re-serialise the SAME claims with keys in reverse order — semantically
+    // identical, byte-different. The seal covers bytes, so this must fail.
+    const reordered = JSON.stringify(
+      Object.fromEntries(Object.entries(claims).reverse()),
+    );
+    expect(reordered).not.toBe(JSON.stringify(claims)); // guard: order really changed
+    expect(await tokens.verify(`${b64urlEncode(reordered)}.${sig}`)).toBeNull();
+  });
+
+  it("returns null (never throws or hangs) on an oversized cookie value", async () => {
+    // Far beyond the ~4KB browser cookie cap — a hostile or corrupted
+    // value must collapse to "no session", not crash the middleware.
+    const huge = "A".repeat(1_000_000);
+    expect(await tokens.verify(huge)).toBeNull();
+    expect(await tokens.verify(`${huge}.${huge}`)).toBeNull();
+  });
 });
