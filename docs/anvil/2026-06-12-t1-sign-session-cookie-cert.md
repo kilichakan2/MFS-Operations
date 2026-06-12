@@ -2,7 +2,8 @@
 
 Date: 2026-06-12
 App: MFS-Operations (Next.js 15 App Router + Supabase + Vercel)
-Branch: `fix/t1-sign-session-cookie` | PR: #30 (head `40c82c7`)
+Branch: fix/t1-sign-session-cookie
+PR: #30 (head `40c82c7`)
 Unit: T1 — HMAC-SHA256-sign the `mfs_session` cookie (Critical #1, F-RLS-01 audit)
 
 ## Test results
@@ -43,4 +44,4 @@ Rollback: `git revert` the merge commit on main → Vercel auto-deploys; users r
 
 ## Verdict
 
-**CLEARED FOR SHIP.** Deploy impact: one-time logout for all signed-in users (no grace window, by approved spec).
+**CLEARED FOR PRODUCTION.** Deploy impact: one-time logout for all signed-in users (no grace window, by approved spec).
