@@ -29,14 +29,26 @@ describe("KDS integration", () => {
   let users: TestUserSet;
   let customer: { id: string; name: string };
   let product: { id: string; name: string; code: string | null };
+  // Captured before we overwrite it so afterAll can restore the row exactly
+  // as found — otherwise this suite leaves ANVIL-TEST-butcher's pin_hash set
+  // to bcrypt(TEST_PIN), which breaks the next local @critical Playwright run
+  // (it expects E2E_PIN_BUTCHER) until `npm run db:reset` (F-TD-08).
+  let originalButcherPinHash: string | null = null;
 
   beforeAll(async () => {
     users = await setupTestUsers();
     customer = await setupTestCustomer();
     product = await getTestProduct();
 
-    // Ensure the test butcher has a known PIN
+    // Ensure the test butcher has a known PIN — capturing the original first.
     const supa = getServiceClient();
+    const { data: before } = await supa
+      .from("users")
+      .select("pin_hash")
+      .eq("id", users.butcher.id)
+      .single();
+    originalButcherPinHash = before?.pin_hash ?? null;
+
     const hash = await bcrypt.hash(TEST_PIN, 10);
     await supa
       .from("users")
@@ -47,6 +59,13 @@ describe("KDS integration", () => {
   }, 30_000);
 
   afterAll(async () => {
+    // Restore the butcher's pin_hash so the suite leaves no residue (F-TD-08).
+    const supa = getServiceClient();
+    await supa
+      .from("users")
+      .update({ pin_hash: originalButcherPinHash })
+      .eq("id", users.butcher.id);
+
     await cleanupTestData();
   }, 30_000);
 

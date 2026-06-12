@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { sessionTokens }             from '@/lib/wiring/session'
 
 const ADMIN_PASSWORD = '0505'
 const ADMIN_USER_ID  = 'e5320cb8-8977-4f86-80d7-6bbc595ce183'  // Hakan — admin
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({ ok: true })
 
     // mfs_session is httpOnly — the authoritative server-side session
-    res.cookies.set('mfs_session', JSON.stringify({
+    res.cookies.set('mfs_session', await sessionTokens.issue({
       userId: ADMIN_USER_ID,
       name:   ADMIN_NAME,
       role:   'admin',

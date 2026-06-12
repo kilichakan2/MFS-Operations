@@ -15,3 +15,4 @@ export type {
 export type { CustomersRepository } from "./CustomersRepository";
 export type { ProductsRepository } from "./ProductsRepository";
 export type { UsersRepository } from "./UsersRepository";
+export type { SessionTokens } from "./SessionTokens";

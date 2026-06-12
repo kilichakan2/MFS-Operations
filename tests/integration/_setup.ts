@@ -24,6 +24,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { createWebCryptoSessionTokens } from "@/lib/adapters/web-crypto";
 import { INTEGRATION_BASE_URL } from "./_config";
 
 const SUPABASE_URL =
@@ -265,11 +266,29 @@ export async function getTestProduct(): Promise<{
 }
 
 /**
+ * Sign a fabricated session cookie exactly the way the app does —
+ * through the same adapter factory the wiring uses (T1). The dev
+ * server booted by _globalSetup.ts shares SESSION_SECRET from
+ * .env.test.local, so tokens signed here verify there. An unsigned
+ * JSON cookie now 307s at the middleware.
+ */
+export async function signSessionCookie(session: {
+  userId: string;
+  name: string;
+  role: string;
+  secondaryRoles?: string[];
+}): Promise<string> {
+  return createWebCryptoSessionTokens({
+    getSecret: () => process.env.SESSION_SECRET,
+  }).issue(session);
+}
+
+/**
  * Call a Next.js API route with cookie-based auth. Returns the
  * response (status + parsed JSON if any).
  *
  * Sets THREE cookies to mirror what the real login flow sets:
- *   mfs_session    — JSON-encoded session, used by middleware
+ *   mfs_session    — signed session token (T1), verified by middleware
  *   mfs_role       — used by route handlers for per-role gating
  *   mfs_user_id    — used by route handlers for created_by attribution
  *
@@ -296,15 +315,13 @@ export async function api(
   if (opts.role) cookieParts.push(`mfs_role=${opts.role}`);
   if (opts.userId) cookieParts.push(`mfs_user_id=${opts.userId}`);
   if (opts.role && opts.userId) {
-    const session = {
+    // Signed base64url tokens are cookie-safe — no URI-encoding needed
+    const token = await signSessionCookie({
       userId: opts.userId,
       name: opts.name ?? `ANVIL-TEST-${opts.role}`,
       role: opts.role,
-    };
-    // URI-encode so the JSON braces + quotes don't break the cookie header
-    cookieParts.push(
-      `mfs_session=${encodeURIComponent(JSON.stringify(session))}`,
-    );
+    });
+    cookieParts.push(`mfs_session=${token}`);
   }
   if (cookieParts.length) headers.Cookie = cookieParts.join("; ");
 

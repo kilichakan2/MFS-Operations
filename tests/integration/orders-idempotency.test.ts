@@ -21,6 +21,7 @@ import {
   setupTestCustomer,
   getTestProduct,
   cleanupTestData,
+  signSessionCookie,
   type TestUserSet,
 } from "./_setup";
 import { INTEGRATION_BASE_URL } from "./_config";
@@ -61,17 +62,17 @@ describe("/api/orders Idempotency-Key integration", () => {
     /** Request body override — defaults to the suite's minimal orderBody(). */
     body?: Record<string, unknown>;
   }): Promise<{ status: number; body: unknown }> {
-    const session = {
+    const sessionToken = await signSessionCookie({
       userId: opts.userId,
       name: `ANVIL-TEST-${opts.role}`,
       role: opts.role,
-    };
+    });
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Cookie: [
         `mfs_role=${opts.role}`,
         `mfs_user_id=${opts.userId}`,
-        `mfs_session=${encodeURIComponent(JSON.stringify(session))}`,
+        `mfs_session=${sessionToken}`,
       ].join("; "),
     };
     if (opts.idempotencyKey !== undefined) {
