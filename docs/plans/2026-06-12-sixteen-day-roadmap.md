@@ -37,15 +37,15 @@ resuming the Day-2 order**, each through the **full FORGE loop + ANVIL cert +
 ship gate** (no frame-light — these touch production auth and the production DB).
 Run in severity order:
 
-- **T1 — sign/encrypt the `mfs_session` cookie.** Unsigned plaintext JSON today
-  → any logged-in user edits it to `role:admin` for instant priv-esc, independent
-  of RLS. Touches `app/api/auth/login/route.ts:207` + `middleware.ts:118` + the
-  integration cookie helper `tests/integration/_setup.ts`.
-  **Agreed spec (FORGE Gate 1, awaiting approval at session pause):** HMAC-SHA256
-  sign with a server-side `SESSION_SECRET` env var (new — Vercel prod + local);
-  middleware verifies and clears/redirects any cookie that fails; all fields kept
-  (userId, name, role, secondaryRoles); old unsigned cookies invalid → one-time
-  re-login; no grace window. **STATUS: in FORGE, at Gate 1 (spec) — resume here.**
+- ✅ **T1 — sign the `mfs_session` cookie.** SHIPPED 2026-06-12 (PR #30, squash
+  `88af11d`). HMAC-SHA256 via port `lib/ports/SessionTokens.ts` + Web Crypto
+  adapter `lib/adapters/web-crypto/` + wiring `lib/wiring/session.ts`; middleware
+  verifies, fails closed, clears + redirects. `SESSION_SECRET` set in Vercel
+  Production AND Preview (distinct values). Full FORGE + ANVIL cert
+  (`docs/anvil/2026-06-12-t1-sign-session-cookie-cert.md`); preview smoke 8/8;
+  prod smoke green incl. forged-admin-cookie bounce verified live. Residual
+  logged as **F-TD-14** (32 `/api/haccp/*` routes on unsigned `mfs_role` —
+  rides T4). Plan archived. One-time mass re-login occurred at deploy.
 - **T2 — enable RLS on the 42 exposed tables (step-1-only fast pass).** `ALTER
 TABLE … ENABLE ROW LEVEL SECURITY` on all 42. Safe under service-role (the app
   bypasses RLS), closes the PostgREST anon exposure immediately. Production
