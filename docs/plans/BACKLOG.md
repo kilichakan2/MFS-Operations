@@ -122,7 +122,7 @@ the trail matters.
 - **Fix shape:** one composition-root file (e.g. `lib/wiring/orders.ts`) imports the adapter singletons once and constructs `ordersService` + the three use-case singletons; service/use-case files keep their factories, lose their adapter imports; routes import singletons from the composition root. Same PR: tighten the architecture pin (or an ESLint `no-restricted-imports` rule) to forbid `lib/adapters` imports from `lib/services/**` and `lib/usecases/**` — the current pin codifies rather than catches this pattern (interacts with F-TD-05). ~5 files, zero behaviour change, covered by existing unit suite.
 - **Detail:** `docs/anvil/2026-06-11-f-09-rip-out-audit.md` (BLOCKER-1)
 - **Owner unit:** F-TD-11 (dedicated PR) — **must land before F-13 clones the template**; F-09 re-gates after it merges
-- **Status:** shipped-pending-merge (F-TD-11 PR — `lib/wiring/orders.ts` composition root + ESLint guard pinned by `tests/unit/lint/no-adapter-imports.test.ts`; rip-out re-enumeration = 1 adapter folder + 1 wiring file; final flip post-merge)
+- **Status:** done (PR #29 / `43f5049` — `lib/wiring/orders.ts` composition root + ESLint guard pinned by `tests/unit/lint/no-adapter-imports.test.ts`; rip-out re-enumeration on shipped main = 1 adapter folder + 1 wiring file; F-09 re-gated PASS 2026-06-12 → Phase 1 closed; cert `docs/anvil/2026-06-12-f-td-11-cert.md`)
 
 ### F-TD-12 — Retire legacy `lib/orders/types.ts` wire shapes from the UI
 
@@ -131,6 +131,15 @@ the trail matters.
 - **Fix shape:** move the UI pages to DTO-derived types, then delete `lib/orders/types.ts`.
 - **Detail:** `docs/anvil/2026-06-11-f-09-rip-out-audit.md` (item 7 notes)
 - **Owner unit:** unscheduled — low priority, fold into the UI phase
+- **Status:** open
+
+### F-TD-13 — `annualReview.test.ts` date-boundary flake (00:00–01:00 local)
+
+- **Deferred:** 2026-06-12 (found during F-TD-11 Render; pre-existing on main, unrelated to the diff)
+- **What:** 2 `trainingRefreshStatus` tests in `tests/unit/annualReview.test.ts` fail when the suite runs between 00:00 and 01:00 local (BST): the test helper derives "today" via `toISOString()` (UTC) while the implementation (`lib/annualReview/sections.ts`) uses the local date — for one hour a day the two disagree. Verified failing on untouched main at 00:36 and green at 01:00+.
+- **Fix shape:** make the test helper derive "today" the same way the implementation does (local date), or freeze the clock in the test with vitest fake timers.
+- **Detail:** PR #29 description (implementer note) + `docs/anvil/2026-06-12-f-td-11-cert.md` (known gaps §1)
+- **Owner unit:** unscheduled (tiny standalone PR)
 - **Status:** open
 
 ---

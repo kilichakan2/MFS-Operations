@@ -32,7 +32,8 @@ The three layers above live in these paths. Every file belongs to exactly one:
 - `lib/services/` — business logic that depends on ports. Never on vendors directly. Services do not import other services (use a `lib/usecases/` use-case to compose).
 - `lib/usecases/` — orchestration that composes multiple services or ports for a single business operation.
 - `lib/adapters/<vendor>/` — concrete implementations (**adapters**) of the ports. The only place a vendor SDK is ever imported. One sub-folder per vendor (`lib/adapters/supabase/`, `lib/adapters/resend/`, etc.).
-- `app/` (Next.js App Router) and `components/` — presentation. Never imports adapters directly; goes via services or use-cases.
+- `lib/wiring/` — composition roots, one file per domain (`lib/wiring/orders.ts`). The ONLY business-layer location allowed to import from `lib/adapters/**`: it connects concrete adapters to service/use-case factories and exports the ready-to-use singletons. Services and use-cases export factories only — never pre-wired singletons (ESLint-enforced since F-TD-11; pinned by `tests/unit/lint/no-adapter-imports.test.ts`). This is what keeps the rip-out test at "one adapter + one wiring line".
+- `app/` (Next.js App Router) and `components/` — presentation. Never imports adapters directly; goes via services or use-cases (importing their singletons from `lib/wiring/`).
 
 When skills say "which port?" they mean the interface in `lib/ports/`. When they say "which adapter?" they mean the implementation in `lib/adapters/<vendor>/`. See ADR-0002 (`docs/adr/0002-hexagonal-shape-and-naming.md` line 19) for the full naming + dependency rule.
 

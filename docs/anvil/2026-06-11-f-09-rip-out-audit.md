@@ -85,3 +85,15 @@ Test-quality note: the Orders suite is behaviour-shaped — shared port contract
 ## Verdict line
 
 **Blockers present (1) — Phase 1 does NOT close today.** The rip-out test fails on the letter of the wiring count. Resolution: either the composition-root refactor (recommended, ~5 files, zero behaviour change) or an explicit owner amendment of the acceptance criterion in CLAUDE.md. On either resolution, F-09 re-gates.
+
+---
+
+## RE-GATE ADDENDUM — 2026-06-12: PASS. Phase 1 CLOSED.
+
+Hakan chose the fix. **F-TD-11** (PR #29, squash `43f5049`, cert `docs/anvil/2026-06-12-f-td-11-cert.md`) shipped the composition root + ESLint guard. The rip-out enumeration was re-run on shipped `main@43f5049` by the conductor:
+
+- Business/UI files importing `@/lib/adapters` outside `lib/adapters/` + `lib/wiring/`: **empty**
+- Wiring files importing adapters: **exactly `lib/wiring/orders.ts`**
+- Any `@/lib/adapters` mention in `lib/services/` + `lib/usecases/`: **empty**
+
+**Orders rip-out cost: 1 adapter folder + 1 wiring file — the mandated answer. BLOCKER-1 discharged. F-09 verdict flips to PASS; Phase 1 of the strangler-fig migration (ADR-0003) is formally closed.** The wiring rule is now codified in CLAUDE.md (folder layout, `lib/wiring/`) and ADR-0002 (2026-06-12 amendment); recommended backlog entries from this audit are booked as F-TD-11 (done), F-TD-12 (open), and the F-TD-04 amendment.
