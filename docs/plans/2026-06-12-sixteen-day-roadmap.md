@@ -29,6 +29,36 @@ Phase 1, Users RLS with F-13" rule.
 - ✅ **F-TD-13** — `annualReview.test.ts` midnight flake fix (commit `32fbec7`; 182/182 green)
 - ✅ **F-TD-08** — `kds.test.ts` pin_hash clobber fix (commit `32fbec7`; verified no residue)
 
+### ⚠️ CRITICAL SECURITY INSERTIONS — pulled forward from the F-RLS-01 audit (Hakan, 2026-06-12)
+
+The Day-1 audit (`docs/rls-audit-2026-06-12.md`) surfaced 3 criticals NOT in the
+original roadmap. Hakan's decision (2026-06-12): **do all three now, before
+resuming the Day-2 order**, each through the **full FORGE loop + ANVIL cert +
+ship gate** (no frame-light — these touch production auth and the production DB).
+Run in severity order:
+
+- **T1 — sign/encrypt the `mfs_session` cookie.** Unsigned plaintext JSON today
+  → any logged-in user edits it to `role:admin` for instant priv-esc, independent
+  of RLS. Touches `app/api/auth/login/route.ts:207` + `middleware.ts:118` + the
+  integration cookie helper `tests/integration/_setup.ts`.
+  **Agreed spec (FORGE Gate 1, awaiting approval at session pause):** HMAC-SHA256
+  sign with a server-side `SESSION_SECRET` env var (new — Vercel prod + local);
+  middleware verifies and clears/redirects any cookie that fails; all fields kept
+  (userId, name, role, secondaryRoles); old unsigned cookies invalid → one-time
+  re-login; no grace window. **STATUS: in FORGE, at Gate 1 (spec) — resume here.**
+- **T2 — enable RLS on the 42 exposed tables (step-1-only fast pass).** `ALTER
+TABLE … ENABLE ROW LEVEL SECURITY` on all 42. Safe under service-role (the app
+  bypasses RLS), closes the PostgREST anon exposure immediately. Production
+  migration via Supabase MCP `apply_migration`, tested on local first, rollback
+  block. Policies still land per-domain in F-RLS-04a–i. **STATUS: queued.**
+- **T3 — harden the SECURITY DEFINER functions.** Revoke anon/authenticated
+  `EXECUTE` on `replace_agreement_lines` (mutates pricing!), `is_admin`,
+  `orders_audit_trigger`, `order_lines_audit_trigger` (or `SECURITY INVOKER`); set
+  a fixed `search_path` on the 4 mutable-search-path functions. Production
+  migration. **STATUS: queued.**
+
+After all three ship, resume the Day-2 order below.
+
 ### Day 2 — Fri 13 Jun
 
 - **F-TD-01** — clear ~60 pre-existing tsc errors + ESLint nits → `lint`/`tsc` exit 0 on main → ANVIL layers 3+4 go strict for every later unit
