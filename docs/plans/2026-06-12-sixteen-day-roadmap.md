@@ -22,12 +22,12 @@ Phase 1, Users RLS with F-13" rule.
 
 ## Schedule
 
-### Day 1 — Thu 12 Jun
+### Day 1 — Thu 12 Jun ✅ DONE
 
-- **F-RLS-01** — RLS audit + threat model (docs only; Supabase advisors + per-table exposure map → `docs/rls-audit-*.md`)
-- **F-RLS-02** — per-table expand-contract RLS plan (docs only)
-- **F-TD-13** — `annualReview.test.ts` midnight flake fix (tiny)
-- **F-TD-08** — `kds.test.ts` pin_hash clobber fix (tiny)
+- ✅ **F-RLS-01** — RLS audit + threat model → `docs/rls-audit-2026-06-12.md` (advisors + per-table map; surfaced 3 criticals: unsigned session cookie = priv-esc, 42 RLS-off tables exposed via PostgREST, anon-callable `replace_agreement_lines`)
+- ✅ **F-RLS-02** — per-table expand-contract RLS plan → `docs/rls-expand-contract-plan-2026-06-12.md` (6-step sequence, policy templates, slice schedule, rollback per step)
+- ✅ **F-TD-13** — `annualReview.test.ts` midnight flake fix (commit `32fbec7`; 182/182 green)
+- ✅ **F-TD-08** — `kds.test.ts` pin_hash clobber fix (commit `32fbec7`; verified no residue)
 
 ### Day 2 — Fri 13 Jun
 
