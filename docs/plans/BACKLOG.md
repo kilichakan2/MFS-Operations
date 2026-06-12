@@ -142,6 +142,16 @@ the trail matters.
 - **Owner unit:** Day 1 of the 16-day sprint
 - **Status:** done (`daysFromToday` helper now derives the date via `toLocaleDateString('en-CA')` — local, matching the implementation and the rest of the file — instead of `toISOString()` UTC; 182/182 unit tests green)
 
+### F-TD-14 — 32 `/api/haccp/*` routes authorize off UNSIGNED `mfs_role`/`mfs_user_id` cookies (T1 residual)
+
+- **Deferred:** 2026-06-12 (during T1 — sign the `mfs_session` cookie; plan §11 risk R6)
+- **What:** all 32 route files under `app/api/haccp/**` read the client-writable, unsigned `mfs_role` / `mfs_user_id` cookies directly for authorization (e.g. `app/api/haccp/customers/route.ts:14`), and `/api/haccp` is a PUBLIC path in `middleware.ts` — so these routes never see the now-signed `mfs_session` at all. Signing `mfs_session` (T1) does NOT close this hole: anyone can set `mfs_role=admin` in devtools and call these endpoints. Forgeable independently of the session cookie.
+- **Why deferred:** out of T1's locked scope (Gate 1: no change to the unsigned display cookies or the HACCP route authorization model); too big to sneak into the signing PR.
+- **Fix shape:** auth-track follow-up unit — move `/api/haccp/*` authorization onto the verified session (middleware `x-mfs-*` headers or a shared `requireRole` helper reading the signed cookie); rides the T4/`requireRole` migration from the F-RLS-01 audit.
+- **Detail:** `docs/plans/2026-06-12-t1-sign-session-cookie.md` §11 R6 + `docs/rls-audit-2026-06-12.md`
+- **Owner unit:** T4 (auth track) — needs its own unit, not unscheduled hygiene
+- **Status:** open
+
 ---
 
 ## Architecture follow-ups (ARCH-FU-)
