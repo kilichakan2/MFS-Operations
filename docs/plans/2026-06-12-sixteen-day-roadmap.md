@@ -57,11 +57,20 @@ Run in severity order:
     benign deny-all), anon-key read of `cash_entries`/`haccp_health_records` → `[]` on live
     data, app smoke green. Non-destructive (PITR not required); rollback = DISABLE on the 42.
     Per-table policies still land per-domain in F-RLS-04a–i. Plan archived.
-- **T3 — harden the SECURITY DEFINER functions.** Revoke anon/authenticated
-  `EXECUTE` on `replace_agreement_lines` (mutates pricing!), `is_admin`,
-  `orders_audit_trigger`, `order_lines_audit_trigger` (or `SECURITY INVOKER`); set
-  a fixed `search_path` on the 4 mutable-search-path functions. Production
-  migration. **STATUS: queued.**
+- ✅ **T3 — harden the SECURITY DEFINER functions.** SHIPPED 2026-06-13 (PR #32,
+  squash `2a5021f`). One migration
+  (`supabase/migrations/20260613020000_harden_security_definer_fns.sql`): pinned
+  `search_path = public` on the 4 mutable functions, revoked anon/PUBLIC (+authenticated
+  where safe) `EXECUTE` on the 4 SECURITY DEFINER functions — keeping `service_role` on
+  `replace_agreement_lines` and `authenticated`+`service_role` on `is_admin` (RLS policies /
+  F-RLS-03 need it; residual `authenticated_security_definer` = 1 is BY DESIGN), zero grants
+  on the 2 audit triggers; and normalized `generate_order_reference` to `SECURITY INVOKER`
+  (reconciling a prod-vs-migration-files drift — Hakan-approved). Fail-closed pre-guard +
+  post-check. Applied to prod via Supabase MCP. Prod verified: advisor mutable 4→0,
+  anon-definer 4→0, auth-definer 4→1 (is_admin), app smoke green. Preview smoke 8/8.
+  Non-destructive (PITR not required); rollback = re-GRANT. 3 implementer ejects en route
+  (signature-format bug, prod drift, migration-version collision → F-TD-15). Plan archived.
+  **All three CRITICAL SECURITY INSERTIONS (T1/T2/T3) now shipped — resume the Day-2 order.**
 
 After all three ship, resume the Day-2 order below.
 
