@@ -682,7 +682,7 @@ function ComplaintsPageBody() {
               <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Complaint category">
                 {categories.slice(0,6).map(({value,label})=>(
                   <OptionButton key={value} value={value} label={label}
-                    selected={form.category===value} onPress={v=>set('category',v)} activeColour="maroon"/>
+                    selected={form.category===value} onPress={v=>set('category',v as Category)} activeColour="maroon"/>
                 ))}
                 <div className="col-span-3">
                   <OptionButton value="other" label={t('other')}
@@ -709,7 +709,7 @@ function ComplaintsPageBody() {
               <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="How complaint was received">
                 {receivedVia.map(({value,label})=>(
                   <OptionButton key={value} value={value} label={label}
-                    selected={form.receivedVia===value} onPress={v=>set('receivedVia',v)} activeColour="navy"/>
+                    selected={form.receivedVia===value} onPress={v=>set('receivedVia',v as ReceivedVia)} activeColour="navy"/>
                 ))}
               </div>
               <FieldError message={errors.receivedVia}/>

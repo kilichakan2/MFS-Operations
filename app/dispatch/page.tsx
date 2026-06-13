@@ -516,7 +516,7 @@ export default function Screen1Page() {
                     key={value}
                     type="button"
                     onClick={() => {
-                      set('reason', value)
+                      set('reason', value as Reason)
                     }}
                     aria-pressed={isActive}
                     className={[
