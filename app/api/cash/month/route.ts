@@ -106,8 +106,8 @@ export async function GET(req: NextRequest) {
       }))
     )
 
-    const totalIncome  = entriesWithUrls.filter(e => e.type === 'income').reduce((s, e)  => s + Number(e.amount), 0)
-    const totalExpense = entriesWithUrls.filter(e => e.type === 'expense').reduce((s, e) => s + Number(e.amount), 0)
+    const totalIncome  = entriesWithUrls.filter(e => (e as { type?: string }).type === 'income').reduce((s, e)  => s + Number((e as { amount?: unknown }).amount), 0)
+    const totalExpense = entriesWithUrls.filter(e => (e as { type?: string }).type === 'expense').reduce((s, e) => s + Number((e as { amount?: unknown }).amount), 0)
     const closing      = Number(monthRow.opening_balance) + totalIncome - totalExpense
 
     return NextResponse.json({
