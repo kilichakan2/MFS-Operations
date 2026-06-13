@@ -10,6 +10,28 @@ features.
 15 of ~38 roadmap PRs shipped. Required pace: ~2.5–3 PRs/day, every day,
 weekends included. There is NO slack day — slippage surfaces immediately.
 
+### RESCOPE — 2026-06-13 (Hakan-approved)
+
+The 3 CRITICAL SECURITY INSERTIONS (T1/T2/T3) were inserted scope, not slots in
+the day plan. They consumed real days: T1 rode Day 1 (Thu 12 Jun); **T2 + T3
+consumed all of Fri 13 Jun**. So the original "Day 2" content (F-TD-01, F-TD-09)
+never started, and **every content block from Day 2 onward shifts +1 calendar
+day**. New end date: **Sat 28 Jun** (was Fri 27 Jun). Scope unchanged — nothing
+dropped (the "nothing skipped" goal holds). The named fallback (defer Day-16
+nice-to-haves F-INFRA-03 + F-TD-12 to BACKLOG) is held IN RESERVE — triggered
+only if a later block slips again (checkpoint: end of Day-12 block, 24 Jun).
+
+Content-block → new calendar date:
+
+- Day 2 (F-TD-01, F-TD-09) → **Sat 14 Jun** ◀ next
+- Day 3 → Sun 15 Jun · Day 4 → Mon 16 Jun · Days 5–6 → Tue 17–Wed 18 Jun
+- Day 7 → Thu 19 Jun · Day 8 → Fri 20 Jun · Day 9 → Sat 21 Jun
+- Day 10 → Sun 22 Jun · Day 11 → Mon 23 Jun · Day 12 → Tue 24 Jun
+- Days 13–14 (HACCP crunch) → Wed 25–Thu 26 Jun · Day 15 → Fri 27 Jun
+- Day 16 (seal + close) → **Sat 28 Jun**
+
+The "Day N" headers below are CONTENT labels; read dates from this rescope map.
+
 **Delivery loop per unit:** FORGE (4 gates) → ANVIL cert → squash-merge →
 archive plan. Domain units copy the F-13-onward composition-root template
 (`lib/wiring/<domain>.ts`); the ESLint adapter-import guard is already live.
@@ -74,10 +96,10 @@ Run in severity order:
 
 After all three ship, resume the Day-2 order below.
 
-### Day 2 — Fri 13 Jun
+### Day 2 content — rescoped to Sat 14 Jun (see RESCOPE banner)
 
-- **F-TD-01** — clear ~60 pre-existing tsc errors + ESLint nits → `lint`/`tsc` exit 0 on main → ANVIL layers 3+4 go strict for every later unit
-- **F-TD-09** — idempotency-key purge job + Guard W1 TOCTOU fix + nits N1–N3
+- ✅ **F-TD-01** — SHIPPED 2026-06-14 (PR #33, squash `72cb80b`). Cleared all 60 `tsc --noEmit` errors + all 58 `next lint` problems to 0/0; added `typecheck` npm script. ~50 mechanical type fixes (dominant: 27 Supabase embedded-relation casts) + 55 cosmetic lint (jsx-key, unescaped entities, 1 aria) + ~10 documented real-bug fixes (dead duplicate `recalc`, `logNew` dedup → user-visible label flip to `'Yeni Kayıt'`, restored `saveTimer` ref, 2 HACCP exhaustive-deps with safe callback reorder, test no-overlap/always-truthy fixes). ZERO new suppressions (grep-verified). Guard SHIP (0 findings); ANVIL CLEARED (unit 1528/1528, integration 115/115, preview 8/8 @critical, prod smoke 3/3). Non-destructive (no migration/PITR). **Gate consequence: `main` now tsc 0 / lint 0 → ANVIL layers 3+4 run STRICT for every later unit.** En route: surfaced + fixed a global FORGE formatter-hook bug (`format.sh` was imposing prettier defaults on this no-prettier repo; now gated behind config-present). Cert `docs/anvil/2026-06-14-f-td-01-clear-tsc-lint-cert.md`; plan archived.
+- **F-TD-09** — idempotency-key purge job + Guard W1 TOCTOU fix + nits N1–N3 ◀ next
 
 ### Day 3 — Sat 14 Jun
 
