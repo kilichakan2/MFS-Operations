@@ -1135,7 +1135,7 @@ export default function MincePage() {
 
                 {/* Source — mince batches (today's runs) */}
                 <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Source mince batches — today's runs (select if prep comes from mince)</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Source mince batches — today&apos;s runs (select if prep comes from mince)</p>
                   <MinceBatchPicker />
                   {pMinceBatchCodes.length > 0 && (
                     <div className="mt-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -1369,7 +1369,7 @@ export default function MincePage() {
 
             {/* Time sep history */}
             <div>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Today's time separation records</p>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Today&apos;s time separation records</p>
               {tsRecs.length === 0
               ? <div className="bg-white border border-blue-100 rounded-xl px-4 py-5 text-center"><p className="text-slate-400 text-sm">No time separation logs today</p></div>
               : (

@@ -250,7 +250,7 @@ function LineRow({
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   <p className="text-[11px] font-bold text-amber-700">⚠ Not in product list</p>
                   <p className="text-[10px] text-amber-600 mt-0.5">
-                    Are you sure "{freetextInput.trim()}" isn't already in the system?
+                    Are you sure &quot;{freetextInput.trim()}&quot; isn&apos;t already in the system?
                   </p>
                   <div className="flex gap-2 mt-2">
                     <button type="button" onClick={handleFreetextConfirm}

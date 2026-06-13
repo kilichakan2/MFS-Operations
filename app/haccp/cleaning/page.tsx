@@ -496,7 +496,7 @@ export default function CleaningPage() {
         {/* Today's log */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Today's log</p>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Today&apos;s log</p>
             {entries.length > 0 && (
               <span className="bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs font-bold text-green-600">
                 {entries.length} {entries.length === 1 ? 'clean' : 'cleans'} logged
