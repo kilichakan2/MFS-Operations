@@ -74,7 +74,7 @@ function ListItem({
         isSelected ? 'bg-orange-50' : 'bg-white',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EB6619]',
       ].join(' ')}
-      aria-selected={isSelected}
+      aria-pressed={isSelected}
     >
       <span className="flex flex-col gap-0.5 min-w-0">
         <span
