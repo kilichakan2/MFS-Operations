@@ -13,6 +13,7 @@ import RecentActivity from '@/components/RecentActivity'
 import { localDb, syncReferenceData } from '@/lib/localDb'
 import { triggerSync }                from '@/lib/syncEngine'
 import { useCustomers, useProducts } from '@/hooks/useReferenceData'
+import type { TranslationKey } from '@/lib/translations'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ const EMPTY_FORM: FormState = {
 
 // ─── Reason config ────────────────────────────────────────────────────────────
 
-function REASONS(t: (k: string) => string) {
+function REASONS(t: (k: TranslationKey) => string) {
   return [
   { value: 'out_of_stock',   label: t('outOfStock')   },
   { value: 'supplier_short', label: t('supplierShort') },
@@ -515,7 +516,7 @@ export default function Screen1Page() {
                     key={value}
                     type="button"
                     onClick={() => {
-                      set('reason', value)
+                      set('reason', value as Reason)
                     }}
                     aria-pressed={isActive}
                     className={[

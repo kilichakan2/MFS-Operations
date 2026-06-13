@@ -160,9 +160,7 @@ const t = {
   deleteVisit:       { en: 'Delete visit',           tr: 'Ziyareti sil' },
   deleteConfirmMsg:  { en: 'Permanently delete this visit?', tr: 'Bu ziyareti kalıcı olarak sil?' },
   deleteConfirmYes:  { en: 'Yes, delete',            tr: 'Evet, sil' },
-  cancel:            { en: 'Cancel',                 tr: 'İptal' },
   noActivityYet:     { en: 'No visits logged today', tr: 'Bugün ziyaret girilmedi' },
-  loading:           { en: 'Loading…',               tr: 'Yükleniyor…' },
 
   // ── Language toggle ───────────────────────────────────────────────────────
   switchToTr:     { en: 'TR',              tr: 'TR' },
@@ -186,7 +184,6 @@ const t = {
 
   // ─── /visits & /complaints UX strings ─────────────────────────────────────
   myVisits:            { en: 'My Visits',              tr: 'Ziyaretlerim'                 },
-  logNew:              { en: 'Log New',                tr: 'Yeni Kaydet'                  },
   allComplaints:       { en: 'All Complaints',         tr: 'Tüm Şikayetler'               },
   searchByCustomer:    { en: 'Search by customer…',    tr: 'Müşteri ara…'                 },
   chipToday:           { en: 'Today',                  tr: 'Bugün'                        },

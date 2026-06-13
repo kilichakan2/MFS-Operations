@@ -1348,7 +1348,8 @@ describe("FoodFraudDefencePanel logic", () => {
   const past = "2025-01-01";
 
   it("review_due false when next_review in future", () => {
-    expect(!"exists" || future < today).toBe(false);
+    const exists = true;
+    expect(!exists || future < today).toBe(false);
     expect(future < today).toBe(false);
   });
 

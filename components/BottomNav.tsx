@@ -1,6 +1,7 @@
 'use client'
 
 import Link            from 'next/link'
+import type { Route }  from 'next'
 import { usePathname } from 'next/navigation'
 import { MoreHorizontal } from 'lucide-react'
 
@@ -51,7 +52,7 @@ export default function BottomNav({ matrix, onOpenMore }: BottomNavProps) {
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={item.href as Route}
               className={[
                 'relative flex-1 flex flex-col items-center justify-center gap-1 min-h-[56px]',
                 'text-[11px] font-medium uppercase tracking-[0.05em]',

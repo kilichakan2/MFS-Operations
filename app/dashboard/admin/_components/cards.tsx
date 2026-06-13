@@ -117,10 +117,10 @@ export function OpenComplaintsCard({
                   last={i === items.length - 1}
                   widths={['1fr', '120px', '64px', '110px']}
                   cells={[
-                    <strong className="font-semibold text-mfs-black">{c.customer}</strong>,
-                    <span className="text-mfs-neutral-700">{c.category}</span>,
-                    <span className="text-mfs-danger font-semibold">{c.hoursAgo}h</span>,
-                    <span className="text-mfs-neutral-700">{c.loggedBy}</span>,
+                    <strong key="customer" className="font-semibold text-mfs-black">{c.customer}</strong>,
+                    <span key="category" className="text-mfs-neutral-700">{c.category}</span>,
+                    <span key="hoursAgo" className="text-mfs-danger font-semibold">{c.hoursAgo}h</span>,
+                    <span key="loggedBy" className="text-mfs-neutral-700">{c.loggedBy}</span>,
                   ]}
                 />
               ))}
@@ -176,11 +176,11 @@ export function AtRiskCard({
                   last={i === items.length - 1}
                   widths={['1fr', '1fr', '110px']}
                   cells={[
-                    <strong className="font-semibold text-mfs-black">{a.customer}</strong>,
-                    <span className={a.outcome === 'lost' ? 'text-mfs-danger font-semibold' : 'text-mfs-warning font-semibold'}>
+                    <strong key="customer" className="font-semibold text-mfs-black">{a.customer}</strong>,
+                    <span key="outcome" className={a.outcome === 'lost' ? 'text-mfs-danger font-semibold' : 'text-mfs-warning font-semibold'}>
                       {a.outcome === 'lost' ? 'Lost' : 'At risk'}
                     </span>,
-                    <span className="text-mfs-neutral-700">{a.rep}</span>,
+                    <span key="rep" className="text-mfs-neutral-700">{a.rep}</span>,
                   ]}
                 />
               ))}
@@ -389,12 +389,13 @@ export function ProspectsCard({
                   last={i === items.length - 1}
                   widths={['1fr', '120px', '110px']}
                   cells={[
-                    <strong className="font-semibold text-mfs-black">{p.name}</strong>,
+                    <strong key="name" className="font-semibold text-mfs-black">{p.name}</strong>,
                     <StagePill
+                      key="stage"
                       dotClassName={pickStageColor(p.visitType)}
                       label={p.visitType || 'Logged'}
                     />,
-                    <span className="text-mfs-neutral-700">{p.rep}</span>,
+                    <span key="rep" className="text-mfs-neutral-700">{p.rep}</span>,
                   ]}
                 />
               ))}

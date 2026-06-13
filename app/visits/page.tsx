@@ -13,6 +13,7 @@ import { localDb, syncReferenceData } from '@/lib/localDb'
 import { triggerSync }     from '@/lib/syncEngine'
 import type { SelectableItem }  from '@/components/BottomSheetSelector'
 import type { TodayVisit }      from '@/app/api/screen3/today/route'
+import type { TranslationKey }  from '@/lib/translations'
 
 // ─── Pipeline configuration ────────────────────────────────────────────────────
 
@@ -113,13 +114,13 @@ interface VisitNote {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-function VISIT_TYPES(t:(k:string)=>string) { return [
+function VISIT_TYPES(t:(k:TranslationKey)=>string) { return [
   { value:'routine',            label:t('routine')           },
   { value:'new_pitch',          label:t('newPitch')          },
   { value:'complaint_followup', label:t('complaintFollowup') },
   { value:'delivery_issue',     label:t('deliveryIssue')     },
 ]}
-function OUTCOMES(t:(k:string)=>string) { return [
+function OUTCOMES(t:(k:TranslationKey)=>string) { return [
   { value:'positive', label:t('positive'), active:'bg-[#16205B] text-white shadow-md'  },
   { value:'neutral',  label:t('neutral'),  active:'bg-[#5F5E5A] text-white shadow-md'  },
   { value:'at_risk',  label:t('atRisk'),   active:'bg-[#BA7517] text-white shadow-md'  },

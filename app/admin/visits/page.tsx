@@ -236,18 +236,18 @@ function AdminVisitsPageBody() {
                     last={i === rows.length - 1}
                     widths={['1fr', '140px', '120px', '110px', '1.4fr', '110px']}
                     cells={[
-                      <strong className="font-semibold text-mfs-black">{v.customer}</strong>,
-                      <span className="text-mfs-neutral-700">{v.rep}</span>,
-                      <span className="text-mfs-neutral-700 capitalize">{v.visitType || '—'}</span>,
-                      <span className={
+                      <strong key="customer" className="font-semibold text-mfs-black">{v.customer}</strong>,
+                      <span key="rep" className="text-mfs-neutral-700">{v.rep}</span>,
+                      <span key="visitType" className="text-mfs-neutral-700 capitalize">{v.visitType || '—'}</span>,
+                      <span key="outcome" className={
                         v.outcome === 'lost' ? 'text-mfs-danger font-semibold capitalize' :
                         v.outcome === 'at risk' ? 'text-mfs-warning font-semibold capitalize' :
                         'text-mfs-neutral-700 capitalize'
                       }>{v.outcome || '—'}</span>,
-                      <span className="text-mfs-neutral-700 text-xs truncate block">
+                      <span key="notes" className="text-mfs-neutral-700 text-xs truncate block">
                         {v.notes || <span className="text-mfs-neutral-500 italic">no notes</span>}
                       </span>,
-                      <span className="text-mfs-neutral-500 text-xs">{fmtTime(v.createdAt)}</span>,
+                      <span key="createdAt" className="text-mfs-neutral-500 text-xs">{fmtTime(v.createdAt)}</span>,
                     ]}
                   />
                 ))}

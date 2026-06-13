@@ -84,7 +84,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Failed to add line' }, { status: 500 })
   }
 
-  const p = line.product as { id: string; name: string; box_size: string | null; code: string | null } | null
+  const p = line.product as unknown as { id: string; name: string; box_size: string | null; code: string | null } | null
   return NextResponse.json({
     id:                    line.id,
     product_id:            line.product_id,

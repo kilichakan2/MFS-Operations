@@ -16,6 +16,7 @@
 
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import type { Route } from 'next'
 
 const ROLE_HOME: Record<string, string> = {
   admin:     '/dashboard/admin',
@@ -63,7 +64,7 @@ export default function PwaGuard() {
 
     if (!isOk && !isPublic) {
       const home = ROLE_HOME[role] ?? '/'
-      router.replace(home)
+      router.replace(home as Route)
     }
   }, [pathname, router])
 

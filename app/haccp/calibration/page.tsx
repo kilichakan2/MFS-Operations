@@ -533,7 +533,7 @@ export default function CalibrationPage() {
                 {anyFail && (
                   <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
                     <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">Calibration failure — corrective action required</p>
-                    <p className="text-slate-600 text-xs">Submit to open the corrective action form — you'll log the cause, what was done with the probe, and how to prevent recurrence.</p>
+                    <p className="text-slate-600 text-xs">Submit to open the corrective action form — you&apos;ll log the cause, what was done with the probe, and how to prevent recurrence.</p>
                   </div>
                 )}
               </>
@@ -721,7 +721,7 @@ export default function CalibrationPage() {
               </div>
               <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                 <p className="text-green-600 font-bold text-xs uppercase tracking-widest mb-1.5">Certified probe alternative</p>
-                <p className="text-slate-500 text-xs leading-relaxed">HB-001 SOP 3: "Monthly Calibration Procedure / Annually Buy New Calibrated Probe" — a new probe with a UKAS or traceable certificate satisfies the FSA requirement without a monthly manual test.</p>
+                <p className="text-slate-500 text-xs leading-relaxed">HB-001 SOP 3: &quot;Monthly Calibration Procedure / Annually Buy New Calibrated Probe&quot; — a new probe with a UKAS or traceable certificate satisfies the FSA requirement without a monthly manual test.</p>
               </div>
             </div>
           </div>

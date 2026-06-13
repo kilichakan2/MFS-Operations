@@ -637,13 +637,6 @@ export default function ProcessRoomPage() {
   const bothFilled = productVal !== '' && !isNaN(productNum) && roomVal !== '' && !isNaN(roomNum)
   const hasDeviation = (pStat === 'critical') || (rStat === 'amber') || (rStat === 'critical')
 
-  // Submit temperature session
-  const handleTempSubmit = useCallback(() => {
-    if (!bothFilled) return
-    if (hasDeviation) { setShowCCA(true); setTempSubmitPending(true); return }
-    doTempSubmit(null)
-  }, [bothFilled, hasDeviation])
-
   const doTempSubmit = useCallback(async (ca: CAPayload | null) => {
     setShowCCA(false); setTempSubmitPending(false); setSubmitErr('')
     try {
@@ -666,6 +659,13 @@ export default function ProcessRoomPage() {
       }
     } catch { setSubmitErr('Connection error — try again') }
   }, [session, date, productNum, roomNum, loadData])
+
+  // Submit temperature session
+  const handleTempSubmit = useCallback(() => {
+    if (!bothFilled) return
+    if (hasDeviation) { setShowCCA(true); setTempSubmitPending(true); return }
+    doTempSubmit(null)
+  }, [bothFilled, hasDeviation, doTempSubmit])
 
   // Submit diary phase
   const handleDiarySubmit = useCallback(async (phase: Phase, results: Record<string,boolean>, issues: boolean, note: string) => {
@@ -844,7 +844,7 @@ export default function ProcessRoomPage() {
 
             <div className="mx-4 mb-4 border-l-2 border-amber-300 pl-3 py-1" style={{borderRadius:0}}>
               <p className="text-slate-400 text-xs italic leading-relaxed">
-                "Problems are always happening — the important thing is to show what is being done to put things right."
+                &quot;Problems are always happening — the important thing is to show what is being done to put things right.&quot;
               </p>
             </div>
           </div>
@@ -902,7 +902,7 @@ export default function ProcessRoomPage() {
               </div>
               <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
                 <p className="text-amber-700 font-bold text-xs uppercase tracking-widest mb-1.5">Key rule (verbatim — HB-001)</p>
-                <p className="text-slate-600 text-xs leading-relaxed italic">"Do NOT stop cutting. Bring product to production area progressively in small quantities to ensure core temperature does not exceed 4°C."</p>
+                <p className="text-slate-600 text-xs leading-relaxed italic">&quot;Do NOT stop cutting. Bring product to production area progressively in small quantities to ensure core temperature does not exceed 4°C.&quot;</p>
               </div>
             </div>
           </div>

@@ -179,7 +179,7 @@ export default function DocumentRegisterPage() {
             )}
             {searchQ.trim().length >= 2 && !searching && results.length === 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-300 rounded-2xl px-4 py-3 z-20">
-                <p className="text-slate-400 text-sm">No results for "{searchQ}"</p>
+                <p className="text-slate-400 text-sm">No results for &quot;{searchQ}&quot;</p>
               </div>
             )}
           </div>

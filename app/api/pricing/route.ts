@@ -72,11 +72,11 @@ export async function GET(req: NextRequest) {
     created_at:       a.created_at,
     updated_at:       a.updated_at,
     customer_id:      a.customer_id,
-    customer_name:    (a.customer as {id:string;name:string}|null)?.name ?? a.prospect_name ?? 'Unknown',
+    customer_name:    (a.customer as unknown as {id:string;name:string}|null)?.name ?? a.prospect_name ?? 'Unknown',
     is_prospect:      !a.customer_id,
-    rep_id:           (a.rep as {id:string;name:string}|null)?.id   ?? null,
-    rep_name:         (a.rep as {id:string;name:string}|null)?.name ?? 'Unknown',
-    lines:            ((a.price_agreement_lines ?? []) as PriceLine[])
+    rep_id:           (a.rep as unknown as {id:string;name:string}|null)?.id   ?? null,
+    rep_name:         (a.rep as unknown as {id:string;name:string}|null)?.name ?? 'Unknown',
+    lines:            ((a.price_agreement_lines ?? []) as unknown as PriceLine[])
                         .sort((x, y) => x.position - y.position)
                         .map(l => shapeLineToMap(l)),
   }))

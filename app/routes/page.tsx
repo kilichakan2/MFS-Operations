@@ -807,8 +807,8 @@ function RoutesPageInner() {
         lockedPosition:        (s as RouteStop & { lockedPosition?: boolean }).lockedPosition ?? stops[i]?.lockedPosition ?? false,
         priorityNote:          (s as RouteStop & { priorityNote?: string }).priorityNote ?? stops[i]?.priorityNote ?? null,
         estimatedArrival:      (s as RouteStop).estimatedArrival ?? null,
-        driveTimeFromPrevMin:  (s as RouteStop).driveTimeFromPrevMin ?? null,
-        distanceFromPrevKm:    (s as RouteStop).distanceFromPrevKm ?? null,
+        driveTimeFromPrevMin:  (s as RouteStop & { driveTimeFromPrevMin?: number | null }).driveTimeFromPrevMin ?? null,
+        distanceFromPrevKm:    (s as RouteStop & { distanceFromPrevKm?: number | null }).distanceFromPrevKm ?? null,
       }))
 
       const body = JSON.stringify({

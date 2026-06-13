@@ -23,6 +23,7 @@
 
 import { useEffect } from 'react'
 import Link          from 'next/link'
+import type { Route } from 'next'
 import type { NavItem } from '@/components/BottomNav'
 
 interface MoreDrawerProps {
@@ -82,7 +83,7 @@ export default function MoreDrawer({ open, onClose, items }: MoreDrawerProps) {
           {items.map((item) => (
             <li key={item.href}>
               <Link
-                href={item.href}
+                href={item.href as Route}
                 onClick={onClose}
                 className="flex items-center gap-3 min-h-[56px] border-b border-mfs-neutral-200 last:border-b-0"
               >

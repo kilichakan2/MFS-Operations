@@ -193,18 +193,18 @@ function AdminDiscrepanciesPageBody() {
                     last={i === rows.length - 1}
                     widths={['1fr', '1fr', '90px', '120px', '80px', '70px', '110px', '110px']}
                     cells={[
-                      <strong className="font-semibold text-mfs-black">{d.customer}</strong>,
-                      <span className="text-mfs-neutral-700 truncate block">{d.product}</span>,
-                      <span className={
+                      <strong key="customer" className="font-semibold text-mfs-black">{d.customer}</strong>,
+                      <span key="product" className="text-mfs-neutral-700 truncate block">{d.product}</span>,
+                      <span key="status" className={
                         d.status === 'not_sent'
                           ? 'text-mfs-danger font-semibold'
                           : 'text-mfs-warning font-semibold'
                       }>{d.status === 'not_sent' ? 'Not sent' : 'Short'}</span>,
-                      <span className="text-mfs-neutral-700">{cap(d.reason)}</span>,
-                      <span className="text-mfs-black">{d.orderedQty ?? '—'}</span>,
-                      <span className="text-mfs-black">{d.sentQty ?? '—'}</span>,
-                      <span className="text-mfs-neutral-700">{d.loggedBy}</span>,
-                      <span className="text-mfs-neutral-500 text-xs">{fmtTime(d.createdAt)}</span>,
+                      <span key="reason" className="text-mfs-neutral-700">{cap(d.reason)}</span>,
+                      <span key="orderedQty" className="text-mfs-black">{d.orderedQty ?? '—'}</span>,
+                      <span key="sentQty" className="text-mfs-black">{d.sentQty ?? '—'}</span>,
+                      <span key="loggedBy" className="text-mfs-neutral-700">{d.loggedBy}</span>,
+                      <span key="createdAt" className="text-mfs-neutral-500 text-xs">{fmtTime(d.createdAt)}</span>,
                     ]}
                   />
                 ))}

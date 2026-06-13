@@ -459,11 +459,6 @@ export default function ColdStoragePage() {
       unitType: u.unit_type,
     }))
 
-  const handleSubmitAttempt = useCallback(() => {
-    if (deviations.length > 0) { setShowCCA(true); return }
-    doSubmit(null)
-  }, [deviations])
-
   const doSubmit = useCallback(async (ca: CAPayload | null) => {
     setSubmitting(true)
     setShowCCA(false)
@@ -495,6 +490,11 @@ export default function ColdStoragePage() {
     } catch { setSubmitError('Connection error — try again') }
     finally { setSubmitting(false) }
   }, [units, temps, session, date, comments])
+
+  const handleSubmitAttempt = useCallback(() => {
+    if (deviations.length > 0) { setShowCCA(true); return }
+    doSubmit(null)
+  }, [deviations, doSubmit])
 
   if (submitted) {
     return (
