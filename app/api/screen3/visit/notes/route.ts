@@ -67,8 +67,8 @@ export async function GET(req: NextRequest) {
     body:         n.body,
     created_at:   n.created_at,
     updated_at:   n.updated_at,
-    author_id:    (n.author as { id: string; name: string } | null)?.id   ?? null,
-    author_name:  (n.author as { id: string; name: string } | null)?.name ?? 'Unknown',
+    author_id:    (n.author as unknown as { id: string; name: string } | null)?.id   ?? null,
+    author_name:  (n.author as unknown as { id: string; name: string } | null)?.name ?? 'Unknown',
   }))
 
   return NextResponse.json({ notes: shaped })
@@ -128,8 +128,8 @@ export async function POST(req: NextRequest) {
       body:        note.body,
       created_at:  note.created_at,
       updated_at:  note.updated_at,
-      author_id:   (note.author as { id: string; name: string } | null)?.id   ?? null,
-      author_name: (note.author as { id: string; name: string } | null)?.name ?? 'Unknown',
+      author_id:   (note.author as unknown as { id: string; name: string } | null)?.id   ?? null,
+      author_name: (note.author as unknown as { id: string; name: string } | null)?.name ?? 'Unknown',
     },
   }, { status: 201 })
 }
