@@ -231,7 +231,7 @@ export async function GET(req: NextRequest) {
     // Group visits today by rep — also keep individual visit list for drill-down
     const visitsByRepMap = new Map<string, {
       rep: string; count: number; outcomes: Record<string, number>
-      visits: { id: string; customer: string; visitType: string; outcome: string }[]
+      visits: { id: string; customer: string; visitType: string; outcome: string; pipelineStatus: string; notes: string | null }[]
     }>()
     for (const v of (visitsTodayRes.data ?? [])) {
       const vr  = v as Record<string, unknown>
