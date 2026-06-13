@@ -637,13 +637,6 @@ export default function ProcessRoomPage() {
   const bothFilled = productVal !== '' && !isNaN(productNum) && roomVal !== '' && !isNaN(roomNum)
   const hasDeviation = (pStat === 'critical') || (rStat === 'amber') || (rStat === 'critical')
 
-  // Submit temperature session
-  const handleTempSubmit = useCallback(() => {
-    if (!bothFilled) return
-    if (hasDeviation) { setShowCCA(true); setTempSubmitPending(true); return }
-    doTempSubmit(null)
-  }, [bothFilled, hasDeviation])
-
   const doTempSubmit = useCallback(async (ca: CAPayload | null) => {
     setShowCCA(false); setTempSubmitPending(false); setSubmitErr('')
     try {
@@ -666,6 +659,13 @@ export default function ProcessRoomPage() {
       }
     } catch { setSubmitErr('Connection error — try again') }
   }, [session, date, productNum, roomNum, loadData])
+
+  // Submit temperature session
+  const handleTempSubmit = useCallback(() => {
+    if (!bothFilled) return
+    if (hasDeviation) { setShowCCA(true); setTempSubmitPending(true); return }
+    doTempSubmit(null)
+  }, [bothFilled, hasDeviation, doTempSubmit])
 
   // Submit diary phase
   const handleDiarySubmit = useCallback(async (phase: Phase, results: Record<string,boolean>, issues: boolean, note: string) => {
