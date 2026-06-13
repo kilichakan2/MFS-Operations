@@ -25,7 +25,7 @@ async function checkAccess(lineId: string, userId: string, role: string): Promis
     .single()
 
   if (!data) return false
-  const agreement = data.price_agreements as { agreed_by: string } | null
+  const agreement = data.price_agreements as unknown as { agreed_by: string } | null
   return agreement?.agreed_by === userId
 }
 
@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Update failed' }, { status: 500 })
   }
 
-  const p = data.product as { id: string; name: string; box_size: string | null; code: string | null } | null
+  const p = data.product as unknown as { id: string; name: string; box_size: string | null; code: string | null } | null
   return NextResponse.json({
     id:                    data.id,
     product_id:            data.product_id,

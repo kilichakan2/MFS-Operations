@@ -52,7 +52,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   }
 
   const today = londonToday()
-  const rep = data.rep as { id: string; name: string } | null
+  const rep = data.rep as unknown as { id: string; name: string } | null
 
   return NextResponse.json({
     id:               data.id,
@@ -65,11 +65,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     created_at:       data.created_at,
     updated_at:       data.updated_at,
     customer_id:      data.customer_id,
-    customer_name:    (data.customer as { id: string; name: string } | null)?.name ?? data.prospect_name ?? 'Unknown',
+    customer_name:    (data.customer as unknown as { id: string; name: string } | null)?.name ?? data.prospect_name ?? 'Unknown',
     is_prospect:      !data.customer_id,
     rep_id:           rep?.id   ?? null,
     rep_name:         rep?.name ?? 'Unknown',
-    lines:            ((data.price_agreement_lines ?? []) as PriceLine[])
+    lines:            ((data.price_agreement_lines ?? []) as unknown as PriceLine[])
                         .sort((a, b) => a.position - b.position)
                         .map(shapeLine),
   })
@@ -151,7 +151,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         .single()
 
       if (full) {
-        const lines = ((full.price_agreement_lines ?? []) as EmailLine[])
+        const lines = ((full.price_agreement_lines ?? []) as unknown as EmailLine[])
           .map(l => ({
             product_name: (l.product as {name:string}|null)?.name ?? l.product_name_override ?? 'Unknown',
             box_size:     (l.product as {name:string;box_size:string|null}|null)?.box_size ?? null,
@@ -164,9 +164,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         await sendPricingEmail({
           id:               full.id,
           reference_number: full.reference_number,
-          customer_name:    (full.customer as {name:string}|null)?.name ?? full.prospect_name ?? 'Unknown',
+          customer_name:    (full.customer as unknown as {name:string}|null)?.name ?? full.prospect_name ?? 'Unknown',
           is_prospect:      !full.customer_id,
-          rep_name:         (full.rep as {name:string}|null)?.name ?? 'Unknown',
+          rep_name:         (full.rep as unknown as {name:string}|null)?.name ?? 'Unknown',
           valid_from:       full.valid_from,
           valid_until:      full.valid_until ?? null,
           notes:            full.notes ?? null,
