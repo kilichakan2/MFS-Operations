@@ -22,6 +22,7 @@
  */
 
 import Link            from 'next/link'
+import type { Route }  from 'next'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight }   from 'lucide-react'
@@ -98,7 +99,7 @@ export default function DesktopSidebar({ items }: DesktopSidebarProps) {
             return (
               <li key={item.href} className="relative">
                 <Link
-                  href={item.href}
+                  href={item.href as Route}
                   aria-current={active ? 'page' : undefined}
                   className={[
                     'relative flex items-center h-12 overflow-hidden',
