@@ -136,7 +136,7 @@ describe('Butchery acknowledgment checklist', () => {
 })
 
 describe('Document version tracking', () => {
-  const CURRENT = 'V2.0'
+  const CURRENT: string = 'V2.0'
 
   it('no warning when version matches current', () => {
     const version = 'V2.0'
