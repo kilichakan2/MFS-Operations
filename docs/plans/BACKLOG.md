@@ -207,6 +207,21 @@ the trail matters.
 
 ---
 
+## Migration hygiene (F-TD-)
+
+### F-TD-15 — Migration filename convention collides for same-day migrations
+
+- **Deferred:** 2026-06-13 (during T3)
+- **What:** The repo's `YYYYMMDD_NNN_name.sql` naming is latent-broken — the Supabase CLI derives a migration's `version` from the digits **before the first underscore**, so `20260613_001_…` and `20260613_002_…` both register as version `20260613` and collide (`schema_migrations_pkey` 23505) on `db:reset`. Never surfaced because every prior date had exactly one migration; T3 was the first second-same-day migration and hit it.
+- **Fix applied for T3:** T3 uses a full 14-digit timestamp `20260613020000_harden_security_definer_fns.sql` (unique version, sorts after T2). Going forward all migrations should use full 14-digit timestamps (`YYYYMMDDHHMMSS_name.sql`, like `20260101000000_baseline.sql`), not `YYYYMMDD_NNN`.
+- **Why deferred (residual):** already-shipped `YYYYMMDD_NNN` files (incl. T2 `20260613_001`) are grandfathered — each is the sole migration for its date, so no live collision; renaming files already recorded in prod `schema_migrations` is risky and unnecessary. Deferred work: (a) codify the full-timestamp convention in CLAUDE.md / a lint check; (b) optionally backfill-rename historical files in a migration-hygiene pass.
+- **Detail:** `docs/plans/2026-06-13-t3-harden-security-definer-fns.md` §"Exact file to change".
+- **Priority:** Medium — a footgun that silently rolls back a same-day migration; cheap to codify.
+- **Owner unit:** unscheduled (migration-hygiene)
+- **Status:** open
+
+---
+
 ## Infrastructure follow-ups (F-INFRA-)
 
 ### F-INFRA-03 — Run the preview smoke in CI (GitHub Actions)
