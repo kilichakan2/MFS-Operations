@@ -119,14 +119,14 @@ function AdminProspectsPageBody() {
                     last={i === rows.length - 1}
                     widths={['1fr', '100px', '140px', '120px', '120px', '140px']}
                     cells={[
-                      <strong className="font-semibold text-mfs-black">{p.name}</strong>,
-                      <span className="text-mfs-neutral-700">{p.postcode || '—'}</span>,
+                      <strong key="name" className="font-semibold text-mfs-black">{p.name}</strong>,
+                      <span key="postcode" className="text-mfs-neutral-700">{p.postcode || '—'}</span>,
                       p.stage
-                        ? <StagePill dotClassName={pickStageColor(p.stage)} label={p.stage} />
-                        : <span className="text-mfs-neutral-500">—</span>,
-                      <span className="text-mfs-neutral-700 capitalize">{p.visitType || '—'}</span>,
-                      <span className="text-mfs-neutral-700 capitalize">{p.outcome || '—'}</span>,
-                      <span className="text-mfs-neutral-700">{p.rep}</span>,
+                        ? <StagePill key="stage" dotClassName={pickStageColor(p.stage)} label={p.stage} />
+                        : <span key="stage" className="text-mfs-neutral-500">—</span>,
+                      <span key="visitType" className="text-mfs-neutral-700 capitalize">{p.visitType || '—'}</span>,
+                      <span key="outcome" className="text-mfs-neutral-700 capitalize">{p.outcome || '—'}</span>,
+                      <span key="rep" className="text-mfs-neutral-700">{p.rep}</span>,
                     ]}
                   />
                 ))}

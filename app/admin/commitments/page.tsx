@@ -117,15 +117,15 @@ function AdminCommitmentsPageBody() {
                     last={i === rows.length - 1}
                     widths={['1fr', '1.5fr', '140px', '100px', '110px']}
                     cells={[
-                      <strong className="font-semibold text-mfs-black">{c.customer}</strong>,
-                      <span className="text-mfs-neutral-700 truncate block">{c.detail || '—'}</span>,
-                      <span className="text-mfs-neutral-700">{c.rep}</span>,
-                      <span className={
+                      <strong key="customer" className="font-semibold text-mfs-black">{c.customer}</strong>,
+                      <span key="detail" className="text-mfs-neutral-700 truncate block">{c.detail || '—'}</span>,
+                      <span key="rep" className="text-mfs-neutral-700">{c.rep}</span>,
+                      <span key="status" className={
                         c.status === 'overdue'
                           ? 'text-mfs-danger font-semibold uppercase'
                           : 'text-mfs-neutral-700 font-semibold uppercase'
                       }>{c.status}</span>,
-                      <span className="text-mfs-black">{c.hoursAgo}h</span>,
+                      <span key="hoursAgo" className="text-mfs-black">{c.hoursAgo}h</span>,
                     ]}
                   />
                 ))}

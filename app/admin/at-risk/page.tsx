@@ -117,15 +117,15 @@ function AdminAtRiskPageBody() {
                     last={i === rows.length - 1}
                     widths={['1fr', '100px', '1fr', '140px', '110px']}
                     cells={[
-                      <strong className="font-semibold text-mfs-black">{a.customer}</strong>,
-                      <span className={
+                      <strong key="customer" className="font-semibold text-mfs-black">{a.customer}</strong>,
+                      <span key="outcome" className={
                         a.outcome === 'lost'
                           ? 'text-mfs-danger font-semibold'
                           : 'text-mfs-warning font-semibold'
                       }>{a.outcome === 'lost' ? 'Lost' : 'At risk'}</span>,
-                      <span className="text-mfs-neutral-700">{a.reason}</span>,
-                      <span className="text-mfs-neutral-700">{a.rep}</span>,
-                      <span className="text-mfs-black">{a.hoursAgo}h</span>,
+                      <span key="reason" className="text-mfs-neutral-700">{a.reason}</span>,
+                      <span key="rep" className="text-mfs-neutral-700">{a.rep}</span>,
+                      <span key="hoursAgo" className="text-mfs-black">{a.hoursAgo}h</span>,
                     ]}
                   />
                 ))}
