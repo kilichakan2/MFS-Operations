@@ -38,10 +38,10 @@ export async function GET(req: NextRequest) {
     id:             c.id,
     body:           c.body,
     created_at:     c.created_at,
-    posted_by_id:   (c.poster as { id: string; name: string } | null)?.id   ?? null,
-    posted_by_name: (c.poster as { id: string; name: string } | null)?.name ?? 'Unknown',
-    recipient_id:   (c.recipient as { id: string; name: string } | null)?.id   ?? null,
-    recipient_name: (c.recipient as { id: string; name: string } | null)?.name ?? null,
+    posted_by_id:   (c.poster as unknown as { id: string; name: string } | null)?.id   ?? null,
+    posted_by_name: (c.poster as unknown as { id: string; name: string } | null)?.name ?? 'Unknown',
+    recipient_id:   (c.recipient as unknown as { id: string; name: string } | null)?.id   ?? null,
+    recipient_name: (c.recipient as unknown as { id: string; name: string } | null)?.name ?? null,
   }))
 
   return NextResponse.json({ compliments })
@@ -84,8 +84,8 @@ export async function POST(req: NextRequest) {
   // Send email notification — await before responding (no fire-and-forget in serverless)
   await sendComplimentEmail({
     body:          c.body,
-    postedByName:  (c.poster  as { id: string; name: string } | null)?.name ?? 'Someone',
-    recipientName: (c.recipient as { id: string; name: string } | null)?.name ?? null,
+    postedByName:  (c.poster  as unknown as { id: string; name: string } | null)?.name ?? 'Someone',
+    recipientName: (c.recipient as unknown as { id: string; name: string } | null)?.name ?? null,
   }).catch(err => console.error('[compliments POST] email error:', err))
 
   return NextResponse.json({
@@ -93,10 +93,10 @@ export async function POST(req: NextRequest) {
       id:             c.id,
       body:           c.body,
       created_at:     c.created_at,
-      posted_by_id:   (c.poster as { id: string; name: string } | null)?.id   ?? null,
-      posted_by_name: (c.poster as { id: string; name: string } | null)?.name ?? 'Unknown',
-      recipient_id:   (c.recipient as { id: string; name: string } | null)?.id   ?? null,
-      recipient_name: (c.recipient as { id: string; name: string } | null)?.name ?? null,
+      posted_by_id:   (c.poster as unknown as { id: string; name: string } | null)?.id   ?? null,
+      posted_by_name: (c.poster as unknown as { id: string; name: string } | null)?.name ?? 'Unknown',
+      recipient_id:   (c.recipient as unknown as { id: string; name: string } | null)?.id   ?? null,
+      recipient_name: (c.recipient as unknown as { id: string; name: string } | null)?.name ?? null,
     },
   }, { status: 201 })
 }
