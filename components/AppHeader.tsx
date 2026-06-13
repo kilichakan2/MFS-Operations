@@ -19,7 +19,7 @@ function getClientRole(): Role {
 
 interface AppHeaderProps {
   title?:    string
-  maxWidth?: 'lg' | '2xl' | '4xl'
+  maxWidth?: 'lg' | '2xl' | '4xl' | 'full'
   actions?:  React.ReactNode
 }
 
