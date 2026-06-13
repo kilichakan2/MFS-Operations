@@ -8,7 +8,7 @@
  * Phase 2: Section 3.2 Training with live data panel
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import {
   REVIEW_SECTIONS,
@@ -1318,6 +1318,7 @@ export default function AnnualReviewPage() {
   const [saveErr,   setSaveErr]   = useState('')
   const [flash,     setFlash]     = useState('')
   const [sectionData, setSectionData] = useState<SectionData>({})
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // New review modal
   const [showModal,  setShowModal]  = useState(false)
