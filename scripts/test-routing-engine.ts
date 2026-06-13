@@ -764,8 +764,9 @@ test('Pass 4 uses TRAFFIC_AWARE_OPTIMAL for future departure, TRAFFIC_AWARE for 
   }
   eq(withFuture.routingPreference, 'TRAFFIC_AWARE_OPTIMAL')
 
+  const noDepartureISO: string | null = null
   const noDeparture = {
-    routingPreference:     (null as string | null) ? 'TRAFFIC_AWARE_OPTIMAL' : 'TRAFFIC_AWARE',
+    routingPreference:     noDepartureISO ? 'TRAFFIC_AWARE_OPTIMAL' : 'TRAFFIC_AWARE',
     optimizeWaypointOrder: false,
   }
   eq(noDeparture.routingPreference, 'TRAFFIC_AWARE')
