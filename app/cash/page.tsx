@@ -669,14 +669,6 @@ function CashTab({ role }: { role: string }) {
       )}
     </div>
   )
-
-  // Nested helper so it has access to summary
-  function recalc(prev: MonthData, entries: CashEntry[]): MonthData {
-    const totalIn  = entries.filter(e => e.type === 'income').reduce((s, e)  => s + e.amount, 0)
-    const totalOut = entries.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0)
-    const opening  = prev.summary?.opening ?? 0
-    return { ...prev, entries, summary: { opening, total_income: totalIn, total_expense: totalOut, closing: opening + totalIn - totalOut } }
-  }
 }
 
 // ─── Cheques Tab ──────────────────────────────────────────────────────────────
