@@ -46,11 +46,17 @@ Run in severity order:
   prod smoke green incl. forged-admin-cookie bounce verified live. Residual
   logged as **F-TD-14** (32 `/api/haccp/*` routes on unsigned `mfs_role` —
   rides T4). Plan archived. One-time mass re-login occurred at deploy.
-- **T2 — enable RLS on the 42 exposed tables (step-1-only fast pass).** `ALTER
-TABLE … ENABLE ROW LEVEL SECURITY` on all 42. Safe under service-role (the app
-  bypasses RLS), closes the PostgREST anon exposure immediately. Production
-  migration via Supabase MCP `apply_migration`, tested on local first, rollback
-  block. Policies still land per-domain in F-RLS-04a–i. **STATUS: queued.**
+- ✅ **T2 — enable RLS on the 42 exposed tables (step-1-only fast pass).** SHIPPED
+  2026-06-13 (PR #31, squash `90aa565`). One migration
+  (`supabase/migrations/20260613_001_enable_rls_42_tables.sql`): drift-guard DO-block
+  - 42× `ALTER TABLE … ENABLE ROW LEVEL SECURITY` (ENABLE never FORCE) + FORCE/enabled
+    post-check, all in one transaction. Applied to prod via Supabase MCP
+    `apply_migration`. Full FORGE + ANVIL cert
+    (`docs/anvil/2026-06-13-t2-enable-rls-cert.md`); preview smoke 8/8; prod verified —
+    advisor `rls_disabled_in_public` ERROR **42 → 0** (now 42× INFO `rls_enabled_no_policy`,
+    benign deny-all), anon-key read of `cash_entries`/`haccp_health_records` → `[]` on live
+    data, app smoke green. Non-destructive (PITR not required); rollback = DISABLE on the 42.
+    Per-table policies still land per-domain in F-RLS-04a–i. Plan archived.
 - **T3 — harden the SECURITY DEFINER functions.** Revoke anon/authenticated
   `EXECUTE` on `replace_agreement_lines` (mutates pricing!), `is_admin`,
   `orders_audit_trigger`, `order_lines_audit_trigger` (or `SECURITY INVOKER`); set
