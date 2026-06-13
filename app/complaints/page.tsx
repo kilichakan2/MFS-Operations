@@ -12,6 +12,7 @@ import { useCustomers }    from '@/hooks/useReferenceData'
 import { localDb, syncReferenceData } from '@/lib/localDb'
 import { triggerSync }     from '@/lib/syncEngine'
 import type { SelectableItem } from '@/components/BottomSheetSelector'
+import type { TranslationKey } from '@/lib/translations'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ interface ValidationErrors {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-function CATEGORIES(t: (k:string)=>string) {
+function CATEGORIES(t: (k:TranslationKey)=>string) {
   return [
     { value:'weight',       label:t('weight')       },
     { value:'quality',      label:t('quality')      },
@@ -72,7 +73,7 @@ function CATEGORIES(t: (k:string)=>string) {
     { value:'other',        label:t('other')        },
   ]
 }
-function RECEIVED_VIA(t: (k:string)=>string) {
+function RECEIVED_VIA(t: (k:TranslationKey)=>string) {
   return [
     { value:'phone',      label:t('phone')    },
     { value:'in_person',  label:t('inPerson') },
