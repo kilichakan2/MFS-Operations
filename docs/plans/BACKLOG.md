@@ -50,7 +50,7 @@ the trail matters.
 - **Detail:** F-07 plan §5 Risk #7 (updated) + F-07 cert (when written)
 - **Also (from F-09 audit, 2026-06-11):** when the lazy-getter fix lands, ALSO move `lib/supabase.ts` → `lib/adapters/supabase/client.ts` so all Supabase code lives inside the one adapter folder (today the shared client is Supabase code living outside the box labelled Supabase).
 - **Owner unit:** unscheduled — pick up after Phase 1 closes (F-09)
-- **Status:** open
+- **Status:** done (PR #35 / squash `e0c5fcd`, shipped + prod-verified 2026-06-14). Full close: new lazy `lib/adapters/supabase/client.ts` (`getSupabaseService()` memoized + back-compat `supabaseService` lazy Proxy → zero `createClient` at module-load), codemod of 88 import paths, deleted old `lib/supabase.ts` + the `tests/setup.ts` env-stub shim, synced 4 lint mirrors. Acceptance proof: unit 1533→1536 green with the shim gone (`setup 0ms`); integration 122; preview 8/8; prod smoke 5/5 non-500 (`kds/orders` 200 through the proxy). No migration. Cert `docs/anvil/2026-06-14-f-td-04-lazy-supabase-client-cert.md`. Residual 🟡 → F-TD-17 (WebKit E2E flake, harness not app).
 
 ### F-TD-05 — Architecture-pin test only covers `OrdersService.ts`
 

@@ -46,3 +46,12 @@ PITR confirmed: N/A — no destructive migration, no data at risk.
 ## Verdict
 
 ✅ CLEARED FOR PRODUCTION
+
+## Production ship record
+
+- **Merged:** 2026-06-14 — PR #35 squashed to `e0c5fcd` on `main`.
+- **Deploy:** Vercel `dpl_ARtjrAKYC9RkGyjoNDGYkzV8YrE4` (target=production, sha `e0c5fcd`) → READY, aliased to `www.mfsops.com` + `mfsops.com`.
+- **No migration** → no `supabase db push`, no PITR.
+- **Pre-ship preview smoke:** 8/8 @critical (chromium) on `mfs-operations-git-f-td-0-031070-…vercel.app`; DB-identity probe passed (seed-born preview DB).
+- **Post-deploy production smoke (5/5, zero 500s):** `GET /` 307 (login redirect); `GET /api/haccp/today-status` 307 (rewritten import, auth redirect — alive); `GET /api/kds/orders` **200** (real data served through the lazy proxy — proves the client constructs against prod env on first DB call); `POST /api/auth/login` bogus creds 400 (clean handled rejection through the proxy, no crash); `GET /dashboard` forged cookie 307 (auth guard redirect). No route 500'd → the 88-route import rewrite + lazy client are healthy in production.
+- **Rollback (unused):** `git revert` of `e0c5fcd` + redeploy. No data restore.

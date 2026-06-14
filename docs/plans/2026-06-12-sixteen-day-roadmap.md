@@ -103,7 +103,7 @@ After all three ship, resume the Day-2 order below.
 
 ### Day 3 — Sat 14 Jun
 
-- **F-TD-04** — lazy `getSupabaseService()` getter + move `lib/supabase.ts` → `lib/adapters/supabase/client.ts`
+- **F-TD-04** ✅ SHIPPED (2026-06-14, PR #35 / `e0c5fcd`, prod-verified) — lazy `getSupabaseService()` + back-compat proxy, moved `lib/supabase.ts` → `lib/adapters/supabase/client.ts`, codemod 88 imports, deleted env-stub shim. unit 1536 (shim gone) · int 122 · preview 8/8 · prod smoke 5/5.
 - **F-10** — `PasswordHasher` port + bcrypt adapter (4 routes)
 - **F-12** — `LLMExtractor` port + Anthropic adapter (`admin/import`)
 
