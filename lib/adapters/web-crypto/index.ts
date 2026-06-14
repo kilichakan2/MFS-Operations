@@ -10,3 +10,4 @@
  */
 
 export { createWebCryptoSessionTokens } from "./SessionTokens";
+export { createWebCryptoDbTokenMinter } from "./DbTokenMinter";

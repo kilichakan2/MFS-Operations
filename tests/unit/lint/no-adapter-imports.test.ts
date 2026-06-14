@@ -243,4 +243,49 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(ANTHROPIC_MESSAGE);
   });
+
+  // ── (16) F-RLS-03 ──────────────────────────────────────────────
+  // The new per-request authenticated client is built with `createClient`
+  // from @supabase/supabase-js. No NEW lint rule is needed: the existing
+  // F-04 ban on @supabase/supabase-js already fences `createClient` (and
+  // therefore the anon-key authenticated client) inside the adapter folder.
+  // This pin proves that wall stands for a route — so the anon client can't
+  // be constructed in app code, and SUPABASE_JWT_SECRET has no createClient
+  // to feed there.
+  it("bans @supabase/supabase-js (the anon authenticated client's createClient) inside app/api routes", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import { createClient } from '@supabase/supabase-js'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+    expect(messages[0].message).toContain(F04_MESSAGE);
+  });
+
+  // ── (17) F-RLS-03 ──────────────────────────────────────────────
+  // The new authenticatedClient module lives under lib/adapters/supabase/.
+  // Like every other adapter it must not be imported from services/usecases
+  // (F-TD-11 pattern ban) — wiring composes it. This pins the new surface
+  // inside its adapter folder.
+  it("bans importing the new authenticatedClient adapter from lib/services (F-TD-11 pattern)", async () => {
+    const messages = await lint(
+      "lib/services/Foo.ts",
+      "import { authenticatedClientForCaller } from '@/lib/adapters/supabase/authenticatedClient'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+    expect(messages[0].message).toContain(FTD11_MESSAGE);
+  });
+
+  // ── (18) F-RLS-03 ──────────────────────────────────────────────
+  // The authenticated client + requireServiceRole ARE allowed inside their
+  // own adapter folder (the one place createClient is permitted). Sanity pin
+  // that the override doesn't over-fence the new file.
+  it("allows @supabase/supabase-js inside lib/adapters/supabase/authenticatedClient.ts (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/supabase/authenticatedClient.ts",
+      "import { createClient } from '@supabase/supabase-js'\n",
+    );
+    expect(messages).toEqual([]);
+  });
 });
