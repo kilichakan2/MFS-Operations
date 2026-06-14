@@ -93,3 +93,26 @@ PITR: **N/A — non-destructive** (no schema change, no data touched).
 ✅ CLEARED FOR PRODUCTION
 
 (Conductor handles the Lock gate / ship with Hakan — the runner does not ship.)
+
+## Production Ship Record
+
+- **SHIPPED 2026-06-14.** PR #37 squash-merged to `main` as `e4b9740`, feature branch deleted.
+- **Production deploy:** `dpl_6jTnDFchmJ96zEGm2ZNKJnGzydLM`, target=production, **READY** (~48s build), commit `e4b9740`, auto-promoted to `www.mfsops.com` + `mfsops.com`.
+- **No migration / no PITR** (non-destructive).
+- **Production smoke (post-deploy, www.mfsops.com):** all non-500, app healthy.
+  - `GET /` → 307 (app alive, redirect to login)
+  - `POST /api/auth/login` bogus → 400 (login route validates; untouched by F-12)
+  - `POST /api/admin/import` no-auth → 307 (auth middleware redirect — identical to an
+    untouched API route; no 500)
+  - `GET /api/reference` → 307 (same middleware redirect; no 500)
+  - Caveat (honest): the import route sits behind auth middleware, so an unauthenticated
+    prod probe redirects (307) before reaching the handler — it cannot exercise the F-12
+    handler directly, and an authenticated probe would hit the real Anthropic API (the
+    deliberate scope boundary). The handler is proven on this exact commit by ANVIL
+    (unit 1581, integration 122, preview 8/8 @critical). Prod confirms deploy health /
+    no regression.
+- **Baselines held:** tsc 0, lint 0, unit 1581, integration 122.
+- **Rollback (if needed):** `vercel rollback` to the prior production deploy
+  `dpl_AgUmW8v5ZXkYq1GohPaePsgy6afB` (F-10, `5393c33`); code-only, no data to restore.
+
+✅ SHIPPED — CLEARED FOR PRODUCTION, live on www.mfsops.com.
