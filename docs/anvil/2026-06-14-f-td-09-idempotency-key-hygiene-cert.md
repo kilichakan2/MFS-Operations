@@ -7,7 +7,7 @@
 
 Date: 2026-06-14
 App: MFS-Operations (Mangal Food Services — operations app)
-Branch: `f-td-09-idempotency-key-hygiene`
+Branch: f-td-09-idempotency-key-hygiene
 PR: #34
 
 ## Scope — what this certificate actually covers
