@@ -54,6 +54,14 @@ const BCRYPT_MESSAGE =
   "bcryptjs may only be imported inside lib/adapters/bcrypt/. " +
   "See ADR-0002 / F-10.";
 
+// F-12 — the @anthropic-ai/sdk forbidden message. Drift-catcher pin: asserted
+// verbatim against the SHIPPED .eslintrc.json (loaded from disk), so a typo in
+// the config's message fails this test.
+const ANTHROPIC_MESSAGE =
+  "Use the LLMExtractor port via @/lib/wiring/llm. " +
+  "@anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/. " +
+  "See ADR-0002 / F-12.";
+
 /**
  * Load the SHIPPED config from disk so the pin fails if the guard is
  * weakened or deleted in `.eslintrc.json` itself. `extends` is removed
@@ -195,5 +203,44 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(BCRYPT_MESSAGE);
+  });
+
+  // ── (12) F-12 ──────────────────────────────────────────────────
+  it("bans @anthropic-ai/sdk inside lib/services (services override RESTATES the path)", async () => {
+    const messages = await lint(
+      "lib/services/OrdersService.ts",
+      "import Anthropic from '@anthropic-ai/sdk'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (13) F-12 ──────────────────────────────────────────────────
+  it("bans @anthropic-ai/sdk inside app/api routes", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import Anthropic from '@anthropic-ai/sdk'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (14) F-12 ──────────────────────────────────────────────────
+  it("allows @anthropic-ai/sdk inside lib/adapters/anthropic (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/anthropic/LLMExtractor.ts",
+      "import Anthropic from '@anthropic-ai/sdk'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (15) F-12 ──────────────────────────────────────────────────
+  it("reports the shipped @anthropic-ai/sdk message text verbatim", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import Anthropic from '@anthropic-ai/sdk'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(ANTHROPIC_MESSAGE);
   });
 });

@@ -32,3 +32,4 @@ export {
   createFakeUsersRepository,
   fakeUsersRepository,
 } from "./UsersRepository";
+export { createFakeLLMExtractor, fakeLLMExtractor } from "./LLMExtractor";

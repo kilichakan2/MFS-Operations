@@ -34,3 +34,8 @@ uniquely-numbered dummy row is planted in every throwaway database — if the
 robot can see that row through the deployed app, the app is definitely
 talking to a throwaway database, not the real one. No test code anywhere
 creates this row; only seed.sql does.
+
+**LLMExtractor** — the app's own socket for "turn this pasted text into
+mapped customer or product rows." The AI vendor (currently Anthropic) plugs
+in behind it via an adapter; the import screen and route never see the
+vendor. Swapping the AI = one new adapter + one wiring line.

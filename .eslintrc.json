@@ -12,6 +12,10 @@
           {
             "name": "bcryptjs",
             "message": "Use the PasswordHasher port via @/lib/wiring/password. bcryptjs may only be imported inside lib/adapters/bcrypt/. See ADR-0002 / F-10."
+          },
+          {
+            "name": "@anthropic-ai/sdk",
+            "message": "Use the LLMExtractor port via @/lib/wiring/llm. @anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/. See ADR-0002 / F-12."
           }
         ]
       }
@@ -22,6 +26,7 @@
       "files": [
         "lib/adapters/supabase/**/*.ts",
         "lib/adapters/bcrypt/**/*.ts",
+        "lib/adapters/anthropic/**/*.ts",
         "tests/**"
       ],
       "rules": {
@@ -42,6 +47,10 @@
               {
                 "name": "bcryptjs",
                 "message": "Use the PasswordHasher port via @/lib/wiring/password. bcryptjs may only be imported inside lib/adapters/bcrypt/. See ADR-0002 / F-10."
+              },
+              {
+                "name": "@anthropic-ai/sdk",
+                "message": "Use the LLMExtractor port via @/lib/wiring/llm. @anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/. See ADR-0002 / F-12."
               }
             ],
             "patterns": [

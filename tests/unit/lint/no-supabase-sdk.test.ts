@@ -44,6 +44,14 @@ const BCRYPT_FORBIDDEN_MESSAGE =
   "bcryptjs may only be imported inside lib/adapters/bcrypt/. " +
   "See ADR-0002 / F-10.";
 
+// F-12 — @anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/.
+// The string below MUST be byte-identical to the one in .eslintrc.json and
+// no-adapter-imports.test.ts (the no-adapter-imports pin asserts it verbatim).
+const ANTHROPIC_FORBIDDEN_MESSAGE =
+  "Use the LLMExtractor port via @/lib/wiring/llm. " +
+  "@anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/. " +
+  "See ADR-0002 / F-12.";
+
 /**
  * The F-04 config under test. Mirrors `.eslintrc.json` exactly.
  *
@@ -76,6 +84,10 @@ const f04Config = {
             name: "bcryptjs",
             message: BCRYPT_FORBIDDEN_MESSAGE,
           },
+          {
+            name: "@anthropic-ai/sdk",
+            message: ANTHROPIC_FORBIDDEN_MESSAGE,
+          },
         ],
       },
     ],
@@ -85,6 +97,7 @@ const f04Config = {
       files: [
         "lib/adapters/supabase/**/*.ts",
         "lib/adapters/bcrypt/**/*.ts",
+        "lib/adapters/anthropic/**/*.ts",
         "tests/**",
       ],
       rules: {
@@ -218,5 +231,36 @@ describe("F-10 no-restricted-imports — bcryptjs may only live in lib/adapters/
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(BCRYPT_FORBIDDEN_MESSAGE);
+  });
+});
+
+describe("F-12 no-restricted-imports — @anthropic-ai/sdk may only live in lib/adapters/anthropic", () => {
+  // ── (a) ────────────────────────────────────────────────────────
+  it("reports an error when @anthropic-ai/sdk is imported from app/api", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import Anthropic from '@anthropic-ai/sdk'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (b) ────────────────────────────────────────────────────────
+  it("allows the import in lib/adapters/anthropic/**/*.ts (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/anthropic/LLMExtractor.ts",
+      "import Anthropic from '@anthropic-ai/sdk'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (c) ────────────────────────────────────────────────────────
+  it("reports the configured @anthropic-ai/sdk custom-message text verbatim", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import Anthropic from '@anthropic-ai/sdk'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(ANTHROPIC_FORBIDDEN_MESSAGE);
   });
 });
