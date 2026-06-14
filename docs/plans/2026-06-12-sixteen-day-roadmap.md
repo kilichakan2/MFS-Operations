@@ -104,7 +104,7 @@ After all three ship, resume the Day-2 order below.
 ### Day 3 — Sat 14 Jun
 
 - **F-TD-04** ✅ SHIPPED (2026-06-14, PR #35 / `e0c5fcd`, prod-verified) — lazy `getSupabaseService()` + back-compat proxy, moved `lib/supabase.ts` → `lib/adapters/supabase/client.ts`, codemod 88 imports, deleted env-stub shim. unit 1536 (shim gone) · int 122 · preview 8/8 · prod smoke 5/5.
-- **F-10** — `PasswordHasher` port + bcrypt adapter (4 routes)
+- **F-10** ✅ SHIPPED (2026-06-14, PR #36 / `684a94f`, prod-verified) — `PasswordHasher` port + sole-import bcrypt adapter + `lib/wiring/password.ts` singleton; 4 routes (login, kds-pin, admin/users, admin/users/[id]) re-pointed; lint extended to forbid bcryptjs outside its adapter. TOTAL compare (never throws). unit 1552 (+16) · int 122 · preview 8/8 · prod smoke 4/4 non-500. No migration. Behaviour-preserving (cost-10 hashes still verify through cost-12 adapter, proven at unit + integration).
 - **F-12** — `LLMExtractor` port + Anthropic adapter (`admin/import`)
 
 ### Day 4 — Sun 15 Jun
