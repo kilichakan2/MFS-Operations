@@ -46,6 +46,14 @@ const FTD11_MESSAGE =
   "Services and use-cases depend on ports, never on adapters (ADR-0002). " +
   "Wire concretions in the composition root lib/wiring/ instead. See F-TD-11.";
 
+// F-10 — the bcryptjs forbidden message. This is the drift-catcher pin: it is
+// asserted verbatim against the SHIPPED .eslintrc.json (loaded from disk), so a
+// typo in the config's bcryptjs message fails this test.
+const BCRYPT_MESSAGE =
+  "Use the PasswordHasher port via @/lib/wiring/password. " +
+  "bcryptjs may only be imported inside lib/adapters/bcrypt/. " +
+  "See ADR-0002 / F-10.";
+
 /**
  * Load the SHIPPED config from disk so the pin fails if the guard is
  * weakened or deleted in `.eslintrc.json` itself. `extends` is removed
@@ -148,5 +156,44 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(FTD11_MESSAGE);
+  });
+
+  // ── (8) F-10 ───────────────────────────────────────────────────
+  it("bans bcryptjs inside lib/services (override RESTATES the bcryptjs path)", async () => {
+    const messages = await lint(
+      "lib/services/OrdersService.ts",
+      "import bcrypt from 'bcryptjs'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (9) F-10 ───────────────────────────────────────────────────
+  it("bans bcryptjs inside app/api routes", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import bcrypt from 'bcryptjs'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (10) F-10 ──────────────────────────────────────────────────
+  it("allows bcryptjs inside lib/adapters/bcrypt (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/bcrypt/PasswordHasher.ts",
+      "import bcrypt from 'bcryptjs'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (11) F-10 ──────────────────────────────────────────────────
+  it("reports the shipped bcryptjs message text verbatim", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import bcrypt from 'bcryptjs'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(BCRYPT_MESSAGE);
   });
 });
