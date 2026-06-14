@@ -52,6 +52,29 @@ Single-use vendor libraries (imported in exactly one file) must sit behind an ow
 - A single-use vendor library not wrapped
 - A rip-out test answer that costs more than one adapter + one config line
 
+## Non-negotiable architecture
+
+This project is hexagonal (ports & adapters). The authoritative rules live in
+"## Architecture principle — build it like Lego" above and in ADR-0002
+(`docs/adr/0002-hexagonal-shape-and-naming.md`). They are non-negotiable and
+enforced on every FORGE unit:
+
+- UI → API/service → adapter. Inner layers never import outward: `lib/domain/**`
+  and `lib/ports/**` never import `lib/adapters/**`; `app/**` and `components/**`
+  never import `lib/adapters/**` directly (go via `lib/services/` or `lib/usecases/`).
+- Vendor SDKs are imported ONLY in `lib/adapters/<vendor>/`. Vendor-specific types
+  never leak past the adapter boundary — map them to `lib/domain/` models.
+- Every external dependency sits behind a port the app owns; concrete adapters are
+  wired to factories only in `lib/wiring/`. Rip-out test: replacing a vendor =
+  one new adapter + one wiring line, nothing else changes.
+- Every new `package.json` entry needs a written one-line justification; single-use
+  vendor libraries must sit behind an owned `lib/adapters/<vendor>/` wrapper.
+
+Scope: pre-existing breaches are known debt; only new or touched code in the
+current diff is held to this standard (the FORGE pipeline reviews diffs, not the
+whole tree). See the "### Blockers (code-critic will reject)" list above for the
+exact rejection criteria.
+
 ## Local test infrastructure
 
 Prereq: Supabase CLI (`brew install supabase/tap/supabase`) and Docker Desktop running. Daily commands:
