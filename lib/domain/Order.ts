@@ -230,10 +230,11 @@ export interface OrderPatch {
  * Input shape for `OrdersRepository.createOrder`.
  *
  * Domain-shape input, NOT the wire-shape request body. The route layer
- * is responsible for parsing the HTTP request (today: ad-hoc validation
- * at `lib/orders/validation.ts`; F-08: zod). The service layer (F-07)
- * then constructs a `CreateOrderInput` from the validated/normalised
- * data and calls the port.
+ * is responsible for parsing the HTTP request (the zod
+ * `createOrderBodySchema` at `lib/api/orders/schemas.ts` validates and
+ * transforms the body into this shape). The service layer (F-07) then
+ * constructs a `CreateOrderInput` from the validated/normalised data
+ * and calls the port.
  *
  * `lines` is required and must have at least one entry — the port
  * contract documents this; the service enforces it via
@@ -259,11 +260,11 @@ export interface CreateOrderInput {
  * fields rather than a discriminated union.
  *
  * `lineNumber` is intentionally NOT on the input — the adapter
- * assigns it based on input array order (matches existing route
- * behaviour at `lib/orders/validation.ts:175` —
- * `lines: body.lines.map((line, i) => ({ line_number: i + 1, ... }))`).
- * Pulls complexity downward (APOSD §10) — the caller does not need to
- * know about line-number assignment.
+ * assigns it based on input array order (the Supabase adapter's
+ * `createOrder` maps `line_number: i + 1` over the input lines —
+ * `lib/adapters/supabase/OrdersRepository.ts`). Pulls complexity
+ * downward (APOSD §10) — the caller does not need to know about
+ * line-number assignment.
  */
 export interface CreateOrderLineInput {
   readonly productId: string | null;
