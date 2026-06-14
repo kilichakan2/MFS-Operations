@@ -329,6 +329,13 @@ export function createFakeOrdersRepository(): OrdersRepository {
         serverTime: serverTime.toISOString(),
       };
     },
+
+    // The Fake does not model TTL (see store docstring, lines 57-59), so
+    // there are no expired rows to sweep. Real purge behaviour is proven
+    // against the live DB in integration tests (F-TD-09 §7 I2/I3).
+    async purgeExpiredIdempotencyKeys(_now: Date): Promise<number> {
+      return 0;
+    },
   };
 }
 

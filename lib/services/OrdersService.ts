@@ -216,6 +216,17 @@ export interface OrdersService {
    */
   listKdsQueue(since: Date): Promise<KdsOrderQueueSnapshot>;
 
+  /**
+   * Purge expired idempotency-key rows. Pass-through to
+   * `OrdersRepository.purgeExpiredIdempotencyKeys`. Called by the daily
+   * purge cron (`app/api/cron/purge-idempotency-keys`). Hygiene only —
+   * no business decision, single port, so a thin delegate (matches
+   * listOrders / findOrderById / listKdsQueue).
+   *
+   * Throws: ServiceError (propagated from port).
+   */
+  purgeExpiredIdempotencyKeys(now: Date): Promise<number>;
+
   // ─── Business orchestration ──────────────────────────────────
 
   /**
@@ -392,6 +403,8 @@ export function createOrdersService(repos: OrdersServiceRepos): OrdersService {
     listOrders: (filter) => orders.listOrders(filter),
     findOrderById: (id) => orders.findOrderById(id),
     listKdsQueue: (since) => orders.listKdsQueue(since),
+    purgeExpiredIdempotencyKeys: (now) =>
+      orders.purgeExpiredIdempotencyKeys(now),
 
     // ─── placeOrder ────────────────────────────────────────────
 

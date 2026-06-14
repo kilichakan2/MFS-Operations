@@ -487,4 +487,25 @@ export interface OrdersRepository {
    * @throws ServiceError on DB failure.
    */
   listKdsQueue(since: Date): Promise<KdsOrderQueueSnapshot>;
+
+  /**
+   * Purge expired idempotency-key rows from the ledger.
+   *
+   * What this hides:
+   *   - The single DELETE on `order_idempotency_keys` filtered to rows
+   *     whose `expires_at` is at or before `now`. Callers (the daily
+   *     purge cron) never write the table name or the predicate.
+   *   - The vendor's "rows affected" count extraction; the method
+   *     returns a plain `number` of rows deleted.
+   *
+   * Hygiene-only: TTL is already enforced at read time and reclaimed
+   * opportunistically on key reuse (createOrder step 0). This sweeps the
+   * rows whose key is never reused so the table cannot grow unbounded.
+   *
+   * @param now  The cutoff. Rows with `expires_at <= now` are deleted.
+   *             Passed in (not `now()` inside) so tests are deterministic.
+   * @returns The number of rows deleted (>= 0).
+   * @throws  ServiceError on DB failure.
+   */
+  purgeExpiredIdempotencyKeys(now: Date): Promise<number>;
 }

@@ -902,6 +902,21 @@ export function createSupabaseOrdersRepository(
         serverTime: serverTime.toISOString(),
       };
     },
+
+    async purgeExpiredIdempotencyKeys(now: Date): Promise<number> {
+      const { data, error } = await client
+        .from("order_idempotency_keys")
+        .delete()
+        .lte("expires_at", now.toISOString())
+        .select("key");
+      if (error) {
+        log.error("OrdersRepository.purgeExpiredIdempotencyKeys DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Idempotency-key purge failed", { cause: error });
+      }
+      return (data ?? []).length;
+    },
   };
 }
 
