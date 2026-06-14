@@ -229,6 +229,16 @@ the trail matters.
 - **Owner unit:** unscheduled (tiny — fold into any future Orders/cron touch)
 - **Status:** open
 
+### F-TD-17 — WebKit E2E flakiness on 2 `@critical` specs (harness, not app)
+
+- **Deferred:** 2026-06-14 (F-TD-04 ANVIL, 🟡 non-blocking)
+- **What:** On the **Mobile Safari / WebKit** Playwright project only, `01-order-place.spec.ts:38` and `02-picking-list-print.spec.ts:25` flake/fail (timing/locator), while passing clean on chromium. Error-context snapshots show the app fully rendered — a WebKit navigation/timing wobble, not a server error.
+- **Why deferred:** provably pre-existing and unrelated to F-TD-04 (that PR touched no spec/config/env; same flows green on chromium). Not worth gating a clean refactor.
+- **Fix idea:** add `retries` for the WebKit project in the Playwright config, or `test.fixme('@flaky …')`/`@flaky`-tag the two assertions. Also: the WebKit binary was missing locally and installed mid-run — cold dev-server + WebKit timing likely contributes.
+- **Detail:** `docs/anvil/2026-06-14-f-td-04-lazy-supabase-client-cert.md` (Warnings section)
+- **Owner unit:** unscheduled (E2E-harness hygiene)
+- **Status:** open
+
 ---
 
 ## Infrastructure follow-ups (F-INFRA-)
