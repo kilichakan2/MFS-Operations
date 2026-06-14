@@ -7,7 +7,7 @@
         "paths": [
           {
             "name": "@supabase/supabase-js",
-            "message": "Use supabaseService from @/lib/supabase for app code, or add an adapter under lib/adapters/supabase/ for vendor-specific operations. See ADR-0003 (FREEZE rule)."
+            "message": "Use supabaseService from @/lib/adapters/supabase/client for app code, or add an adapter under lib/adapters/supabase/ for vendor-specific operations. See ADR-0003 (FREEZE rule)."
           }
         ]
       }
@@ -15,7 +15,7 @@
   },
   "overrides": [
     {
-      "files": ["lib/supabase.ts", "lib/adapters/supabase/**/*.ts", "tests/**"],
+      "files": ["lib/adapters/supabase/**/*.ts", "tests/**"],
       "rules": {
         "no-restricted-imports": "off"
       }
@@ -29,7 +29,7 @@
             "paths": [
               {
                 "name": "@supabase/supabase-js",
-                "message": "Use supabaseService from @/lib/supabase for app code, or add an adapter under lib/adapters/supabase/ for vendor-specific operations. See ADR-0003 (FREEZE rule)."
+                "message": "Use supabaseService from @/lib/adapters/supabase/client for app code, or add an adapter under lib/adapters/supabase/ for vendor-specific operations. See ADR-0003 (FREEZE rule)."
               }
             ],
             "patterns": [

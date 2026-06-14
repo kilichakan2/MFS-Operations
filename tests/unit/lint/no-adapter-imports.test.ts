@@ -38,7 +38,7 @@ import { describe, it, expect } from "vitest";
 import { ESLint } from "eslint";
 
 const F04_MESSAGE =
-  "Use supabaseService from @/lib/supabase for app code, " +
+  "Use supabaseService from @/lib/adapters/supabase/client for app code, " +
   "or add an adapter under lib/adapters/supabase/ for vendor-specific operations. " +
   "See ADR-0003 (FREEZE rule).";
 

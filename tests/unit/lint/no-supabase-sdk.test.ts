@@ -5,7 +5,7 @@
  * and silent drift. Six cases:
  *
  *   (1) Forbidden:  SDK import in app/api/foo/route.ts                       → 1 error
- *   (2) Allowed:    SDK import in lib/supabase.ts                            → 0 errors
+ *   (2) Allowed:    SDK import in lib/adapters/supabase/client.ts            → 0 errors
  *   (3) Allowed:    SDK import in lib/adapters/supabase/OrdersRepository.ts  → 0 errors
  *   (4) Allowed:    SDK import in tests/integration/foo.ts                   → 0 errors
  *   (5) Message:    the configured custom-message text is reported as-is
@@ -32,7 +32,7 @@ import { describe, it, expect } from "vitest";
 import { ESLint } from "eslint";
 
 const FORBIDDEN_MESSAGE =
-  "Use supabaseService from @/lib/supabase for app code, " +
+  "Use supabaseService from @/lib/adapters/supabase/client for app code, " +
   "or add an adapter under lib/adapters/supabase/ for vendor-specific operations. " +
   "See ADR-0003 (FREEZE rule).";
 
@@ -70,7 +70,7 @@ const f04Config = {
   },
   overrides: [
     {
-      files: ["lib/supabase.ts", "lib/adapters/supabase/**/*.ts", "tests/**"],
+      files: ["lib/adapters/supabase/**/*.ts", "tests/**"],
       rules: {
         "no-restricted-imports": "off",
       },
@@ -123,9 +123,9 @@ describe("F-04 no-restricted-imports — Supabase SDK FREEZE rule", () => {
   });
 
   // ── (2) ────────────────────────────────────────────────────────
-  it("allows the import in lib/supabase.ts (central client)", async () => {
+  it("allows the import in lib/adapters/supabase/client.ts (central client)", async () => {
     const messages = await lint(
-      "lib/supabase.ts",
+      "lib/adapters/supabase/client.ts",
       "import { createClient } from '@supabase/supabase-js'\n",
     );
     expect(messages).toEqual([]);
