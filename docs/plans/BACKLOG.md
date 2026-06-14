@@ -261,6 +261,17 @@ the trail matters.
 - **Owner unit:** unscheduled (post-migration ops)
 - **Status:** open
 
+### F-INFRA-05 — Supabase→Vercel integration not injecting preview-branch DB credentials  ⚠️ BLOCKS F-RLS-04a
+
+- **Surfaced:** 2026-06-14 (during F-RLS-03 ANVIL Lock, PR #38)
+- **What:** The Supabase↔Vercel integration shows **connected on both sides** but injects **no** Supabase credentials into the Vercel **Preview** scope. A preview deploy therefore has zero DB creds (all prod Supabase vars are correctly Production-only per ADR-0006), so `createClient` throws and every route 500s; the Gate-4 preview smoke fails closed at the DB-identity probe. **Ruled out:** the timing race (deploy built before the Supabase branch existed) — a clean redeploy *after* the branch was healthy still 500'd. So the integration's preview env-var sync is genuinely not running/writing.
+- **Stopgap used on F-RLS-03:** manual env bridge — added the PR branch's own keys (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) to Vercel Preview scope, restricted to the git branch (branch keys, never prod). Smoke then went 8/8. This is a **per-PR manual chore** — not sustainable.
+- **Why it must be fixed before F-RLS-04a:** F-RLS-04a flips real Orders routes onto the authenticated client (NOT inert) and genuinely needs a working preview smoke to prove RLS doesn't break Orders. Also: F-RLS-04a needs `SUPABASE_JWT_SECRET` on preview, which a working integration would sync automatically (the prod set includes it).
+- **Investigate:** Supabase dashboard → Integrations → Vercel sync config (only Preview + `NEXT_PUBLIC_` prefix was observed enabled — confirm which vars/scopes actually sync, incl. the server-only `SUPABASE_SERVICE_ROLE_KEY`); consider re-install/re-authorize of the integration; confirm whether it writes project-level Preview env vars or per-deployment injection.
+- **Detail:** ADR-0006 (per-PR preview branches), `docs/runbooks/preview-smoke.md`, cert `docs/anvil/2026-06-14-f-rls-03-authenticated-db-client-cert.md` (E2E section)
+- **Owner unit:** F-INFRA-05 — **schedule before F-RLS-04a (Day 4)**
+- **Status:** open
+
 ---
 
 ## Product features (F-PROD-)

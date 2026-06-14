@@ -109,8 +109,10 @@ After all three ship, resume the Day-2 order below.
 
 ### Day 4 — Sun 15 Jun
 
-- **F-RLS-03** — per-request authenticated Supabase client (`AuthenticatedDbAdapter`); `supabaseService` demoted to admin-only
+- **F-RLS-03** ✅ SHIPPED (2026-06-14, PR #38 / `e55dcc7`, prod-verified) — INTRODUCE-ONLY per-request authenticated DB client. App-minted HS256 token (web-crypto, **no new dep**) + `db-pre-request` GUC bridge migration (`20260614210221`) copying the `user_id` claim into `app.current_user_id` → existing GUC policies fire unchanged (ADR-0007 supersedes ADR-0004's JWT mechanism). New `DbTokenMinter` port + web-crypto adapter; `authenticatedClientForCaller()` + `requireServiceRole()` Supabase adapter; lint pins. **Zero prod routes flipped**; migration non-destructive + inert (no PITR). unit 1595 (+14) · int 126 (rls-bridge 4/4 RAN) · tsc/lint 0 · preview 8/8 @critical · prod smoke non-500 (`/api/auth/team` 200 = 7 real users through the hook, inert confirmed). Cert `docs/anvil/2026-06-14-f-rls-03-…-cert.md`; ADR-0007. **En route: surfaced F-INFRA-05** (Supabase→Vercel preview cred-sync broken; unblocked this PR via manual env bridge — MUST fix before F-RLS-04a).
 - **F-RLS-04a** — Orders-context RLS migration (expand-contract, rollback path)
+  - ⚠️ **Carry from F-RLS-03 Guard (🟡):** the minted DB token is 60s TTL with `iat=now` and NO clock-skew leeway (`lib/adapters/web-crypto/DbTokenMinter.ts:34,79`). Inert in F-RLS-03 (no route uses it); becomes an intermittent-401 risk at THIS cutover if app/DB clocks drift. Fix here: backdate `iat` ~5s (or lengthen TTL) before flipping any Orders route onto the authenticated client.
+  - ⚠️ **Blocked-by F-INFRA-05:** preview smoke needs the Supabase→Vercel cred-sync fixed first (F-RLS-04a is NOT inert — it flips real Orders routes and genuinely needs the smoke). Also needs `SUPABASE_JWT_SECRET` on preview/prod (a working integration would sync it automatically).
 - **F-TD-07** — prod hygiene audit for `ANVIL-TEST-*` rows (**needs Hakan ~15 min** for the delete decision)
 
 ### Days 5–6 — Mon 16 – Tue 17 Jun
