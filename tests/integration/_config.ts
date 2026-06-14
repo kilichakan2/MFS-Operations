@@ -18,3 +18,23 @@ export const INTEGRATION_PORT =
   Number.parseInt(process.env.INTEGRATION_PORT ?? "", 10) || 3100;
 
 export const INTEGRATION_BASE_URL = `http://localhost:${INTEGRATION_PORT}`;
+
+/**
+ * Shared cron secret for the integration suite (F-TD-09 I4).
+ *
+ * The purge route (app/api/cron/purge-idempotency-keys) authenticates
+ * with `Authorization: Bearer ${process.env.CRON_SECRET}`. The spawned
+ * dev server and the test that calls it must agree on this value, so —
+ * exactly like the port/URL above — it lives here as the single source
+ * of truth rather than in the (harness-shielded, optional) env file.
+ *
+ * `_globalSetup.ts` injects this into the spawned server's environment,
+ * and the I4 test reads it to build the Bearer header. A real CRON_SECRET
+ * already present in the environment wins (so a developer can still
+ * override locally); otherwise this throwaway value is used. It never
+ * leaves the local test process — production cron uses the real secret.
+ */
+export const INTEGRATION_CRON_SECRET =
+  process.env.CRON_SECRET && process.env.CRON_SECRET.length > 0
+    ? process.env.CRON_SECRET
+    : "anvil-test-cron-secret-f-td-09";
