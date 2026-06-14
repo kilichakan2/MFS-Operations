@@ -5,8 +5,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt                        from 'bcryptjs'
 import { supabaseService }           from '@/lib/adapters/supabase/client'
+import { passwordHasher }            from '@/lib/wiring/password'
 
 const supabase = supabaseService
 
@@ -46,7 +46,7 @@ export async function PATCH(
     }
 
     if (body.credential && body.role) {
-      const hash  = await bcrypt.hash(body.credential, 12)
+      const hash  = await passwordHasher.hash(body.credential)
       const field = body.role === 'admin' ? 'password_hash' : 'pin_hash'
       // Clear the other field so no stale credential remains
       if (field === 'pin_hash') updates.password_hash = null

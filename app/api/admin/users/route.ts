@@ -8,8 +8,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt                        from 'bcryptjs'
 import { supabaseService }           from '@/lib/adapters/supabase/client'
+import { passwordHasher }            from '@/lib/wiring/password'
 
 const supabase = supabaseService
 
@@ -65,14 +65,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Explicitly cast to String() before bcrypt — prevents "Illegal arguments" TypeError
-    let hash: string
-    try {
-      hash = await bcrypt.hash(String(credential), 12)
-    } catch (bcryptErr) {
-      console.error('[POST /api/admin/users] bcrypt.hash failed:', bcryptErr)
-      return NextResponse.json({ error: 'Failed to hash credential' }, { status: 500 })
-    }
+    // Hash via the PasswordHasher port (cost 12, String() casting owned by the
+    // adapter). A genuine hashing failure propagates to the outer try/catch,
+    // which already returns a 500.
+    const hash = await passwordHasher.hash(credential)
 
     const field = role === 'admin' ? 'password_hash' : 'pin_hash'
 
