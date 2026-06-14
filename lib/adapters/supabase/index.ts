@@ -35,3 +35,7 @@ export {
   createSupabaseUsersRepository,
   supabaseUsersRepository,
 } from "./UsersRepository";
+export {
+  authenticatedClientForCaller,
+  requireServiceRole,
+} from "./authenticatedClient";
