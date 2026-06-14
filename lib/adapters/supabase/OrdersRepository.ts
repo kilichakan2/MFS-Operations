@@ -221,14 +221,34 @@ async function readIdempotencyKey(
   return (data as IdempotencyKeyRow | null) ?? null;
 }
 
+/**
+ * Narrowing guard for `deleteIdempotencyKey` (F-TD-09 W1). The two
+ * reclaim arms in `createOrder` step 0 delete by `key`, but at the
+ * exact 24h expiry tick a concurrent same-key request can plant a
+ * FRESH valid row that the unguarded delete would clobber — letting
+ * one key resolve to two orders (a TOCTOU bug). Each arm passes its
+ * own guard so the delete only fires if the row it read is still the
+ * one it intends to reclaim:
+ *   - `expiredAt`: only delete if the row is STILL expired at `now`.
+ *   - `orderId`:   only delete the row pointing at this specific
+ *                  stale order_id.
+ */
+type IdempotencyDeleteGuard =
+  | { kind: "expiredAt"; now: Date }
+  | { kind: "orderId"; orderId: string };
+
 async function deleteIdempotencyKey(
   client: SupabaseClient,
   key: string,
+  guard?: IdempotencyDeleteGuard,
 ): Promise<void> {
-  const { error } = await client
-    .from("order_idempotency_keys")
-    .delete()
-    .eq("key", key);
+  let query = client.from("order_idempotency_keys").delete().eq("key", key);
+  if (guard?.kind === "expiredAt") {
+    query = query.lte("expires_at", guard.now.toISOString());
+  } else if (guard?.kind === "orderId") {
+    query = query.eq("order_id", guard.orderId);
+  }
+  const { error } = await query;
   if (error) {
     log.error("OrdersRepository idempotency-key delete DB error", {
       error: error.message,
@@ -372,11 +392,21 @@ export function createSupabaseOrdersRepository(
       //    Plan §5 D1: SELECT the key row first; expired → reclaim,
       //    cross-user → Conflict, same-caller live → replay.
       if (idempotencyKey !== undefined) {
+        // F-TD-09 W1: capture ONE `now` so the expiry guard below deletes
+        // against the same instant the row was read at (no second TOCTOU
+        // between the `isExpired` read and the guarded delete).
+        const now = new Date();
         const existing = await readIdempotencyKey(client, idempotencyKey);
         if (existing !== null) {
           if (isExpired(existing)) {
             // Expired — reclaim opportunistically, fall through to create.
-            await deleteIdempotencyKey(client, idempotencyKey);
+            // W1: guard the delete so a concurrent FRESH row (planted at
+            // the expiry tick) is not clobbered — only delete if STILL
+            // expired at `now`.
+            await deleteIdempotencyKey(client, idempotencyKey, {
+              kind: "expiredAt",
+              now,
+            });
           } else if (existing.created_by !== createdBy) {
             // Never reveal the other user's order.
             throw new ConflictError("Idempotency-Key already used");
@@ -384,7 +414,12 @@ export function createSupabaseOrdersRepository(
             const original = await this.findOrderById(existing.order_id);
             if (original !== null) return original; // replay, no-op
             // Order vanished (deleted meanwhile) — reclaim stale key.
-            await deleteIdempotencyKey(client, idempotencyKey);
+            // W1: guard the delete to the SPECIFIC stale order_id we read,
+            // so a concurrent fresh row pointing at a live order survives.
+            await deleteIdempotencyKey(client, idempotencyKey, {
+              kind: "orderId",
+              orderId: existing.order_id,
+            });
           }
         }
       }
@@ -468,9 +503,12 @@ export function createSupabaseOrdersRepository(
         if (winnerOrderId !== newId) {
           const readBackWinner = await this.findOrderById(winnerOrderId);
           if (readBackWinner === null) {
+            // F-TD-09 N1: do not log the raw client idempotencyKey.
+            // winnerOrderId alone uniquely identifies the situation for
+            // debugging; the raw key adds nothing but a leak.
             log.error(
               "OrdersRepository.createOrder race winner order unreadable",
-              { idempotencyKey, winnerOrderId },
+              { winnerOrderId },
             );
             throw new ServiceError("Order created but could not be read back");
           }
