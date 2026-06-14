@@ -92,4 +92,22 @@ short-lived, 24h TTL). The `vercel.json` cron entry deactivates automatically on
 
 ## Verdict
 
-✅ CLEARED FOR PRODUCTION — Lock gate passed 2026-06-14 (pending only the conductor's preview `@critical` smoke at the pre-ship step)
+✅ CLEARED FOR PRODUCTION — Lock gate passed 2026-06-14; **SHIPPED + prod-verified 2026-06-14**.
+
+## Production ship record
+
+- **Merged:** PR #34 squashed to `main` as `29987df` (2026-06-14).
+- **Preview `@critical` smoke (pre-ship):** 8/8 green on `mfs-operations-7bba015u1-…vercel.app`
+  (commit `189d305`, the exact ship build); previewProbe confirmed a seed-born preview DB.
+- **Production deploy:** `dpl_HRL9oorx5StM3ueTVwAKv62HkgEz` (target=production) READY on www.mfsops.com.
+- **Deploy-time checks (both passed):** the 2nd cron did NOT exceed the Vercel Hobby cap
+  (deploy succeeded, not rejected); the new cron route is live and fails closed (401 unauth),
+  confirming `CRON_SECRET` auth is wired.
+- **Post-deploy production smoke (all green):**
+  - `GET /login` → **200**
+  - `GET /api/kds/orders` → **200**
+  - forged `mfs_session` cookie on `/` → **307** (fail-closed redirect)
+  - `GET /api/cron/purge-idempotency-keys` unauth → **401** (new route live + locked)
+- **Migration / PITR:** none — code-only, non-destructive.
+- **Rollback (unused):** `vercel rollback` to the prior production deployment; no data/schema to undo.
+- **First daily purge** fires at the next `0 3 * * *` (03:00 UTC).

@@ -103,7 +103,7 @@ the trail matters.
   - **N3:** two comments in `lib/domain/Order.ts` (~234, ~263) still reference the deleted `lib/orders/validation.ts`.
 - **Detail:** `docs/plans/2026-06-11-f-08-orders-route-rewrites.md` §5 D1 (TTL / cleanup decision) + code-critic Guard report for PR #27
 - **Owner unit:** unscheduled (tiny)
-- **Status:** open
+- **Status:** done (PR #34 / squash `29987df`, shipped + prod-verified 2026-06-14). Daily Vercel cron `/api/cron/purge-idempotency-keys` (`0 3 * * *`) → port `purgeExpiredIdempotencyKeys` → adapter `DELETE … WHERE expires_at <= now`. W1 TOCTOU closed (conditional reclaim deletes, one captured `now`); N1 (key dropped from error log) + N3 (stale comments) done; N2 unchanged by design. ANVIL wrote the deferred I2/I3/I4 integration specs (integration 115→122). Cert `docs/anvil/2026-06-14-f-td-09-idempotency-key-hygiene-cert.md`. Residual 🔵 follow-ups → F-TD-16.
 
 ### F-TD-10 — Wire `Idempotency-Key` into the order form (activate the F-08 duplicate guard)
 
@@ -218,6 +218,15 @@ the trail matters.
 - **Detail:** `docs/plans/2026-06-13-t3-harden-security-definer-fns.md` §"Exact file to change".
 - **Priority:** Medium — a footgun that silently rolls back a same-day migration; cheap to codify.
 - **Owner unit:** unscheduled (migration-hygiene)
+- **Status:** open
+
+### F-TD-16 — Two 🔵 residuals from the F-TD-09 Guard review (cron auth + comment accuracy)
+
+- **Deferred:** 2026-06-14 (F-TD-09 Guard, both non-blocking 🔵)
+- **What:** (a) **CRON_SECRET-unset hardening** — both cron routes (`app/api/cron/purge-idempotency-keys/route.ts:17` and the pre-existing `app/api/cron/haccp-alarm/route.ts:66`) compare `Authorization` to `Bearer ${process.env.CRON_SECRET}`; if `CRON_SECRET` were ever unset, the literal `"Bearer undefined"` would authenticate. Vercel injects the secret in all envs so it's latent, not live — but an early-return 500 on `!process.env.CRON_SECRET` would fail closed regardless. (b) **W1 comment accuracy** — `lib/adapters/supabase/OrdersRepository.ts:395-398` comment says the guard deletes "against the same instant the row was read at"; the captured `now` is actually taken *before* the read (conservative clock — behaviour is correct, the wording oversells). Reword.
+- **Why deferred:** both non-blocking nits surfaced at F-TD-09 Guard; not worth re-opening the shipped PR.
+- **Detail:** `docs/reviews/2026-06-14-f-td-09-idempotency-key-hygiene-review.md` (🔵 findings)
+- **Owner unit:** unscheduled (tiny — fold into any future Orders/cron touch)
 - **Status:** open
 
 ---
