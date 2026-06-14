@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const supabase = supabaseService
 
 import { getUKDateAndHour, getEffectiveMinDate } from '@/lib/utils/ukDateAndHour'
-import { supabaseService }           from '@/lib/supabase'
+import { supabaseService }           from '@/lib/adapters/supabase/client'
 
 export async function GET(req: NextRequest) {
   try {

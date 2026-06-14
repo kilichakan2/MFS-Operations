@@ -22,7 +22,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { supabaseService } from "@/lib/supabase";
+import { supabaseService } from "@/lib/adapters/supabase/client";
 import { ServiceError } from "@/lib/errors";
 import { log } from "@/lib/observability/log";
 import type { UserSummary } from "@/lib/domain";

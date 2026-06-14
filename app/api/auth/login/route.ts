@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt                        from 'bcryptjs'
-import { supabaseService }           from '@/lib/supabase'
+import { supabaseService }           from '@/lib/adapters/supabase/client'
 import { sessionTokens }             from '@/lib/wiring/session'
 
 // Service role key — bypasses RLS. Never expose to the client.

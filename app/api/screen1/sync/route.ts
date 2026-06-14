@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService as supabase } from '@/lib/supabase'
+import { supabaseService as supabase } from '@/lib/adapters/supabase/client'
 
 export async function POST(req: NextRequest) {
   try {

@@ -11,7 +11,7 @@
  */
 
 import { NextResponse }         from 'next/server'
-import { supabaseService }           from '@/lib/supabase'
+import { supabaseService }           from '@/lib/adapters/supabase/client'
 
 // Service role client — bypasses RLS for trusted server-side reads
 const supabase = supabaseService
