@@ -4,14 +4,15 @@
  * PIN and password authentication.
  * Uses SUPABASE_SERVICE_ROLE_KEY — bypasses RLS.
  * Sets session cookie directly on the NextResponse (Next.js 15 pattern).
- * All credentials are explicitly cast to String() before bcrypt to prevent
- * "Illegal arguments: number, string" TypeError if type coercion occurs.
+ * Credential verification goes through the PasswordHasher port
+ * (@/lib/wiring/password); the adapter owns String() casting and the TOTAL
+ * compare guard, so this route never touches bcryptjs directly.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt                        from 'bcryptjs'
 import { supabaseService }           from '@/lib/adapters/supabase/client'
 import { sessionTokens }             from '@/lib/wiring/session'
+import { passwordHasher }            from '@/lib/wiring/password'
 
 // Service role key — bypasses RLS. Never expose to the client.
 const supabase = supabaseService
@@ -146,14 +147,12 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── bcrypt compare — both args explicitly string ──────────────────────────
-    let valid = false
-    try {
-      valid = await bcrypt.compare(String(credential), String(hashToCheck))
-    } catch (bcryptErr) {
-      console.error('[login] bcrypt.compare threw:', bcryptErr)
-      return NextResponse.json({ error: 'Authentication error' }, { status: 500 })
-    }
+    // ── Credential check via the PasswordHasher port ──────────────────────────
+    // compare is TOTAL — a corrupt stored hash returns false (logged inside the
+    // adapter) rather than throwing, so a broken hash reads as a wrong
+    // credential (401) instead of a 500. String() casting now lives in the
+    // adapter.
+    const valid = await passwordHasher.compare(credential, hashToCheck)
 
     if (!valid) {
       recordFailure(name)

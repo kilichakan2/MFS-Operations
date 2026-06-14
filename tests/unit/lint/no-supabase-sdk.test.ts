@@ -36,6 +36,14 @@ const FORBIDDEN_MESSAGE =
   "or add an adapter under lib/adapters/supabase/ for vendor-specific operations. " +
   "See ADR-0003 (FREEZE rule).";
 
+// F-10 — bcryptjs may only be imported inside lib/adapters/bcrypt/. The string
+// below MUST be byte-identical to the one in .eslintrc.json and
+// no-adapter-imports.test.ts (the no-adapter-imports pin asserts it verbatim).
+const BCRYPT_FORBIDDEN_MESSAGE =
+  "Use the PasswordHasher port via @/lib/wiring/password. " +
+  "bcryptjs may only be imported inside lib/adapters/bcrypt/. " +
+  "See ADR-0002 / F-10.";
+
 /**
  * The F-04 config under test. Mirrors `.eslintrc.json` exactly.
  *
@@ -64,13 +72,21 @@ const f04Config = {
             name: "@supabase/supabase-js",
             message: FORBIDDEN_MESSAGE,
           },
+          {
+            name: "bcryptjs",
+            message: BCRYPT_FORBIDDEN_MESSAGE,
+          },
         ],
       },
     ],
   },
   overrides: [
     {
-      files: ["lib/adapters/supabase/**/*.ts", "tests/**"],
+      files: [
+        "lib/adapters/supabase/**/*.ts",
+        "lib/adapters/bcrypt/**/*.ts",
+        "tests/**",
+      ],
       rules: {
         "no-restricted-imports": "off",
       },
@@ -171,5 +187,36 @@ describe("F-04 no-restricted-imports — Supabase SDK FREEZE rule", () => {
       "import { z } from 'zod'\n",
     );
     expect(messages).toEqual([]);
+  });
+});
+
+describe("F-10 no-restricted-imports — bcryptjs may only live in lib/adapters/bcrypt", () => {
+  // ── (a) ────────────────────────────────────────────────────────
+  it("reports an error when bcryptjs is imported from app/api", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import bcrypt from 'bcryptjs'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (b) ────────────────────────────────────────────────────────
+  it("allows the import in lib/adapters/bcrypt/**/*.ts (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/bcrypt/PasswordHasher.ts",
+      "import bcrypt from 'bcryptjs'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (c) ────────────────────────────────────────────────────────
+  it("reports the configured bcryptjs custom-message text verbatim", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import bcrypt from 'bcryptjs'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(BCRYPT_FORBIDDEN_MESSAGE);
   });
 });

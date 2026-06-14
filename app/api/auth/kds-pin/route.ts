@@ -22,7 +22,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseService }           from '@/lib/adapters/supabase/client'
-import bcrypt                        from 'bcryptjs'
+import { passwordHasher }            from '@/lib/wiring/password'
 
 const supabase = supabaseService
 
@@ -51,20 +51,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Server error' }, { status: 500 })
     }
 
+    // The loop is business logic — check the PIN against every active
+    // butcher/warehouse user — and stays in the route. Only the inner compare
+    // swaps to the port. compare is TOTAL: a malformed hash for one user
+    // returns false (logged inside the adapter) and the loop cleanly continues
+    // to the next, so no per-iteration try/catch is needed.
     for (const user of users ?? []) {
       if (!user.pin_hash) continue
-      try {
-        const match = await bcrypt.compare(pin, String(user.pin_hash))
-        if (match) {
-          return NextResponse.json({
-            id:   user.id,
-            name: user.name,
-            role: user.role,
-          })
-        }
-      } catch (e) {
-        // bcrypt can throw on malformed hashes — log and continue
-        console.error(`[POST /api/auth/kds-pin] bcrypt error for ${user.name}`, e)
+      const match = await passwordHasher.compare(pin, user.pin_hash)
+      if (match) {
+        return NextResponse.json({
+          id:   user.id,
+          name: user.name,
+          role: user.role,
+        })
       }
     }
 

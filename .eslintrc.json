@@ -8,6 +8,10 @@
           {
             "name": "@supabase/supabase-js",
             "message": "Use supabaseService from @/lib/adapters/supabase/client for app code, or add an adapter under lib/adapters/supabase/ for vendor-specific operations. See ADR-0003 (FREEZE rule)."
+          },
+          {
+            "name": "bcryptjs",
+            "message": "Use the PasswordHasher port via @/lib/wiring/password. bcryptjs may only be imported inside lib/adapters/bcrypt/. See ADR-0002 / F-10."
           }
         ]
       }
@@ -15,7 +19,11 @@
   },
   "overrides": [
     {
-      "files": ["lib/adapters/supabase/**/*.ts", "tests/**"],
+      "files": [
+        "lib/adapters/supabase/**/*.ts",
+        "lib/adapters/bcrypt/**/*.ts",
+        "tests/**"
+      ],
       "rules": {
         "no-restricted-imports": "off"
       }
@@ -30,6 +38,10 @@
               {
                 "name": "@supabase/supabase-js",
                 "message": "Use supabaseService from @/lib/adapters/supabase/client for app code, or add an adapter under lib/adapters/supabase/ for vendor-specific operations. See ADR-0003 (FREEZE rule)."
+              },
+              {
+                "name": "bcryptjs",
+                "message": "Use the PasswordHasher port via @/lib/wiring/password. bcryptjs may only be imported inside lib/adapters/bcrypt/. See ADR-0002 / F-10."
               }
             ],
             "patterns": [
