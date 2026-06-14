@@ -3,6 +3,10 @@
     {
       "path": "/api/routes/compute-road-times",
       "schedule": "0 2 * * 0"
+    },
+    {
+      "path": "/api/cron/purge-idempotency-keys",
+      "schedule": "0 3 * * *"
     }
   ]
 }
