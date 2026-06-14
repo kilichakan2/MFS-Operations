@@ -16,6 +16,7 @@ export type { CustomersRepository } from "./CustomersRepository";
 export type { ProductsRepository } from "./ProductsRepository";
 export type { UsersRepository } from "./UsersRepository";
 export type { SessionTokens } from "./SessionTokens";
+export type { DbTokenMinter } from "./DbTokenMinter";
 export type { PasswordHasher } from "./PasswordHasher";
 export type { LLMExtractor } from "./LLMExtractor";
 // LLMExtractionError is a runtime value (a class), not a type — value export.
