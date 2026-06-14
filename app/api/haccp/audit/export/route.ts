@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/supabase'
+import { supabaseService }           from '@/lib/adapters/supabase/client'
 import * as XLSX                     from 'xlsx'
 
 const supabase = supabaseService

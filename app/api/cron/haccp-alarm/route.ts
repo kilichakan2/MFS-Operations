@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse }    from 'next/server'
-import { supabaseService }              from '@/lib/supabase'
+import { supabaseService }              from '@/lib/adapters/supabase/client'
 import { sendPushNotification }         from '@/lib/webpush'
 import { getOverdueItems, getNotificationText, getOverdueKey } from '@/lib/haccp-alarm-status'
 

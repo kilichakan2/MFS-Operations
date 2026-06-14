@@ -36,7 +36,7 @@ const SNIFFER_FIELD_MASK = 'routes.legs,routes.distanceMeters,routes.duration'
 // Hub coordinates — imported from shared constants (lib/hubs.ts)
 import { MFS_COORDS, OZMEN_COORDS }                 from '@/lib/hubs'
 import { loadRoadTimes, MFS_HUB_ID, OZMEN_HUB_ID, type RoadTimeMatrix } from '@/lib/road-times'
-import { supabaseService }           from '@/lib/supabase'
+import { supabaseService }           from '@/lib/adapters/supabase/client'
 
 // Postcode strings for deep-link builder and log messages only
 const ORIGIN_PC = MFS_COORDS.postcode

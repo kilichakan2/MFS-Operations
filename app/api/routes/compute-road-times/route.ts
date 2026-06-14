@@ -20,7 +20,7 @@ export const maxDuration = 60  // Vercel max for hobby/pro — large matrix may 
 import { NextRequest, NextResponse } from 'next/server'
 import { MFS_COORDS, OZMEN_COORDS }  from '@/lib/hubs'
 import { MFS_HUB_ID, OZMEN_HUB_ID } from '@/lib/road-times'
-import { supabaseService }           from '@/lib/supabase'
+import { supabaseService }           from '@/lib/adapters/supabase/client'
 
 const supabase = supabaseService
 

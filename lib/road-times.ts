@@ -12,7 +12,7 @@
  *   Ozmen John Street S2 4QT → OZMEN_HUB_ID
  */
 
-import { supabaseService } from "@/lib/supabase";
+import { supabaseService } from "@/lib/adapters/supabase/client";
 import { log } from "@/lib/observability";
 
 export const MFS_HUB_ID = "00000000-0000-0000-0000-000000000001";
