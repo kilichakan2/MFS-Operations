@@ -45,7 +45,7 @@
  *     tests do not assert the exact reference.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createOrdersService } from "@/lib/services";
@@ -671,6 +671,27 @@ describe("OrdersService pass-throughs", () => {
     expect(snap.recentFlashes.length).toBe(0);
     expect(typeof snap.serverTime).toBe("string");
   });
+
+  it("purgeExpiredIdempotencyKeys forwards `now` and returns the count unchanged", async () => {
+    // F-TD-09 U4: spy on the port to prove the delegate is a pure
+    // pass-through (forwards the exact `now`, returns the port's
+    // number with no transformation). The Fake's purge is a documented
+    // no-op (returns 0); wrapping it with a spy lets us assert both the
+    // forwarded argument and a non-zero count flowing back.
+    const orders = createFakeOrdersRepository();
+    const purgeSpy = vi.fn(async (_now: Date) => 7);
+    orders.purgeExpiredIdempotencyKeys = purgeSpy;
+    const customers = createFakeCustomersRepository([]);
+    const products = createFakeProductsRepository([]);
+    const service = createOrdersService({ orders, customers, products });
+
+    const now = new Date("2026-06-14T03:00:00Z");
+    const deleted = await service.purgeExpiredIdempotencyKeys(now);
+
+    expect(purgeSpy).toHaveBeenCalledTimes(1);
+    expect(purgeSpy).toHaveBeenCalledWith(now);
+    expect(deleted).toBe(7);
+  });
 });
 
 // ─── Architecture pins ──────────────────────────────────────
@@ -695,6 +716,7 @@ describe("OrdersService architecture pins", () => {
     expect(typeof service.listOrders).toBe("function");
     expect(typeof service.findOrderById).toBe("function");
     expect(typeof service.listKdsQueue).toBe("function");
+    expect(typeof service.purgeExpiredIdempotencyKeys).toBe("function");
   });
 
   it("every typed error thrown by the service is instanceof its class", async () => {

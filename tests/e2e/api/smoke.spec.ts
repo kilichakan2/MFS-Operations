@@ -50,4 +50,16 @@ test.describe('F-INFRA-01 — api project smoke', () => {
     const body = await res.json()
     expect(Array.isArray(body)).toBe(true)
   })
+
+  // F-TD-09 — the purge cron route must refuse an unauthenticated caller
+  // at the deploy target, not just at the integration layer. /api/cron is
+  // a PUBLIC middleware path (middleware.ts), so a no-Bearer request reaches
+  // the route and gets the route's own 401 — never a middleware 307. This
+  // is the regression sentinel that the cron endpoint stays locked.
+  test('GET /api/cron/purge-idempotency-keys without Bearer → 401', async ({ request }) => {
+    const res = await request.get('/api/cron/purge-idempotency-keys', {
+      maxRedirects: 0,
+    })
+    expect(res.status(), `body: ${await res.text()}`).toBe(401)
+  })
 })

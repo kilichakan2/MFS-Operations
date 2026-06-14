@@ -24,7 +24,7 @@ import {
   signSessionCookie,
   type TestUserSet,
 } from "./_setup";
-import { INTEGRATION_BASE_URL } from "./_config";
+import { INTEGRATION_BASE_URL, INTEGRATION_CRON_SECRET } from "./_config";
 
 describe("/api/orders Idempotency-Key integration", () => {
   let users: TestUserSet;
@@ -220,5 +220,190 @@ describe("/api/orders Idempotency-Key integration", () => {
       .select("id", { count: "exact", head: true })
       .eq("id", orderId);
     expect(count).toBe(1);
+  });
+});
+
+/**
+ * F-TD-09 I4 — the purge cron route over real HTTP.
+ *
+ * GET /api/cron/purge-idempotency-keys:
+ *   - without `Authorization: Bearer ${CRON_SECRET}` → 401, deletes nothing
+ *   - with the Bearer header → 200 { ok, deleted }, removes rows whose
+ *     expires_at <= now and LEAVES rows whose expires_at > now, with an
+ *     accurate `deleted` count for the rows it actually removed.
+ *
+ * The route is PUBLIC at the middleware (middleware.ts PUBLIC_PATHS
+ * includes /api/cron) and self-authenticates via CRON_SECRET — so the
+ * no-Bearer case sees the route's own 401, not a middleware 307.
+ *
+ * The shared test secret is injected into the booted dev server by
+ * _globalSetup.ts (INTEGRATION_CRON_SECRET) so the 200-path authenticates.
+ */
+describe("/api/cron/purge-idempotency-keys integration (F-TD-09 I4)", () => {
+  let users: TestUserSet;
+  let customer: { id: string; name: string };
+  let product: { id: string; name: string; code: string | null };
+  const PURGE_PATH = "/api/cron/purge-idempotency-keys";
+
+  beforeAll(async () => {
+    users = await setupTestUsers();
+    customer = await setupTestCustomer();
+    product = await getTestProduct();
+    await cleanupTestData();
+  }, 30_000);
+
+  afterAll(async () => {
+    await cleanupTestData();
+  }, 30_000);
+
+  /**
+   * Seed a real order (FK target for the key row) and a key row with an
+   * explicit expires_at. Returns the key so the test can assert on it.
+   * Uses the service client directly — this is fixture setup, not the
+   * behaviour under test.
+   */
+  async function seedKey(opts: {
+    keyLabel: string;
+    expiresAt: Date;
+  }): Promise<string> {
+    const supa = getServiceClient();
+    const { data: order, error: orderErr } = await supa
+      .from("orders")
+      .insert({
+        customer_id: customer.id,
+        delivery_date: "2031-03-01",
+        created_by: users.admin.id,
+      })
+      .select("id")
+      .single();
+    if (orderErr || !order) {
+      throw new Error(`I4 seed: order insert failed: ${orderErr?.message}`);
+    }
+    // Give the order one line so it mirrors a real order shape.
+    await supa.from("order_lines").insert({
+      order_id: order.id,
+      line_number: 1,
+      product_id: product.id,
+      quantity: 1,
+      uom: "kg",
+    });
+    const key = `i4-${opts.keyLabel}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const { error: keyErr } = await supa.from("order_idempotency_keys").insert({
+      key,
+      order_id: order.id,
+      created_by: users.admin.id,
+      expires_at: opts.expiresAt.toISOString(),
+    });
+    if (keyErr) {
+      throw new Error(`I4 seed: key insert failed: ${keyErr.message}`);
+    }
+    return key;
+  }
+
+  async function keyExists(key: string): Promise<boolean> {
+    const supa = getServiceClient();
+    const { data } = await supa
+      .from("order_idempotency_keys")
+      .select("key")
+      .eq("key", key)
+      .maybeSingle();
+    return data !== null;
+  }
+
+  async function getPurge(opts: {
+    bearer?: string;
+  }): Promise<{ status: number; body: unknown }> {
+    const headers: Record<string, string> = {};
+    if (opts.bearer !== undefined) {
+      headers["Authorization"] = `Bearer ${opts.bearer}`;
+    }
+    const res = await fetch(`${INTEGRATION_BASE_URL}${PURGE_PATH}`, {
+      method: "GET",
+      headers,
+      redirect: "manual",
+    });
+    const raw = await res.text();
+    let body: unknown;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      body = raw;
+    }
+    return { status: res.status, body };
+  }
+
+  it("rejects a request with no Bearer header as 401 and deletes nothing", async () => {
+    // Seed one expired row; an unauthorised call must not touch it.
+    const expiredKey = await seedKey({
+      keyLabel: "noauth-expired",
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    const res = await getPurge({});
+    expect(res.status).toBe(401);
+
+    // The expired row is still there — no work happened.
+    expect(await keyExists(expiredKey)).toBe(true);
+
+    // Cleanup this fixture row's order (CASCADE removes the key).
+    await getServiceClient()
+      .from("order_idempotency_keys")
+      .delete()
+      .eq("key", expiredKey);
+  });
+
+  it("rejects a wrong Bearer token as 401", async () => {
+    const res = await getPurge({ bearer: "not-the-real-secret" });
+    expect(res.status).toBe(401);
+  });
+
+  it("with the Bearer secret: deletes expired rows, leaves unexpired, returns an accurate count", async () => {
+    // Two genuinely-expired rows (expires_at in the past) …
+    const expiredA = await seedKey({
+      keyLabel: "auth-expiredA",
+      expiresAt: new Date(Date.now() - 120_000),
+    });
+    const expiredB = await seedKey({
+      keyLabel: "auth-expiredB",
+      expiresAt: new Date(Date.now() - 5_000),
+    });
+    // … and one row that is firmly in the future (must survive).
+    const unexpired = await seedKey({
+      keyLabel: "auth-unexpired",
+      expiresAt: new Date(Date.now() + 60 * 60_000),
+    });
+
+    const res = await getPurge({ bearer: INTEGRATION_CRON_SECRET });
+    expect(res.status).toBe(200);
+    const body = res.body as { ok: boolean; deleted: number };
+    expect(body.ok).toBe(true);
+
+    // Our two expired rows are gone; the unexpired row remains.
+    expect(await keyExists(expiredA)).toBe(false);
+    expect(await keyExists(expiredB)).toBe(false);
+    expect(await keyExists(unexpired)).toBe(true);
+
+    // The count is accurate: it removed AT LEAST our two expired rows
+    // (a shared local DB may hold other expired rows from sibling suites,
+    // so we assert a lower bound, not an exact global figure — the
+    // per-row assertions above already pin our specific rows).
+    expect(body.deleted).toBeGreaterThanOrEqual(2);
+
+    // Cleanup the surviving unexpired fixture row.
+    await getServiceClient()
+      .from("order_idempotency_keys")
+      .delete()
+      .eq("key", unexpired);
+  });
+
+  it("a second purge right after is a clean no-op for our rows (idempotent sweep)", async () => {
+    // No expired fixtures of ours remain; the route still returns 200.
+    const res = await getPurge({ bearer: INTEGRATION_CRON_SECRET });
+    expect(res.status).toBe(200);
+    const body = res.body as { ok: boolean; deleted: number };
+    expect(body.ok).toBe(true);
+    expect(typeof body.deleted).toBe("number");
   });
 });

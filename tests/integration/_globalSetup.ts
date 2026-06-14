@@ -33,7 +33,11 @@ import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import { parse } from "dotenv";
 import bcrypt from "bcryptjs";
-import { INTEGRATION_PORT, INTEGRATION_BASE_URL } from "./_config";
+import {
+  INTEGRATION_PORT,
+  INTEGRATION_BASE_URL,
+  INTEGRATION_CRON_SECRET,
+} from "./_config";
 
 const REPO_ROOT = resolve(__dirname, "../..");
 const ENV_FILE = resolve(REPO_ROOT, ".env.test.local");
@@ -188,6 +192,11 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
         SUPABASE_SERVICE_ROLE_KEY: serviceKey,
         PORT: String(INTEGRATION_PORT),
+        // F-TD-09 I4: the purge cron route validates Bearer ${CRON_SECRET}.
+        // Inject the shared test secret so the I4 200-path can authenticate.
+        // A real CRON_SECRET in this process's env wins (INTEGRATION_CRON_SECRET
+        // already prefers it); otherwise the throwaway test value is used.
+        CRON_SECRET: INTEGRATION_CRON_SECRET,
       },
     },
   );
