@@ -39,3 +39,17 @@ creates this row; only seed.sql does.
 mapped customer or product rows." The AI vendor (currently Anthropic) plugs
 in behind it via an adapter; the import screen and route never see the
 vendor. Swapping the AI = one new adapter + one wiring line.
+
+**Authenticated DB client** — a database connection stamped with *who is
+asking*. Built per request from the logged-in user's identity, so the
+database's own row-level-security rules decide what that user may see. The
+opposite of the **admin (service-role) client** — the master-key connection
+that ignores those rules and can touch any row, reserved for system/admin
+jobs (login, cron, admin screens) behind `requireServiceRole()`.
+
+**GUC bridge** — the database's "fill in the clipboard" step. The app's RLS
+rules check a session variable (`app.current_user_id`); the bridge is a tiny
+database hook that reads the user's id out of a per-request signed token and
+writes it into that variable, so the rules already written keep working
+unchanged. Inert until a route is actually switched onto the authenticated
+client.
