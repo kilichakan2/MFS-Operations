@@ -22,7 +22,7 @@
  *     `getServiceClient()` to get a fresh adapter against a
  *     test-scoped client.
  *   - `supabaseOrdersRepository` singleton — pre-wired against
- *     `supabaseService` from `@/lib/supabase`. App code (F-07
+ *     `supabaseService` from `@/lib/adapters/supabase/client`. App code (F-07
  *     OrdersService, F-08 routes) imports this.
  *
  * Error contract (per F-05 OrdersRepository JSDoc, verbatim):

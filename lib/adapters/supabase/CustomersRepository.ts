@@ -17,7 +17,7 @@
  *   - `createSupabaseCustomersRepository(client)` factory — tests
  *     pass `getServiceClient()`.
  *   - `supabaseCustomersRepository` singleton — pre-wired against
- *     `supabaseService` from `@/lib/supabase`.
+ *     `supabaseService` from `@/lib/adapters/supabase/client`.
  *
  * Error contract (per F-05 CustomersRepository JSDoc):
  *   findCustomerById → ServiceError on DB failure; returns null on miss.
