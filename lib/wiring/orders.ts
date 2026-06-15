@@ -37,7 +37,13 @@ import {
   supabaseCustomersRepository,
   supabaseProductsRepository,
   supabaseUsersRepository,
+  createSupabaseOrdersRepository,
+  createSupabaseCustomersRepository,
+  createSupabaseProductsRepository,
+  createSupabaseUsersRepository,
+  authenticatedClientForCaller,
 } from "@/lib/adapters/supabase";
+import { dbTokenMinter } from "@/lib/wiring/dbToken";
 
 export const ordersService: OrdersService = createOrdersService({
   orders: supabaseOrdersRepository,
@@ -60,3 +66,52 @@ export const kdsLineDoneUsecase: KdsLineDoneUsecase = createKdsLineDoneUsecase({
   ordersService,
   users: supabaseUsersRepository,
 });
+
+// ─── Per-request authenticated composition (F-RLS-04a) ──────────
+//
+// The pre-wired singletons above use the SERVICE-ROLE client (master key —
+// bypasses RLS) and STAY: they remain the one-line rollback parachute and are
+// still used by the KDS use-cases and the cron. The factories below build a
+// fresh Orders graph bound to ONE caller, reaching the DB as the Postgres
+// `authenticated` role so the GUC-based RLS policies (F-RLS-03 bridge) fire.
+//
+// Per-request — NEVER memoize: the minted token is per-caller, and a memoized
+// client would leak one caller's identity to another (Risk R4). Each call
+// mints a fresh token and builds a fresh client.
+//
+// Hexagonal (ADR-0002): the vendor `SupabaseClient` is constructed and
+// consumed entirely inside this wiring file; the route never sees it — it
+// receives a ready OrdersService / PickingListUsecase built from ports.
+
+/** Build an OrdersService bound to ONE caller, reaching the DB as the
+ *  Postgres `authenticated` role so RLS fires. Per-request — never memoize. */
+export async function ordersServiceForCaller(
+  callerUserId: string,
+): Promise<OrdersService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createOrdersService({
+    orders: createSupabaseOrdersRepository(client),
+    customers: createSupabaseCustomersRepository(client),
+    products: createSupabaseProductsRepository(client),
+  });
+}
+
+/** Picking-list use-case bound to ONE caller (composes the authed
+ *  OrdersService). Per-request — never memoize. */
+export async function pickingListUsecaseForCaller(
+  callerUserId: string,
+): Promise<PickingListUsecase> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  const callerOrdersService = createOrdersService({
+    orders: createSupabaseOrdersRepository(client),
+    customers: createSupabaseCustomersRepository(client),
+    products: createSupabaseProductsRepository(client),
+  });
+  return createPickingListUsecase({
+    ordersService: callerOrdersService,
+    products: createSupabaseProductsRepository(client),
+    users: createSupabaseUsersRepository(client),
+  });
+}

@@ -68,8 +68,10 @@ describe("F-RLS-03 web-crypto DbTokenMinter", () => {
     expect(header).toEqual({ alg: "HS256", typ: "JWT" });
   });
 
-  it("carries { role: 'authenticated', sub, user_id, iat, exp } with a 60s TTL", async () => {
+  it("carries { role: 'authenticated', sub, user_id, iat, exp } with a 30s-back / 120s-forward skew window", async () => {
+    const before = Math.floor(Date.now() / 1000);
     const token = await minter.mint({ userId: USER_ID });
+    const after = Math.floor(Date.now() / 1000);
     const payload = decodeSegment(token.split(".")[1]) as Record<
       string,
       unknown
@@ -79,7 +81,21 @@ describe("F-RLS-03 web-crypto DbTokenMinter", () => {
     expect(payload.user_id).toBe(USER_ID);
     expect(typeof payload.iat).toBe("number");
     expect(typeof payload.exp).toBe("number");
-    expect((payload.exp as number) - (payload.iat as number)).toBe(60);
+
+    const iat = payload.iat as number;
+    const exp = payload.exp as number;
+
+    // iat is backdated 30s for clock-skew tolerance: it must be 30s before
+    // the "now" the token was minted at, bounded by the call window.
+    expect(iat).toBeGreaterThanOrEqual(before - 30);
+    expect(iat).toBeLessThanOrEqual(after - 30);
+    // iat is strictly in the past relative to mint time (skew tolerance).
+    expect(iat).toBeLessThan(before);
+    // exp is 120s after the mint "now".
+    expect(exp).toBeGreaterThanOrEqual(before + 120);
+    expect(exp).toBeLessThanOrEqual(after + 120);
+    // The total claim span is exactly 150s (30s back + 120s forward).
+    expect(exp - iat).toBe(150);
   });
 
   it("produces a signature that verifies under the same secret (independent re-computation)", async () => {

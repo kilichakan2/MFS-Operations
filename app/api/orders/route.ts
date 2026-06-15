@@ -18,7 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { withErrors } from "@/lib/errors";
 import { withRequestContext } from "@/lib/observability";
-import { ordersService } from "@/lib/wiring/orders";
+import { ordersService, ordersServiceForCaller } from "@/lib/wiring/orders";
 import { parseOrThrow } from "@/lib/api/validate";
 import {
   listOrdersQuerySchema,
@@ -31,7 +31,13 @@ import { toOrderListDto } from "@/lib/api/orders/dto";
 
 export const GET = withRequestContext(
   withErrors(async (req: NextRequest) => {
-    requireRole(req, ["admin", "sales", "office", "warehouse", "butcher"]);
+    const caller = requireRole(req, [
+      "admin",
+      "sales",
+      "office",
+      "warehouse",
+      "butcher",
+    ]);
     const q = req.nextUrl.searchParams;
     const filter = parseOrThrow(listOrdersQuerySchema, {
       state: q.get("state"),
@@ -40,6 +46,9 @@ export const GET = withRequestContext(
       created_by: q.get("created_by"),
       limit: q.get("limit"),
     });
+    // F-RLS-04a: read under the per-caller authenticated client (RLS fires).
+    // Rollback = swap `ordersServiceForCaller(caller.userId!)` → `ordersService`.
+    const ordersService = await ordersServiceForCaller(caller.userId!);
     const orders = await ordersService.listOrders(filter);
     return NextResponse.json({ orders: orders.map(toOrderListDto) });
   }),
@@ -55,6 +64,13 @@ export const POST = withRequestContext(
       createOrderBodySchema,
       await req.json().catch(() => null),
     );
+    // reason: create STAYS on the service-role singleton this unit (F-RLS-04a).
+    // createOrder's order/line inserts are atomically coupled to its
+    // idempotency-key bookkeeping on `order_idempotency_keys`, which is
+    // RLS-deny-all (no policy) — running it under the authenticated client
+    // would silently break idempotency. The route-level requireRole already
+    // gates create to admin/sales/office. Flipping create is deferred to the
+    // F-RLS-04a-create follow-up (plan §4.5).
     const order = await ordersService.placeOrder(input, caller.userId!, key);
     return NextResponse.json(
       { id: order.id, reference: order.reference },

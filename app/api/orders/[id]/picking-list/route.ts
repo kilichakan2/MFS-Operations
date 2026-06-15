@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { withErrors } from "@/lib/errors";
 import { withRequestContext } from "@/lib/observability";
-import { pickingListUsecase } from "@/lib/wiring/orders";
+import { pickingListUsecaseForCaller } from "@/lib/wiring/orders";
 import { parseOrThrow } from "@/lib/api/validate";
 import { orderIdParamSchema } from "@/lib/api/orders/schemas";
 import { toPickingListData } from "@/lib/api/orders/dto";
@@ -51,6 +51,9 @@ export const GET = withRequestContext(
       "butcher",
     ]);
     const id = parseOrThrow(orderIdParamSchema, (await params).id);
+    // F-RLS-04a: preview under the per-caller authenticated client (RLS fires).
+    // Rollback = swap `pickingListUsecaseForCaller(caller.userId!)` → `pickingListUsecase`.
+    const pickingListUsecase = await pickingListUsecaseForCaller(caller.userId!);
     const assembly = await pickingListUsecase.previewPickingList(
       id,
       caller.userId!,
@@ -65,6 +68,10 @@ export const POST = withRequestContext(
   withErrors(async (req: NextRequest, { params }: Params) => {
     const caller = requireRole(req, ["admin", "office", "warehouse"]);
     const id = parseOrThrow(orderIdParamSchema, (await params).id);
+    // F-RLS-04a: print (render + placed→printed transition) under the
+    // per-caller authenticated client (RLS fires).
+    // Rollback = swap `pickingListUsecaseForCaller(caller.userId!)` → `pickingListUsecase`.
+    const pickingListUsecase = await pickingListUsecaseForCaller(caller.userId!);
     const assembly = await pickingListUsecase.printPickingList(
       id,
       caller.userId!,
