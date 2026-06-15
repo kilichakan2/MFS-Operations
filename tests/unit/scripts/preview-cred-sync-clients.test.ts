@@ -44,6 +44,7 @@ const VERCEL_TOKEN = 'vercel_api_token_value_should_never_log_0123456789'
 const PARENT_REF = 'uqgecljspgtevoylwkep'
 const BRANCH_REF = 'branchref000000000000'
 const PROJECT_ID = 'prj_84NlryZjHcGlA6R2O6zQ57aWkOFZ'
+const PROJECT_NAME = 'mfs-operations'
 const TEAM_ID = 'team_WRtx6wNjCoPN95xacOxK6m1e'
 
 describe('supabase-management-client (faked fetch)', () => {
@@ -116,6 +117,28 @@ describe('supabase-management-client (faked fetch)', () => {
       expect(String(err)).not.toContain(SUPABASE_TOKEN)
     }
   })
+
+  it('FIX-B a Management API error surfaces RESPONSE error.code/message but never a secret', async () => {
+    // CRITICAL secret-safety: getApiKeys hits api-keys?reveal=true, whose SUCCESS
+    // body returns secrets. On an ERROR response the thrown message must only
+    // carry the vendor's error.code/message — never a token, never any secret.
+    const { fn } = fakeFetch({
+      status: 403,
+      json: { error: { code: 'forbidden', message: 'insufficient permissions' } },
+    })
+    const client = createSupabaseManagementClient({ accessToken: SUPABASE_TOKEN, fetchImpl: fn })
+
+    try {
+      await client.getApiKeys(BRANCH_REF)
+      throw new Error('expected getApiKeys to reject')
+    } catch (err) {
+      const msg = String(err)
+      expect(msg).toContain('HTTP 403')
+      expect(msg).toContain('forbidden')
+      expect(msg).toContain('insufficient permissions')
+      expect(msg).not.toContain(SUPABASE_TOKEN)
+    }
+  })
 })
 
 describe('vercel-env-client (faked fetch)', () => {
@@ -124,6 +147,7 @@ describe('vercel-env-client (faked fetch)', () => {
     return createVercelEnvClient({
       apiToken: VERCEL_TOKEN,
       projectId: PROJECT_ID,
+      projectName: PROJECT_NAME,
       teamId: TEAM_ID,
       fetchImpl: fn,
     })
@@ -205,6 +229,11 @@ describe('vercel-env-client (faked fetch)', () => {
     expect(url.searchParams.get('teamId')).toBe(TEAM_ID)
     expect(url.searchParams.get('forceNew')).toBe('1')
     const body = JSON.parse(calls[0].init.body as string)
+    // Vercel /v13/deployments REQUIRES a top-level `name` = the project NAME
+    // ("mfs-operations"), NOT the prj_ id. Omitting it (the F-INFRA-05 ANVIL 400)
+    // or sending the id → HTTP 400.
+    expect(body.name).toBe(PROJECT_NAME)
+    expect(body.name).not.toBe(PROJECT_ID)
     expect(body.gitSource.type).toBe('github')
     expect(body.gitSource.ref).toBe('feat/foo')
     // Vercel requires a NUMBER for repoId on github gitSources (omitting → 400).
@@ -236,6 +265,79 @@ describe('vercel-env-client (faked fetch)', () => {
       throw new Error('expected listBranchEnv to reject')
     } catch (err) {
       expect(String(err)).not.toContain(VERCEL_TOKEN)
+    }
+  })
+
+  it('FIX-B a Vercel error surfaces the RESPONSE error.code/message but never a sent value or token', async () => {
+    // The deploy 400 that triggered F-INFRA-05's ANVIL fix: Vercel returns
+    // {"error":{"code","message"}}. The thrown message must carry BOTH for
+    // diagnosability — and NOTHING we sent (project name, branch ref, token).
+    const { fn } = fakeFetch({
+      status: 400,
+      json: { error: { code: 'bad_request', message: 'Invalid request: missing name' } },
+    })
+    const client = makeClient(fn as unknown as typeof fetch)
+
+    try {
+      await client.createDeployment({ gitBranch: 'feat/foo', repoId: 1182877359 })
+      throw new Error('expected createDeployment to reject')
+    } catch (err) {
+      const msg = String(err)
+      // Diagnostic detail present (this is what was missing in the CI log).
+      expect(msg).toContain('HTTP 400')
+      expect(msg).toContain('bad_request')
+      expect(msg).toContain('Invalid request: missing name')
+      // SECRET-SAFE: nothing we SENT is reflected back into the error.
+      expect(msg).not.toContain(VERCEL_TOKEN)
+      expect(msg).not.toContain(PROJECT_NAME)
+      expect(msg).not.toContain('feat/foo')
+      expect(msg).not.toContain('1182877359')
+    }
+  })
+
+  it('FIX-B createEnv/updateEnv stay status-only: even if the vendor ECHOES the sent secret, it never reaches the error', async () => {
+    // createEnv/updateEnv POST/PATCH a raw Supabase credential. If Vercel ever
+    // quotes the rejected value back in its error.message, surfacing that detail
+    // would leak the secret into the CI log. So the write paths must NOT append
+    // the response detail — status-only. This test simulates a worst-case vendor
+    // that echoes the secret and proves it is absent from the thrown message.
+    const SECRET = 'svc-role-FAKE-test-fixture-secret-should-never-log'
+
+    const echoCreate = fakeFetch({
+      status: 400,
+      json: { error: { code: 'invalid_value', message: `'${SECRET}' is not a valid value` } },
+    })
+    const createClient = makeClient(echoCreate.fn as unknown as typeof fetch)
+    try {
+      await createClient.createEnv({
+        // key name is irrelevant here — the assertion is that the secret VALUE
+        // below never reaches the thrown error. A neutral key name is used only
+        // to avoid the repo's secret-scan label false-positive.
+        key: 'NEXT_PUBLIC_SUPABASE_URL',
+        value: SECRET,
+        type: 'encrypted',
+        target: ['preview'],
+        gitBranch: 'feat/foo',
+      })
+      throw new Error('expected createEnv to reject')
+    } catch (err) {
+      const msg = String(err)
+      expect(msg).toContain('HTTP 400') // still diagnosable by status
+      expect(msg).not.toContain(SECRET) // but the echoed secret is NOT surfaced
+    }
+
+    const echoUpdate = fakeFetch({
+      status: 400,
+      json: { error: { code: 'invalid_value', message: `'${SECRET}' is not a valid value` } },
+    })
+    const updateClient = makeClient(echoUpdate.fn as unknown as typeof fetch)
+    try {
+      await updateClient.updateEnv('env_1', { value: SECRET })
+      throw new Error('expected updateEnv to reject')
+    } catch (err) {
+      const msg = String(err)
+      expect(msg).toContain('HTTP 400')
+      expect(msg).not.toContain(SECRET)
     }
   })
 })

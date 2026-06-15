@@ -19,12 +19,14 @@
  *    Vercel and asks it to rebuild the preview.
  */
 
+import { describeErrorBody } from './redact.mjs'
+
 const BASE = 'https://api.vercel.com'
 
 /**
- * @param {{ apiToken: string, projectId: string, teamId: string, fetchImpl?: typeof fetch }} opts
+ * @param {{ apiToken: string, projectId: string, projectName: string, teamId: string, fetchImpl?: typeof fetch }} opts
  */
-export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }) {
+export function createVercelEnvClient({ apiToken, projectId, projectName, teamId, fetchImpl }) {
   const doFetch = fetchImpl ?? fetch
 
   /**
@@ -43,9 +45,16 @@ export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }
    * @param {string} fullUrl
    * @param {RequestInit} init
    * @param {string} label
+   * @param {{ safeBody?: boolean }} [opts]
+   *   safeBody — opt-in to appending the RESPONSE's error.code/message to the
+   *   thrown error. ONLY pass true for calls whose REQUEST body carries NO secret
+   *   (deploy, list, delete). createEnv/updateEnv POST/PATCH a raw Supabase
+   *   credential, so they must stay status-only: if Vercel ever echoes the
+   *   rejected value back in its error, surfacing it would leak the secret into
+   *   the CI log — the exact thing redact.mjs exists to prevent.
    * @returns {Promise<any>}
    */
-  async function request(fullUrl, init, label) {
+  async function request(fullUrl, init, label, { safeBody = false } = {}) {
     const res = await doFetch(fullUrl, {
       ...init,
       headers: {
@@ -55,8 +64,11 @@ export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }
       },
     })
     if (!res.ok) {
-      // Status + label only — never the token, never the request body.
-      throw new Error(`Vercel API ${label} failed: HTTP ${res.status}`)
+      // Status + label always. The vendor error.code/message detail is appended
+      // ONLY for non-secret-bearing calls (safeBody) — never the token, never the
+      // request body, never a value we sent.
+      const detail = safeBody ? await describeErrorBody(res) : ''
+      throw new Error(`Vercel API ${label} failed: HTTP ${res.status}${detail}`)
     }
     return res.json()
   }
@@ -72,6 +84,7 @@ export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }
         url(`/v9/projects/${projectId}/env`, { gitBranch, decrypt: 'false' }),
         { method: 'GET' },
         'listBranchEnv',
+        { safeBody: true }, // GET — no secret in the request body.
       )
       const envs = Array.isArray(data?.envs) ? data.envs : Array.isArray(data) ? data : []
       return envs.map((e) => ({ id: e.id, key: e.key }))
@@ -114,6 +127,7 @@ export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }
         url(`/v9/projects/${projectId}/env/${envId}`),
         { method: 'DELETE' },
         'deleteEnv',
+        { safeBody: true }, // DELETE by id — no secret in the request body.
       )
     },
 
@@ -126,8 +140,11 @@ export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }
      */
     async createDeployment({ gitBranch, repoId }) {
       const body = {
-        name: projectId,
-        target: 'preview',
+        // Vercel /v13/deployments REQUIRES a top-level `name` = the project NAME
+        // (e.g. "mfs-operations"), NOT the prj_ id. Omitting it (or sending the
+        // id) → HTTP 400. Confirmed against the live Vercel deploy 400 (F-INFRA-05
+        // ANVIL run on PR #39) and the REST docs.
+        name: projectName,
         gitSource: {
           type: 'github',
           ref: gitBranch,
@@ -140,6 +157,11 @@ export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }
         url('/v13/deployments', { forceNew: '1' }),
         { method: 'POST', body: JSON.stringify(body) },
         'createDeployment',
+        // The deploy body is only name + gitSource (project name, branch ref,
+        // numeric repoId) — all non-secret public identifiers — so the vendor
+        // error detail is safe to surface. This is the call the F-INFRA-05 ANVIL
+        // 400 came from, and the detail is what made it undiagnosable.
+        { safeBody: true },
       )
     },
   }

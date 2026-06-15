@@ -39,6 +39,53 @@ export function redact(value) {
 }
 
 /**
+ * Build a SECRET-SAFE one-line suffix describing a vendor error RESPONSE, for
+ * appending to a thrown Error message. Reads the response body and extracts ONLY
+ * the vendor's own `error.code` / `error.message` (Vercel + Supabase both use the
+ * `{"error":{"code","message"}}` shape). It NEVER reflects the request body, a
+ * token, or any value we sent — only what the vendor returned. If the body is not
+ * parseable JSON, it surfaces at most the first ~200 chars of the text body so a
+ * plain-text error is still diagnosable. On any read failure it returns an empty
+ * string (the caller already has the HTTP status).
+ *
+ * IMPORTANT: callers must only pass this an ERROR response. Never call it on a
+ * success body — some success bodies (e.g. Supabase api-keys?reveal=true) contain
+ * secrets, and this function would surface them.
+ *
+ * 🗣 The robot reading back the vendor's complaint slip out loud — only the slip
+ *    the vendor wrote, never the password the robot handed over.
+ *
+ * @param {{ text?: () => Promise<string> }} res
+ * @returns {Promise<string>} e.g. " (code=BAD_REQUEST: name is required)" or ""
+ */
+export async function describeErrorBody(res) {
+  if (!res || typeof res.text !== 'function') return ''
+  let raw
+  try {
+    raw = await res.text()
+  } catch {
+    return ''
+  }
+  if (typeof raw !== 'string' || raw.length === 0) return ''
+  try {
+    const parsed = JSON.parse(raw)
+    const err = parsed && typeof parsed === 'object' ? parsed.error : undefined
+    if (err && typeof err === 'object') {
+      const code = typeof err.code === 'string' ? err.code : undefined
+      const message = typeof err.message === 'string' ? err.message : undefined
+      if (code !== undefined || message !== undefined) {
+        return ` (code=${code ?? '?'}: ${message ?? '?'})`
+      }
+    }
+    // Parseable JSON but not the {error:{code,message}} shape — fall through to
+    // the truncated-text path rather than dumping the whole parsed object.
+  } catch {
+    // Not JSON — fall through to truncated text.
+  }
+  return ` (body: ${raw.slice(0, 200)})`
+}
+
+/**
  * @param {'info'|'warn'|'error'} level
  * @param {string} msg
  * @param {Record<string, unknown>} [fields]

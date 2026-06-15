@@ -42,6 +42,9 @@ import { createVercelEnvClient } from './preview-cred-sync/vercel-env-client.mjs
 // ── Hardcoded, non-secret config (plan §6). Public identifiers, never secrets. ──
 export const CONFIG = Object.freeze({
   vercelProjectId: 'prj_84NlryZjHcGlA6R2O6zQ57aWkOFZ',
+  // Vercel /v13/deployments REQUIRES a top-level `name` = the project NAME (not
+  // the prj_ id). Omitting it (or sending the id) → HTTP 400. Stable + non-secret.
+  vercelProjectName: 'mfs-operations',
   vercelTeamId: 'team_WRtx6wNjCoPN95xacOxK6m1e',
   supabaseParentRef: 'uqgecljspgtevoylwkep',
   // Numeric GitHub repo id — Vercel /v13/deployments with gitSource.type:'github'
@@ -273,6 +276,7 @@ export async function main(argv, env) {
   const vercelClient = createVercelEnvClient({
     apiToken: inputs.vercelApiToken,
     projectId: CONFIG.vercelProjectId,
+    projectName: CONFIG.vercelProjectName,
     teamId: CONFIG.vercelTeamId,
   })
 

@@ -14,6 +14,8 @@
  *    Endpoints confirmed against the live Management API docs (plan §7).
  */
 
+import { describeErrorBody } from './redact.mjs'
+
 const BASE = 'https://api.supabase.com'
 
 /**
@@ -35,8 +37,12 @@ export function createSupabaseManagementClient({ accessToken, fetchImpl }) {
       },
     })
     if (!res.ok) {
-      // Error message carries the path + status ONLY — never the token.
-      throw new Error(`Supabase Management API ${path} failed: HTTP ${res.status}`)
+      // SECRET-SAFE diagnostics: path + status + ONLY the RESPONSE's
+      // error.code/message (never the token, never any value we sent). This runs
+      // exclusively on a non-OK response, so the secret-bearing SUCCESS body of
+      // api-keys?reveal=true is never read here; describeErrorBody also extracts
+      // specific fields rather than dumping the body.
+      throw new Error(`Supabase Management API ${path} failed: HTTP ${res.status}${await describeErrorBody(res)}`)
     }
     return res.json()
   }
