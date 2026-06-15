@@ -1,0 +1,66 @@
+# F-INFRA-05 — Supabase → Vercel preview credential sync.
+#
+# On every pull-request event this owns the per-PR Preview credentials that the
+# native Supabase↔Vercel integration does NOT inject (see BACKLOG F-INFRA-05 /
+# ADR-0006). The native integration keeps owning the 9 Production-scoped vars;
+# this action owns Preview scope ONLY, scoped to the PR's git branch.
+#
+#   opened / synchronize / reopened -> sync   (wait for branch health, write the
+#                                              4 branch-scoped Preview vars
+#                                              idempotently, conditional redeploy)
+#   closed                          -> cleanup (delete the 4 branch-scoped vars)
+#
+# House style for this repo's first workflow: kebab-case filename, descriptive
+# name, pinned first-party actions (major tag), least-privilege permissions,
+# secrets passed via env from `secrets.*` (never echoed). No third-party
+# marketplace actions — zero new supply-chain surface beyond GitHub's own.
+# The script runs on Node 20 with the built-in global fetch — no `npm install`.
+
+name: Preview cred sync (Supabase → Vercel)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# One run per PR; a new push cancels the in-flight sync so two runs never race
+# on the same branch's Vercel env vars (plan §11, R1).
+concurrency:
+  group: preview-cred-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Least privilege: the job only checks out the repo; it needs no repo-write
+# scope (no pull-requests: write, no contents: write).
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Sync preview creds
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+          PR_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: node scripts/preview-cred-sync.mjs sync
+
+  cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Remove branch-scoped preview creds
+        env:
+          VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+          PR_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+          EVENT_ACTION: ${{ github.event.action }}
+        run: node scripts/preview-cred-sync.mjs cleanup
