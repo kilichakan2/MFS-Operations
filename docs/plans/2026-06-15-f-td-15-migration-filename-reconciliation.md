@@ -459,3 +459,18 @@ Supabase preview branch for this PR, which is disposable and is torn down with t
 
 > **🗣 In plain English:** Undoing this is as simple as renaming the files back — nothing permanent
 > or production-side was changed, so there's no cleanup beyond a normal git revert.
+
+---
+
+## 13. Live verification (ANVIL acceptance)
+
+**2026-06-15 — cloud preview-branch proof.** After a Supabase org/region provisioning
+outage cleared (~14:00 UTC; confirmed external via a control branch on an unrelated PR
+that stalled identically then recovered), PR #40's preview branch built fresh and applied
+all 7 migrations with the renamed 14-digit filenames in correct order — both T2 (RLS) and
+T3 (security-definer) guards passed, project reached `FUNCTIONS_DEPLOYED` / `ACTIVE_HEALTHY`.
+This commit triggers the **second push** (the exact resync that drove the short-name branch
+to `MIGRATIONS_FAILED`); the branch staying healthy after it is the F-TD-15 acceptance proof.
+
+> **🗣 In plain English:** the renamed files built cleanly in the cloud, and this second
+> nudge re-runs the exact step that used to break — if it stays green, the fix is proven live.
