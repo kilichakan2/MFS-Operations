@@ -214,11 +214,24 @@ the trail matters.
 - **Deferred:** 2026-06-13 (during T3)
 - **What:** The repo's `YYYYMMDD_NNN_name.sql` naming is latent-broken — the Supabase CLI derives a migration's `version` from the digits **before the first underscore**, so `20260613_001_…` and `20260613_002_…` both register as version `20260613` and collide (`schema_migrations_pkey` 23505) on `db:reset`. Never surfaced because every prior date had exactly one migration; T3 was the first second-same-day migration and hit it.
 - **Fix applied for T3:** T3 uses a full 14-digit timestamp `20260613020000_harden_security_definer_fns.sql` (unique version, sorts after T2). Going forward all migrations should use full 14-digit timestamps (`YYYYMMDDHHMMSS_name.sql`, like `20260101000000_baseline.sql`), not `YYYYMMDD_NNN`.
-- **Why deferred (residual):** already-shipped `YYYYMMDD_NNN` files (incl. T2 `20260613_001`) are grandfathered — each is the sole migration for its date, so no live collision; renaming files already recorded in prod `schema_migrations` is risky and unnecessary. Deferred work: (a) codify the full-timestamp convention in CLAUDE.md / a lint check; (b) optionally backfill-rename historical files in a migration-hygiene pass.
-- **Detail:** `docs/plans/2026-06-13-t3-harden-security-definer-fns.md` §"Exact file to change".
-- **Priority:** Medium — a footgun that silently rolls back a same-day migration; cheap to codify.
-- **Owner unit:** unscheduled (migration-hygiene)
-- **Status:** open
+- **Escalation 2026-06-15:** the drift had a second, worse consequence than the same-day collision — it broke **Supabase preview-branch resync**. On a PR's 2nd+ push the CLI diffs the branch's recorded 8-digit versions against the local files and fails (`Remote migration versions not found in local migrations directory` → branch `status=MIGRATIONS_FAILED`), which fail-closes any health-gated workflow (preview smoke, F-INFRA-05 cred-sync) and blocked F-RLS-04a. Discovered live on PR #39.
+- **Residual work — now done (F-TD-15 residual (a) + (b), 2026-06-15):**
+  - **(b) files renamed:** the 4 short-named files renamed to full 14-digit (`git mv`, byte-identical): `20260530_001_…`→`20260530000000_…`, `20260601_001_…`→`20260601000000_…`, `20260611_001_…`→`20260611000000_…`, `20260613_001_…`→`20260613000000_…`. Order preserved (`…613000000` < existing `…613020000`). Live references repointed (ADR-0007, the 16-day roadmap, `lib/adapters/supabase/OrdersRepository.ts`, `lib/orders/types.ts`).
+  - **(a) convention codified:** the full-14-digit rule is written into CLAUDE.md ("Local test infrastructure") and **pinned by `tests/unit/migrations/filename-convention.test.ts`** (asserts every migration filename matches `/^\d{14}_[a-z0-9_]+\.sql$/`, rejects a known-bad name, and bars duplicate version prefixes).
+- **Descoped → moved to F-TD-18:** the originally-proposed reconciliation of **prod** `schema_migrations` was **dropped from this unit** — proven inert (preview branches build from the repo's migration FILES, not prod's recorded history; prod is append-only via `apply_migration`). Logged as optional future hygiene under **F-TD-18**.
+- **Detail:** `docs/plans/2026-06-15-f-td-15-migration-filename-reconciliation.md`; original collision context in `docs/plans/2026-06-13-t3-harden-security-definer-fns.md` §"Exact file to change".
+- **Priority:** Medium → resolved.
+- **Owner unit:** F-TD-15 residual (b) (2026-06-15).
+- **Status:** done (F-TD-15 residual (a) + (b) — files renamed to 14-digit, convention codified in CLAUDE.md and pinned by `tests/unit/migrations/filename-convention.test.ts`; prod-history reconciliation descoped to F-TD-18).
+
+### F-TD-18 — Prod migration-history reconciliation (optional hygiene)
+
+- **Logged:** 2026-06-15 (split out of F-TD-15 residual (b))
+- **What:** Prod `schema_migrations` (project uqgecljspgtevoylwkep) holds ~100 real historical records with full-14-digit timestamps and NO baseline row, whereas the repo ships 7 squashed migration files. The two histories diverge.
+- **Why INERT for our workflow:** Supabase preview branches are built from the repo's migration FILES (verified on branch htinhqorvyhajcsvnqgz — it recorded exactly the 7 repo-file versions, not prod's ~100). Prod itself is only ever mutated via `apply_migration` (append-only); we never run `supabase db push` or `supabase db pull` against prod. So the divergence touches no live path — it is NOT on the RLS critical path and does not affect preview-branch health.
+- **Optional future fix:** if we ever adopt `db push`/`db pull` against prod, reconcile prod's recorded history with the repo (mechanism TBD: `supabase migration repair` vs direct `schema_migrations` edit). Own FORGE/ANVIL pass, prod-touching.
+- **Priority:** LOW — optional hygiene, off the critical path.
+- **Status:** open (no scheduled owner).
 
 ### F-TD-16 — Two 🔵 residuals from the F-TD-09 Guard review (cron auth + comment accuracy)
 
