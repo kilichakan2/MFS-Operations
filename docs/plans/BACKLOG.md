@@ -291,6 +291,34 @@ the trail matters.
 
 ---
 
+## RLS track follow-ups (F-RLS-)
+
+### F-RLS-04a-print-guard — Enforce order-stage transition integrity (print-before-complete) for ALL roles
+
+- **Logged:** 2026-06-15 (F-RLS-04a Guard delta re-review; conductor+Hakan accepted the gap as low-severity)
+- **What:** the Orders UPDATE policies gate by role + pre-image state, but Postgres OR's permissive policies independently on USING (row visibility) and WITH CHECK (new row). Result: a role that can *see* a `placed` row for UPDATE can drive it straight to `completed` (skip print), because `orders_update_printed`'s WITH CHECK accepts `completed`. Confirmed live for **warehouse** (newly, via F-RLS-04a's `orders_print_placed`) AND pre-existing for **office/admin** (already in `orders_update_placed` + the loose printed WITH CHECK).
+- **Severity:** LOW — workflow/state-machine looseness, NOT authorization or data exposure. Not reachable through app code (the app only does placed→printed→completed); requires a hand-crafted authenticated DB call with a valid session. Warehouse completing orders is legitimate; only the *skip-print* shortcut is at issue.
+- **Fix:** restructure the order-stage UPDATE policies so each transition pins its pre-image — e.g. split `orders_update_printed` into an explicit `printed→completed` policy with `USING state='printed'` so a `placed` row can never satisfy the completed path. Do it **uniformly for all roles** (warehouse, office, admin) in one migration — NOT bolted onto one role. Add regression tests: each role can only advance one stage at a time.
+- **Why deferred from F-RLS-04a:** doing it there meant restructuring a pre-existing policy + retesting office/admin completion flows = scope creep on a clean cutover. Better as a focused state-machine-integrity unit.
+
+### F-RLS-04a-create — Cut `POST /api/orders` (create) onto RLS (deferred from F-RLS-04a)
+
+- **Logged:** 2026-06-15 (F-RLS-04a Gate 2)
+- **What:** order creation stays on the service-role client in F-RLS-04a because it's atomically coupled to `order_idempotency_keys` (RLS-on, deny-all, no policy — kept service-role). You can't split one transaction across the authenticated + service-role clients.
+- **Fix options:** give `order_idempotency_keys` a policy so the whole create flow can run on the authenticated client, OR redesign the idempotency write so the order insert (authenticated) and the key write (service-role) aren't in one transaction. Needs design.
+- **Note:** until done, Orders expand-contract steps 5–6 (remove the service-role fallback) cannot fully complete (create + KDS still need it).
+
+### F-RLS-04a-kds — Cut the KDS routes onto RLS (carved out of F-RLS-04a)
+
+- **Carved:** 2026-06-15 (F-RLS-04a FORGE Frame / grill)
+- **What:** F-RLS-04a flips only the **front-door** Orders routes (`/api/orders`, `/api/orders/[id]`, `/api/orders/[id]/picking-list`) onto the authenticated DB client. The **KDS routes** — `/api/kds/orders` (public kiosk read) and `/api/kds/lines/[lineId]/done` (line-done write) — were carved out: they use a **side-door identity** (public at middleware; the worker's `butcher_id` arrives in the request body and is validated via the Users port, NOT the standard `mfs_session` / `x-mfs-user-*` headers). The session-minted authenticated client can't feed them without a different identity bridge.
+- **Work needed:** thread the validated `butcher_id` into `app.current_user_id` for the KDS path (set the GUC on the request, or mint a token from the validated butcher) so KDS reads/writes can run on the authenticated client under the existing `orders`/`order_lines` policies. Decide the KDS read model too (a public kiosk read with no user → the GUC policy would deny; may need to keep the read on service-role or define a kiosk policy).
+- **Also closes — KDS audit-attribution gap:** because KDS line-done stays service-role with no session GUC, KDS "done" taps currently record a **NULL user** in `order_audit_log` (the busiest Orders mutation). Cutting KDS over fixes attribution.
+- **⚠️ Blocks Orders cleanup:** until this lands, F-RLS-04a expand-contract **steps 5–6 (remove the Orders service-role fallback)** cannot fully complete — the KDS path still needs service-role.
+- **Schedule:** after F-RLS-04a proves out in prod. Tracked in the roadmap under Day-4's F-RLS-04a block.
+
+---
+
 ## Product features (F-PROD-)
 
 ### F-PROD-01 — HACCP Allergen Assessment version history UI
