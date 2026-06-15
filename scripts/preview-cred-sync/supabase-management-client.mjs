@@ -72,17 +72,6 @@ export function createSupabaseManagementClient({ accessToken, fetchImpl }) {
     },
 
     /**
-     * Derive the branch's project URL (no network — Supabase URLs are
-     * deterministic from the ref; the core's deriveSupabaseUrl owns the rule).
-     * Kept here so the entrypoint reads all "branch facts" from one client.
-     * @param {string} branchRef
-     * @returns {string}
-     */
-    getProjectUrl(branchRef) {
-      return `https://${branchRef}.supabase.co`
-    },
-
-    /**
      * Fetch the branch's symmetric JWT secret, if the Management API still
      * returns one. Under the asymmetric-signing-key migration this may be
      * absent — in that case return null (do NOT throw): the caller logs a loud

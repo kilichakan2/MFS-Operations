@@ -44,6 +44,11 @@ export const CONFIG = Object.freeze({
   vercelProjectId: 'prj_84NlryZjHcGlA6R2O6zQ57aWkOFZ',
   vercelTeamId: 'team_WRtx6wNjCoPN95xacOxK6m1e',
   supabaseParentRef: 'uqgecljspgtevoylwkep',
+  // Numeric GitHub repo id — Vercel /v13/deployments with gitSource.type:'github'
+  // REQUIRES it (omitting → HTTP 400). Stable + non-secret, so pinned here like
+  // projectId/teamId so it works in CI and local `npm run preview:cred-sync`.
+  // Overridable via VERCEL_GIT_REPO_ID (env wins) but never required.
+  githubRepoId: 1182877359,
 })
 
 /**
@@ -111,7 +116,7 @@ export async function waitForBranchAndReadCreds(deps) {
  * @param {ReturnType<typeof createVercelEnvClient>} deps.vercelClient
  * @param {{ branchRef: string, url: string, anonKey: string, serviceRoleKey: string, jwtSecret: string | null }} deps.creds
  * @param {string} deps.gitBranch
- * @param {string} [deps.repoId]
+ * @param {number} [deps.repoId]
  * @returns {Promise<{ created: number, updated: number, redeployed: boolean }>}
  */
 export async function syncEnvVars(deps) {
@@ -168,7 +173,7 @@ export async function syncEnvVars(deps) {
  * @param {ReturnType<typeof createSupabaseManagementClient>} deps.supabaseClient
  * @param {ReturnType<typeof createVercelEnvClient>} deps.vercelClient
  * @param {string} deps.gitBranch
- * @param {string} [deps.repoId]
+ * @param {number} [deps.repoId]
  * @param {(ms: number) => Promise<void>} [deps.sleepImpl]
  * @param {() => number} [deps.now]
  * @param {{ totalTimeoutMs?: number }} [deps.pollOpts]
@@ -212,7 +217,7 @@ export async function runCleanup(deps) {
  *
  * @param {NodeJS.ProcessEnv} env
  * @param {string} mode
- * @returns {{ gitBranch: string, repoId?: string, supabaseAccessToken: string, vercelApiToken: string }}
+ * @returns {{ gitBranch: string, repoId: number, supabaseAccessToken: string, vercelApiToken: string }}
  */
 export function readEnv(env, mode) {
   const gitBranch = env.PR_GIT_BRANCH ?? ''
@@ -228,9 +233,17 @@ export function readEnv(env, mode) {
   if (mode === 'sync' && !supabaseAccessToken) {
     throw new Error('SUPABASE_ACCESS_TOKEN is required for sync — refusing to run (fail closed)')
   }
+  // repoId: env override wins (Vercel wants a number, env is always a string →
+  // coerce), else the pinned non-secret constant. Always present so the redeploy
+  // body never omits repoId (would 400 on /v13/deployments with a github source).
+  const repoIdOverride = env.VERCEL_GIT_REPO_ID
+  const repoId = repoIdOverride ? Number(repoIdOverride) : CONFIG.githubRepoId
+  if (!Number.isInteger(repoId)) {
+    throw new Error(`VERCEL_GIT_REPO_ID must be a numeric GitHub repo id, got "${repoIdOverride}" (fail closed)`)
+  }
   return {
     gitBranch,
-    repoId: env.VERCEL_GIT_REPO_ID || undefined,
+    repoId,
     supabaseAccessToken,
     vercelApiToken,
   }

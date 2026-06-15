@@ -121,7 +121,7 @@ export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }
      * Trigger a fresh Preview deployment for the PR's git branch (the redeploy
      * after the vars are in place — plan §9). `forceNew=1` so Vercel does not
      * dedupe against the previous (credential-less) build.
-     * @param {{ gitBranch: string, repoId?: string }} opts
+     * @param {{ gitBranch: string, repoId?: number }} opts
      * @returns {Promise<any>}
      */
     async createDeployment({ gitBranch, repoId }) {
@@ -131,7 +131,9 @@ export function createVercelEnvClient({ apiToken, projectId, teamId, fetchImpl }
         gitSource: {
           type: 'github',
           ref: gitBranch,
-          ...(repoId ? { repoId } : {}),
+          // Vercel requires a numeric repoId for github gitSources; the caller
+          // always supplies it (pinned constant or env override).
+          ...(repoId !== undefined ? { repoId } : {}),
         },
       }
       return request(
