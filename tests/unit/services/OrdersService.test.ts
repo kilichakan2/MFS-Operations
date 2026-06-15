@@ -275,7 +275,7 @@ describe("OrdersService.editOrder", () => {
   it("throws NotFoundError when the order does not exist", async () => {
     const { service } = make();
     await expect(
-      service.editOrder(UNKNOWN_ID, {}, undefined, "admin", USER_ID),
+      service.editOrder(UNKNOWN_ID, {}, undefined, "admin"),
     ).rejects.toThrowError(NotFoundError);
   });
 
@@ -296,7 +296,6 @@ describe("OrdersService.editOrder", () => {
         { deliveryNotes: "x" },
         undefined,
         "admin",
-        USER_ID,
       );
     } catch (e) {
       caught = e;
@@ -319,7 +318,6 @@ describe("OrdersService.editOrder", () => {
         { deliveryNotes: "x" },
         undefined,
         "sales",
-        USER_ID,
       );
     } catch (e) {
       caught = e;
@@ -338,7 +336,6 @@ describe("OrdersService.editOrder", () => {
       { deliveryNotes: "urgent" },
       undefined,
       "sales",
-      USER_ID,
     );
     expect(updated.deliveryNotes).toBe("urgent");
   });
@@ -352,7 +349,6 @@ describe("OrdersService.editOrder", () => {
       { deliveryNotes: "fast track" },
       undefined,
       "office",
-      USER_ID,
     );
     expect(updated.deliveryNotes).toBe("fast track");
   });
@@ -375,7 +371,6 @@ describe("OrdersService.editOrder", () => {
           },
         ],
         "admin",
-        USER_ID,
       );
     } catch (e) {
       caught = e;
@@ -395,13 +390,7 @@ describe("OrdersService.editOrder", () => {
       const { service } = make();
       const placed = await service.placeOrder(buildInput(), USER_ID);
       await expect(
-        service.editOrder(
-          placed.id,
-          { deliveryNotes: "x" },
-          undefined,
-          role,
-          USER_ID,
-        ),
+        service.editOrder(placed.id, { deliveryNotes: "x" }, undefined, role),
       ).rejects.toThrowError(ForbiddenError);
     },
   );
@@ -762,13 +751,7 @@ describe("OrdersService architecture pins", () => {
     const placed = await service.placeOrder(buildInput(), USER_ID);
     await service.printOrder(placed.id, USER_ID, T);
     await expect(
-      service.editOrder(
-        placed.id,
-        { deliveryNotes: "x" },
-        undefined,
-        "sales",
-        USER_ID,
-      ),
+      service.editOrder(placed.id, { deliveryNotes: "x" }, undefined, "sales"),
     ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
@@ -781,11 +764,12 @@ describe("OrdersService architecture pins", () => {
     // F-07 is the first service; today this is trivially true, but
     // the assertion catches drift when F-13 / F-14 / etc. land.
     expect(src).not.toMatch(/from ['"][^'"]*Service['"]/);
-    // Also forbid runtime observability coupling — only the type-only
-    // `Role` import is allowed. The value-import form `import { … }`
-    // is the one that couples runtime; the type-only form
-    // `import type { Role } from "@/lib/observability"` does not
-    // match because the regex requires braces around runtime exports.
+    // Forbid runtime observability coupling. Since ARCH-FU-01 the
+    // service imports `type Role` from `@/lib/domain` (not observability),
+    // so there is no observability import at all. The value-import form
+    // `import { … } from "@/lib/observability"` is the runtime-coupling
+    // shape this guards against; the type-only `import type` form would
+    // not match anyway (it carries `type`, not bare braces).
     expect(src).not.toMatch(
       /import \{ [^}]* \} from ['"]@\/lib\/observability/,
     );

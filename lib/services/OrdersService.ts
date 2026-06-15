@@ -282,11 +282,11 @@ export interface OrdersService {
    *   4. orders.updateOrder(id, patch, lineReplacement). Returns the
    *      updated Order.
    *
-   * Note: `callerUserId` is currently unused by the service body — the
-   * port's updateOrder does not record who edited an order (only the
-   * audit log does). The parameter is on the signature for forward
-   * compatibility (F-13 / F-19 may persist an `edited_by` per audit
-   * row) and for symmetry with the other write methods.
+   * Note: there is no `callerUserId` parameter — the port's updateOrder
+   * does not record who edited an order (only the audit log does), so
+   * the service has nothing to do with the editor's id. It was removed
+   * in F-13 PR1 (ARCH-FU-03) as dead weight; a future `edited_by` audit
+   * requirement (F-19) re-introduces it with a real consumer.
    *
    * Throws: NotFoundError | ConflictError | ForbiddenError | ValidationError | ServiceError.
    */
@@ -295,7 +295,6 @@ export interface OrdersService {
     patch: OrderPatch,
     lineReplacement: readonly CreateOrderLineInput[] | undefined,
     callerRole: Role,
-    callerUserId: string,
   ): Promise<Order>;
 
   /**
@@ -435,7 +434,7 @@ export function createOrdersService(repos: OrdersServiceRepos): OrdersService {
 
     // ─── editOrder ─────────────────────────────────────────────
 
-    async editOrder(id, patch, lineReplacement, callerRole, _callerUserId) {
+    async editOrder(id, patch, lineReplacement, callerRole) {
       const order = await orders.findOrderById(id);
       if (order === null) {
         throw new NotFoundError("Order not found");
