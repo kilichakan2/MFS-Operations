@@ -24,6 +24,8 @@ import {
   runCleanup,
   syncEnvVars,
   waitForBranchAndReadCreds,
+  readEnv,
+  CONFIG,
 } from '../../../scripts/preview-cred-sync.mjs'
 
 const SCRIPT = resolve(__dirname, '../../../scripts/preview-cred-sync.mjs')
@@ -120,7 +122,6 @@ function fakeSupabaseClient(overrides: Record<string, unknown> = {}) {
     ]),
     getApiKeys: vi.fn(async () => ({ anonKey: 'anon-val', serviceRoleKey: 'svc-val' })),
     getJwtSecret: vi.fn(async () => 'jwt-val'),
-    getProjectUrl: vi.fn((ref: string) => `https://${ref}.supabase.co`),
     ...overrides,
   }
 }
@@ -245,10 +246,13 @@ describe('runSync wiring (fake clients)', () => {
 })
 
 describe('syncEnvVars redeploy decision (fake clients)', () => {
-  it('does NOT redeploy on a pure no-op (loop guard) — but with creates it does', async () => {
-    // No-op is only possible if mapCreds yields zero writes, which never happens
-    // for valid creds; instead assert the conditional via decideRedeploy through
-    // the public path: a fresh branch (creates>0) redeploys.
+  // The false branch of decideRedeploy (zero writes → no redeploy) cannot be
+  // reached honestly through syncEnvVars: mapCredsToEnvWrites always yields ≥3
+  // writes for valid creds, each of which is a create or an update, so
+  // created+updated > 0 on every call. That false branch is owned by the
+  // pure-core test U16 (core.test.ts). Here we assert the path syncEnvVars CAN
+  // take: any env write triggers exactly one redeploy.
+  it('triggers exactly one redeploy whenever env writes occurred (created+updated > 0)', async () => {
     const vercelClient = fakeVercelClient([])
     const result = await syncEnvVars({
       vercelClient,
@@ -261,8 +265,59 @@ describe('syncEnvVars redeploy decision (fake clients)', () => {
         jwtSecret: 'j',
       },
     })
+    expect(result.created + result.updated).toBeGreaterThan(0)
     expect(result.redeployed).toBe(true)
     expect(vercelClient.createDeployment).toHaveBeenCalledTimes(1)
+  })
+
+  it('passes the pinned numeric repoId through to the redeploy body', async () => {
+    const vercelClient = fakeVercelClient([])
+    await syncEnvVars({
+      vercelClient,
+      gitBranch: 'feat/foo',
+      repoId: 1182877359,
+      creds: {
+        branchRef: 'branchref000',
+        url: 'https://branchref000.supabase.co',
+        anonKey: 'a',
+        serviceRoleKey: 's',
+        jwtSecret: 'j',
+      },
+    })
+    expect(vercelClient.createDeployment).toHaveBeenCalledWith(
+      expect.objectContaining({ gitBranch: 'feat/foo', repoId: 1182877359 }),
+    )
+  })
+})
+
+describe('readEnv repoId resolution', () => {
+  // Cast: readEnv only ever reads a handful of keys; the test env literal stands
+  // in for a full NodeJS.ProcessEnv.
+  const env = (extra: Record<string, string> = {}): NodeJS.ProcessEnv =>
+    ({
+      PR_GIT_BRANCH: 'feat/foo',
+      VERCEL_API_TOKEN: 'x'.repeat(24),
+      SUPABASE_ACCESS_TOKEN: 'y'.repeat(24),
+      ...extra,
+    }) as unknown as NodeJS.ProcessEnv
+
+  it('defaults repoId to the pinned numeric constant when no override is set', () => {
+    const inputs = readEnv(env(), 'sync')
+    expect(inputs.repoId).toBe(CONFIG.githubRepoId)
+    expect(inputs.repoId).toBe(1182877359)
+    expect(typeof inputs.repoId).toBe('number')
+  })
+
+  it('lets VERCEL_GIT_REPO_ID override and coerces it to a number', () => {
+    const inputs = readEnv(env({ VERCEL_GIT_REPO_ID: '999' }), 'sync')
+    expect(inputs.repoId).toBe(999)
+    expect(typeof inputs.repoId).toBe('number')
+  })
+
+  it('fails closed when the override is non-numeric', () => {
+    expect(() => readEnv(env({ VERCEL_GIT_REPO_ID: 'not-a-number' }), 'sync')).toThrow(
+      /numeric GitHub repo id/,
+    )
   })
 })
 

@@ -22,11 +22,13 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
-# One run per PR; a new push cancels the in-flight sync so two runs never race
-# on the same branch's Vercel env vars (plan §11, R1).
-concurrency:
-  group: preview-cred-sync-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# Concurrency is set PER JOB, not workflow-wide, because the two paths want
+# opposite behaviour (plan §11, R1):
+#   - sync: a new push SHOULD cancel the in-flight sync so two runs never race on
+#     the same branch's Vercel env vars (cancel-in-progress: true).
+#   - cleanup: a delete pass must ALWAYS finish — a close-then-reopen race must
+#     not cancel a half-done cleanup and leave stray vars (cancel-in-progress:
+#     false), and it rides its own group so a sync cancel never reaches it.
 
 # Least privilege: the job only checks out the repo; it needs no repo-write
 # scope (no pull-requests: write, no contents: write).
@@ -37,6 +39,10 @@ jobs:
   sync:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
+    # A new push cancels the in-flight sync (re-runs here are fine — latest creds win).
+    concurrency:
+      group: preview-cred-sync-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,12 +53,16 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
           PR_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
-          EVENT_ACTION: ${{ github.event.action }}
         run: node scripts/preview-cred-sync.mjs sync
 
   cleanup:
     if: github.event.action == 'closed'
     runs-on: ubuntu-latest
+    # Own group + never cancel: a close-then-reopen race must not abort a
+    # half-done delete pass and leave stray Preview vars behind.
+    concurrency:
+      group: preview-cred-sync-cleanup-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -62,5 +72,4 @@ jobs:
         env:
           VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
           PR_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
-          EVENT_ACTION: ${{ github.event.action }}
         run: node scripts/preview-cred-sync.mjs cleanup

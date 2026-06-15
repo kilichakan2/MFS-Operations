@@ -197,7 +197,7 @@ describe('vercel-env-client (faked fetch)', () => {
     const { fn, calls } = fakeFetch({ json: { id: 'dpl_new' } })
     const client = makeClient(fn as unknown as typeof fetch)
 
-    await client.createDeployment({ gitBranch: 'feat/foo', repoId: '12345' })
+    await client.createDeployment({ gitBranch: 'feat/foo', repoId: 1182877359 })
 
     const url = new URL(calls[0].url)
     expect(calls[0].init.method).toBe('POST')
@@ -205,7 +205,11 @@ describe('vercel-env-client (faked fetch)', () => {
     expect(url.searchParams.get('teamId')).toBe(TEAM_ID)
     expect(url.searchParams.get('forceNew')).toBe('1')
     const body = JSON.parse(calls[0].init.body as string)
+    expect(body.gitSource.type).toBe('github')
     expect(body.gitSource.ref).toBe('feat/foo')
+    // Vercel requires a NUMBER for repoId on github gitSources (omitting → 400).
+    expect(body.gitSource.repoId).toBe(1182877359)
+    expect(typeof body.gitSource.repoId).toBe('number')
   })
 
   it('U19 a 409/non-2xx Vercel response surfaces a typed error (never a silent crash)', async () => {
