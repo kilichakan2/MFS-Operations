@@ -19,7 +19,15 @@ export type {
 } from "./Order";
 export type { Customer } from "./Customer";
 export type { Product } from "./Product";
-export type { UserSummary } from "./User";
+export type {
+  UserSummary,
+  UserCredential,
+  AuthType,
+  CreateUserInput,
+  UpdateUserInput,
+  CreateUserPersist,
+  UpdateUserPersist,
+} from "./User";
 // Role: the canonical staff-role union (ARCH-FU-01 moved it here from
 // lib/observability/Caller.ts). The type is re-exported here; the runtime
 // mirror + predicate are value exports below.

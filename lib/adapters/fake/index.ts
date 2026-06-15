@@ -31,5 +31,7 @@ export {
 export {
   createFakeUsersRepository,
   fakeUsersRepository,
+  type FakeUserRow,
+  type FakeUserSeed,
 } from "./UsersRepository";
 export { createFakeLLMExtractor, fakeLLMExtractor } from "./LLMExtractor";
