@@ -70,7 +70,7 @@ Run in severity order:
   rides T4). Plan archived. One-time mass re-login occurred at deploy.
 - ✅ **T2 — enable RLS on the 42 exposed tables (step-1-only fast pass).** SHIPPED
   2026-06-13 (PR #31, squash `90aa565`). One migration
-  (`supabase/migrations/20260613_001_enable_rls_42_tables.sql`): drift-guard DO-block
+  (`supabase/migrations/20260613000000_enable_rls_42_tables.sql`): drift-guard DO-block
   - 42× `ALTER TABLE … ENABLE ROW LEVEL SECURITY` (ENABLE never FORCE) + FORCE/enabled
     post-check, all in one transaction. Applied to prod via Supabase MCP
     `apply_migration`. Full FORGE + ANVIL cert
