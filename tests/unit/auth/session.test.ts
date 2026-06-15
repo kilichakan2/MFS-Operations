@@ -15,7 +15,7 @@ import { describe, it, expect } from "vitest";
 import { NextRequest } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { UnauthorizedError, ForbiddenError } from "@/lib/errors";
-import type { Role } from "@/lib/observability/Caller";
+import type { Role } from "@/lib/domain";
 
 function makeRequest(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest("http://localhost/test", { headers });

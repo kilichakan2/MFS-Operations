@@ -11,16 +11,16 @@
  *   - the picking-list use-case (`lib/usecases/pickingList.ts`)
  *     resolves the printing user's display name for the sheet footer.
  *
- * Why `role` is a plain `string`, not the `Role` union:
- *   The canonical `Role` union currently lives at
- *   `lib/observability/Caller.ts` (ARCH-FU-01) and importing
- *   observability into `lib/domain` would invert the dependency
- *   direction. F-13 (Users + Auth) moves `Role` to
- *   `lib/domain/Role.ts` and tightens this field to the union.
+ * `role` is the `Role` union (tightened from `string` in F-13 PR1,
+ * ARCH-FU-01): the canonical role vocabulary now lives in the domain
+ * layer at `lib/domain/Role.ts`, so this field references it directly
+ * without inverting the dependency direction.
  *
  * F-13 absorbs/expands this projection into the full staff-management
  * domain model. Until then it stays deliberately tiny.
  */
+
+import type { Role } from "./Role";
 
 /**
  * A user as the Orders domain sees it. Read-only projection — there
@@ -29,7 +29,6 @@
 export interface UserSummary {
   readonly id: string;
   readonly name: string;
-  /** Plain string today; tightened to the Role union in F-13. */
-  readonly role: string;
+  readonly role: Role;
   readonly active: boolean;
 }

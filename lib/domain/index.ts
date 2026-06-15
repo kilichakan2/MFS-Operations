@@ -20,6 +20,11 @@ export type {
 export type { Customer } from "./Customer";
 export type { Product } from "./Product";
 export type { UserSummary } from "./User";
+// Role: the canonical staff-role union (ARCH-FU-01 moved it here from
+// lib/observability/Caller.ts). The type is re-exported here; the runtime
+// mirror + predicate are value exports below.
+export type { Role } from "./Role";
+export { KNOWN_ROLES, isKnownRole } from "./Role";
 export type { SessionClaims } from "./Session";
 export type {
   CustomerCleanRow,

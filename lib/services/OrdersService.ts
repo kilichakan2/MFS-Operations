@@ -81,17 +81,14 @@
  *     bleeds with F-FND-03's observability shape. Primitives are
  *     simpler and have the same expressive power.
  *
- * `Role` import forward path (F-13).
- *   - Today: `import type { Role } from '@/lib/observability'`. The
- *     `Role` union currently lives at `lib/observability/Caller.ts:26-32`
- *     because that file's docstring (lines 11-16) records that "When
- *     the Users + Auth migration lands (F-13), this canonical type
- *     moves to a domain module (`lib/domain/Role.ts`)."
- *   - F-13: this import becomes `import type { Role } from '@/lib/domain'`.
- *     One line change, no behavioural impact. The TYPE-ONLY import
- *     today is erased at compile time, so the service file's compiled
- *     JavaScript has zero references to `@/lib/observability` —
- *     no runtime coupling to break.
+ * `Role` import (F-13 PR1, done).
+ *   - This service imports `type Role from '@/lib/domain'`. ARCH-FU-01
+ *     (F-13 PR1) moved the `Role` union out of
+ *     `lib/observability/Caller.ts` into the domain layer
+ *     (`lib/domain/Role.ts`), exactly as the old Caller docstring
+ *     promised. The import is TYPE-ONLY, erased at compile time, so the
+ *     service file's compiled JavaScript has zero references to
+ *     `@/lib/observability` — no runtime coupling.
  *
  * Error contract per method (cited verbatim from F-05's port JSDoc
  * + the locked Gate 1 spec).
@@ -122,7 +119,7 @@
  *     F-19 revisits.
  */
 
-import type { Role } from "@/lib/observability";
+import type { Role } from "@/lib/domain";
 import {
   NotFoundError,
   ConflictError,
