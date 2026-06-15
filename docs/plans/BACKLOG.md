@@ -275,7 +275,7 @@ the trail matters.
 - **Owner unit:** unscheduled (post-migration ops)
 - **Status:** open
 
-### F-INFRA-05 — Supabase→Vercel integration not injecting preview-branch DB credentials  ⚠️ BLOCKS F-RLS-04a
+### F-INFRA-05 — Supabase→Vercel preview-branch credential sync  ✅ SHIPPED (2026-06-15, PR #41 / `472d3f5`)
 
 - **Surfaced:** 2026-06-14 (during F-RLS-03 ANVIL Lock, PR #38)
 - **What:** The Supabase↔Vercel integration shows **connected on both sides** but injects **no** Supabase credentials into the Vercel **Preview** scope. A preview deploy therefore has zero DB creds (all prod Supabase vars are correctly Production-only per ADR-0006), so `createClient` throws and every route 500s; the Gate-4 preview smoke fails closed at the DB-identity probe. **Ruled out:** the timing race (deploy built before the Supabase branch existed) — a clean redeploy *after* the branch was healthy still 500'd. So the integration's preview env-var sync is genuinely not running/writing.
@@ -285,7 +285,9 @@ the trail matters.
 - **Detail:** ADR-0006 (per-PR preview branches), `docs/runbooks/preview-smoke.md`, cert `docs/anvil/2026-06-14-f-rls-03-authenticated-db-client-cert.md` (E2E section)
 - **Owner unit:** F-INFRA-05 — **schedule before F-RLS-04a (Day 4)**
 - **Fix shipping:** an owned GitHub Action now does the sync automatically — `.github/workflows/preview-cred-sync.yml` + `scripts/preview-cred-sync*` (pure core + injected Supabase/Vercel I/O clients), runbook `docs/runbooks/preview-cred-sync.md`, plan `docs/plans/2026-06-15-f-infra-05-preview-cred-sync.md`. Writes the 4 branch-scoped Preview vars idempotently on PR open/sync/reopen + conditional redeploy, deletes them on PR close. Manual env bridge retired. Zero new deps.
-- **Status:** **IN PROGRESS** (branch `feat/f-infra-05-preview-cred-sync`; code + unit tests green). **Live acceptance pending at ANVIL Gate 4** (throwaway PR → green preview + 8/8 + 4/4 → close → vars gone) — this also resolves the §10 JWT-secret unknown (Supabase asymmetric-key migration may withhold `SUPABASE_JWT_SECRET`; the 3-key path + loud warning is the defined fallback). F-RLS-04a unblocked once this ANVIL-certs.
+- **Status:** ✅ **SHIPPED 2026-06-15** (PR #41 / `472d3f5`; supersedes closed #39). Live acceptance proven on PR #41's fresh 14-digit preview branch (`imrobmcrjicmrgxawlza`, run `27555331185`): branch-health poll → 3 Preview-scoped branch-scoped creds synced (redacted) → JWT warn-and-continue → redeploy fired → Vercel `dpl_G1g6…` came up `READY` as **Preview** (not prod). Took 3 live runs (HTTP-400 redeploy bug → fixed; eu-west-2 outage timeout → external; green on #41 after rebasing onto F-TD-15's 14-digit migrations + fresh-provisioning). Cert `docs/anvil/2026-06-15-f-infra-05-preview-cred-sync-cert.md`; review `docs/reviews/2026-06-15-f-infra-05-preview-cred-sync-review.md`. CI tooling only — no app code, no deps, no migration.
+  - **⚠️ Residual → F-RLS-04a (NOT solved here):** the Supabase **Management API does NOT return `SUPABASE_JWT_SECRET`** for a branch (asymmetric-key migration), so F-RLS-04a's preview-JWT need must be sourced another way (mechanism undecided). The 3-key path + loud warning is the defined fallback.
+  - **🔵 follow-up:** confirm the `closed`-event cleanup fully deletes the branch-scoped Preview vars (run #41 showed `created:0, updated:3` → the #39-close cleanup left vars that #41 overwrote; benign, idempotent).
 
 ---
 
