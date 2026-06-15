@@ -37,6 +37,16 @@
  *
  * Each test gets a fresh trio via `make()` so cases are independent.
  *
+ * Round-trip read-back pattern (ARCH-FU-04 — the template for every
+ * future *Service unit suite, incl. UsersService.test.ts):
+ *   A write method's happy-path test must do more than assert the
+ *   RETURNED object. It must read the row back through a finder
+ *   (`findOrderById`, `findUserById`, …) and assert the data actually
+ *   persisted. A write that returns a correct-looking object but never
+ *   commits it is a real, silent bug class; only a read-back catches it.
+ *   See the catalogued-lines placeOrder case below for the worked shape:
+ *   place → assert returned Order → findById → assert the persisted Order.
+ *
  * Determinism:
  *   - `when` arguments are fixed Date instances.
  *   - Customer / product IDs are stable strings.
@@ -229,6 +239,21 @@ describe("OrdersService.placeOrder", () => {
     expect(result.lines.length).toBe(1);
     expect(result.lines[0].productId).toBe(PRODUCT_ID);
     expect(result.lines[0].lineNumber).toBe(1);
+
+    // ARCH-FU-04 round-trip read-back: the write doesn't just RETURN the
+    // right shape — read it back through a finder and assert it actually
+    // landed in the store. Catches a write that returns a correct object
+    // but fails to persist (a class of bug the return-value-only assertion
+    // above is blind to). This is the documented happy-path template.
+    const persisted = await service.findOrderById(result.id);
+    expect(persisted).not.toBeNull();
+    expect(persisted?.id).toBe(result.id);
+    expect(persisted?.reference).toBe(result.reference);
+    expect(persisted?.customerId).toBe(CUSTOMER_ID);
+    expect(persisted?.state).toBe("placed");
+    expect(persisted?.createdBy).toBe(USER_ID);
+    expect(persisted?.lines.length).toBe(1);
+    expect(persisted?.lines[0].productId).toBe(PRODUCT_ID);
   });
 
   it("persists an order with all ad-hoc lines (no product lookup)", async () => {
