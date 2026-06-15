@@ -300,7 +300,7 @@ export async function signSessionCookie(session: {
 export async function api(
   path: string,
   opts: {
-    method?: "GET" | "POST" | "PUT" | "DELETE";
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     role?: string; // sets mfs_role + mfs_session.role
     userId?: string; // sets mfs_user_id + mfs_session.userId
     name?: string; // optional — name to put in mfs_session

@@ -1,30 +1,44 @@
 /**
  * app/api/admin/users/route.ts
  * GET  — list all users
- * POST — create a new user (bcrypt-hashes PIN or password)
+ * POST — create a new user (the service bcrypt-hashes the PIN or password)
  *
- * Uses SUPABASE_SERVICE_ROLE_KEY — bypasses RLS.
- * Credentials are cast to String() before bcrypt to prevent type errors.
+ * F-13 PR2: re-pointed through usersService (service-role posture, RLS still
+ * bypassed — unchanged from today). The service hashes the credential and the
+ * adapter writes the role-appropriate column; this route keeps the admin-role
+ * guard, the field validation, and the secondary_roles 'admin' filter.
+ *
+ * Both GET and POST return the exact 8-field snake_case AppUser shape the admin
+ * page (app/admin/page.tsx) reads — the camelCase UserSummary the service
+ * returns is projected back before responding.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-import { passwordHasher }            from '@/lib/wiring/password'
+import { usersService }              from '@/lib/wiring/users'
+import type { Role, UserSummary }    from '@/lib/domain'
 
-const supabase = supabaseService
-
-export async function GET(req: NextRequest) {
-  const { data, error } = await supabase
-    .from('users')
-    .select('id, name, role, secondary_roles, active, last_login_at, created_at, email')
-    .order('created_at', { ascending: true })
-
-  if (error) {
-    console.error('[GET /api/admin/users]', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+/** Project the camelCase domain user back to today's snake_case AppUser shape. */
+function toAppUser(u: UserSummary) {
+  return {
+    id:              u.id,
+    name:            u.name,
+    role:            u.role,
+    secondary_roles: u.secondaryRoles,
+    active:          u.active,
+    last_login_at:   u.lastLoginAt,
+    created_at:      u.createdAt,
+    email:           u.email,
   }
+}
 
-  return NextResponse.json(data)
+export async function GET(_req: NextRequest) {
+  try {
+    const users = await usersService.listAllUsers()
+    return NextResponse.json(users.map(toAppUser))
+  } catch (err) {
+    console.error('[GET /api/admin/users]', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -41,7 +55,7 @@ export async function POST(req: NextRequest) {
     const credential      = String(body?.credential ?? '').trim()
     const email           = body?.email ? String(body.email).trim() || null : null
     const secondaryRoles  = (Array.isArray(body?.secondary_roles) ? body.secondary_roles : [])
-      .filter((r: unknown) => typeof r === 'string' && r !== 'admin') as string[]
+      .filter((r: unknown) => typeof r === 'string' && r !== 'admin') as Role[]
 
     if (!name || !role || !credential) {
       return NextResponse.json(
@@ -65,25 +79,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Hash via the PasswordHasher port (cost 12, String() casting owned by the
-    // adapter). A genuine hashing failure propagates to the outer try/catch,
-    // which already returns a 500.
-    const hash = await passwordHasher.hash(credential)
+    // The service hashes the credential (via the PasswordHasher port) and the
+    // adapter writes the role-appropriate column — no bcrypt, no column choice
+    // in this route any more.
+    const created = await usersService.createUser({
+      name,
+      role: role as Role,
+      credential,
+      secondaryRoles,
+      email,
+    })
 
-    const field = role === 'admin' ? 'password_hash' : 'pin_hash'
-
-    const { data, error } = await supabase
-      .from('users')
-      .insert({ name, role, secondary_roles: secondaryRoles, [field]: hash, active: true, ...(email ? { email } : {}) })
-      .select('id, name, role, secondary_roles, active, last_login_at, created_at, email')
-      .single()
-
-    if (error) {
-      console.error('[POST /api/admin/users]', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json(data, { status: 201 })
+    return NextResponse.json(toAppUser(created), { status: 201 })
   } catch (err) {
     console.error('[POST /api/admin/users] Unhandled:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
