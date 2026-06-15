@@ -14,3 +14,8 @@ export {
   type OrdersService,
   type OrdersServiceRepos,
 } from "./OrdersService";
+export {
+  createUsersService,
+  type UsersService,
+  type UsersServiceDeps,
+} from "./UsersService";
