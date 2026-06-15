@@ -230,7 +230,8 @@ the trail matters.
 - **What:** Prod `schema_migrations` (project uqgecljspgtevoylwkep) holds ~100 real historical records with full-14-digit timestamps and NO baseline row, whereas the repo ships 7 squashed migration files. The two histories diverge.
 - **Why INERT for our workflow:** Supabase preview branches are built from the repo's migration FILES (verified on branch htinhqorvyhajcsvnqgz — it recorded exactly the 7 repo-file versions, not prod's ~100). Prod itself is only ever mutated via `apply_migration` (append-only); we never run `supabase db push` or `supabase db pull` against prod. So the divergence touches no live path — it is NOT on the RLS critical path and does not affect preview-branch health.
 - **Optional future fix:** if we ever adopt `db push`/`db pull` against prod, reconcile prod's recorded history with the repo (mechanism TBD: `supabase migration repair` vs direct `schema_migrations` edit). Own FORGE/ANVIL pass, prod-touching.
-- **Priority:** LOW — optional hygiene, off the critical path.
+- **⚠️ HARD GATE:** this MUST land **before** any switch to a diff-based prod migration workflow (`supabase db push`/`db pull`). Under that workflow the renamed 14-digit files would be seen as NEW (prod recorded the old short versions) and re-applied → failure/double-apply. Inert only while prod stays append-only via `apply_migration`. Confirmed live 2026-06-15: F-TD-15 shipped (`b3f3901`) with prod untouched; preview branches build fresh from files (proven on `uiiubqaxnjvjaoqicvau`).
+- **Priority:** LOW — optional hygiene, off the critical path (but a blocking prereq for any diff-based prod sync, per the gate above).
 - **Status:** open (no scheduled owner).
 
 ### F-TD-16 — Two 🔵 residuals from the F-TD-09 Guard review (cron auth + comment accuracy)
