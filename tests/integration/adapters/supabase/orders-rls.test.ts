@@ -25,10 +25,16 @@
  *     - the order_audit_log row the UPDATE trigger writes now carries the
  *       REAL caller user_id (not NULL) — read back as service-role.
  *
+ *   PRINT gate (Guard loop-back fix — warehouse first-print):
+ *     - a WAREHOUSE keycard transitions a placed order placed -> printed
+ *       (proves the `orders_print_placed` policy); before that policy this
+ *       was denied (UPDATE 0 -> spurious ConflictError in recordPrint);
+ *     - an out-of-role (driver) keycard still cannot make that transition.
+ *
  * REQUIREMENTS to run (else SKIP, never fake-pass): SUPABASE_JWT_SECRET +
- * NEXT_PUBLIC_SUPABASE_ANON_KEY, and the 20260615173901 DELETE-policies
- * migration applied (local: `npm run db:reset`). The DELETE half of the
- * write gate is the load-bearing proof of that migration.
+ * NEXT_PUBLIC_SUPABASE_ANON_KEY, and the 20260615173901 DELETE+print-policies
+ * migration applied (local: `npm run db:reset`). The DELETE half of the write
+ * gate and the warehouse PRINT case are the load-bearing proof of that migration.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient } from "@supabase/supabase-js";
@@ -289,5 +295,86 @@ describe.skipIf(!CAN_RUN)("F-RLS-04a orders/order_lines RLS (DB-layer)", () => {
       .eq("order_id", orderId);
     expect((after.data ?? []).length).toBe(1);
     void del;
+  });
+
+  // ─── PRINT gate (Guard loop-back fix — warehouse first-print) ───
+  //
+  // The picking-list POST route authorizes admin/office/WAREHOUSE to print,
+  // but a brand-new order is `state='placed'` — governed by
+  // `orders_update_placed` (admin/sales/office, NO warehouse). Before the
+  // `orders_print_placed` policy a warehouse user printing a placed order was
+  // denied at the DB -> recordPrint saw UPDATE 0 -> spurious ConflictError.
+  // These two cases pin the fix: warehouse CAN do the placed->printed
+  // transition, an out-of-role user (driver) still CANNOT. Every pre-existing
+  // print test used admin/office (both already in-policy), so this closes the
+  // blind spot. Ordered last because the warehouse case mutates `state`.
+
+  it("PRINT deny — out-of-role (driver) keycard cannot transition placed -> printed", async () => {
+    // Order is still `placed` at this point (no prior test changes state).
+    const svc = getServiceClient();
+    const before = await svc
+      .from("orders")
+      .select("state")
+      .eq("id", orderId)
+      .single();
+    expect(before.data?.state).toBe("placed");
+
+    // Mirror recordPrint's first-print payload: state + printed_at +
+    // printed_by are set together (the orders_check constraint requires
+    // printed_at IS NOT NULL when state='printed'). The RLS denial fires
+    // regardless of the columns — driver matches no UPDATE policy on a
+    // placed row, so the row is invisible to the write.
+    const authed = await authedFor(users.driver.id);
+    const { error } = await authed
+      .from("orders")
+      .update({
+        state: "printed",
+        printed_at: new Date().toISOString(),
+        printed_by: users.driver.id,
+      })
+      .eq("id", orderId);
+
+    // Denial surfaces as a permission error or a zero-row no-op; either way
+    // the state must be unchanged. Assert via service-role read.
+    const after = await svc
+      .from("orders")
+      .select("state")
+      .eq("id", orderId)
+      .single();
+    expect(after.data?.state).toBe("placed");
+    void error;
+  });
+
+  it("PRINT in-role — warehouse keycard transitions placed -> printed (orders_print_placed)", async () => {
+    const svc = getServiceClient();
+    const before = await svc
+      .from("orders")
+      .select("state")
+      .eq("id", orderId)
+      .single();
+    expect(before.data?.state).toBe("placed");
+
+    // Mirror recordPrint's first-print payload (OrdersRepository.recordPrint
+    // line ~673): state + printed_at + printed_by together, as the
+    // orders_check constraint requires printed_at IS NOT NULL when printed.
+    const authed = await authedFor(users.warehouse.id);
+    const { error } = await authed
+      .from("orders")
+      .update({
+        state: "printed",
+        printed_at: new Date().toISOString(),
+        printed_by: users.warehouse.id,
+      })
+      .eq("id", orderId);
+    // With `orders_print_placed` present this UPDATE is permitted; before the
+    // policy it was denied (UPDATE 0 -> spurious ConflictError in recordPrint).
+    expect(error).toBeNull();
+
+    const after = await svc
+      .from("orders")
+      .select("state")
+      .eq("id", orderId)
+      .single();
+    expect(after.data?.state).toBe("printed");
   });
 });
