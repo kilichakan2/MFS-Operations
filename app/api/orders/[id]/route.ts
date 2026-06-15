@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireRole } from "@/lib/auth/session";
 import { NotFoundError, withErrors } from "@/lib/errors";
 import { withRequestContext } from "@/lib/observability";
-import { ordersService } from "@/lib/wiring/orders";
+import { ordersServiceForCaller } from "@/lib/wiring/orders";
 import { parseOrThrow } from "@/lib/api/validate";
 import {
   orderIdParamSchema,
@@ -38,8 +38,17 @@ type Params = { params: Promise<{ id: string }> };
 
 export const GET = withRequestContext(
   withErrors(async (req: NextRequest, { params }: Params) => {
-    requireRole(req, ["admin", "sales", "office", "warehouse", "butcher"]);
+    const caller = requireRole(req, [
+      "admin",
+      "sales",
+      "office",
+      "warehouse",
+      "butcher",
+    ]);
     const id = parseOrThrow(orderIdParamSchema, (await params).id);
+    // F-RLS-04a: read under the per-caller authenticated client (RLS fires).
+    // Rollback = swap `ordersServiceForCaller(caller.userId!)` → `ordersService`.
+    const ordersService = await ordersServiceForCaller(caller.userId!);
     const order = await ordersService.findOrderById(id);
     if (order === null) throw new NotFoundError("Order not found");
     return NextResponse.json({ order: toOrderDetailDto(order) });
@@ -56,6 +65,10 @@ export const PUT = withRequestContext(
       updateOrderBodySchema,
       await req.json().catch(() => null),
     );
+    // F-RLS-04a: edit under the per-caller authenticated client (RLS fires;
+    // line-replacement DELETE relies on the new order_lines_delete policy).
+    // Rollback = swap `ordersServiceForCaller(caller.userId!)` → `ordersService`.
+    const ordersService = await ordersServiceForCaller(caller.userId!);
     await ordersService.editOrder(
       id,
       patch,
