@@ -17,6 +17,16 @@ specs are a relay — 01 creates the order 02 prints and 03 works).
 
 ## 1. Preconditions
 
+> **Preview env vars are now auto-synced (F-INFRA-05).** The PR's four
+> branch-scoped Preview credentials (`NEXT_PUBLIC_SUPABASE_URL`,
+> `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
+> `SUPABASE_JWT_SECRET`) are written into Vercel Preview scope automatically by
+> `.github/workflows/preview-cred-sync.yml` on every PR event, and deleted on
+> PR close. **The manual per-PR env bridge is retired** — you no longer paste
+> creds by hand. See `docs/runbooks/preview-cred-sync.md`. If a probe failure
+> below points at stale/missing Preview-scope env vars, debug the sync action
+> first (its runbook has a troubleshooting table).
+
 - The PR is open and its Vercel preview deployment is green.
 - The Supabase preview branch for the PR exists and is healthy:
 
