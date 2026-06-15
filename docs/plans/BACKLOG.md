@@ -61,7 +61,7 @@ the trail matters.
 - **Detail:** F-07 cert + code-critic Guard report (when cert written)
 - **Owner unit:** F-13 (UsersService) — must tighten BEFORE second service ships
 - **Progress (2026-06-12, F-TD-11):** adapter-import dimension now ESLint-enforced for `lib/services/**` + `lib/usecases/**` (`.eslintrc.json` override, pinned by `tests/unit/lint/no-adapter-imports.test.ts` against the real config); cross-service-import dimension still open — owner F-13 unchanged.
-- **Status:** open
+- **Status:** done (F-13 PR1, `7d482c6`) — cross-service-import ban added to the services/usecases ESLint override (`no-restricted-imports` patterns `@/lib/services/*` + `**/services/*`, catching the alias form the codebase universally uses; same-dir `./Other` relative deliberately left legal so the `lib/services/index.ts` barrel re-export passes — documented 🔵 gap), pinned by load-from-disk test `tests/unit/lint/no-cross-service-imports.test.ts` (verified it bites on a real cross-service import).
 
 ### F-TD-06 — `ValidationError` comma-joined string shape (`{ "lines.products": ["a, b, c"] }`)
 
@@ -164,7 +164,7 @@ the trail matters.
 - **Fix shape:** create `lib/domain/Role.ts`, re-export from `lib/domain/index.ts`, change every importer's path (one-line each), delete the export from observability.
 - **Detail:** `lib/observability/Caller.ts:11-16` + F-07 plan §1.5
 - **Owner unit:** F-13 (UsersService — naturally touches Role anyway)
-- **Status:** open
+- **Status:** done (F-13 PR1, `7d482c6`) — `lib/domain/Role.ts` created (Role union + `KNOWN_ROLES` + `isKnownRole`), re-exported from `lib/domain/index.ts`, every importer re-pointed, observability export deleted, `UserSummary.role` tightened from `string` to the `Role` union. tsc 0 proves no orphaned import.
 - **F-13 note (added 2026-06-11, F-08):** F-08 shipped a minimal read-only `UsersRepository` port (`lib/ports/UsersRepository.ts`, `findUserById` only) with Supabase + Fake adapters and a shared contract suite. **F-13 absorbs and expands this port** — it is the Users domain's absorption seed; `UserSummary.role` (plain `string`) tightens to the `Role` union when Role moves to `lib/domain/`.
 
 ### ARCH-FU-02 — Raw `fetch()` sites awaiting port extractions (F-01 narrowing)
@@ -184,7 +184,7 @@ the trail matters.
 - **Decision needed:** when F-13/F-19 lands — either (a) wire it through to a new audit hook, or (b) remove it from the interface and add fresh fields when actually needed (YAGNI argument).
 - **Detail:** F-07 source `lib/services/OrdersService.ts:417` + plan §1 lines 268-272
 - **Owner unit:** F-13 or F-19 (whichever ships first and adopts the audit shape)
-- **Status:** open
+- **Status:** done (F-13 PR1, `7d482c6`) — chose **(b) YAGNI-remove** (Hakan-approved at Frame): F-13 is a pure extraction with no audit-trail feature, so the dead `callerUserId` was removed from `editOrder`'s signature/impl/JSDoc + the single route call site + 8 test call sites. When F-19 (edit history) needs audit it adds fresh, used fields then.
 
 ### ARCH-FU-04 — Improve unit-test happy-path coverage with round-trip reads
 
@@ -194,7 +194,7 @@ the trail matters.
 - **Fix shape:** one-line `const fresh = await service.findOrderById(result.id); expect(fresh?.reference).toBe(result.reference);` after happy-path assertions, in every service's unit test.
 - **Detail:** F-07 cert (when written) + code-critic Guard report
 - **Owner unit:** F-13 (template for service unit tests) — apply pattern, retrofit OrdersService.test.ts
-- **Status:** open
+- **Status:** done (F-13 PR1, `7d482c6`) — round-trip read-back adopted in the UsersRepository shared contract (write then re-read via the finder, assert persistence) + retrofitted into OrdersService.test.ts happy-paths. It is now the documented template for service unit tests.
 
 ### ARCH-FU-05 — Test forbidden-role exclusion paths in `editOrder`
 
@@ -233,6 +233,14 @@ the trail matters.
 - **⚠️ HARD GATE:** this MUST land **before** any switch to a diff-based prod migration workflow (`supabase db push`/`db pull`). Under that workflow the renamed 14-digit files would be seen as NEW (prod recorded the old short versions) and re-applied → failure/double-apply. Inert only while prod stays append-only via `apply_migration`. Confirmed live 2026-06-15: F-TD-15 shipped (`b3f3901`) with prod untouched; preview branches build fresh from files (proven on `uiiubqaxnjvjaoqicvau`).
 - **Priority:** LOW — optional hygiene, off the critical path (but a blocking prereq for any diff-based prod sync, per the gate above).
 - **Status:** open (no scheduled owner).
+
+### F-TD-19 — `findUserByName` literal-vs-wildcard twin divergence (🔵 from F-13 PR1 Guard)
+
+- **Logged:** 2026-06-15 (F-13 PR1 code-critic review, 🔵)
+- **What:** the two `UsersRepository` adapters match names differently: Supabase `findUserByName` uses `ilike` (`lib/adapters/supabase/UsersRepository.ts:126`), which treats `%`/`_` as SQL wildcards; the Fake uses exact lowercase equality (`lib/adapters/fake/UsersRepository.ts:152-158`), which doesn't. For every committed consumer (literal staff names, no wildcards) the twins behave identically; they'd diverge silently ONLY if a caller passed a name containing a SQL wildcard char.
+- **Fix shape:** one-line port-doc note that names are treated as literals, OR make the Supabase adapter escape `%`/`_` before the `ilike` so the twins match for wildcard-bearing input. No consumer sends such input today → not a bug, hygiene only.
+- **Priority:** LOW (theoretical edge; no live path).
+- **Status:** open.
 
 ### F-TD-16 — Two 🔵 residuals from the F-TD-09 Guard review (cron auth + comment accuracy)
 

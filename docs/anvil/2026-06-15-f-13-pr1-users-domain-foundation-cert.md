@@ -74,3 +74,19 @@ No migration, so the migrations-first step is a no-op:
 Every required layer for the approved F-13 PR1 matrix ran and passed; no required layer produced `0/0`. Zero iteration loops on code (one missing matrix item — the `users_auth_check`-fires negative test — was a coverage gap the runner filled in Nail, not a code bug). No real-code bugs found; no FORGE eject required.
 
 — Draft certificate produced by the ANVIL runner. The conductor owns the Lock gate, the no-PITR confirmation (trivially satisfied here), and the ship decision with Hakan. Do not merge on the basis of this draft alone.
+
+---
+
+## SHIP RECORD (conductor, 2026-06-15)
+
+- **Shipped:** PR #43 squashed to main as **7d482c6**.
+- **No migration** → no prod DB push, no PITR.
+- **Prod deploy:** `dpl_8E8RXbxMmcY38yHcbTZcyxSWaBNv` (target production, commit 7d482c6) state READY.
+- **Production post-deploy @critical smoke: 6/6 expected-status, zero 5xx** —
+  `GET /` 307 · `GET /api/auth/team` **200** (users table reads through the new build) ·
+  `POST /api/auth/type` 200 · `POST /api/auth/login` (bogus) **401** (PasswordHasher path healthy) ·
+  `GET /api/kds/orders` 200 · `GET /api/orders` 307 (fail-closed).
+- **Behaviour-change risk:** none realised — PR1 is introduce-only; no production route calls the new
+  Users engine yet (PR2/PR3 wire them). Pre-ship preview smoke deliberately skipped (no route/prod-path
+  change); deferred to PR2 (first real route re-point) and PR3 (login — the decisive one).
+- **Rollback (unused):** revert PR #43; no migration to undo, no prod data touched.
