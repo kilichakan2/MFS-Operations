@@ -28,10 +28,17 @@ import type { DbTokenMinter } from "@/lib/ports";
 
 const encoder = new TextEncoder();
 
-/** Token lifetime: short window minimises replay; tokens are minted
- *  per-request, server-side only, never persisted, never sent to the
- *  browser. (ADR-0007 §Consequences — token lifetime is an owned concern.) */
-export const TOKEN_TTL_SECONDS = 60;
+/** Backdate `iat` by this many seconds so a DB whose clock is a few
+ *  seconds behind the app never rejects a brand-new token as "not yet
+ *  valid" (nbf/iat skew). Server-only, never sent to the browser, so a
+ *  small backdate is safe. (F-RLS-04a clock-skew fix.) */
+export const TOKEN_SKEW_SECONDS = 30;
+
+/** Token lifetime forward of mint time: short window minimises replay;
+ *  tokens are minted per-request, server-side only, never persisted, never
+ *  sent to the browser. (ADR-0007 §Consequences — token lifetime is an
+ *  owned concern.) The total claim span is `SKEW + TTL` = 150s. */
+export const TOKEN_TTL_SECONDS = 120;
 
 /** Copied verbatim from SessionTokens.ts — base64url-encode raw bytes. */
 function toBase64Url(bytes: Uint8Array): string {
@@ -75,7 +82,7 @@ export function createWebCryptoDbTokenMinter(deps: {
         role: "authenticated",
         sub: claims.userId,
         user_id: claims.userId,
-        iat: now,
+        iat: now - TOKEN_SKEW_SECONDS,
         exp: now + TOKEN_TTL_SECONDS,
       };
 
