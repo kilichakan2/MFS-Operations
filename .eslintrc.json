@@ -62,6 +62,10 @@
                   "**/adapters/**"
                 ],
                 "message": "Services and use-cases depend on ports, never on adapters (ADR-0002). Wire concretions in the composition root lib/wiring/ instead. See F-TD-11."
+              },
+              {
+                "group": ["@/lib/services/*", "**/services/*"],
+                "message": "Services and use-cases must not import another service directly (ADR-0002 line 23 / F-TD-05). Compose via a use-case in lib/usecases/ or depend on the other domain's PORT. Wire concretions in lib/wiring/."
               }
             ]
           }

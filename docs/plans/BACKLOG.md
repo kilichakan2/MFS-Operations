@@ -79,8 +79,8 @@ the trail matters.
 - **What:** Before F-TD-03, the documented integration-test procedure booted the dev server against `.env.local` (production Supabase). Any past run that followed it may have written `ANVIL-TEST-*` fixture rows (users, customer, orders) into the PRODUCTION database via the dev server. One-off audit: query production for `name LIKE 'ANVIL-TEST-%'` across `users`, `customers`, `products` and orders referencing them; review findings with Hakan before deleting anything.
 - **Why deferred:** F-TD-03 is forbidden from touching production (scope boundary locked at Gate 1).
 - **Detail:** `docs/plans/2026-06-09-f-td-03-integration-test-runner.md` (Risks)
-- **Owner unit:** unscheduled — small, read-first, needs Hakan present for the delete decision
-- **Status:** open
+- **Owner unit:** Day 4 of the 16-day sprint
+- **Status:** done (2026-06-15 — read-only prod audit, **0 fixture rows** found across `users`/`customers`/`products` + linked orders; exact `ANVIL-TEST-%` + widened `anvil/e2e/fixture/test/sentinel` sweep, live-data sanity counts confirm real reads. No delete needed. Record `docs/anvil/2026-06-15-f-td-07-anvil-test-row-audit.md`)
 
 ### F-TD-08 — `kds.test.ts` clobbers ANVIL-TEST-butcher's `pin_hash` (breaks subsequent local `@critical` runs)
 

@@ -63,12 +63,8 @@
  */
 import { NextRequest } from "next/server";
 import { randomBytes } from "node:crypto";
-import {
-  makeCaller,
-  isKnownRole,
-  type Caller,
-  type Role,
-} from "@/lib/observability/Caller";
+import { makeCaller, type Caller } from "@/lib/observability/Caller";
+import { isKnownRole, type Role } from "@/lib/domain";
 import { UnauthorizedError, ForbiddenError } from "@/lib/errors";
 
 export function requireRole(

@@ -10,10 +10,18 @@
  *   - The returned object's shape is stable across calls.
  *   - `Role` union accepts the six known literals; rejects unknown
  *     at the type level (compile-time assertion).
+ *
+ * Note (ARCH-FU-01): the `Role` union and its runtime mirror moved to
+ * `lib/domain/Role.ts`; the role-SET parity assertions now live in
+ * `lib/domain/Role.test.ts`. This file keeps the `makeCaller`
+ * factory-shape cases plus the type-level Role acceptance/rejection
+ * cases (which exercise `Caller.role`). `Role` is imported from its
+ * new domain home; `makeCaller`/`Caller` from observability.
  */
 
 import { describe, it, expect } from 'vitest'
-import { makeCaller, type Caller, type Role } from '@/lib/observability/Caller'
+import { makeCaller, type Caller } from '@/lib/observability/Caller'
+import type { Role } from '@/lib/domain'
 
 describe('makeCaller', () => {
   it('returns a Caller with defaults when only correlationId is supplied', () => {

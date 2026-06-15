@@ -69,13 +69,7 @@ export const PUT = withRequestContext(
     // line-replacement DELETE relies on the new order_lines_delete policy).
     // Rollback = swap `ordersServiceForCaller(caller.userId!)` → `ordersService`.
     const ordersService = await ordersServiceForCaller(caller.userId!);
-    await ordersService.editOrder(
-      id,
-      patch,
-      lineReplacement,
-      caller.role!,
-      caller.userId!,
-    );
+    await ordersService.editOrder(id, patch, lineReplacement, caller.role!);
     return NextResponse.json({ ok: true }); // service result discarded — wire compat
   }),
 );
