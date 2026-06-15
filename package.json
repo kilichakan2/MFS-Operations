@@ -15,6 +15,7 @@
     "test:e2e:api": "playwright test --project=api",
     "test:e2e:ui": "playwright test --project=ui",
     "test:e2e:preview": "node scripts/e2e-preview.mjs",
+    "preview:cred-sync": "node scripts/preview-cred-sync.mjs",
     "db:up": "supabase start",
     "db:branches": "supabase branches list",
     "db:reset": "supabase db reset",
