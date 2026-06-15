@@ -45,6 +45,6 @@ Direction 2 was rejected: it rewrites the entire existing policy corpus in one m
 - ADR-0002 — Hexagonal shape and naming (`AuthenticatedDbAdapter`, `requireServiceRole()`).
 - ADR-0003 — Strangler-fig migration and FREEZE rule (the F-RLS-04 per-domain sequencing this unit precedes).
 - `supabase/migrations/20260101000000_baseline.sql` — existing GUC-based policies (`app.current_user_id`).
-- `supabase/migrations/20260601_001_fix_session_var_and_audit_security.sql` — orders/order_lines GUC policies + `is_admin()`.
+- `supabase/migrations/20260601000000_fix_session_var_and_audit_security.sql` — orders/order_lines GUC policies + `is_admin()`.
 - `lib/adapters/web-crypto/SessionTokens.ts` — the HMAC primitive reused to mint the Supabase token.
 - `middleware.ts` — custom `mfs_session` verification + `x-mfs-user-*` header injection (the identity source threaded to the minter).

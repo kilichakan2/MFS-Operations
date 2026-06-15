@@ -45,7 +45,7 @@
  *   behaviour.
  *
  * Audit user-attribution (SET LOCAL) deferred:
- *   The audit triggers (supabase/migrations/20260530_001:170-218) read
+ *   The audit triggers (supabase/migrations/20260530000000:170-218) read
  *   `current_setting('app.current_user_id', true)`. The supabase-js
  *   client doesn't expose SET LOCAL through `.from()`. F-06 inherits
  *   today's route behaviour: the trigger writes NULL user_id to the
@@ -189,7 +189,7 @@ function rowToOrder(r: OrderRow): Order {
 
 // ─── Idempotency-key helpers (F-08) ──────────────────────────
 // Internal to this adapter. The `order_idempotency_keys` table
-// (migration 20260611_001) is the storage half of the createOrder
+// (migration 20260611000000) is the storage half of the createOrder
 // idempotency contract; the PK on `key` is the race arbiter.
 
 type IdempotencyKeyRow = {

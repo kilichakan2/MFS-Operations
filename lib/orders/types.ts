@@ -4,7 +4,7 @@
  * TypeScript types for the order pipeline feature.
  *
  * Mirrors the database schema created in
- * supabase/migrations/20260530_001_order_pipeline_schema.sql.
+ * supabase/migrations/20260530000000_order_pipeline_schema.sql.
  *
  * Plan: docs/plans/2026-05-30-order-pipeline-kds-implementation.md (SB1)
  */
