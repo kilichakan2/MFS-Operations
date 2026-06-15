@@ -24,10 +24,10 @@ afterEach(() => {
  * Build a fake fetch that records calls and returns a canned response.
  * @param {{ status?: number, json?: unknown }} resp
  */
-function fakeFetch(resp = {}) {
+function fakeFetch(resp: { status?: number; json?: unknown } = {}) {
   const calls: Array<{ url: string; init: RequestInit }> = []
-  const fn = vi.fn(async (url: string, init: RequestInit = {}) => {
-    calls.push({ url, init })
+  const fn = vi.fn(async (url: string | URL | Request, init: RequestInit = {}) => {
+    calls.push({ url: String(url), init })
     const status = resp.status ?? 200
     return {
       ok: status >= 200 && status < 300,
@@ -35,7 +35,7 @@ function fakeFetch(resp = {}) {
       json: async () => resp.json ?? {},
       text: async () => JSON.stringify(resp.json ?? {}),
     } as unknown as Response
-  })
+  }) as unknown as typeof fetch
   return { fn, calls }
 }
 

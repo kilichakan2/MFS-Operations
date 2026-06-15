@@ -30,6 +30,7 @@ export const POLL_DEFAULTS = Object.freeze({
 
 /**
  * @typedef {{ name: string, project_ref: string, status?: string, preview_project_status?: string }} SupabaseBranch
+ * @typedef {{ status?: string, preview_project_status?: string, [k: string]: unknown }} BranchHealthFields
  */
 
 /**
@@ -51,7 +52,7 @@ export function matchBranchByName(branches, gitBranch) {
  * A branch is usable only when its project is up AND functions are deployed
  * (plan §7). Anything else — including a null/partial branch — is unhealthy.
  *
- * @param {SupabaseBranch | null | undefined} branch
+ * @param {BranchHealthFields | null | undefined} branch
  * @returns {boolean}
  */
 export function isBranchHealthy(branch) {
@@ -86,7 +87,7 @@ export function nextPollDelayMs(attempt, opts = {}) {
  * (even past the timeout — if it came up, use it). Otherwise wait while under
  * the total budget; give up once the budget is spent (fail closed, plan §7).
  *
- * @param {SupabaseBranch | null} branch the matched branch, or null if absent
+ * @param {BranchHealthFields | null} branch the matched branch, or null if absent
  * @param {{ attempt: number, elapsedMs: number, totalTimeoutMs?: number }} state
  * @returns {'ready' | 'wait' | 'giveup'}
  */

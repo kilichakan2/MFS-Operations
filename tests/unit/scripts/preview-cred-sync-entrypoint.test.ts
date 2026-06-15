@@ -127,11 +127,11 @@ function fakeSupabaseClient(overrides: Record<string, unknown> = {}) {
 
 function fakeVercelClient(existing: Array<{ id: string; key: string }> = []) {
   return {
-    listBranchEnv: vi.fn(async () => existing),
-    createEnv: vi.fn(async () => ({ created: { id: 'env_new' } })),
-    updateEnv: vi.fn(async () => ({ id: 'env_patched' })),
-    deleteEnv: vi.fn(async () => ({})),
-    createDeployment: vi.fn(async () => ({ id: 'dpl_new' })),
+    listBranchEnv: vi.fn(async (_gitBranch: string) => existing),
+    createEnv: vi.fn(async (_write: Record<string, unknown>) => ({ created: { id: 'env_new' } })),
+    updateEnv: vi.fn(async (_envId: string, _patch: Record<string, unknown>) => ({ id: 'env_patched' })),
+    deleteEnv: vi.fn(async (_envId: string) => ({})),
+    createDeployment: vi.fn(async (_opts: Record<string, unknown>) => ({ id: 'dpl_new' })),
   }
 }
 
@@ -191,7 +191,7 @@ describe('runSync wiring (fake clients)', () => {
     expect(vercelClient.createEnv).toHaveBeenCalledTimes(3)
     // Every write carries the production guard.
     for (const call of vercelClient.createEnv.mock.calls) {
-      const write = call[0] as { target: string[]; gitBranch: string; key: string }
+      const write = call[0] as unknown as { target: string[]; gitBranch: string; key: string }
       expect(write.target).toEqual(['preview'])
       expect(write.gitBranch).toBe('feat/foo')
       expect(write.key).not.toBe('SUPABASE_JWT_SECRET')
