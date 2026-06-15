@@ -2,12 +2,16 @@
  * app/api/auth/type/route.ts
  * Returns the auth type (pin or password) for a given name.
  * No sensitive data exposed — just tells the login page which input to show.
+ *
+ * F-13 PR2: re-pointed through usersService (front desk) instead of hitting
+ * Supabase directly. `authTypeForName` bakes in the non-enumeration posture
+ * (returns 'pin' for an unknown/inactive name). The outer try/catch STAYS so
+ * a DB failure (which the service throws on) still yields { authType: 'pin' },
+ * byte-identical to today's behaviour.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { usersService }              from '@/lib/wiring/users'
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,25 +21,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Name required' }, { status: 400 })
     }
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('role, active')
-      .ilike('name', name.trim())
-      .single()
+    const authType = await usersService.authTypeForName(name.trim())
 
-    if (error || !user) {
-      // Return 'pin' as default — don't reveal whether a name exists
-      return NextResponse.json({ authType: 'pin' })
-    }
-
-    if (!user.active) {
-      return NextResponse.json({ authType: 'pin' })
-    }
-
-    return NextResponse.json({
-      authType: user.role === 'admin' ? 'password' : 'pin'
-    })
+    return NextResponse.json({ authType })
   } catch {
+    // Never reveal whether a name exists or a lookup failed — always 'pin'.
     return NextResponse.json({ authType: 'pin' })
   }
 }

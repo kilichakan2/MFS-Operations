@@ -242,6 +242,14 @@ the trail matters.
 - **Priority:** LOW (theoretical edge; no live path).
 - **Status:** open.
 
+### F-TD-20 — `PATCH /api/admin/users/[id]` returns 500 (not 404) for a missing id
+
+- **Logged:** 2026-06-15 (F-13 PR2, R-MF-1 — latent bug deliberately preserved)
+- **What:** editing a non-existent user id returns `500 { error: 'User not found' }`, not a `404`. Historically the route used `.update(...).select(...).single()`, and PostgREST's `.single()` errors (`PGRST116`) on a zero-row UPDATE → the route's `if (error)` path emitted 500. PR1's `updateUser` adapter uses `.maybeSingle()` and returns `null` on no-row. To keep PR2 a pure no-behaviour-change re-point, the re-pointed route maps that `null` to the SAME 500 (`app/api/admin/users/[id]/route.ts` PATCH handler). Pinned by `tests/integration/admin-users.test.ts` ("PATCH missing-id returns 500").
+- **Fix shape:** change the `null` branch to `404 { error: 'User not found' }` (semantically correct) — a deliberate status-code change (500→404) that belongs in its own small unit, not a re-pointing PR. Update the integration pin from 500 to 404 at the same time, and check the admin UI handles a 404 from the toggle/reset/secondary-role flows.
+- **Priority:** LOW (error path only; missing-id PATCH is not a live happy path).
+- **Status:** open.
+
 ### F-TD-16 — Two 🔵 residuals from the F-TD-09 Guard review (cron auth + comment accuracy)
 
 - **Deferred:** 2026-06-14 (F-TD-09 Guard, both non-blocking 🔵)

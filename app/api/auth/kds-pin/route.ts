@@ -15,18 +15,22 @@
  * 200:   { id, name, role }
  * 401:   { error: 'No butcher matches that PIN' }
  *
+ * F-13 PR2: the candidate list is now fetched through
+ * usersService.listCredentialsByRoles (front desk) instead of a direct
+ * Supabase query. The PIN-compare loop is business logic and stays in the
+ * route — the service has no "verify pin" method by design. Only the field
+ * read changes: pin_hash → pinHash (camelCase domain field).
+ *
  * Plan: docs/plans/2026-05-30-order-pipeline-kds-implementation.md (SB5)
  */
 
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-import { passwordHasher }            from '@/lib/wiring/password'
+import { usersService }             from '@/lib/wiring/users'
+import { passwordHasher }           from '@/lib/wiring/password'
 
-const supabase = supabaseService
-
-const KDS_ALLOWED_ROLES = ['butcher', 'warehouse']
+const KDS_ALLOWED_ROLES = ['butcher', 'warehouse'] as const
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,25 +44,18 @@ export async function POST(req: NextRequest) {
     // Pull every potential KDS user — bcrypt comparison is per-user so we
     // can't shortcut by hashing the pin first. Active butcher/warehouse
     // users are typically <10; this is cheap.
-    const { data: users, error: dbErr } = await supabase
-      .from('users')
-      .select('id, name, role, pin_hash, active')
-      .in('role', KDS_ALLOWED_ROLES)
-      .eq('active', true)
-
-    if (dbErr) {
-      console.error('[POST /api/auth/kds-pin] DB error', dbErr)
-      return NextResponse.json({ error: 'Server error' }, { status: 500 })
-    }
+    const users = await usersService.listCredentialsByRoles(KDS_ALLOWED_ROLES, {
+      activeOnly: true,
+    })
 
     // The loop is business logic — check the PIN against every active
     // butcher/warehouse user — and stays in the route. Only the inner compare
     // swaps to the port. compare is TOTAL: a malformed hash for one user
     // returns false (logged inside the adapter) and the loop cleanly continues
     // to the next, so no per-iteration try/catch is needed.
-    for (const user of users ?? []) {
-      if (!user.pin_hash) continue
-      const match = await passwordHasher.compare(pin, user.pin_hash)
+    for (const user of users) {
+      if (!user.pinHash) continue
+      const match = await passwordHasher.compare(pin, user.pinHash)
       if (match) {
         return NextResponse.json({
           id:   user.id,
