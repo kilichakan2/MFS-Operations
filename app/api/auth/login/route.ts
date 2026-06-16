@@ -2,7 +2,9 @@
  * app/api/auth/login/route.ts
  *
  * PIN and password authentication.
- * Uses SUPABASE_SERVICE_ROLE_KEY — bypasses RLS.
+ * Reads the credential and stamps last-login through the Users service
+ * (@/lib/wiring/users), which composes the service-role adapter (RLS
+ * bypassed) — this route never imports a vendor SDK.
  * Sets session cookie directly on the NextResponse (Next.js 15 pattern).
  * Credential verification goes through the PasswordHasher port
  * (@/lib/wiring/password); the adapter owns String() casting and the TOTAL
@@ -10,12 +12,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
+import { usersService }              from '@/lib/wiring/users'
 import { sessionTokens }             from '@/lib/wiring/session'
 import { passwordHasher }            from '@/lib/wiring/password'
-
-// Service role key — bypasses RLS. Never expose to the client.
-const supabase = supabaseService
 
 
 // ── In-memory rate limiter ────────────────────────────────────────────────────
@@ -110,24 +109,28 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── Fetch user by name (service role — RLS bypassed) ─────────────────────
-    const { data: user, error: dbError } = await supabase
-      .from('users')
-      .select('id, name, role, secondary_roles, pin_hash, password_hash, active')
-      .ilike('name', name)
-      .single()
-
-    if (dbError) {
-      // PGRST116 = no rows returned by .single() — treat as wrong credentials
-      if (dbError.code === 'PGRST116') {
-        recordFailure(name)
-        return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
-      }
-      console.error('[login] DB error:', dbError.code, dbError.message)
+    // ── Fetch the credential by name through the Users service ───────────────
+    // Service role — RLS bypassed inside the adapter (login MUST read any
+    // user's record). The service returns null on a miss and throws on a real
+    // DB failure, so the old two-branch error shape collapses cleanly:
+    //   - null   → unknown user → 401 (was the PGRST116 branch)
+    //   - throw  → DB failure   → 500 { error: 'Database error' } (was the
+    //              dbError 500 branch — kept here via an inner try/catch so the
+    //              body stays 'Database error', not the outer catch's
+    //              'Server error').
+    let user
+    try {
+      user = await usersService.findCredentialByName(name)
+    } catch (e) {
+      console.error('[login] DB error:', e)
       return NextResponse.json({ error: 'Database error' }, { status: 500 })
     }
 
     if (!user) {
+      // A miss is now `null` (the live unknown-user path). Count the failed
+      // attempt — the old PGRST116 branch did this; the rate limiter relies on
+      // it to lock out unknown-name guessing.
+      recordFailure(name)
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
@@ -136,8 +139,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Select correct hash ───────────────────────────────────────────────────
+    // camelCase domain fields — the adapter already mapped pin_hash/password_hash.
     const hashToCheck: string | null =
-      user.role === 'admin' ? user.password_hash : user.pin_hash
+      user.role === 'admin' ? user.passwordHash : user.pinHash
 
     if (!hashToCheck) {
       console.error(`[login] ${user.name} (${user.role}) has no hash set`)
@@ -163,16 +167,16 @@ export async function POST(req: NextRequest) {
     recordSuccess(name)
 
     // ── Update last_login_at (non-blocking, fire and forget) ──────────────────
-    supabase
-      .from('users')
-      .update({ last_login_at: new Date().toISOString() })
-      .eq('id', user.id)
-      .then(({ error: e }) => {
-        if (e) console.error('[login] last_login_at update failed:', e.message)
-      })
+    // recordLogin takes a Date (the adapter calls .toISOString() internally).
+    // Throws on DB failure; catch and log so a stamp failure never blocks or
+    // fails the login — identical to today's non-awaited .then() behaviour.
+    void usersService.recordLogin(user.id, new Date()).catch((e) => {
+      console.error('[login] last_login_at update failed:', e)
+    })
 
     // ── Multi-role: prompt picker if no chosenRole provided ───────────────────
-    const secondaryRoles: string[] = (user.secondary_roles as string[] | null) ?? []
+    // camelCase domain field (already typed as readonly Role[] — no cast needed).
+    const secondaryRoles = user.secondaryRoles ?? []
     const allRoles = [user.role, ...secondaryRoles]
 
     if (secondaryRoles.length > 0 && !chosenRole) {
@@ -185,8 +189,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Validate chosenRole if provided ───────────────────────────────────────
+    // activeRole may be an arbitrary client-supplied string (chosenRole), so
+    // compare against the role list as strings — identical runtime check to the
+    // pre-PR3 code, where allRoles was string[].
     const activeRole = chosenRole ?? user.role
-    if (!allRoles.includes(activeRole)) {
+    if (!(allRoles as readonly string[]).includes(activeRole)) {
       return NextResponse.json({ error: 'Invalid role selection' }, { status: 400 })
     }
 
