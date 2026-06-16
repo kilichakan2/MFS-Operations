@@ -27,6 +27,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { UsersRepository } from "@/lib/ports";
+import { ConflictError } from "@/lib/errors";
 
 export interface UsersContractSetup {
   repo: UsersRepository;
@@ -274,6 +275,25 @@ export function usersRepositoryContract(
       const cred = await ctx.repo.findCredentialByName(name);
       expect(cred?.pinHash).not.toBeNull();
       expect(cred?.passwordHash).toBeNull();
+    });
+
+    it("createUser rejects a case-insensitively duplicate name with ConflictError", async () => {
+      // ctx.knownUserName is a seeded butcher (ANVIL-FAKE-butcher /
+      // ANVIL-TEST-butcher). Re-creating it in a DIFFERENT case must be
+      // rejected by both adapters — the DB UNIQUE index on lower(name) for
+      // the real adapter, the in-memory scan for the Fake. A rejected
+      // insert persists no row, so no cleanup is needed.
+      await expect(
+        ctx.repo.createUser({
+          name: ctx.knownUserName.toUpperCase(),
+          role: "warehouse",
+          secondaryRoles: [],
+          email: null,
+          passwordHash:
+            "$2a$10$DUPNAMEHASHXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+          hashColumn: "pin_hash",
+        }),
+      ).rejects.toBeInstanceOf(ConflictError);
     });
 
     it("createUser puts an admin password in password_hash, pin_hash null", async () => {

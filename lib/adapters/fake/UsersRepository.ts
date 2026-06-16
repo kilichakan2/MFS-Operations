@@ -33,6 +33,7 @@ import type {
   ListUsersByRolesOptions,
   ListCredentialsByRolesOptions,
 } from "@/lib/ports";
+import { ConflictError } from "@/lib/errors";
 
 // Mirror Postgres enum ordering: the `role` column is a Postgres enum,
 // which sorts by DECLARATION order, not alphabetically. KNOWN_ROLES is
@@ -195,10 +196,21 @@ export function createFakeUsersRepository(
     },
 
     async createUser(input: CreateUserPersist): Promise<UserSummary> {
+      // Mirror the DB UNIQUE index on lower(name): reject a create whose
+      // trimmed, lowercased name already exists (case-insensitive). The
+      // real adapter relies on Postgres 23505; the Fake enforces the same
+      // rule in-memory so both adapters answer the contract identically.
+      const trimmed = input.name.trim();
+      const target = trimmed.toLowerCase();
+      for (const r of store.values()) {
+        if (r.name.trim().toLowerCase() === target) {
+          throw new ConflictError("A user with that name already exists");
+        }
+      }
       const id = nextId();
       const row: FakeUserRow = {
         id,
-        name: input.name,
+        name: trimmed,
         role: input.role,
         active: true,
         secondaryRoles: input.secondaryRoles,
