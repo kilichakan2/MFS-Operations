@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { usersService }              from '@/lib/wiring/users'
+import { ConflictError }             from '@/lib/errors'
 import type { Role, UserSummary }    from '@/lib/domain'
 
 /** Project the camelCase domain user back to today's snake_case AppUser shape. */
@@ -92,6 +93,15 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(toAppUser(created), { status: 201 })
   } catch (err) {
+    // A duplicate name surfaces as ConflictError (the adapter mapped the
+    // Postgres unique-violation). Return a friendly 409 — never the raw
+    // Postgres code. This branch MUST precede the generic 500 handler.
+    if (err instanceof ConflictError) {
+      return NextResponse.json(
+        { error: 'A user with that name already exists.' },
+        { status: 409 }
+      )
+    }
     console.error('[POST /api/admin/users] Unhandled:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
