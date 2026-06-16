@@ -96,10 +96,7 @@ export async function POST(req: NextRequest) {
     // A duplicate name surfaces as ConflictError (the adapter mapped the
     // Postgres unique-violation). Return a friendly 409 — never the raw
     // Postgres code. This branch MUST precede the generic 500 handler.
-    if (
-      err instanceof ConflictError ||
-      (err as { httpStatus?: number })?.httpStatus === 409
-    ) {
+    if (err instanceof ConflictError) {
       return NextResponse.json(
         { error: 'A user with that name already exists.' },
         { status: 409 }
