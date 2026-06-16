@@ -32,7 +32,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseService } from "@/lib/adapters/supabase/client";
-import { ServiceError } from "@/lib/errors";
+import { ConflictError, ServiceError } from "@/lib/errors";
 import { log } from "@/lib/observability/log";
 import type {
   UserSummary,
@@ -212,7 +212,7 @@ export function createSupabaseUsersRepository(
       const { data, error } = await client
         .from("users")
         .insert({
-          name: input.name,
+          name: input.name.trim(),
           role: input.role,
           secondary_roles: input.secondaryRoles,
           active: true,
@@ -222,6 +222,15 @@ export function createSupabaseUsersRepository(
         .select(SUMMARY_COLS)
         .single();
       if (error) {
+        // Postgres 23505 = unique-constraint violation (the lower(name)
+        // index). Map it to the app's ConflictError INSIDE the adapter so
+        // the raw code never crosses the port boundary (ADR-0002 line 27).
+        // Every OTHER failure stays a generic ServiceError (500).
+        if ((error as { code?: string }).code === "23505") {
+          throw new ConflictError("A user with that name already exists", {
+            cause: error,
+          });
+        }
         log.error("UsersRepository.createUser DB error", {
           error: error.message,
         });
