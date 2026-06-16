@@ -250,7 +250,7 @@ the trail matters.
 - **Priority:** LOW (error path only; missing-id PATCH is not a live happy path).
 - **Status:** open.
 
-### F-TD-22 — `users.name` uniqueness guard (case-insensitive) — COMMITTED next unit
+### F-TD-22 — `users.name` uniqueness guard (case-insensitive) — ✅ SHIPPED 2026-06-16 (PR #46, `1f46857`)
 
 - **Logged:** 2026-06-16 (F-13 PR3 Guard, 🟡 W1). **Hakan explicitly wants this enforced** — not a someday-maybe.
 - **What:** there is no uniqueness constraint on `users.name` and no app-level guard on user creation, while the login lookup is case-insensitive (`.ilike("name", …)`). So `"Hakan"` and `"hakan"` (or two identical names) can coexist. PR3 surfaced this as a behaviour delta: the old `.single()` returned `401 Invalid credentials` (+ `recordFailure`) on a duplicate-name lookup; the new adapter `.maybeSingle()` errors on >1 row → route returns `500 'Database error'` and `recordFailure` does NOT fire. Operator-error edge, accepted for PR3.
@@ -260,7 +260,8 @@ the trail matters.
   3. Add an app-level guard (clear error) on user create/rename so the DB error surfaces as a friendly 4xx, not a 500.
   4. Decide whether the login duplicate-name 500 path is then unreachable (it should be) and simplify if so.
 - **Priority:** MEDIUM (data-integrity + closes the PR3 W1 edge). **Owner unit:** dedicated, scheduled after F-13 (alongside / before F-RLS-04b).
-- **Status:** open (committed).
+- **Shipped as:** UNIQUE index on `lower(name)` (migration `20260616120000_unique_username_lower_index`, covers all rows active+inactive); both adapters trim name on write + map Postgres `23505` → app-owned `ConflictError`; `POST /api/admin/users` → 409 "A user with that name already exists." Verify-first prod dedup found **0** collisions (11 users, 11 distinct). The login duplicate-name 500/W1 path is now unreachable (names are unique) — login adapter/route needed NO change. Cert `docs/anvil/2026-06-16-f-td-22-unique-usernames-cert.md`; review `docs/reviews/2026-06-16-f-td-22-unique-usernames-review.md`; plan archived. Renames are not possible via the API, so create was the only entry point guarded.
+- **Status:** ✅ DONE — shipped 2026-06-16, prod-healthy (preview 8/8 @critical · prod smoke 5/5 non-500 · ANVIL CLEARED unit 1722 / int 175 / pgTAP 66/66).
 
 ### F-TD-21 — `/api/auth/login` discloses an inactive account before checking the credential
 
