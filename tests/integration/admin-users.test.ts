@@ -106,4 +106,27 @@ describe("admin/auth user routes (F-13 PR2 re-point)", () => {
     // missing id must NOT become 404 or a silent 200.
     expect(res.status).toBe(500);
   });
+
+  // ── POST /api/admin/users duplicate name → 409 (F-TD-22) ─────
+
+  it("POST /api/admin/users with a duplicate name returns 409", async () => {
+    // users.butcher.name (ANVIL-TEST-butcher) is already seeded. Re-creating
+    // it must hit the new UNIQUE lower(name) index → 23505 → ConflictError →
+    // HTTP 409 with the friendly message (never a raw 500 / Postgres code).
+    // A rejected create persists nothing, so no cleanup is needed.
+    const res = await api("/api/admin/users", {
+      method: "POST",
+      role: "admin",
+      userId: users.admin.id,
+      body: {
+        name: users.butcher.name,
+        role: "warehouse",
+        credential: "1234",
+      },
+    });
+    expect(res.status).toBe(409);
+    expect((res.body as { error?: string }).error).toBe(
+      "A user with that name already exists.",
+    );
+  });
 });
