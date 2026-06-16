@@ -1,0 +1,25 @@
+-- ANVIL rollback — F-13 PR3 (re-point /auth/login through UsersService)
+-- Branch: f-13-pr3-repoint-login   PR: #45   HEAD: 79425f0
+-- Date: 2026-06-16
+--
+-- ────────────────────────────────────────────────────────────────────────────
+-- NO DATABASE CHANGES IN THIS PR.
+-- ────────────────────────────────────────────────────────────────────────────
+-- This PR is a code-only re-point of app/api/auth/login/route.ts to read the
+-- credential and stamp last_login_at through the usersService wiring singleton
+-- (@/lib/wiring/users) instead of importing @supabase/supabase-js directly.
+-- It adds NO migration, NO new policy, NO schema change, NO new dependency.
+-- Therefore there is nothing to roll back at the database layer, and PITR is
+-- N/A (no data-shape or RLS change to recover from).
+--
+-- ROLLBACK IS A CODE REVERT ONLY (Vercel + git):
+--   git revert <merge-commit-sha>        # reverses the squash-merge of PR #45
+--   # then Vercel auto-deploys the reverted code; OR
+--   vercel rollback                      # promote the previous production deploy
+--
+-- The revert restores the previous login route, which read credentials via a
+-- direct Supabase client. Because the DB schema is identical before and after
+-- this PR, the old code runs against the live schema with zero migration work.
+--
+-- No SQL to execute. This file exists for audit-trail completeness.
+SELECT 'F-13 PR3 is code-only — no DB rollback required' AS rollback_note;

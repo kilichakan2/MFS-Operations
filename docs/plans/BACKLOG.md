@@ -250,6 +250,26 @@ the trail matters.
 - **Priority:** LOW (error path only; missing-id PATCH is not a live happy path).
 - **Status:** open.
 
+### F-TD-22 — `users.name` uniqueness guard (case-insensitive) — COMMITTED next unit
+
+- **Logged:** 2026-06-16 (F-13 PR3 Guard, 🟡 W1). **Hakan explicitly wants this enforced** — not a someday-maybe.
+- **What:** there is no uniqueness constraint on `users.name` and no app-level guard on user creation, while the login lookup is case-insensitive (`.ilike("name", …)`). So `"Hakan"` and `"hakan"` (or two identical names) can coexist. PR3 surfaced this as a behaviour delta: the old `.single()` returned `401 Invalid credentials` (+ `recordFailure`) on a duplicate-name lookup; the new adapter `.maybeSingle()` errors on >1 row → route returns `500 'Database error'` and `recordFailure` does NOT fire. Operator-error edge, accepted for PR3.
+- **Fix shape (own small FORGE unit, needs a migration):**
+  1. **Dedup FIRST** — a unique index FAILS to create if duplicate names already exist in prod, so pre-flight: query prod for any case-insensitive name collisions and resolve them before applying.
+  2. Add a **`UNIQUE` index on `lower(name)`** (catches case variants, matching the `.ilike` lookup) — NOT a plain unique on `name`.
+  3. Add an app-level guard (clear error) on user create/rename so the DB error surfaces as a friendly 4xx, not a 500.
+  4. Decide whether the login duplicate-name 500 path is then unreachable (it should be) and simplify if so.
+- **Priority:** MEDIUM (data-integrity + closes the PR3 W1 edge). **Owner unit:** dedicated, scheduled after F-13 (alongside / before F-RLS-04b).
+- **Status:** open (committed).
+
+### F-TD-21 — `/api/auth/login` discloses an inactive account before checking the credential
+
+- **Logged:** 2026-06-16 (F-13 PR3 plan §8.6 / Guard — pre-existing, byte-identical preserved).
+- **What:** login returns `403 Account is inactive` *before* verifying the password/PIN, so a wrong credential against a known-inactive account still reveals that the account exists and is disabled — a mild account-enumeration signal. Not introduced by PR3 (the re-point preserved it exactly).
+- **Fix shape:** move the active-check to AFTER credential verification (or return a uniform `401` for inactive+wrong-credential) so an attacker can't distinguish "inactive" from "wrong credential". Small, route-local; pair it with a test asserting the timing/response is indistinguishable.
+- **Priority:** LOW (mild enumeration; requires knowing a real inactive username).
+- **Status:** open.
+
 ### F-TD-16 — Two 🔵 residuals from the F-TD-09 Guard review (cron auth + comment accuracy)
 
 - **Deferred:** 2026-06-14 (F-TD-09 Guard, both non-blocking 🔵)
