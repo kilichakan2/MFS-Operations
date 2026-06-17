@@ -21,7 +21,12 @@
  * (PR2/PR3 re-point the routes).
  */
 import { createUsersService, type UsersService } from "@/lib/services";
-import { supabaseUsersRepository } from "@/lib/adapters/supabase";
+import {
+  supabaseUsersRepository,
+  createSupabaseUsersRepository,
+  authenticatedClientForCaller,
+} from "@/lib/adapters/supabase";
+import { dbTokenMinter } from "@/lib/wiring/dbToken";
 import { passwordHasher } from "@/lib/wiring/password";
 
 export const usersService: UsersService = createUsersService({
@@ -29,27 +34,35 @@ export const usersService: UsersService = createUsersService({
   passwordHasher,
 });
 
-// ─── Per-request authenticated composition (F-RLS-04b — NOT YET) ────
+// ─── Per-request authenticated composition (F-RLS-04b) ──────────────
 //
-// SEAM (do not build in PR1). When F-RLS-04b flips Users onto RLS, this
-// is where the per-caller authenticated factory lands — exactly the
-// shape `lib/wiring/orders.ts` already carries for Orders (F-RLS-04a):
+// The pre-wired `usersService` singleton above uses the SERVICE-ROLE client
+// (master key — bypasses RLS) and STAYS: it is the one-line rollback
+// parachute and the engine for the 5 public/pre-auth routes (login, kds-pin,
+// team, haccp-team, auth-type) that run before any session exists.
 //
-//   export async function usersServiceForCaller(
-//     callerUserId: string,
-//   ): Promise<UsersService> {
-//     const token  = await dbTokenMinter.mint({ userId: callerUserId })
-//     const client = authenticatedClientForCaller({ token })
-//     return createUsersService({
-//       users:          createSupabaseUsersRepository(client),
-//       passwordHasher,
-//     })
-//   }
+// The factory below builds a fresh Users graph bound to ONE caller, reaching
+// the DB as the Postgres `authenticated` role so the GUC-based RLS policies
+// (F-RLS-03 bridge + the users_insert/update/delete policies) fire. It mirrors
+// `ordersServiceForCaller` in `lib/wiring/orders.ts` (F-RLS-04a) exactly.
 //
-// Per-request — NEVER memoize: the minted token is per-caller, and a
-// memoized client would leak one caller's identity to another. The
-// service-role singleton above STAYS as the one-line rollback parachute
-// and for paths that must bypass RLS (e.g. login/kds-pin reading another
-// user's credential, admin user management). Until F-RLS-04b lands,
-// `usersService` (service-role) is the only wiring, matching today's
-// routes byte-for-byte.
+// Per-request — NEVER memoize: the minted token is per-caller, and a memoized
+// client would leak one admin's identity to another. Each call mints a fresh
+// token and builds a fresh client.
+//
+// Hexagonal (ADR-0002): the vendor `SupabaseClient` is constructed and
+// consumed entirely inside this wiring file; the route never sees it — it
+// receives a ready UsersService built from ports.
+
+/** Build a UsersService bound to ONE caller, reaching the DB as the Postgres
+ *  `authenticated` role so RLS fires. Per-request — never memoize. */
+export async function usersServiceForCaller(
+  callerUserId: string,
+): Promise<UsersService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createUsersService({
+    users: createSupabaseUsersRepository(client),
+    passwordHasher,
+  });
+}

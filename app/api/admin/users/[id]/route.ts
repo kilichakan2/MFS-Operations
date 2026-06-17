@@ -3,21 +3,28 @@
  * PATCH  — toggle active / reset credential
  * DELETE — permanently remove a user
  *
- * F-13 PR2: re-pointed through usersService. The service hashes any new
- * credential and the adapter writes the role-appropriate column and clears
- * the other; this route keeps the admin-role guard and the secondary_roles
- * 'admin' filter. The updated user is projected back to the exact 8-field
- * snake_case AppUser shape the admin page reads.
+ * F-RLS-04b: re-pointed onto usersServiceForCaller(caller.userId) — reaches the
+ * DB as the Postgres `authenticated` role so the users_update / users_delete
+ * RLS policies (admin-only) are EVALUATED. Auth is now via requireRole(req,
+ * ['admin']) (replacing the hand-rolled x-mfs-user-role check); its thrown
+ * 401/403 are mapped here so the manual try/catch never turns them into a 500.
+ *
+ * Rollback parachute: swap `await usersServiceForCaller(caller.userId!)` back
+ * to the `usersService` service-role singleton (still exported from wiring).
  *
  * NOTE (R-MF-1, latent bug preserved deliberately): today this route uses
  * .single() on the UPDATE, which errors on a zero-row match and therefore
  * returns 500 for a non-existent id. The service returns null instead. To
  * keep behaviour byte-identical, null is mapped to the SAME 500 here. The
  * "should be a 404" fix is deferred — see docs/plans/BACKLOG.md (F-TD-20).
+ * Under RLS this still only bites non-admins (already 403'd at the route);
+ * an admin can update any row.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { usersService }              from '@/lib/wiring/users'
+import { NextRequest, NextResponse }         from 'next/server'
+import { usersServiceForCaller }             from '@/lib/wiring/users'
+import { requireRole }                       from '@/lib/auth/session'
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import type { Role, UpdateUserInput, UserSummary } from '@/lib/domain'
 
 /** Project the camelCase domain user back to today's snake_case AppUser shape. */
@@ -39,11 +46,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  const role = req.headers.get('x-mfs-user-role')
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
-
+    const caller = requireRole(req, ['admin'])
+    const usersService = await usersServiceForCaller(caller.userId!)
 
     const { id }  = await params
     const body    = await req.json() as {
@@ -85,6 +89,12 @@ export async function PATCH(
 
     return NextResponse.json(toAppUser(updated))
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
@@ -94,11 +104,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  const role = req.headers.get('x-mfs-user-role')
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
-
+    const caller = requireRole(req, ['admin'])
+    const usersService = await usersServiceForCaller(caller.userId!)
 
     const { id } = await params
 
@@ -106,6 +113,12 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
