@@ -20,6 +20,14 @@
           {
             "name": "resend",
             "message": "Use the Mailer port via @/lib/wiring/mailer. resend may only be imported inside lib/adapters/resend/. See ADR-0002 / F-11."
+          },
+          {
+            "name": "leaflet",
+            "message": "Use the MapProvider port via @/lib/adapters/leaflet. leaflet may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
+          },
+          {
+            "name": "react-leaflet",
+            "message": "Use the MapProvider port via @/lib/adapters/leaflet. react-leaflet may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
           }
         ]
       }
@@ -32,6 +40,7 @@
         "lib/adapters/bcrypt/**/*.ts",
         "lib/adapters/anthropic/**/*.ts",
         "lib/adapters/resend/**/*.ts",
+        "lib/adapters/leaflet/**/*.{ts,tsx}",
         "tests/**"
       ],
       "rules": {
@@ -60,6 +69,14 @@
               {
                 "name": "resend",
                 "message": "Use the Mailer port via @/lib/wiring/mailer. resend may only be imported inside lib/adapters/resend/. See ADR-0002 / F-11."
+              },
+              {
+                "name": "leaflet",
+                "message": "Use the MapProvider port via @/lib/adapters/leaflet. leaflet may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
+              },
+              {
+                "name": "react-leaflet",
+                "message": "Use the MapProvider port via @/lib/adapters/leaflet. react-leaflet may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
               }
             ],
             "patterns": [

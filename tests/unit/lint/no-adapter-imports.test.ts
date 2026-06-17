@@ -72,6 +72,21 @@ const RESEND_MESSAGE =
   "resend may only be imported inside lib/adapters/resend/. " +
   "See ADR-0002 / F-11.";
 
+// F-24 — the `leaflet` / `react-leaflet` forbidden messages. Drift-catcher pins:
+// asserted verbatim against the SHIPPED .eslintrc.json (loaded from disk), so a
+// typo in the config's message fails this test. Restated in BOTH the top-level
+// paths block and the services/usecases override (legacy overrides REPLACE rule
+// options — they do not merge), so both must carry them.
+const LEAFLET_MESSAGE =
+  "Use the MapProvider port via @/lib/adapters/leaflet. " +
+  "leaflet may only be imported inside lib/adapters/leaflet/. " +
+  "See ADR-0002 / F-24.";
+
+const REACT_LEAFLET_MESSAGE =
+  "Use the MapProvider port via @/lib/adapters/leaflet. " +
+  "react-leaflet may only be imported inside lib/adapters/leaflet/. " +
+  "See ADR-0002 / F-24.";
+
 /**
  * Load the SHIPPED config from disk so the pin fails if the guard is
  * weakened or deleted in `.eslintrc.json` itself. `extends` is removed
@@ -336,5 +351,73 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(RESEND_MESSAGE);
+  });
+
+  // ── (23) F-24 ──────────────────────────────────────────────────
+  it("bans leaflet inside components (the RouteMap surface this PR fixes)", async () => {
+    const messages = await lint(
+      "components/RouteMap.tsx",
+      "import L from 'leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (24) F-24 ──────────────────────────────────────────────────
+  it("bans react-leaflet inside lib/services (services override RESTATES the path)", async () => {
+    const messages = await lint(
+      "lib/services/Foo.ts",
+      "import { MapContainer } from 'react-leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (25) F-24 ──────────────────────────────────────────────────
+  it("bans leaflet inside app/api routes", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import L from 'leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (26) F-24 ──────────────────────────────────────────────────
+  it("allows leaflet inside lib/adapters/leaflet (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/leaflet/MapCanvas.tsx",
+      "import L from 'leaflet'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (27) F-24 ──────────────────────────────────────────────────
+  it("allows react-leaflet inside lib/adapters/leaflet (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/leaflet/MapCanvas.tsx",
+      "import { MapContainer } from 'react-leaflet'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (28) F-24 ──────────────────────────────────────────────────
+  it("reports the shipped leaflet message text verbatim", async () => {
+    const messages = await lint(
+      "components/RouteMap.tsx",
+      "import L from 'leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(LEAFLET_MESSAGE);
+  });
+
+  // ── (29) F-24 ──────────────────────────────────────────────────
+  it("reports the shipped react-leaflet message text verbatim", async () => {
+    const messages = await lint(
+      "components/RouteMap.tsx",
+      "import { MapContainer } from 'react-leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(REACT_LEAFLET_MESSAGE);
   });
 });
