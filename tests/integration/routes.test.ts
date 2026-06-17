@@ -324,6 +324,60 @@ describe("/api/routes + /api/admin/runs integration (F-14 PR2 re-point)", () => 
     expect(stops[0].priority).toBe("priority");
   });
 
+  it("W-NUM: numeric distance fields are emitted as JSON numbers, not strings", async () => {
+    // Pin the W-NUM deviation: the two Postgres `numeric` columns
+    // (routes.total_distance_km, route_stops.distance_from_prev_km) must come
+    // back over the GET wire as JSON numbers, never quoted strings. Seed
+    // non-null distances via PUT so the assertion is meaningful, then read back
+    // through GET /api/routes/[id].
+    const created = await createRoute({ name: "ANVIL-TEST-wnum" });
+    const id = (created.body as { route: { id: string } }).route.id;
+
+    const put = await api(`/api/routes/${id}`, {
+      method: "PUT",
+      role: "admin",
+      userId: users.admin.id,
+      body: {
+        name: "ANVIL-TEST-wnum",
+        plannedDate: PLANNED_DATE,
+        assignedTo: users.driver.id,
+        departureTime: "08:00",
+        endPoint: "mfs",
+        stops: [
+          {
+            customerId: customer.id,
+            position: 1,
+            priority: "none",
+            lockedPosition: false,
+            distanceFromPrevKm: 3.7,
+          },
+        ],
+        totalDistanceKm: 12.5,
+        totalDurationMin: 40,
+      },
+    });
+    expect(put.status).toBe(200);
+
+    const res = await api(`/api/routes/${id}`, {
+      method: "GET",
+      role: "admin",
+      userId: users.admin.id,
+    });
+    expect(res.status).toBe(200);
+    const route = (res.body as { route: Record<string, unknown> }).route;
+    // Header numeric: a real JSON number, with the seeded value preserved.
+    expect(route.total_distance_km).not.toBeNull();
+    expect(typeof route.total_distance_km).toBe("number");
+    expect(route.total_distance_km).toBe(12.5);
+    // Per-stop numeric: the stop with a non-null distance comes back as a number.
+    const stops = route.route_stops as Record<string, unknown>[];
+    const withDistance = stops.find((s) => s.distance_from_prev_km !== null);
+    expect(withDistance).toBeTruthy();
+    if (!withDistance) throw new Error("no stop with a non-null distance_from_prev_km");
+    expect(typeof withDistance.distance_from_prev_km).toBe("number");
+    expect(withDistance.distance_from_prev_km).toBe(3.7);
+  });
+
   it("PUT /api/routes/[id] 400s on missing required fields and on empty stops", async () => {
     const created = await createRoute({ name: "ANVIL-TEST-put400" });
     const id = (created.body as { route: { id: string } }).route.id;
