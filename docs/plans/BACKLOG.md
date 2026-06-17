@@ -338,6 +338,14 @@ the trail matters.
 - **Fix:** restructure the order-stage UPDATE policies so each transition pins its pre-image — e.g. split `orders_update_printed` into an explicit `printed→completed` policy with `USING state='printed'` so a `placed` row can never satisfy the completed path. Do it **uniformly for all roles** (warehouse, office, admin) in one migration — NOT bolted onto one role. Add regression tests: each role can only advance one stage at a time.
 - **Why deferred from F-RLS-04a:** doing it there meant restructuring a pre-existing policy + retesting office/admin completion flows = scope creep on a clean cutover. Better as a focused state-machine-integrity unit.
 
+### F-RLS-04b-is-admin-guard — Harden `is_admin()` against an empty-string GUC (project-wide)
+
+- **Logged:** 2026-06-17 (F-RLS-04b Render; implementer discovery, conductor ruling Option 1)
+- **What:** `is_admin()` (baseline `20260101000000_baseline.sql` lines ~177-187) casts `current_setting('app.current_user_id', true)::uuid` with a COALESCE *around the subquery* but **no `nullif(...,'')` guard on the cast itself**. On a blank-identity request — which the GUC bridge (`20260614210221_db_pre_request_guc_bridge.sql` line 72) deliberately produces as the empty string `''` on its fail-closed/anon path — the cast throws `22P02 invalid input syntax for type uuid: ""` instead of returning `false`. So any `is_admin()`-gated policy **errors (→ 500)** on a blank keycard rather than cleanly denying (`42501`).
+- **Severity:** LOW-MED — fail-*to-500*, not fail-open. No data exposure (the write still doesn't happen), but it contradicts the bridge's stated "empty GUC = deny" invariant and turns a clean 403/deny into a 500. Today the only `is_admin()`-gated policy on a write-from-blank path is `users_select` (read; SELECT returning 0 rows ≠ error in the same way) and the customers/products read policies — F-RLS-04b's new users WRITE policies were switched to the inline `nullif(...)` predicate to dodge this, so nothing ships broken.
+- **Fix:** add the `nullif(current_setting('app.current_user_id', true), '')::uuid` guard inside `is_admin()` itself so every caller (`users_select`, `customers_*`, `products_*`) denies cleanly on a blank GUC. One migration redefining the function; add a pgTAP regression: empty GUC → `is_admin()` returns `false`, no `22P02`.
+- **Why deferred from F-RLS-04b:** `is_admin()` is shared across users/customers/products read policies — changing it there is a broader blast radius than a clean Users write cutover. F-RLS-04b stayed in-scope by mirroring the F-RLS-04a inline predicate (proven correct) instead. This item fixes the shared helper once, separately.
+
 ### F-RLS-04a-create — Cut `POST /api/orders` (create) onto RLS (deferred from F-RLS-04a)
 
 - **Logged:** 2026-06-15 (F-RLS-04a Gate 2)

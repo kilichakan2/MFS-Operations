@@ -3,20 +3,29 @@
  * GET  — list all users
  * POST — create a new user (the service bcrypt-hashes the PIN or password)
  *
- * F-13 PR2: re-pointed through usersService (service-role posture, RLS still
- * bypassed — unchanged from today). The service hashes the credential and the
- * adapter writes the role-appropriate column; this route keeps the admin-role
- * guard, the field validation, and the secondary_roles 'admin' filter.
+ * F-RLS-04b: re-pointed onto usersServiceForCaller(caller.userId) — reaches the
+ * DB as the Postgres `authenticated` role so the users_select / users_insert
+ * RLS policies (admin-only) are EVALUATED. Auth is now via requireRole(req,
+ * ['admin']) (replacing the hand-rolled x-mfs-user-role check on POST and
+ * adding an explicit admin guard to GET, which previously had none — Gate 2
+ * security-positive change). requireRole returns 401 if identity is missing
+ * (unreachable for /api/admin/* — middleware redirects without a cookie) and
+ * 403 if the caller is not admin; both are mapped here so the manual try/catch
+ * never turns them into a 500.
+ *
+ * Rollback parachute: swap `await usersServiceForCaller(caller.userId!)` back
+ * to the `usersService` service-role singleton (still exported from wiring).
  *
  * Both GET and POST return the exact 8-field snake_case AppUser shape the admin
  * page (app/admin/page.tsx) reads — the camelCase UserSummary the service
  * returns is projected back before responding.
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { usersService }              from '@/lib/wiring/users'
-import { ConflictError }             from '@/lib/errors'
-import type { Role, UserSummary }    from '@/lib/domain'
+import { NextRequest, NextResponse }         from 'next/server'
+import { usersServiceForCaller }             from '@/lib/wiring/users'
+import { requireRole }                       from '@/lib/auth/session'
+import { ConflictError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import type { Role, UserSummary }            from '@/lib/domain'
 
 /** Project the camelCase domain user back to today's snake_case AppUser shape. */
 function toAppUser(u: UserSummary) {
@@ -32,11 +41,21 @@ function toAppUser(u: UserSummary) {
   }
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
+    const caller = requireRole(req, ['admin'])
+    const usersService = await usersServiceForCaller(caller.userId!)
     const users = await usersService.listAllUsers()
     return NextResponse.json(users.map(toAppUser))
   } catch (err) {
+    // requireRole throws typed AppErrors — map them to their HTTP status
+    // instead of letting the generic 500 handler swallow them.
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     console.error('[GET /api/admin/users]', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
@@ -44,10 +63,8 @@ export async function GET(_req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const callerRole = req.headers.get('x-mfs-user-role')
-    if (callerRole !== 'admin') {
-      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-    }
+    const caller = requireRole(req, ['admin'])
+    const usersService = await usersServiceForCaller(caller.userId!)
 
     const body = await req.json().catch(() => null)
 
@@ -93,6 +110,13 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(toAppUser(created), { status: 201 })
   } catch (err) {
+    // requireRole throws typed AppErrors — map auth failures first.
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     // A duplicate name surfaces as ConflictError (the adapter mapped the
     // Postgres unique-violation). Return a friendly 409 — never the raw
     // Postgres code. This branch MUST precede the generic 500 handler.
