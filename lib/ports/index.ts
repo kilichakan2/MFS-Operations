@@ -27,3 +27,13 @@ export type { LLMExtractor } from "./LLMExtractor";
 // LLMExtractionError is a runtime value (a class), not a type — value export.
 export { LLMExtractionError } from "./LLMExtractor";
 export type { Mailer, EmailMessage, SendResult } from "./Mailer";
+export type {
+  LatLng,
+  MapPin,
+  MapPinKind,
+  MapPopup,
+  MapLine,
+  MapViewport,
+  MapScene,
+  MapCanvasProps,
+} from "./MapProvider";
