@@ -62,6 +62,16 @@ const ANTHROPIC_MESSAGE =
   "@anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/. " +
   "See ADR-0002 / F-12.";
 
+// F-11 — the `resend` forbidden message. Drift-catcher pin: asserted verbatim
+// against the SHIPPED .eslintrc.json (loaded from disk), so a typo in the
+// config's message fails this test. Restated in BOTH the top-level paths block
+// and the services/usecases override (legacy overrides REPLACE rule options —
+// they do not merge), so both must carry it.
+const RESEND_MESSAGE =
+  "Use the Mailer port via @/lib/wiring/mailer. " +
+  "resend may only be imported inside lib/adapters/resend/. " +
+  "See ADR-0002 / F-11.";
+
 /**
  * Load the SHIPPED config from disk so the pin fails if the guard is
  * weakened or deleted in `.eslintrc.json` itself. `extends` is removed
@@ -287,5 +297,44 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
       "import { createClient } from '@supabase/supabase-js'\n",
     );
     expect(messages).toEqual([]);
+  });
+
+  // ── (19) F-11 ──────────────────────────────────────────────────
+  it("bans resend inside lib/services (services override RESTATES the path)", async () => {
+    const messages = await lint(
+      "lib/services/OrdersService.ts",
+      "import { Resend } from 'resend'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (20) F-11 ──────────────────────────────────────────────────
+  it("bans resend inside app/api routes", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import { Resend } from 'resend'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (21) F-11 ──────────────────────────────────────────────────
+  it("allows resend inside lib/adapters/resend (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/resend/Mailer.ts",
+      "import { Resend } from 'resend'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (22) F-11 ──────────────────────────────────────────────────
+  it("reports the shipped resend message text verbatim", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import { Resend } from 'resend'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(RESEND_MESSAGE);
   });
 });
