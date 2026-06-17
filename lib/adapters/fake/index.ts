@@ -34,5 +34,10 @@ export {
   type FakeUserRow,
   type FakeUserSeed,
 } from "./UsersRepository";
+export {
+  createFakeRoutesRepository,
+  fakeRoutesRepository,
+  type FakeRoutesSeed,
+} from "./RoutesRepository";
 export { createFakeLLMExtractor, fakeLLMExtractor } from "./LLMExtractor";
 export { createFakeMailer, fakeMailer, type FakeMailerSeed } from "./Mailer";
