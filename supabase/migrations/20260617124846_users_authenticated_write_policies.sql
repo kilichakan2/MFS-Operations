@@ -14,14 +14,22 @@
 -- permissive policies for the same command — here each command has exactly one).
 --
 -- PREDICATE CHOICE (matches the shipped F-RLS-04a orders policies
--- 20260615173901_*, NOT the bare public.is_admin() helper). is_admin() casts
--- current_setting('app.current_user_id', true)::uuid with no nullif guard, so an
--- EMPTY-STRING GUC raises 22P02 (errors → 500) instead of denying. The GUC
--- bridge (20260614210221_*) sets the GUC to COALESCE(user_id, '') = '' on any
--- anon/no-token/fail-closed request, so that edge is reachable. The inline
--- nullif(current_setting(...),'')::uuid form turns an empty/unset GUC into NULL,
--- the EXISTS subquery yields no row, and RLS cleanly DENIES (42501) — never
--- errors. is_admin()-hardening is logged separately (F-RLS-04b-is-admin-guard).
+-- 20260615173901_*): the inline EXISTS(... nullif(current_setting(...),'')::uuid
+-- ... role='admin') form, for CONSISTENCY with how Orders is already written.
+--
+-- EMPTY-GUC BEHAVIOR (verified, corrected from an earlier assumption): an
+-- empty-string GUC REJECTS the write fail-closed (no row is ever written), but
+-- the rejection currently surfaces as a 22P02 cast error, NOT a clean 42501
+-- deny. Reason: this predicate's EXISTS subquery scans public.users, which
+-- invokes the PRE-EXISTING users_select read policy (baseline.sql) whose
+-- ::uuid cast is unguarded on the empty string. So the inline form does NOT
+-- avoid the 22P02 — both it and the bare public.is_admin() helper land on it
+-- (is_admin() is SECURITY DEFINER so its own users read bypasses users_select,
+-- but it has its own unguarded ::uuid cast, so it throws 22P02 too). Either
+-- form is fail-closed; neither is "cleaner" for the empty-GUC edge. That edge
+-- is unreachable on the 4 authenticated admin routes (they always carry a valid
+-- token → valid uuid GUC) and service-role bypasses RLS entirely. The clean-deny
+-- fix = guard users_select's cast, deferred to F-RLS-04b-is-admin-guard.
 --
 -- Local: npm run db:reset. Prod application is deferred to the ship gate
 -- (apply to prod FIRST via Supabase MCP apply_migration, then merge —

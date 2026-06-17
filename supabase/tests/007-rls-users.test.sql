@@ -26,7 +26,7 @@ BEGIN;
 -- RLS-under-authenticated tests exercise the policies (not a missing GRANT).
 GRANT SELECT, INSERT, UPDATE, DELETE ON users TO authenticated;
 
-SELECT plan(8);
+SELECT plan(10);
 
 \ir _helpers.sql
 
@@ -89,6 +89,16 @@ SELECT throws_ok(
   'empty GUC cannot INSERT a user (rejected, fail-closed — no row written)'
 );
 
+-- Prove the INVARIANT (not just "it threw"): no row was written. Switch the GUC
+-- back to the admin so the verification read passes users_select (the empty GUC
+-- would make this SELECT throw via the same unguarded ::uuid cast).
+SELECT set_config('app.current_user_id', current_setting('test.admin'), true);
+SELECT is(
+  (SELECT count(*)::int FROM users WHERE name = 'rls-u-empty-insert'),
+  0,
+  'empty GUC INSERT wrote no row'
+);
+
 -- ── UPDATE ──────────────────────────────────────────────────
 
 -- admin → UPDATE allowed
@@ -129,6 +139,18 @@ SELECT throws_ok(
   NULL,
   NULL,
   'empty GUC cannot UPDATE a user (rejected, fail-closed — row unchanged)'
+);
+
+-- Prove the INVARIANT (not just "it threw"): the target row is UNCHANGED. The
+-- admin-UPDATE above set active=false and the non-admin UPDATE was RLS-filtered
+-- to 0 rows, so the target's active is false right before this empty-GUC throw —
+-- it must STILL be false. Read with the admin GUC (the empty GUC would make this
+-- SELECT throw via users_select's unguarded ::uuid cast).
+SELECT set_config('app.current_user_id', current_setting('test.admin'), true);
+SELECT is(
+  (SELECT active FROM users WHERE id = current_setting('test.target')::uuid),
+  false,
+  'empty GUC UPDATE did not modify the target row'
 );
 
 -- ── DELETE ──────────────────────────────────────────────────
