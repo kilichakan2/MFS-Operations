@@ -69,12 +69,18 @@ const LIST_COLS = `
   route_stops ( ${FULL_STOP_COLS} )
 `;
 
-// getRouteById + today select assignee + stops, NO creator, NO created_at.
+// getRouteById + today: the WIRE omits creator/created_at (the routes map
+// only the keys they emit today), but the ADAPTER now hydrates created_at,
+// created_by and the creator join so the domain object is honest and the
+// Supabase single-read matches the Fake (W1 kills the createdAt="" sentinel;
+// N1 ends the creator/createdBy single-read divergence). The route mapping —
+// not this projection — is what keeps the [id]/today wire byte-identical.
 const SINGLE_COLS = `
   id, name, planned_date, departure_time, end_point, status,
-  total_distance_km, total_duration_min, google_maps_url,
-  assigned_to,
+  total_distance_km, total_duration_min, google_maps_url, created_at,
+  assigned_to, created_by,
   assignee:users!routes_assigned_to_fkey (id, name, role),
+  creator:users!routes_created_by_fkey   (id, name),
   route_stops ( ${FULL_STOP_COLS} )
 `;
 
@@ -173,6 +179,7 @@ interface RouteRow {
   google_maps_url: string | null;
   created_at?: string;
   assigned_to: string | null;
+  created_by?: string | null;
   assignee?: unknown;
   creator?: unknown;
   route_stops?: StopRow[] | null;
@@ -188,10 +195,10 @@ function toRouteWithStops(row: RouteRow): RouteWithStops {
     name: row.name,
     plannedDate: row.planned_date,
     assignedTo: row.assigned_to,
-    // SINGLE_COLS omits created_by/creator/created_at — those land null
-    // here, matching what those endpoints return today (no such key on
-    // the wire after PR2 maps it back).
-    createdBy: null,
+    // Both LIST_COLS and SINGLE_COLS now select created_by — the domain
+    // object is fully hydrated on every read (N1). The [id]/today routes
+    // simply don't emit it to the wire.
+    createdBy: row.created_by ?? null,
     departureTime: row.departure_time,
     endPoint: row.end_point as RouteEndPoint,
     status: row.status as RouteStatus,

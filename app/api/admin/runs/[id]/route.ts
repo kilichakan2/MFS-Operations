@@ -3,12 +3,15 @@
  *
  * PATCH { status } — update route status
  * DELETE          — delete route (route_stops cascade automatically)
+ *
+ * Re-pointed through `routesService` (F-14 PR2): the route owns auth +
+ * validation + the snake_case wire mapping; the service/adapter own the DB.
+ * Byte-identical to the pre-F-14 wire. No `@supabase/*` import here.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { routesService } from '@/lib/wiring/routes'
+import { ServiceError } from '@/lib/errors'
 
 const VALID_STATUSES = ['draft', 'active', 'completed'] as const
 type RouteStatus = typeof VALID_STATUSES[number]
@@ -35,19 +38,29 @@ export async function PATCH(
       )
     }
 
-    const { data, error } = await supabase
-      .from('routes')
-      .update({ status })
-      .eq('id', id)
-      .select('id, name, planned_date, status')
-      .single()
+    const row = await routesService.setRouteStatus(id, status)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // Today's route used .select(...).single(), which errors (→500) when no
+    // row matched the id. Preserve a non-2xx for the no-match case rather
+    // than inventing a 200/404. The UI only ever PATCHes existing runs.
+    if (row === null) {
+      return NextResponse.json({ error: 'Route not found' }, { status: 500 })
+    }
 
     console.log(`[admin/runs/:id PATCH] route ${id} → ${status}`)
-    return NextResponse.json(data)
+    // Map the trimmed domain row back to the bare snake_case wire shape.
+    return NextResponse.json({
+      id:           row.id,
+      name:         row.name,
+      planned_date: row.plannedDate,
+      status:       row.status,
+    })
 
   } catch (err) {
+    if (err instanceof ServiceError) {
+      console.error('[admin/runs/:id PATCH]', err.message)
+      return NextResponse.json({ error: err.message }, { status: 500 })
+    }
     console.error('[admin/runs/:id PATCH]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -67,20 +80,16 @@ export async function DELETE(
     const { id } = await params
 
     // route_stops has ON DELETE CASCADE — single delete removes all stops too
-    const { error } = await supabase
-      .from('routes')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      console.error('[admin/runs/:id DELETE]', error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    await routesService.deleteRoute(id)
 
     console.log(`[admin/runs/:id DELETE] route ${id} deleted`)
     return new NextResponse(null, { status: 204 })
 
   } catch (err) {
+    if (err instanceof ServiceError) {
+      console.error('[admin/runs/:id DELETE]', err.message)
+      return NextResponse.json({ error: err.message }, { status: 500 })
+    }
     console.error('[admin/runs/:id DELETE]', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

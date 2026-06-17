@@ -7,14 +7,62 @@
  *        If the insert fails, the route is left with zero stops — a
  *        correctable state (re-save restores them). The header is always
  *        saved first so route metadata is never lost.
+ *
+ * Re-pointed through `routesService` (F-14 PR2). The route owns auth +
+ * validation + the snake_case wire mapping; the adapter owns the atomic
+ * delete-then-insert replace and reproduces the exact partial-failure
+ * messages (carried through the ServiceError). The GET wire is byte-identical
+ * to today EXCEPT stops now include `visited` (N2 — approved: aligns /[id]
+ * with /today). NO created_at/creator on the wire. No `@supabase/*` import.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { routesService } from '@/lib/wiring/routes'
+import { ServiceError } from '@/lib/errors'
+import type { RouteWithStops, RouteEndPoint, StopPriority } from '@/lib/domain'
 
 // ── GET ────────────────────────────────────────────────────────────────────────
+
+/** Map a full route aggregate back to the snake_case wire shape. Explicit
+ *  per-key list — NEVER spread the domain object. Omits created_at/creator;
+ *  stops include `visited` (N2). */
+function toWire(r: RouteWithStops) {
+  return {
+    id:                 r.id,
+    name:               r.name,
+    planned_date:       r.plannedDate,
+    departure_time:     r.departureTime,
+    end_point:          r.endPoint,
+    status:             r.status,
+    total_distance_km:  r.totalDistanceKm,
+    total_duration_min: r.totalDurationMin,
+    google_maps_url:    r.googleMapsUrl,
+    assigned_to:        r.assignedTo,
+    assignee:           r.assignee
+      ? { id: r.assignee.id, name: r.assignee.name, role: r.assignee.role }
+      : null,
+    route_stops: r.stops.map(s => ({
+      id:                       s.id,
+      position:                 s.position,
+      priority:                 s.priority,
+      locked_position:          s.lockedPosition,
+      priority_note:            s.priorityNote,
+      estimated_arrival:        s.estimatedArrival,
+      drive_time_from_prev_min: s.driveTimeFromPrevMin,
+      distance_from_prev_km:    s.distanceFromPrevKm,
+      visited:                  s.visited,
+      customer: s.customer
+        ? {
+            id:       s.customer.id,
+            name:     s.customer.name,
+            postcode: s.customer.postcode,
+            lat:      s.customer.lat,
+            lng:      s.customer.lng,
+          }
+        : null,
+    })),
+  }
+}
 
 export async function GET(
   req: NextRequest,
@@ -26,39 +74,17 @@ export async function GET(
 
     const { id } = await params
 
-    const { data, error } = await supabase
-      .from('routes')
-      .select(`
-        id, name, planned_date, departure_time, end_point, status,
-        total_distance_km, total_duration_min, google_maps_url,
-        assigned_to,
-        assignee:users!routes_assigned_to_fkey (id, name, role),
-        route_stops (
-          id, position, priority, locked_position, priority_note,
-          estimated_arrival, drive_time_from_prev_min, distance_from_prev_km,
-          customer:customers (id, name, postcode, lat, lng)
-        )
-      `)
-      .eq('id', id)
-      .single()
+    const route = await routesService.getRouteById(id)
 
-    if (error) {
-      console.error('[GET /api/routes/:id]', error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-    if (!data) return NextResponse.json({ error: 'Route not found' }, { status: 404 })
+    if (route === null) return NextResponse.json({ error: 'Route not found' }, { status: 404 })
 
-    // Sort stops by position
-    const route = {
-      ...data,
-      route_stops: [...(data.route_stops ?? [])].sort(
-        (a, b) => (a.position ?? 0) - (b.position ?? 0)
-      ),
-    }
-
-    return NextResponse.json({ route })
+    return NextResponse.json({ route: toWire(route) })
 
   } catch (err) {
+    if (err instanceof ServiceError) {
+      console.error('[GET /api/routes/:id]', err.message)
+      return NextResponse.json({ error: err.message }, { status: 500 })
+    }
     console.error('[GET /api/routes/:id] unexpected error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -107,72 +133,42 @@ export async function PUT(
       return NextResponse.json({ error: 'Route must have at least one stop' }, { status: 400 })
     }
 
-    // Step 1: Update route header (always persisted — metadata never lost)
-    const { error: updateErr } = await supabase
-      .from('routes')
-      .update({
-        name:             body.name ?? null,
-        planned_date:     body.plannedDate,
-        assigned_to:      body.assignedTo,
-        departure_time:   body.departureTime,
-        end_point:        body.endPoint,
-        total_distance_km:  body.totalDistanceKm  ?? null,
-        total_duration_min: body.totalDurationMin ?? null,
-        google_maps_url:    body.googleMapsUrl    ?? null,
-      })
-      .eq('id', id)
-
-    if (updateErr) {
-      console.error('[PUT /api/routes/:id] header update failed:', updateErr.message)
-      return NextResponse.json({ error: updateErr.message }, { status: 500 })
-    }
-
-    // Step 2: Delete existing stops
-    const { error: deleteErr } = await supabase
-      .from('route_stops')
-      .delete()
-      .eq('route_id', id)
-
-    if (deleteErr) {
-      // Header already updated — stops are stale but route is not lost
-      console.error('[PUT /api/routes/:id] stop delete failed:', deleteErr.message)
-      return NextResponse.json(
-        { error: `Header saved but could not clear old stops: ${deleteErr.message}` },
-        { status: 500 }
-      )
-    }
-
-    // Step 3: Insert new stops
-    const stopRows = body.stops.map(s => ({
-      route_id:               id,
-      customer_id:            s.customerId,
-      position:               s.position,
-      priority:               s.priority,
-      locked_position:        s.lockedPosition,
-      priority_note:          s.priorityNote          ?? null,
-      estimated_arrival:      s.estimatedArrival      ?? null,
-      drive_time_from_prev_min: s.driveTimeFromPrevMin ?? null,
-      distance_from_prev_km:  s.distanceFromPrevKm    ?? null,
-    }))
-
-    const { error: insertErr } = await supabase
-      .from('route_stops')
-      .insert(stopRows)
-
-    if (insertErr) {
-      // Stops deleted but insert failed — route exists but is empty.
-      // Dispatcher must re-save to restore stops (handled via error message).
-      console.error('[PUT /api/routes/:id] stop insert failed:', insertErr.message)
-      return NextResponse.json(
-        { error: `Route header saved but stops could not be written: ${insertErr.message}. Please re-save to restore stops.` },
-        { status: 500 }
-      )
-    }
+    // The adapter does the atomic header-update → delete-stops → insert-stops
+    // replace and throws a ServiceError carrying the exact partial-failure
+    // message shape on a stop-delete or stop-insert failure.
+    await routesService.saveRoute(id, {
+      name:             body.name ?? null,
+      plannedDate:      body.plannedDate,
+      assignedTo:       body.assignedTo,
+      departureTime:    body.departureTime,
+      endPoint:         body.endPoint as RouteEndPoint,
+      stops: body.stops.map(s => ({
+        customerId:           s.customerId,
+        position:             s.position,
+        priority:             s.priority as StopPriority,
+        lockedPosition:       s.lockedPosition,
+        priorityNote:         s.priorityNote          ?? null,
+        estimatedArrival:     s.estimatedArrival      ?? null,
+        driveTimeFromPrevMin: s.driveTimeFromPrevMin  ?? null,
+        distanceFromPrevKm:   s.distanceFromPrevKm    ?? null,
+      })),
+      totalDistanceKm:  body.totalDistanceKm  ?? null,
+      totalDurationMin: body.totalDurationMin ?? null,
+      googleMapsUrl:    body.googleMapsUrl    ?? null,
+    })
 
     console.log(`[PUT /api/routes/:id] route ${id} updated — ${body.stops.length} stops`)
     return NextResponse.json({ id, updated: true })
 
   } catch (err) {
+    if (err instanceof ServiceError) {
+      // The adapter's ServiceError message reproduces today's exact strings:
+      //  "Header saved but could not clear old stops: …"
+      //  "Route header saved but stops could not be written: …. Please re-save to restore stops."
+      //  (and the bare header-update error message).
+      console.error('[PUT /api/routes/:id]', err.message)
+      return NextResponse.json({ error: err.message }, { status: 500 })
+    }
     console.error('[PUT /api/routes/:id] unexpected error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
