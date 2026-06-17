@@ -28,3 +28,10 @@ export const kdsLineDoneBodySchema = z
       .refine((s) => UUID_RE.test(s), "butcher_id required"),
   })
   .transform((b) => ({ butcherId: b.butcher_id }));
+
+/**
+ * POST line-undo body → `{ butcherId }` (F-PROD-02). Same inbound
+ * contract as line-done (a single uuid butcher_id); a distinct export
+ * name keeps the two route boundaries independently evolvable.
+ */
+export const kdsLineUndoneBodySchema = kdsLineDoneBodySchema;
