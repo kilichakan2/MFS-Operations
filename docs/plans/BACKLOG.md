@@ -207,6 +207,15 @@ the trail matters.
 
 ---
 
+### ARCH-FU-06 — Geocoder port (postcodes.io) + RouteOptimizer port (Google Routes v2)
+
+- **Deferred:** 2026-06-17 (F-14 — out of scope, routing brain untouched this pass)
+- **What:** the `optimise` and `compute-road-times` endpoints (`app/api/routes/optimise/route.ts`, `app/api/routes/compute-road-times/route.ts`) still call external services via raw `fetch` outside any port — postcodes.io (geocoding) and Google Routes v2 (drive-time matrix). F-14 deliberately left the routing brain alone; these are the next sockets to build.
+- **Fix shape:** extract as their own unit — a `Geocoder` port (postcodes.io adapter) and a `RouteOptimizer` port (Google Routes v2 adapter), wired in `lib/wiring/routes.ts` beside `routesService`.
+- **Owner unit:** unscheduled.
+
+---
+
 ## Migration hygiene (F-TD-)
 
 ### F-TD-15 — Migration filename convention collides for same-day migrations
