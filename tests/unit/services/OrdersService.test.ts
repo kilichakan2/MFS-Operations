@@ -653,6 +653,103 @@ describe("OrdersService.completeLineDone", () => {
   });
 });
 
+// ─── undoLineDone (F-PROD-02) ────────────────────────────────
+
+describe("OrdersService.undoLineDone", () => {
+  it("propagates NotFoundError when the line does not exist", async () => {
+    const { service } = make();
+    await expect(service.undoLineDone(UNKNOWN_ID, T)).rejects.toThrowError(
+      NotFoundError,
+    );
+  });
+
+  it("plain undo on a printed order: orderReopened false, line reverts", async () => {
+    const { service } = make();
+    const placed = await service.placeOrder(
+      buildInput({
+        lines: [
+          {
+            productId: PRODUCT_ID,
+            adHocDescription: null,
+            quantity: 1,
+            uom: "kg",
+            notes: null,
+          },
+          {
+            productId: PRODUCT_ID_2,
+            adHocDescription: null,
+            quantity: 1,
+            uom: "kg",
+            notes: null,
+          },
+        ],
+      }),
+      USER_ID,
+    );
+    await service.printOrder(placed.id, USER_ID, T);
+    await service.completeLineDone(placed.lines[0].id, BUTCHER_ID, T);
+
+    const result = await service.undoLineDone(placed.lines[0].id, T);
+    expect(result).toEqual({
+      alreadyPending: false,
+      orderId: placed.id,
+      orderReopened: false,
+    });
+    const fresh = await service.findOrderById(placed.id);
+    expect(fresh?.lines.find((l) => l.id === placed.lines[0].id)?.doneAt).toBe(
+      null,
+    );
+    expect(fresh?.state).toBe("printed");
+  });
+
+  it("cascade undo on a completed order: orderReopened true, order back to printed", async () => {
+    const { service } = make();
+    const placed = await service.placeOrder(buildInput(), USER_ID);
+    await service.printOrder(placed.id, USER_ID, T);
+    const done = await service.completeLineDone(placed.lines[0].id, BUTCHER_ID, T);
+    expect(done.completed).toBe(true);
+
+    const result = await service.undoLineDone(placed.lines[0].id, T);
+    expect(result).toEqual({
+      alreadyPending: false,
+      orderId: placed.id,
+      orderReopened: true,
+    });
+    const fresh = await service.findOrderById(placed.id);
+    expect(fresh?.state).toBe("printed");
+    expect(fresh?.completedAt).toBe(null);
+  });
+
+  it("alreadyPending no-op when the line is already not-done", async () => {
+    const { service } = make();
+    const placed = await service.placeOrder(buildInput(), USER_ID);
+    await service.printOrder(placed.id, USER_ID, T);
+    const result = await service.undoLineDone(placed.lines[0].id, T);
+    expect(result).toEqual({
+      alreadyPending: true,
+      orderId: placed.id,
+      orderReopened: false,
+    });
+  });
+
+  it("swallows nothing — propagates a ServiceError from the port", async () => {
+    const orders = createFakeOrdersRepository();
+    const customers = createFakeCustomersRepository([
+      { id: CUSTOMER_ID, name: "Acme", postcode: null, active: true },
+    ]);
+    const products = createFakeProductsRepository([
+      { id: PRODUCT_ID, code: "X", name: "X", boxSize: null },
+    ]);
+    const service = createOrdersService({ orders, customers, products });
+    orders.markLineUndone = async () => {
+      throw new ServiceError("DB connection lost");
+    };
+    await expect(service.undoLineDone(UNKNOWN_ID, T)).rejects.toBeInstanceOf(
+      ServiceError,
+    );
+  });
+});
+
 // ─── Pass-throughs ───────────────────────────────────────────
 
 describe("OrdersService pass-throughs", () => {
