@@ -150,6 +150,14 @@ function KdsPageInner() {
     orderId: string;
     lineId: string;
   } | null>(null);
+  // F-PROD-02 — the line a butcher tapped to UNDO, pending confirmation.
+  // `willReopen` is computed purely client-side (the board already knows
+  // the parent order state) so the modal copy needs no server round-trip.
+  const [undoingLine, setUndoingLine] = useState<{
+    orderId: string;
+    lineId: string;
+    willReopen: boolean;
+  } | null>(null);
 
   // ── Optimistic-UI tracking for Done taps ───────────────────
   // A set of line IDs that have been optimistically marked done in
@@ -160,6 +168,14 @@ function KdsPageInner() {
   // the API confirms (success or failure) — on failure the line is
   // explicitly reverted.
   const pendingDoneIdsRef = useRef<Set<string>>(new Set());
+
+  // ── Optimistic-UI tracking for Undo taps (F-PROD-02) ────────
+  // Mirror of pendingDoneIdsRef, run backwards: a set of line IDs
+  // optimistically reverted to pending whose server commit hasn't yet
+  // shown up in a poll. While a line is in here AND the server still
+  // reports done_at != null, we keep the optimistic pending state so
+  // the green tick doesn't flicker back on between the tap and commit.
+  const pendingUndoIdsRef = useRef<Set<string>>(new Set());
 
   // ── Load signed-in butchers from sessionStorage on mount ────
   useEffect(() => {
@@ -217,6 +233,16 @@ function KdsPageInner() {
                       done_by: prevLine.done_by,
                     };
                   }
+                }
+                // F-PROD-02 mirror: while an undo is in flight and the
+                // server still reports the line as done, keep the
+                // optimistic pending (null) state so the tick doesn't
+                // flicker back on before the commit propagates.
+                if (
+                  pendingUndoIdsRef.current.has(serverLine.id) &&
+                  serverLine.done_at
+                ) {
+                  return { ...serverLine, done_at: null, done_by: null };
                 }
                 return serverLine;
               }),
@@ -360,6 +386,101 @@ function KdsPageInner() {
     setAttributingLine({ orderId, lineId });
   }
 
+  // ── Undo tap handler (F-PROD-02) ───────────────────────────
+
+  // A tap on a DONE line opens the confirmation modal. willReopen is a
+  // pure client-side decision (§5.4): the parent order being completed
+  // means undoing this line re-opens it. No server fetch needed.
+  function handleLineUndoTap(orderId: string, lineId: string) {
+    // Undo is identity-checked through the Users port exactly like
+    // mark-done: a butcher must be signed in. No one signed in → prompt.
+    if (butchers.length === 0) {
+      setShowPinModal(true);
+      return;
+    }
+    const order = orders.find((o) => o.id === orderId);
+    const willReopen = order?.state === "completed";
+    setUndoingLine({ orderId, lineId, willReopen });
+  }
+
+  async function undoLineDone(
+    orderId: string,
+    lineId: string,
+    willReopen: boolean,
+  ) {
+    // Optimistic UI: clear the line immediately, and — if this undo
+    // re-opens the order — flip the order back to printed + clear
+    // completed_at so the card does not vanish under the completed fade.
+    pendingUndoIdsRef.current.add(lineId);
+    setOrders((prev) =>
+      prev.map((order) =>
+        order.id !== orderId
+          ? order
+          : {
+              ...order,
+              state: willReopen ? "printed" : order.state,
+              completed_at: willReopen ? null : order.completed_at,
+              lines: order.lines.map((line) =>
+                line.id === lineId
+                  ? { ...line, done_at: null, done_by: null }
+                  : line,
+              ),
+            },
+      ),
+    );
+
+    // Snapshot the pre-undo line + order state for rollback.
+    const snapshot = orders.find((o) => o.id === orderId);
+    const snapshotLine = snapshot?.lines.find((l) => l.id === lineId);
+
+    function rollback() {
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id !== orderId
+            ? order
+            : {
+                ...order,
+                state: snapshot?.state ?? order.state,
+                completed_at: snapshot?.completed_at ?? order.completed_at,
+                lines: order.lines.map((line) =>
+                  line.id === lineId
+                    ? {
+                        ...line,
+                        done_at: snapshotLine?.done_at ?? null,
+                        done_by: snapshotLine?.done_by ?? null,
+                      }
+                    : line,
+                ),
+              },
+        ),
+      );
+    }
+
+    try {
+      const res = await fetch(`/api/kds/lines/${lineId}/undo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ butcher_id: butchers[0]?.id }),
+      });
+      if (res.ok) {
+        pendingUndoIdsRef.current.delete(lineId);
+      } else {
+        const body = await res.json().catch(() => ({}));
+        console.error("[KDS] undoLineDone failed", body);
+        pendingUndoIdsRef.current.delete(lineId);
+        rollback();
+        setError(body?.message ?? "Failed to undo");
+        setTimeout(() => setError(null), 3000);
+      }
+    } catch (e) {
+      console.error("[KDS] undoLineDone network error", e);
+      pendingUndoIdsRef.current.delete(lineId);
+      rollback();
+      setError("Network error — could not undo");
+      setTimeout(() => setError(null), 3000);
+    }
+  }
+
   // ── Filter visible orders ─────────────────────────────────
 
   const visibleOrders = useMemo(() => {
@@ -421,6 +542,7 @@ function KdsPageInner() {
               flashes={recentFlashes}
               now={now}
               onLineTap={handleLineTap}
+              onLineUndoTap={handleLineUndoTap}
             />
           ))}
         </div>
@@ -446,6 +568,22 @@ function KdsPageInner() {
           onDismiss={() => setAttributingLine(null)}
         />
       )}
+
+      {/* Undo confirmation modal (F-PROD-02) */}
+      {undoingLine && (
+        <UndoConfirmModal
+          willReopen={undoingLine.willReopen}
+          onConfirm={() => {
+            void undoLineDone(
+              undoingLine.orderId,
+              undoingLine.lineId,
+              undoingLine.willReopen,
+            );
+            setUndoingLine(null);
+          }}
+          onDismiss={() => setUndoingLine(null)}
+        />
+      )}
     </div>
   );
 }
@@ -457,11 +595,13 @@ function OrderCard({
   flashes,
   now,
   onLineTap,
+  onLineUndoTap,
 }: {
   order: KdsOrder;
   flashes: FlashEntry[];
   now: number;
   onLineTap: (orderId: string, lineId: string) => void;
+  onLineUndoTap: (orderId: string, lineId: string) => void;
 }) {
   const products = useProductsWithDetail();
 
@@ -551,13 +691,21 @@ function OrderCard({
               <li key={line.id}>
                 <button
                   type="button"
-                  onClick={() =>
-                    !isDone && !isCompleted && onLineTap(order.id, line.id)
-                  }
-                  disabled={isDone || isCompleted}
+                  onClick={() => {
+                    // F-PROD-02: a done line is now tappable and routes
+                    // to the undo flow (with confirmation). A not-done
+                    // line still marks done — but only while the card
+                    // is not yet completed (a not-done line on a
+                    // completed card is unreachable; cascade handles it).
+                    if (isDone) {
+                      onLineUndoTap(order.id, line.id);
+                    } else if (!isCompleted) {
+                      onLineTap(order.id, line.id);
+                    }
+                  }}
                   className={`w-full text-left flex items-center gap-3 rounded-lg px-3 py-3 transition-colors ${
                     isDone
-                      ? "bg-green-900/30 border border-green-700/50 cursor-default"
+                      ? "bg-green-900/30 border border-green-700/50 hover:bg-green-900/50 active:scale-[0.98]"
                       : "bg-slate-700 hover:bg-slate-600 active:scale-[0.98]"
                   }`}
                 >
@@ -782,6 +930,60 @@ function AttributionModal({
               {b.name}
             </button>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Undo confirmation modal (F-PROD-02) ───────────────────
+
+function UndoConfirmModal({
+  willReopen,
+  onConfirm,
+  onDismiss,
+}: {
+  willReopen: boolean;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  const title = willReopen
+    ? "Reopen the completed order?"
+    : "Undo this line?";
+  const body = willReopen
+    ? "This will reopen the completed order — undo anyway?"
+    : "Mark this line as not done again.";
+
+  return (
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6">
+      <div className="bg-slate-800 rounded-2xl p-6 max-w-sm w-full">
+        <h3
+          className={`text-lg font-bold mb-2 ${
+            willReopen ? "text-orange-400" : "text-white"
+          }`}
+        >
+          {title}
+        </h3>
+        <p className="text-sm text-slate-400 mb-6">{body}</p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="flex-1 bg-slate-700 hover:bg-slate-600 rounded-xl px-4 py-3 font-bold text-white transition-colors active:scale-[0.99]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`flex-1 rounded-xl px-4 py-3 font-bold text-white transition-colors active:scale-[0.99] ${
+              willReopen
+                ? "bg-orange-600 hover:bg-orange-700"
+                : "bg-green-600 hover:bg-green-700"
+            }`}
+          >
+            Confirm
+          </button>
         </div>
       </div>
     </div>
