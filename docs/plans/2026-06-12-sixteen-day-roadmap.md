@@ -134,7 +134,7 @@ After all three ship, resume the Day-2 order below.
 
 ### Day 7 — Wed 18 Jun
 
-- **F-11** — `Mailer` port + Resend adapter, 3 email helpers re-pointed (unblocked by F-13)
+- **F-11 ✅ SHIPPED 2026-06-17 (PR #48, squash `e46ed6f`)** — `Mailer` port (`lib/ports/Mailer.ts`, owned `EmailMessage`→`SendResult`) + Resend adapter (`lib/adapters/resend/Mailer.ts`, the sole `resend` importer; lazy memoized client; D2 per-send no-key guard → `{skipped, reason:'no-api-key'}`) + Fake adapter + wiring (`lib/wiring/mailer.ts`). 3 email helpers (compliment/complaint/pricing) re-pointed to send via the port; SEND-ONLY — raw Supabase recipient-fetch + HTML left byte-for-byte for F-15/F-17 to absorb. **No new dep** (`resend@^6.9.4` already present); **no migration**. Behaviour byte-identical bar D3 (success log reads `result.id`). ESLint bans `resend` outside the adapter (both paths blocks + allow-list + lint pin). Rip-out PASS (swap vendor = 1 adapter + 1 wiring line). code-critic NO BLOCKERS (deep port, byte-identical incl. error path). FORGE+ANVIL: unit 1758 · tsc+lint 0 · integration 182 (unkeyed → mailer skips, no real email) · pgTAP n/a (no DB) · **preview smoke 8/8 @critical** (via `--unprotected` mode — protection OFF so bypass key ungenerable; flag skips only the bypass header, all other guards hold) · **prod smoke 0×5xx**. Cert `docs/anvil/2026-06-17-f-11-mailer-port-resend-adapter-cert.md`; review `docs/reviews/...`; plan archived.
 - **F-PROD-02** — KDS line-done undo (**30-min product session with Hakan first** to lock undo/cascade/audit rules, then build)
 
 ### Day 8 — Thu 19 Jun
