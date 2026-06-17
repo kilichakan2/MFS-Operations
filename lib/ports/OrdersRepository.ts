@@ -426,6 +426,88 @@ export interface OrdersRepository {
   markOrderCompleted(id: string, when: Date): Promise<Order>;
 
   /**
+   * Undo a single order line that was marked done — and, if that line
+   * belonged to a `completed` order, atomically re-open the order.
+   *
+   * The mirror of `markLineDone`, with one crucial asymmetry: where
+   * mark-done splits the per-line tick and the per-order completion
+   * into two methods (two distinct actors/moments, a benign race to
+   * swallow), undo FOLDS the cascade into this single method because
+   * the two effects are one atomic operation. A half-done undo — line
+   * pending but parent still `completed` — is a state the DB CHECK
+   * constraint (orders: `completed` ⇒ `completed_at IS NOT NULL`)
+   * actively forbids and no reader may observe. See the plan §6.1
+   * "design it twice": alternative (B) = split into
+   * `markLineUndone` + `revertOrderToPrinted`, rejected because it
+   * exposes that illegal intermediate and forces the caller to
+   * re-assemble the cascade rule the port should hide (depth rule,
+   * ADR-0002 line 25).
+   *
+   * What this hides:
+   *   - The parent-state read that decides plain-undo vs cascade.
+   *   - The cascade UPDATE: line `done_at`/`done_by` → NULL AND, iff
+   *     the parent is `completed`, order `state → 'printed'` +
+   *     `completed_at → NULL`, done atomically (one DB function call
+   *     in the Supabase adapter) so no illegal intermediate is
+   *     observable.
+   *   - The TOCTOU guards (mirror of `markLineDone`'s `.is('done_at',
+   *     null)`): the line UPDATE guards `.not('done_at','is',null)`
+   *     and the order revert guards `.eq('state','completed')`, so two
+   *     simultaneous undos cannot both win and a concurrent re-complete
+   *     cannot corrupt state.
+   *   - The audit row: the `order_lines` UPDATE fires the DB audit
+   *     trigger, which (post-F-PROD-02) emits `line_undone` on the
+   *     reverse `done_at` transition. The adapter writes NO manual
+   *     audit row — consistent with every other order event.
+   *
+   * Idempotency contract:
+   *   If the line is already pending (`done_at IS NULL`), return
+   *   `{ alreadyPending: true, orderId, orderReopened: false }` WITHOUT
+   *   writing — mirrors `markLineDone`'s `alreadyDone` no-op so a
+   *   double-confirm / network retry is not an error.
+   *
+   * Parent-state handling:
+   *   - `printed`   → plain line revert, `orderReopened: false`.
+   *   - `completed` → cascade revert, `orderReopened: true`. This is
+   *     the DELIBERATE exception to the `markLineDone` /
+   *     `markOrderCompleted` `completed`-guard: undo is the one path
+   *     allowed to re-open a completed order. It does NOT throw
+   *     `ConflictError` here.
+   *   - `placed`    → cannot occur (a done line cannot exist on an
+   *     unprinted order). If somehow encountered, the not-done line is
+   *     treated as `alreadyPending` and NEVER cascades a placed order.
+   *
+   * No `undoneBy` parameter. Audit attribution is NULL-user (KDS runs
+   * service-role) and the audit row is written by the DB trigger, not
+   * the adapter — so the port takes no actor id. This is symmetric to
+   * `markLineDone` taking `doneBy` ONLY because it writes `done_by` to
+   * the column; undo CLEARS `done_by`, so there is no id to record.
+   * (Real attribution is deferred to BACKLOG F-RLS-04a-kds.)
+   *
+   * @param lineId  The order_lines row id to revert.
+   * @param when    The undo time. Passed for symmetry / determinism;
+   *                undo clears timestamps rather than writing `when` to
+   *                a column, but adapters may use it for any audit
+   *                metadata.
+   * @returns `{ alreadyPending, orderId, orderReopened }` —
+   *   `alreadyPending` true iff the line was already not-done (no
+   *   write); `orderReopened` true iff a `completed` parent was
+   *   reverted to `printed`.
+   * @throws NotFoundError if `lineId` does not exist.
+   * @throws ServiceError on DB failure. Does NOT throw `ConflictError`
+   *   for the `completed` parent (that is the allowed cascade path);
+   *   no `ForbiddenError`/role logic (route/use-case concern).
+   */
+  markLineUndone(
+    lineId: string,
+    when: Date,
+  ): Promise<{
+    readonly alreadyPending: boolean;
+    readonly orderId: string;
+    readonly orderReopened: boolean;
+  }>;
+
+  /**
    * Read the live KDS queue snapshot.
    *
    * What this hides:
