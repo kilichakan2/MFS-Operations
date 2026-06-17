@@ -20,6 +20,24 @@ export type {
 export type { Customer } from "./Customer";
 export type { Product } from "./Product";
 export type {
+  Route,
+  RouteStop,
+  RouteWithStops,
+  RouteSummary,
+  RoutePerson,
+  StopCustomer,
+  StopInput,
+  CreateRouteInput,
+  SaveRouteInput,
+  CreateRoutePersist,
+  SaveRoutePersist,
+  CreatedRoute,
+  RouteStatusRow,
+  RouteStatus,
+  RouteEndPoint,
+  StopPriority,
+} from "./Route";
+export type {
   UserSummary,
   UserCredential,
   AuthType,

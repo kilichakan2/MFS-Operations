@@ -19,6 +19,7 @@ export type {
   ListUsersByRolesOptions,
   ListCredentialsByRolesOptions,
 } from "./UsersRepository";
+export type { RoutesRepository, ListRoutesFilter } from "./RoutesRepository";
 export type { SessionTokens } from "./SessionTokens";
 export type { DbTokenMinter } from "./DbTokenMinter";
 export type { PasswordHasher } from "./PasswordHasher";
