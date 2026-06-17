@@ -9,7 +9,11 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { getUKDateAndHour, getEffectiveMinDate } from '../../lib/utils/ukDateAndHour'
+import {
+  getUKDateAndHour,
+  getEffectiveMinDate,
+  getUKWeekBounds,
+} from '../../lib/utils/ukDateAndHour'
 
 // ── getEffectiveMinDate (the 7 PM rollover rule) ─────────────────────────────
 
@@ -108,5 +112,37 @@ describe('getUKDateAndHour — Europe/London timezone conversion', () => {
     const { dateStr, hour } = getUKDateAndHour(utcDate)
     expect(hour).toBe(19)  // UTC 18 + BST +1 = 19 UK
     expect(getEffectiveMinDate(dateStr, hour)).toBe('2026-07-21')
+  })
+})
+
+// ── getUKWeekBounds (Mon–Sun week boundary, R5) ──────────────────────────────
+
+describe('getUKWeekBounds — Monday-to-Sunday UK week', () => {
+  it('Wednesday 2026-06-17 → Mon 2026-06-15 .. Sun 2026-06-21', () => {
+    // 2026-06-17 is a Wednesday; the enclosing week is Mon 15th to Sun 21st.
+    const { from, to } = getUKWeekBounds(new Date('2026-06-17T12:00:00Z'))
+    expect(from).toBe('2026-06-15')
+    expect(to).toBe('2026-06-21')
+  })
+
+  it('Monday is the FROM bound (week starts Monday, not Sunday)', () => {
+    const { from, to } = getUKWeekBounds(new Date('2026-06-15T12:00:00Z'))
+    expect(from).toBe('2026-06-15') // Monday maps to itself
+    expect(to).toBe('2026-06-21')
+  })
+
+  it('Sunday belongs to the week that STARTED the previous Monday', () => {
+    // 2026-06-21 is a Sunday; it must NOT start a new week — it closes the
+    // Mon 15th week (the classic Sunday-vs-Monday off-by-one, R5).
+    const { from, to } = getUKWeekBounds(new Date('2026-06-21T12:00:00Z'))
+    expect(from).toBe('2026-06-15')
+    expect(to).toBe('2026-06-21')
+  })
+
+  it('spans across a month boundary', () => {
+    // 2026-07-01 is a Wednesday → week Mon 2026-06-29 .. Sun 2026-07-05.
+    const { from, to } = getUKWeekBounds(new Date('2026-07-01T12:00:00Z'))
+    expect(from).toBe('2026-06-29')
+    expect(to).toBe('2026-07-05')
   })
 })

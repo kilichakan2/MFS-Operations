@@ -43,3 +43,33 @@ export function getEffectiveMinDate(
   }
   return dateStr
 }
+
+/**
+ * The current UK week's Monday–Sunday bounds as YYYY-MM-DD strings.
+ *
+ * Lifted verbatim from app/api/admin/runs/route.ts (F-14) so it sits
+ * beside its UK-time siblings and gets unit tests. "This week" means
+ * Monday-start, not a rolling 7 days. Accepts an optional `now` so the
+ * boundary is testable with a fixed clock.
+ */
+export function getUKWeekBounds(now: Date = new Date()): {
+  from: string
+  to: string
+} {
+  const ukDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+  const d = new Date(ukDateStr + 'T12:00:00')
+  const day = d.getDay() // 0=Sun … 6=Sat
+  const mon = new Date(d)
+  mon.setDate(d.getDate() - ((day + 6) % 7))
+  const sun = new Date(mon)
+  sun.setDate(mon.getDate() + 6)
+  return {
+    from: mon.toLocaleDateString('en-CA'),
+    to: sun.toLocaleDateString('en-CA'),
+  }
+}
