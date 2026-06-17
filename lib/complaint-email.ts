@@ -12,6 +12,8 @@
  *             whose role is NOT 'driver' (drivers have no emails anyway).
  */
 
+import { mailer } from '@/lib/wiring/mailer'
+
 const SUPA_URL   = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
 const SUPA_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const RESEND_KEY = process.env.RESEND_API_KEY            ?? ''
@@ -69,11 +71,10 @@ export async function sendComplaintEmail(event: ComplaintEmailEvent): Promise<vo
     return
   }
 
-  const { Resend } = await import('resend')
-  const resend = new Resend(RESEND_KEY)
-
-  const result = await resend.emails.send({ from: FROM, to: recipients, subject, html })
-  console.log(`[complaint-email] sent "${event.type}" to ${recipients.length} recipient(s)`, result?.data?.id)
+  const result = await mailer.send({ from: FROM, to: recipients, subject, html })
+  // result.id reads the owned SendResult shape (F-11) — same id value as the
+  // former result?.data?.id, flatter shape.
+  console.log(`[complaint-email] sent "${event.type}" to ${recipients.length} recipient(s)`, result.id)
 }
 
 // ─── Email builder ────────────────────────────────────────────────────────────

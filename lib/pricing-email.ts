@@ -10,6 +10,8 @@
  * Silently skips if RESEND_API_KEY is not set.
  */
 
+import { mailer } from '@/lib/wiring/mailer'
+
 const SUPA_URL   = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
 const SUPA_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const RESEND_KEY = process.env.RESEND_API_KEY            ?? ''
@@ -62,14 +64,13 @@ export async function sendPricingEmail(data: PricingEmailData): Promise<void> {
     return
   }
 
-  const { Resend } = await import('resend')
-  const resend      = new Resend(RESEND_KEY)
-
   const subject = `✅ Price Agreement Activated — ${data.customer_name} (${data.reference_number})`
   const html    = buildEmail(data)
 
-  const result = await resend.emails.send({ from: FROM, to: recipients, subject, html })
-  console.log(`[pricing-email] sent "${data.reference_number}" to ${recipients.length} recipient(s)`, result?.data?.id)
+  const result = await mailer.send({ from: FROM, to: recipients, subject, html })
+  // result.id reads the owned SendResult shape (F-11) — same id value as the
+  // former result?.data?.id, flatter shape.
+  console.log(`[pricing-email] sent "${data.reference_number}" to ${recipients.length} recipient(s)`, result.id)
 }
 
 // ─── HTML builder ─────────────────────────────────────────────────────────────

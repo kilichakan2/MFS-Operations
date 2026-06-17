@@ -16,6 +16,10 @@
           {
             "name": "@anthropic-ai/sdk",
             "message": "Use the LLMExtractor port via @/lib/wiring/llm. @anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/. See ADR-0002 / F-12."
+          },
+          {
+            "name": "resend",
+            "message": "Use the Mailer port via @/lib/wiring/mailer. resend may only be imported inside lib/adapters/resend/. See ADR-0002 / F-11."
           }
         ]
       }
@@ -27,6 +31,7 @@
         "lib/adapters/supabase/**/*.ts",
         "lib/adapters/bcrypt/**/*.ts",
         "lib/adapters/anthropic/**/*.ts",
+        "lib/adapters/resend/**/*.ts",
         "tests/**"
       ],
       "rules": {
@@ -51,6 +56,10 @@
               {
                 "name": "@anthropic-ai/sdk",
                 "message": "Use the LLMExtractor port via @/lib/wiring/llm. @anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/. See ADR-0002 / F-12."
+              },
+              {
+                "name": "resend",
+                "message": "Use the Mailer port via @/lib/wiring/mailer. resend may only be imported inside lib/adapters/resend/. See ADR-0002 / F-11."
               }
             ],
             "patterns": [
