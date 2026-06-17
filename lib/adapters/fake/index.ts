@@ -35,3 +35,4 @@ export {
   type FakeUserSeed,
 } from "./UsersRepository";
 export { createFakeLLMExtractor, fakeLLMExtractor } from "./LLMExtractor";
+export { createFakeMailer, fakeMailer, type FakeMailerSeed } from "./Mailer";
