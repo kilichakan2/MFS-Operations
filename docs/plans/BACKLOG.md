@@ -383,8 +383,8 @@ the trail matters.
 - **Why deferred:** would re-litigate F-05's port shape (`markLineUndone` method) + new `audit_log` type + service rules ("can you undo a line on a completed order? No."). Not a migration concern; needs its own product+plan cycle.
 - **Detail:** memory `project_hexagonal_migration_progress.md` "Tracked product features"
 - **Priority:** Low-Medium — annoyance not a safety issue
-- **Owner unit:** unscheduled (product feature, post-Phase-1)
-- **Status:** open
+- **Owner unit:** Day 7 (sprint roadmap)
+- **Status:** ✅ SHIPPED 2026-06-17 (PR #49, squash `1a2ca3f`). Product session reversed the old "No undo on a completed order" lean — Hakan chose the **cascade**: undo IS allowed on a `completed` order and reverts it `completed→printed` atomically. Built hexagonal (`markLineUndone` port + `kds_undo_line` RPC), two additive migrations, prod smoke 0×5xx. The `line_undone` audit row carries **NULL user** (KDS service-role) — real attribution tracked in **F-RLS-04a-kds** (below), which now also covers the undo event. Cert `docs/anvil/2026-06-17-f-prod-02-kds-line-undo-cert.md`.
 
 ---
 
