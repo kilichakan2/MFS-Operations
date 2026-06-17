@@ -33,6 +33,10 @@ import {
   type KdsLineDoneUsecase,
 } from "@/lib/usecases/kdsLineDone";
 import {
+  createKdsLineUndoneUsecase,
+  type KdsLineUndoneUsecase,
+} from "@/lib/usecases/kdsLineUndone";
+import {
   supabaseOrdersRepository,
   supabaseCustomersRepository,
   supabaseProductsRepository,
@@ -66,6 +70,12 @@ export const kdsLineDoneUsecase: KdsLineDoneUsecase = createKdsLineDoneUsecase({
   ordersService,
   users: supabaseUsersRepository,
 });
+
+export const kdsLineUndoneUsecase: KdsLineUndoneUsecase =
+  createKdsLineUndoneUsecase({
+    ordersService,
+    users: supabaseUsersRepository,
+  });
 
 // ─── Per-request authenticated composition (F-RLS-04a) ──────────
 //

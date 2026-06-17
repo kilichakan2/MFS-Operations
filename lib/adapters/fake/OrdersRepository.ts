@@ -303,6 +303,57 @@ export function createFakeOrdersRepository(): OrdersRepository {
       return next;
     },
 
+    async markLineUndone(
+      lineId: string,
+      _when: Date,
+    ): Promise<{
+      readonly alreadyPending: boolean;
+      readonly orderId: string;
+      readonly orderReopened: boolean;
+    }> {
+      // Mirror of markLineDone, inverted, with the atomic cascade.
+      for (const order of state.orders.values()) {
+        const line = order.lines.find((l) => l.id === lineId);
+        if (!line) continue;
+
+        // Idempotency: an already-pending line is a no-op (never a
+        // cascade). This also absorbs the impossible `placed`-parent
+        // case defensively — a not-done line just returns alreadyPending.
+        if (line.doneAt === null) {
+          return {
+            alreadyPending: true,
+            orderId: order.id,
+            orderReopened: false,
+          };
+        }
+
+        // Cascade decision: a `completed` parent reverts to `printed`
+        // in the SAME write (the DB CHECK forbids the half-way state).
+        const reopened = order.state === "completed";
+
+        const nextLines = order.lines.map((l) =>
+          l.id === lineId ? { ...l, doneAt: null, doneBy: null } : l,
+        );
+        const next: Order = reopened
+          ? {
+              ...order,
+              state: "printed",
+              completedAt: null,
+              lines: nextLines,
+            }
+          : { ...order, lines: nextLines };
+        state.orders.set(order.id, next);
+
+        return {
+          alreadyPending: false,
+          orderId: order.id,
+          orderReopened: reopened,
+        };
+      }
+
+      throw new NotFoundError(`Order line ${lineId} not found`);
+    },
+
     async listKdsQueue(since: Date): Promise<KdsOrderQueueSnapshot> {
       const serverTime = new Date();
       const sinceIso = since.toISOString();

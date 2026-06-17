@@ -386,6 +386,36 @@ export interface OrdersService {
     readonly orderId: string;
     readonly completed: boolean;
   }>;
+
+  /**
+   * Undo a single order line that was marked done. If the line belonged
+   * to a `completed` order, the parent is atomically re-opened
+   * (`completed → printed`, `completed_at` cleared) inside the port.
+   *
+   * Orchestration:
+   *   1. orders.markLineUndone(lineId, when). The port handles:
+   *      - line-existence check (throws NotFoundError on miss).
+   *      - idempotency (returns { alreadyPending: true } if the line is
+   *        already not-done; no write).
+   *      - the atomic cascade for a `completed` parent (one DB call).
+   *      - TOCTOU guards on both the line and the order revert.
+   *   2. Return the port's result verbatim.
+   *
+   * Unlike `completeLineDone`, this method swallows NOTHING — there is
+   * no second port call to compose and no benign race to absorb,
+   * because the port's cascade is atomic. Every error from the port
+   * (NotFoundError, ServiceError) propagates as-is.
+   *
+   * Throws: NotFoundError | ServiceError (propagated from the port).
+   */
+  undoLineDone(
+    lineId: string,
+    when: Date,
+  ): Promise<{
+    readonly alreadyPending: boolean;
+    readonly orderId: string;
+    readonly orderReopened: boolean;
+  }>;
 }
 
 // ─── The factory ────────────────────────────────────────────
@@ -529,5 +559,11 @@ export function createOrdersService(repos: OrdersServiceRepos): OrdersService {
         completed: false,
       };
     },
+
+    // ─── undoLineDone ──────────────────────────────────────────
+
+    // Thin, deliberate pass-through: the cascade is atomic inside the
+    // port, so there is nothing to compose and nothing to swallow.
+    undoLineDone: (lineId, when) => orders.markLineUndone(lineId, when),
   };
 }

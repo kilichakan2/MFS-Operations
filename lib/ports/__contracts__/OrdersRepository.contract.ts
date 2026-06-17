@@ -661,6 +661,131 @@ export function ordersRepositoryContract(
       });
     });
 
+    // ─── markLineUndone — 6 cases (port file: markLineUndone) ───
+    //
+    // F-PROD-02. The mirror of markLineDone, with the atomic
+    // completed→printed cascade. Cases trace to plan §12.
+
+    describe("markLineUndone", () => {
+      it("throws NotFoundError when lineId does not exist", async () => {
+        await expect(
+          ctx.repo.markLineUndone(
+            "00000000-0000-0000-0000-0000000000f7",
+            new Date(),
+          ),
+        ).rejects.toThrow(NotFoundError);
+      });
+
+      it("plain undo on a printed order: clears the line, no cascade", async () => {
+        const created = await ctx.repo.createOrder(
+          buildInput({ lineCount: 2 }),
+          ctx.userId,
+        );
+        await ctx.repo.recordPrint(created.id, ctx.userId, new Date());
+        const lineId = created.lines[0]!.id;
+        await ctx.repo.markLineDone(lineId, ctx.butcherId, new Date());
+
+        const result = await ctx.repo.markLineUndone(lineId, new Date());
+        expect(result.alreadyPending).toBe(false);
+        expect(result.orderId).toBe(created.id);
+        expect(result.orderReopened).toBe(false);
+
+        // The line is back to pending; the order stays printed.
+        const fresh = await ctx.repo.findOrderById(created.id);
+        const line = fresh!.lines.find((l) => l.id === lineId)!;
+        expect(line.doneAt).toBeNull();
+        expect(line.doneBy).toBeNull();
+        expect(fresh!.state).toBe("printed");
+      });
+
+      it("cascade undo on a completed order: reverts order to printed, clears completed_at + line", async () => {
+        const created = await ctx.repo.createOrder(
+          buildInput({ lineCount: 1 }),
+          ctx.userId,
+        );
+        await ctx.repo.recordPrint(created.id, ctx.userId, new Date());
+        const lineId = created.lines[0]!.id;
+        await ctx.repo.markLineDone(lineId, ctx.butcherId, new Date());
+        await ctx.repo.markOrderCompleted(created.id, new Date());
+
+        const result = await ctx.repo.markLineUndone(lineId, new Date());
+        expect(result.alreadyPending).toBe(false);
+        expect(result.orderId).toBe(created.id);
+        expect(result.orderReopened).toBe(true);
+
+        const fresh = await ctx.repo.findOrderById(created.id);
+        expect(fresh!.state).toBe("printed");
+        expect(fresh!.completedAt).toBeNull();
+        const line = fresh!.lines.find((l) => l.id === lineId)!;
+        expect(line.doneAt).toBeNull();
+        expect(line.doneBy).toBeNull();
+      });
+
+      it("alreadyPending no-op when the line is already not-done (idempotency)", async () => {
+        const created = await ctx.repo.createOrder(
+          buildInput({ lineCount: 1 }),
+          ctx.userId,
+        );
+        await ctx.repo.recordPrint(created.id, ctx.userId, new Date());
+        const lineId = created.lines[0]!.id;
+        // Line was never marked done — undo is a no-op.
+        const result = await ctx.repo.markLineUndone(lineId, new Date());
+        expect(result.alreadyPending).toBe(true);
+        expect(result.orderId).toBe(created.id);
+        expect(result.orderReopened).toBe(false);
+
+        const fresh = await ctx.repo.findOrderById(created.id);
+        expect(fresh!.state).toBe("printed");
+      });
+
+      it("cascade undo where OTHER lines remain done: order reverts, only the targeted line cleared", async () => {
+        const created = await ctx.repo.createOrder(
+          buildInput({ lineCount: 2 }),
+          ctx.userId,
+        );
+        await ctx.repo.recordPrint(created.id, ctx.userId, new Date());
+        const lineA = created.lines[0]!.id;
+        const lineB = created.lines[1]!.id;
+        await ctx.repo.markLineDone(lineA, ctx.butcherId, new Date());
+        await ctx.repo.markLineDone(lineB, ctx.butcherId, new Date());
+        await ctx.repo.markOrderCompleted(created.id, new Date());
+
+        const result = await ctx.repo.markLineUndone(lineA, new Date());
+        expect(result.orderReopened).toBe(true);
+
+        const fresh = await ctx.repo.findOrderById(created.id);
+        expect(fresh!.state).toBe("printed");
+        expect(fresh!.completedAt).toBeNull();
+        const a = fresh!.lines.find((l) => l.id === lineA)!;
+        const b = fresh!.lines.find((l) => l.id === lineB)!;
+        expect(a.doneAt).toBeNull();
+        // The other line keeps its done stamp.
+        expect(b.doneAt).not.toBeNull();
+      });
+
+      it("plain undo on a printed order with other lines done: no cascade", async () => {
+        const created = await ctx.repo.createOrder(
+          buildInput({ lineCount: 2 }),
+          ctx.userId,
+        );
+        await ctx.repo.recordPrint(created.id, ctx.userId, new Date());
+        const lineA = created.lines[0]!.id;
+        const lineB = created.lines[1]!.id;
+        await ctx.repo.markLineDone(lineA, ctx.butcherId, new Date());
+        await ctx.repo.markLineDone(lineB, ctx.butcherId, new Date());
+        // Order is still 'printed' (never completed — markOrderCompleted
+        // not called), so undoing one line must not cascade.
+        const result = await ctx.repo.markLineUndone(lineA, new Date());
+        expect(result.alreadyPending).toBe(false);
+        expect(result.orderReopened).toBe(false);
+
+        const fresh = await ctx.repo.findOrderById(created.id);
+        expect(fresh!.state).toBe("printed");
+        const b = fresh!.lines.find((l) => l.id === lineB)!;
+        expect(b.doneAt).not.toBeNull();
+      });
+    });
+
     // ─── listKdsQueue — 6 cases (port file lines 395-456) ─────
 
     describe("listKdsQueue", () => {

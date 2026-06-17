@@ -881,6 +881,68 @@ export function createSupabaseOrdersRepository(
       return readBack;
     },
 
+    async markLineUndone(
+      lineId: string,
+      when: Date,
+    ): Promise<{
+      readonly alreadyPending: boolean;
+      readonly orderId: string;
+      readonly orderReopened: boolean;
+    }> {
+      // 1. Read the line.
+      const { data: line, error: lineErr } = await client
+        .from("order_lines")
+        .select("id, order_id, done_at")
+        .eq("id", lineId)
+        .maybeSingle();
+      if (lineErr) {
+        log.error("OrdersRepository.markLineUndone line read DB error", {
+          lineId,
+          error: lineErr.message,
+        });
+        throw new ServiceError("Line lookup failed", { cause: lineErr });
+      }
+      if (line === null) {
+        throw new NotFoundError(`Order line ${lineId} not found`);
+      }
+
+      const orderId = line.order_id as string;
+
+      // 2. Idempotency: an already-pending line is a no-op (no write,
+      //    no cascade). Mirrors markLineDone's alreadyDone path. This
+      //    also absorbs the impossible `placed`-parent case defensively.
+      if (line.done_at === null) {
+        return { alreadyPending: true, orderId, orderReopened: false };
+      }
+
+      // 3. Atomic revert via the kds_undo_line RPC (migration B). One DB
+      //    function performs the line revert AND, iff the parent is
+      //    `completed`, the order revert (state -> printed, completed_at
+      //    -> NULL) in a single transaction — so no illegal intermediate
+      //    (completed + null completed_at) is observable and the CHECK
+      //    constraint is never violated. Both writes are TOCTOU-guarded
+      //    inside the function. The order_lines UPDATE fires the audit
+      //    trigger -> one `line_undone` row; the adapter writes none.
+      const { data: reopened, error: rpcErr } = await client.rpc(
+        "kds_undo_line",
+        { p_line_id: lineId, p_when: when.toISOString() },
+      );
+      if (rpcErr) {
+        log.error("OrdersRepository.markLineUndone RPC DB error", {
+          lineId,
+          orderId,
+          error: rpcErr.message,
+        });
+        throw new ServiceError("Line undo failed", { cause: rpcErr });
+      }
+
+      return {
+        alreadyPending: false,
+        orderId,
+        orderReopened: reopened === true,
+      };
+    },
+
     async listKdsQueue(since: Date): Promise<KdsOrderQueueSnapshot> {
       const serverTime = new Date();
       const sinceIso = since.toISOString();

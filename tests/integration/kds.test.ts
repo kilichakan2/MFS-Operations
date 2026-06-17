@@ -295,4 +295,246 @@ describe("KDS integration", () => {
     expect(r2.status).toBe(200);
     expect((r2.body as { already_done?: boolean }).already_done).toBe(true);
   });
+
+  // ── /api/kds/lines/[lineId]/undo (F-PROD-02) ─────────────────
+  //
+  // Route-level proof on the REAL local DB that the undo reverts the
+  // line, cascades the order revert atomically, is idempotent, mirrors
+  // the line-done identity guard, writes exactly one NULL-user
+  // line_undone audit row, and never produces a false orange flash.
+
+  it("undo on a printed order clears the line and returns {ok:true}", async () => {
+    const orderId = await createAndPrintOrder(2);
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", orderId)
+      .order("line_number");
+
+    // Mark line 1 done (order stays printed since line 2 is still pending).
+    await api(`/api/kds/lines/${lines![0].id}/done`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+
+    const res = await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+
+    const { data: line } = await supa
+      .from("order_lines")
+      .select("done_at, done_by")
+      .eq("id", lines![0].id)
+      .single();
+    expect(line?.done_at).toBeNull();
+    expect(line?.done_by).toBeNull();
+
+    const { data: order } = await supa
+      .from("orders")
+      .select("state")
+      .eq("id", orderId)
+      .single();
+    expect(order?.state).toBe("printed");
+  });
+
+  it("cascade undo on a completed order reopens it: {ok:true, reopened:true}, order→printed, completed_at null", async () => {
+    const orderId = await createAndPrintOrder(1);
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", orderId);
+
+    // Mark the only line done → order auto-completes.
+    const done = await api(`/api/kds/lines/${lines![0].id}/done`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    expect((done.body as { completed?: boolean }).completed).toBe(true);
+
+    const res = await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, reopened: true });
+
+    const { data: order } = await supa
+      .from("orders")
+      .select("state, completed_at")
+      .eq("id", orderId)
+      .single();
+    expect(order?.state).toBe("printed");
+    expect(order?.completed_at).toBeNull();
+
+    const { data: line } = await supa
+      .from("order_lines")
+      .select("done_at")
+      .eq("id", lines![0].id)
+      .single();
+    expect(line?.done_at).toBeNull();
+  });
+
+  it("second undo on an already-pending line returns {ok:true, already_pending:true}", async () => {
+    const orderId = await createAndPrintOrder(2);
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", orderId)
+      .order("line_number");
+
+    await api(`/api/kds/lines/${lines![0].id}/done`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    // First undo reverts it.
+    await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    // Second undo is the idempotent no-op.
+    const res = await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, already_pending: true });
+  });
+
+  it("rejects undo with an invalid butcher_id (400)", async () => {
+    const orderId = await createAndPrintOrder();
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", orderId);
+    const res = await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      body: { butcher_id: "not-a-uuid" },
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { code: string }).code).toBe("VALIDATION_ERROR");
+  });
+
+  it("rejects undo from a sales user_id — wrong role (403)", async () => {
+    const orderId = await createAndPrintOrder(2);
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", orderId)
+      .order("line_number");
+    await api(`/api/kds/lines/${lines![0].id}/done`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    const res = await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      body: { butcher_id: users.sales.id },
+    });
+    expect(res.status).toBe(403);
+    expect((res.body as { code: string }).code).toBe("FORBIDDEN");
+  });
+
+  it("rejects undo from an unknown butcher_id (404)", async () => {
+    const orderId = await createAndPrintOrder();
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", orderId);
+    const res = await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      // Well-formed uuid that matches no user row.
+      body: { butcher_id: "00000000-0000-0000-0000-0000000000aa" },
+    });
+    expect(res.status).toBe(404);
+    expect((res.body as { code: string }).code).toBe("NOT_FOUND");
+  });
+
+  it("writes exactly ONE line_undone audit row, user_id NULL, with before/after payload", async () => {
+    const orderId = await createAndPrintOrder(2);
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", orderId)
+      .order("line_number");
+
+    await api(`/api/kds/lines/${lines![0].id}/done`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+
+    const { data: audit } = await supa
+      .from("order_audit_log")
+      .select("user_id, action, payload")
+      .eq("order_id", orderId)
+      .eq("action", "line_undone");
+
+    expect(audit).toHaveLength(1);
+    expect(audit![0].user_id).toBeNull();
+    // Trigger writes jsonb_build_object('before', OLD, 'after', NEW).
+    const payload = audit![0].payload as {
+      before?: { done_at: string | null };
+      after?: { done_at: string | null };
+    };
+    expect(payload.before).toBeTruthy();
+    expect(payload.after).toBeTruthy();
+    expect(payload.before!.done_at).not.toBeNull();
+    expect(payload.after!.done_at).toBeNull();
+  });
+
+  it("after an undo, /api/kds/orders returns NO flash for that order (line_undone is not a flash action)", async () => {
+    // B2 regression guard: a cascade undo reopens the order to printed
+    // (so it is back in the queue), and the undo must NOT make the card
+    // flash orange. line_undone ∉ flash actions.
+    const orderId = await createAndPrintOrder(1);
+    const supa = getServiceClient();
+    const { data: lines } = await supa
+      .from("order_lines")
+      .select("id")
+      .eq("order_id", orderId);
+
+    await api(`/api/kds/lines/${lines![0].id}/done`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+    await api(`/api/kds/lines/${lines![0].id}/undo`, {
+      method: "POST",
+      body: { butcher_id: users.butcher.id },
+    });
+
+    const queue = await api("/api/kds/orders");
+    expect(queue.status).toBe(200);
+    const body = queue.body as {
+      orders: Array<{ id: string }>;
+      recent_flashes: Array<{ order_id: string; action: string }>;
+    };
+    // The reopened order is back in the queue …
+    expect(body.orders.some((o) => o.id === orderId)).toBe(true);
+
+    // … and the undo produced NO flash. The order legitimately carries a
+    // `line_added` flash from being created moments ago (that IS a flash
+    // action), so we don't assert zero flashes outright — we assert the
+    // undo did not introduce a `line_undone` flash, and crucially did NOT
+    // mislabel itself as `line_edited` (the exact B2 false-orange-flash bug
+    // the trigger fix prevents). An undo logged as line_edited would put a
+    // `line_edited` flash here and wrongly tell butchers "the office amended
+    // this order".
+    const orderFlashes = body.recent_flashes.filter(
+      (f) => f.order_id === orderId,
+    );
+    expect(orderFlashes.some((f) => f.action === "line_undone")).toBe(false);
+    expect(orderFlashes.some((f) => f.action === "line_edited")).toBe(false);
+  });
 });

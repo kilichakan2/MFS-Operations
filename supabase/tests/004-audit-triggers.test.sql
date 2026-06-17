@@ -11,10 +11,11 @@
 --   - INSERT on order_lines    → 'line_added'
 --   - UPDATE on order_lines    → 'line_edited'
 --   - done_at set on order_lines (was NULL) → 'line_done'
+--   - done_at cleared on order_lines (was NOT NULL) → 'line_undone' (F-PROD-02)
 -- ============================================================
 
 BEGIN;
-SELECT plan(8);
+SELECT plan(11);
 
 \ir _helpers.sql
 
@@ -133,6 +134,64 @@ SELECT is(
    WHERE order_id = current_setting('test.order2')::uuid AND action = 'edited'),
   1,
   'non-state UPDATE on orders emits edited audit row'
+);
+
+-- ── F-PROD-02: reverse done_at transition emits 'line_undone' ──
+--
+-- A FRESH order (test.order3) so the undo's audit rows don't pollute
+-- the test.order lifecycle set_eq below. We print it, mark the line
+-- done (forward → line_done), then clear done_at (reverse → must be
+-- line_undone, NOT line_edited — the bug B2 the trigger fix prevents),
+-- then do an unrelated line edit (→ line_edited).
+
+DO $$ DECLARE v_order uuid;
+BEGIN
+  PERFORM set_config('app.current_user_id', current_setting('test.sales'), true);
+  INSERT INTO orders (customer_id, delivery_date, created_by, state, printed_at, printed_by)
+  VALUES (current_setting('test.cust')::uuid, CURRENT_DATE + 1,
+          current_setting('test.sales')::uuid, 'printed', now(),
+          current_setting('test.office')::uuid)
+  RETURNING id INTO v_order;
+  PERFORM set_config('test.order3', v_order::text, true);
+
+  INSERT INTO order_lines (order_id, line_number, product_id, quantity, uom)
+  VALUES (v_order, 1, current_setting('test.prod')::uuid, 3, 'kg');
+
+  -- forward: done_at NULL → NOT NULL  (line_done)
+  UPDATE order_lines
+     SET done_at = now(), done_by = current_setting('test.butcher')::uuid
+   WHERE order_id = v_order AND line_number = 1;
+
+  -- reverse: done_at NOT NULL → NULL  (line_undone)
+  UPDATE order_lines
+     SET done_at = NULL, done_by = NULL
+   WHERE order_id = v_order AND line_number = 1;
+
+  -- unrelated edit: quantity change while done_at stays NULL  (line_edited)
+  UPDATE order_lines
+     SET quantity = 4
+   WHERE order_id = v_order AND line_number = 1;
+END $$;
+
+SELECT is(
+  (SELECT COUNT(*)::int FROM order_audit_log
+   WHERE order_id = current_setting('test.order3')::uuid AND action = 'line_undone'),
+  1,
+  'reverse done_at transition (NOT NULL → NULL) emits exactly one line_undone row'
+);
+
+SELECT is(
+  (SELECT COUNT(*)::int FROM order_audit_log
+   WHERE order_id = current_setting('test.order3')::uuid AND action = 'line_done'),
+  1,
+  'forward done_at transition still emits line_done (not double-counted)'
+);
+
+SELECT is(
+  (SELECT COUNT(*)::int FROM order_audit_log
+   WHERE order_id = current_setting('test.order3')::uuid AND action = 'line_edited'),
+  1,
+  'an unrelated line edit (quantity) still emits line_edited (not line_undone)'
 );
 
 -- ── Full lifecycle audit ordering ───────────────────────────

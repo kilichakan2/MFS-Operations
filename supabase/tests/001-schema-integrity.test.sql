@@ -51,8 +51,9 @@ SELECT set_eq(
 SELECT set_eq(
   $$SELECT unnest(enum_range(NULL::order_audit_action))::text$$,
   ARRAY['created', 'edited', 'printed', 'reprinted',
-        'line_added', 'line_edited', 'line_done', 'completed'],
-  'order_audit_action enum has all 8 values'
+        'line_added', 'line_edited', 'line_done', 'completed',
+        'line_undone'],
+  'order_audit_action enum has all 9 values (line_undone added F-PROD-02)'
 );
 
 -- ── Indexes exist on key columns ────────────────────────────

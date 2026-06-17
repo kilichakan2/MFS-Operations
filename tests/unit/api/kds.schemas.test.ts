@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import {
   kdsLineIdParamSchema,
   kdsLineDoneBodySchema,
+  kdsLineUndoneBodySchema,
 } from "@/lib/api/kds/schemas";
 import { parseOrThrow } from "@/lib/api/validate";
 import { ValidationError } from "@/lib/errors";
@@ -48,6 +49,23 @@ describe("kdsLineDoneBodySchema", () => {
       { butcher_id: 42 },
     ]) {
       expect(() => parseOrThrow(kdsLineDoneBodySchema, body)).toThrowError(
+        ValidationError,
+      );
+    }
+  });
+});
+
+describe("kdsLineUndoneBodySchema (F-PROD-02)", () => {
+  it("accepts and trims a uuid butcher_id, transforming to camelCase", () => {
+    const out = parseOrThrow(kdsLineUndoneBodySchema, {
+      butcher_id: `  ${VALID_UUID}  `,
+    });
+    expect(out).toEqual({ butcherId: VALID_UUID });
+  });
+
+  it("rejects a missing / blank / malformed butcher_id (400)", () => {
+    for (const body of [null, {}, { butcher_id: "" }, { butcher_id: "nope" }]) {
+      expect(() => parseOrThrow(kdsLineUndoneBodySchema, body)).toThrowError(
         ValidationError,
       );
     }
