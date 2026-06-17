@@ -13,22 +13,22 @@ weekends included. There is NO slack day — slippage surfaces immediately.
 ### RESCOPE — 2026-06-13 (Hakan-approved)
 
 The 3 CRITICAL SECURITY INSERTIONS (T1/T2/T3) were inserted scope, not slots in
-the day plan. They consumed real days: T1 rode Day 1 (Thu 12 Jun); **T2 + T3
-consumed all of Fri 13 Jun**. So the original "Day 2" content (F-TD-01, F-TD-09)
+the day plan. They consumed real days: T1 rode Day 1 (Fri 12 Jun); **T2 + T3
+consumed all of Sat 13 Jun**. So the original "Day 2" content (F-TD-01, F-TD-09)
 never started, and **every content block from Day 2 onward shifts +1 calendar
-day**. New end date: **Sat 28 Jun** (was Fri 27 Jun). Scope unchanged — nothing
+day**. New end date: **Sun 28 Jun** (was Sat 27 Jun). Scope unchanged — nothing
 dropped (the "nothing skipped" goal holds). The named fallback (defer Day-16
 nice-to-haves F-INFRA-03 + F-TD-12 to BACKLOG) is held IN RESERVE — triggered
 only if a later block slips again (checkpoint: end of Day-12 block, 24 Jun).
 
 Content-block → new calendar date:
 
-- Day 2 (F-TD-01, F-TD-09) → **Sat 14 Jun** ◀ next
-- Day 3 → Sun 15 Jun · Day 4 → Mon 16 Jun · Days 5–6 → Tue 17–Wed 18 Jun
-- Day 7 → Thu 19 Jun · Day 8 → Fri 20 Jun · Day 9 → Sat 21 Jun
-- Day 10 → Sun 22 Jun · Day 11 → Mon 23 Jun · Day 12 → Tue 24 Jun
-- Days 13–14 (HACCP crunch) → Wed 25–Thu 26 Jun · Day 15 → Fri 27 Jun
-- Day 16 (seal + close) → **Sat 28 Jun**
+- Day 2 (F-TD-01, F-TD-09) → **Sun 14 Jun**
+- Day 3 → Mon 15 Jun · Day 4 → Tue 16 Jun · Days 5–6 → Wed 17–Thu 18 Jun
+- Day 7 → Fri 19 Jun · Day 8 → Sat 20 Jun · Day 9 → Sun 21 Jun
+- Day 10 → Mon 22 Jun · Day 11 → Tue 23 Jun · Day 12 → Wed 24 Jun
+- Days 13–14 (HACCP crunch) → Thu 25–Fri 26 Jun · Day 15 → Sat 27 Jun
+- Day 16 (seal + close) → **Sun 28 Jun**
 
 The "Day N" headers below are CONTENT labels; read dates from this rescope map.
 
@@ -44,7 +44,7 @@ Phase 1, Users RLS with F-13" rule.
 
 ## Schedule
 
-### Day 1 — Thu 12 Jun ✅ DONE
+### Day 1 — Fri 12 Jun ✅ DONE
 
 - ✅ **F-RLS-01** — RLS audit + threat model → `docs/rls-audit-2026-06-12.md` (advisors + per-table map; surfaced 3 criticals: unsigned session cookie = priv-esc, 42 RLS-off tables exposed via PostgREST, anon-callable `replace_agreement_lines`)
 - ✅ **F-RLS-02** — per-table expand-contract RLS plan → `docs/rls-expand-contract-plan-2026-06-12.md` (6-step sequence, policy templates, slice schedule, rollback per step)
@@ -96,18 +96,18 @@ Run in severity order:
 
 After all three ship, resume the Day-2 order below.
 
-### Day 2 content — rescoped to Sat 14 Jun (see RESCOPE banner)
+### Day 2 content — rescoped to Sun 14 Jun (see RESCOPE banner)
 
 - ✅ **F-TD-01** — SHIPPED 2026-06-14 (PR #33, squash `72cb80b`). Cleared all 60 `tsc --noEmit` errors + all 58 `next lint` problems to 0/0; added `typecheck` npm script. ~50 mechanical type fixes (dominant: 27 Supabase embedded-relation casts) + 55 cosmetic lint (jsx-key, unescaped entities, 1 aria) + ~10 documented real-bug fixes (dead duplicate `recalc`, `logNew` dedup → user-visible label flip to `'Yeni Kayıt'`, restored `saveTimer` ref, 2 HACCP exhaustive-deps with safe callback reorder, test no-overlap/always-truthy fixes). ZERO new suppressions (grep-verified). Guard SHIP (0 findings); ANVIL CLEARED (unit 1528/1528, integration 115/115, preview 8/8 @critical, prod smoke 3/3). Non-destructive (no migration/PITR). **Gate consequence: `main` now tsc 0 / lint 0 → ANVIL layers 3+4 run STRICT for every later unit.** En route: surfaced + fixed a global FORGE formatter-hook bug (`format.sh` was imposing prettier defaults on this no-prettier repo; now gated behind config-present). Cert `docs/anvil/2026-06-14-f-td-01-clear-tsc-lint-cert.md`; plan archived.
 - ✅ **F-TD-09** — SHIPPED 2026-06-14 (PR #34, squash `29987df`). Daily Vercel cron (`/api/cron/purge-idempotency-keys`, `0 3 * * *`, Bearer `CRON_SECRET`) → `ordersService` → new port `purgeExpiredIdempotencyKeys(now)` → Supabase adapter `DELETE … WHERE expires_at <= now` (count via `.select`); Fake no-op. W1 TOCTOU: both `createOrder` reclaim deletes now conditional (`expires_at <= now` / `order_id = existing.order_id`) — one captured `now`. N1: raw `idempotencyKey` dropped from the race-winner error log. N3: 2 stale `Order.ts` comments repointed off deleted `lib/orders/validation.ts`. No new deps; rip-out PASS. Guard FIX-THEN-SHIP (0 🔴, 1 🟡 = missing integ tests → ANVIL wrote I2/I3/I4). ANVIL CLEARED: unit 1533/1533, integration 122/122 (was 115), preview 8/8 @critical, prod smoke 4/4 (login 200, kds/orders 200, forged-cookie 307, cron-unauth 401). Non-destructive (no migration/PITR). Cert `docs/anvil/2026-06-14-f-td-09-idempotency-key-hygiene-cert.md`; review `docs/reviews/2026-06-14-…-review.md`; plan archived. Follow-ups → BACKLOG F-TD-16 (🔵 W1 comment reword + CRON_SECRET-unset hardening on both cron routes).
 
-### Day 3 — Sat 14 Jun
+### Day 3 — Mon 15 Jun
 
 - **F-TD-04** ✅ SHIPPED (2026-06-14, PR #35 / `e0c5fcd`, prod-verified) — lazy `getSupabaseService()` + back-compat proxy, moved `lib/supabase.ts` → `lib/adapters/supabase/client.ts`, codemod 88 imports, deleted env-stub shim. unit 1536 (shim gone) · int 122 · preview 8/8 · prod smoke 5/5.
 - **F-10** ✅ SHIPPED (2026-06-14, PR #36 / `684a94f`, prod-verified) — `PasswordHasher` port + sole-import bcrypt adapter + `lib/wiring/password.ts` singleton; 4 routes (login, kds-pin, admin/users, admin/users/[id]) re-pointed; lint extended to forbid bcryptjs outside its adapter. TOTAL compare (never throws). unit 1552 (+16) · int 122 · preview 8/8 · prod smoke 4/4 non-500. No migration. Behaviour-preserving (cost-10 hashes still verify through cost-12 adapter, proven at unit + integration).
 - **F-12** ✅ SHIPPED (2026-06-14, PR #37 / `e4b9740`, prod-verified) — `LLMExtractor` port + sole-import Anthropic adapter (`lib/adapters/anthropic/`) + `lib/wiring/llm.ts` singleton + `Fake` adapter; `admin/import` route thinned onto the port. PURE RELOCATION — `claude-sonnet-4-6` + forced tool-use + both prompts/tool schemas moved byte-identical (verified); lint extended to forbid `@anthropic-ai/sdk` outside its adapter (mirrors F-10 bcryptjs). No new dep, non-destructive. unit 1581 (+29) · int 122 · preview 8/8 · prod smoke non-500. **Day-3 block COMPLETE (F-TD-04 ✓, F-10 ✓, F-12 ✓).**
 
-### Day 4 — Sun 15 Jun ✅ COMPLETE
+### Day 4 — Tue 16 Jun ✅ COMPLETE
 
 - **F-RLS-03** ✅ SHIPPED (2026-06-14, PR #38 / `e55dcc7`, prod-verified) — INTRODUCE-ONLY per-request authenticated DB client. App-minted HS256 token (web-crypto, **no new dep**) + `db-pre-request` GUC bridge migration (`20260614210221`) copying the `user_id` claim into `app.current_user_id` → existing GUC policies fire unchanged (ADR-0007 supersedes ADR-0004's JWT mechanism). New `DbTokenMinter` port + web-crypto adapter; `authenticatedClientForCaller()` + `requireServiceRole()` Supabase adapter; lint pins. **Zero prod routes flipped**; migration non-destructive + inert (no PITR). unit 1595 (+14) · int 126 (rls-bridge 4/4 RAN) · tsc/lint 0 · preview 8/8 @critical · prod smoke non-500 (`/api/auth/team` 200 = 7 real users through the hook, inert confirmed). Cert `docs/anvil/2026-06-14-f-rls-03-…-cert.md`; ADR-0007. **En route: surfaced F-INFRA-05** (Supabase→Vercel preview cred-sync broken; unblocked this PR via manual env bridge — MUST fix before F-RLS-04a).
 - **F-INFRA-05** ✅ SHIPPED (2026-06-15, PR #41 / `472d3f5`; supersedes closed #39) — owned GitHub Action + Node orchestrator (`.github/workflows/preview-cred-sync.yml` + `scripts/preview-cred-sync*`, **zero new deps**) that syncs the 3 Preview-scoped branch DB creds the native Supabase↔Vercel integration doesn't inject; native keeps Production, this owns Preview only. Retires the F-RLS-03 manual env bridge. Proven live end-to-end on a fresh 14-digit preview branch (health poll → creds synced redacted → JWT warn-continue → redeploy `READY` as Preview). CI tooling only — no app code, no migration, no PITR. Cert `docs/anvil/2026-06-15-f-infra-05-…-cert.md`. **Residual → F-RLS-04a:** Mgmt API withholds `SUPABASE_JWT_SECRET` (asymmetric-key migration) → preview JWT must be sourced another way.
@@ -123,7 +123,7 @@ After all three ship, resume the Day-2 order below.
 - **F-RLS-04a-kds** (NEW follow-up, carved from F-RLS-04a at Frame 2026-06-15; logged in BACKLOG) — cut the KDS routes (`/api/kds/orders` read + `/api/kds/lines/[lineId]/done` write) onto RLS. Needs a different identity bridge (validate `butcher_id` → set `app.current_user_id` / mint a token for the KDS path). Also closes the **KDS audit-attribution gap** (KDS line-done currently records a NULL user under service-role — the busiest Orders mutation). Schedule after F-RLS-04a proves out. ⚠️ Until done, Orders steps 5–6 (remove the service-role fallback) cannot fully complete.
 - **F-TD-07** ✅ DONE (2026-06-15) — prod hygiene audit for `ANVIL-TEST-*` rows. Read-only audit of prod (`uqgecljspgtevoylwkep`): exact `ANVIL-TEST-%` prefix + widened `anvil/e2e/fixture/test/sentinel` sweep across `users`/`customers`/`products` + orders referencing them. **0 fixture rows** (live-data sanity counts: 11 users / 107 customers / 285 products / 8 orders — all real, incl. `MFS-2026-0008`). No delete decision needed; risk now structurally prevented by F-TD-03's local-DB runner + identity probe. Record `docs/anvil/2026-06-15-f-td-07-anvil-test-row-audit.md`. **→ Day 4 COMPLETE.**
 
-### Days 5–6 — Mon 16 – Tue 17 Jun
+### Days 5–6 — Wed 17 – Thu 18 Jun
 
 - **F-13** Users + Auth (3 PRs; login route is the most critical surface). Absorbs: **ARCH-FU-01** (Role → `lib/domain/`), **ARCH-FU-03** (callerUserId decision), **ARCH-FU-04** (round-trip-read test pattern + retrofit), **F-TD-05** (cross-service import pin), expansion of the F-08 UsersRepository seed. Planner MUST copy the composition-root template.
   - **PR1 ✅ SHIPPED 2026-06-15 (PR #43, squash `7d482c6`)** — Users-domain foundation, PURE hexagonal extraction, ZERO behaviour change, NO route edited, NO migration. Role→`lib/domain/Role.ts` (ARCH-FU-01, UserSummary.role tightened to the union); expanded `UsersRepository` port (9 methods, each mapped 1:1 to a committed PR2/PR3 route) + Supabase(service-role)+Fake adapters + shared contract; `UsersService` (composes UsersRepository + PasswordHasher); `lib/wiring/users.ts` (service-role singleton, F-RLS-04b per-caller seam commented); ARCH-FU-03 dead `callerUserId` removed from `editOrder`; ARCH-FU-04 round-trip pattern + OrdersService retrofit; F-TD-05 cross-service ESLint ban + load-from-disk pin. **Credential-hash design (the load-bearing call):** two return types — `UserSummary` (no hash field, the only thing list/profile reads return) vs `UserCredential` (carries `passwordHash`/`pinHash`, returned ONLY by `findCredentialByName`/`listCredentialsByRoles`, consumed only by login PR3 + kds-pin PR2) → a hash leak on a normal read is a COMPILE error, backed by a proven-falsifiable runtime leak test on both adapters. No new deps; rip-out PASS. FORGE+ANVIL: unit 1712 · tsc/lint 0 · integration 163 (UsersRepo contract 22 + users_auth_check fires 3, vs real Postgres) · E2E @critical 8/8 · prod smoke 6/6 non-500. Cert `docs/anvil/2026-06-15-f-13-pr1-users-domain-foundation-cert.md`; review persisted; plan archived. **Introduce-only — no prod route calls the new engine yet.**
@@ -132,46 +132,46 @@ After all three ship, resume the Day-2 order below.
 - **F-TD-22 ✅ SHIPPED 2026-06-16 (PR #46, squash `1f46857`)** — name-uniqueness guard (Hakan-requested; closes the F-13 PR3 W1 edge). UNIQUE index on `lower(name)` over ALL rows (migration `20260616120000_unique_username_lower_index`), so two case-insensitive-identical usernames can never coexist (matches the `.ilike` login lookup; covers inactive too). Both adapters trim the name on write + map Postgres `23505` → app-owned `ConflictError` inside the adapter (vendor code never crosses the port boundary); `POST /api/admin/users` → **409** "A user with that name already exists." Renames aren't possible via the API, so create was the sole entry point. **Verify-first prod dedup found 0 collisions** (11 users, 11 distinct names) → index built clean; migration applied to prod FIRST, then merge. The F-13 PR3 W1 duplicate-login 500 path is now **unreachable** (login adapter/route needed NO change). code-critic SHIP (0 blockers, 1 nit folded in pre-ship: dropped a redundant 409 condition). FORGE+ANVIL: unit 1722 · tsc/lint 0 · integration 175 (live ConflictError + 409 cases) · pgTAP 66/66 · **preview smoke 8/8 @critical** · **prod smoke 5/5 non-500**. Cert `docs/anvil/2026-06-16-f-td-22-unique-usernames-cert.md`; review `docs/reviews/2026-06-16-f-td-22-unique-usernames-review.md`; plan archived. **Next: F-RLS-04b (Users-context RLS).**
 - **F-RLS-04b ✅ SHIPPED 2026-06-17 (PR #47, squash `db8d3de`)** — Users-context RLS cutover (mirror of F-RLS-04a). Flipped the **4 admin Users routes** (`GET`/`POST` `/api/admin/users`, `PATCH`/`DELETE` `/api/admin/users/[id]`) onto the per-request **authenticated** client via a new `usersServiceForCaller(callerUserId)` factory in `lib/wiring/users.ts` (mints a per-caller token → `authenticatedClientForCaller` → injected `createSupabaseUsersRepository` → service; NEVER memoized; service-role singleton retained as parachute + engine for the 5 public routes). Added **3 additive `is_admin`-gated write policies** on `public.users` (`users_insert`/`users_update`/`users_delete`, migration `20260617124846_users_authenticated_write_policies`, inline `nullif(...)::uuid` predicate matching the shipped Orders policies). The 5 public/pre-auth routes (login, kds-pin, team, haccp-team, type) stay service-role by necessity (no authenticated caller). GET gained a route-level admin guard (defense-in-depth; middleware already 307s non-admins). **Design call (Ousterhout + hexagonal):** flipping the admin routes is the *un-shortcutting* — moving "admins only" enforcement DOWN into the DB (deepest, un-bypassable layer); the public routes stay on the master key because there's no caller to authenticate as. **Render blocker → conductor Option 1:** the plan picked the bare `is_admin()` predicate which 22P02s on an empty GUC; switched to the inline `nullif(...)` form to mirror Orders. Guard then proved the empty-GUC throw originates from the PRE-EXISTING `users_select` cast regardless of predicate (fail-closed, unreachable on the authenticated routes) → logged `F-RLS-04b-is-admin-guard`. code-critic NO BLOCKERS (ran a live self-promotion attack → `UPDATE 0`); 3 🟡 closed in a Render loop-back (migration-comment accuracy, pgTAP empty-GUC invariant asserts, independent GET-guard test). FORGE+ANVIL: unit 1728 · tsc/lint 0 · integration 182 · pgTAP 76 (`007-rls-users` 10/10) · E2E @critical local (api 3/3 + ui 1/1) · **preview smoke 8/8 @critical** (migration resync + 4 policies confirmed on preview branch `ysyhquwwgzmfhnjxgugh`) · **prod smoke PASS 0×500**. Migration applied to prod FIRST (3 policies verified live), then merge. Cert `docs/anvil/2026-06-17-f-rls-04b-users-rls-cutover-cert.md`; review `docs/reviews/2026-06-17-f-rls-04b-users-rls-cutover-review.md`; rollback `docs/anvil/2026-06-17-f-rls-04b-users-rls-cutover-rollback.sql`; plan archived. **Days 5–6 block COMPLETE (F-13 ✓ + F-TD-22 ✓ + F-RLS-04b ✓). Next: Day 7 — F-11 (email) + F-PROD-02 (KDS undo).**
 
-### Day 7 — Wed 18 Jun
+### Day 7 — Fri 19 Jun
 
 - **F-11 ✅ SHIPPED 2026-06-17 (PR #48, squash `e46ed6f`)** — `Mailer` port (`lib/ports/Mailer.ts`, owned `EmailMessage`→`SendResult`) + Resend adapter (`lib/adapters/resend/Mailer.ts`, the sole `resend` importer; lazy memoized client; D2 per-send no-key guard → `{skipped, reason:'no-api-key'}`) + Fake adapter + wiring (`lib/wiring/mailer.ts`). 3 email helpers (compliment/complaint/pricing) re-pointed to send via the port; SEND-ONLY — raw Supabase recipient-fetch + HTML left byte-for-byte for F-15/F-17 to absorb. **No new dep** (`resend@^6.9.4` already present); **no migration**. Behaviour byte-identical bar D3 (success log reads `result.id`). ESLint bans `resend` outside the adapter (both paths blocks + allow-list + lint pin). Rip-out PASS (swap vendor = 1 adapter + 1 wiring line). code-critic NO BLOCKERS (deep port, byte-identical incl. error path). FORGE+ANVIL: unit 1758 · tsc+lint 0 · integration 182 (unkeyed → mailer skips, no real email) · pgTAP n/a (no DB) · **preview smoke 8/8 @critical** (via `--unprotected` mode — protection OFF so bypass key ungenerable; flag skips only the bypass header, all other guards hold) · **prod smoke 0×5xx**. Cert `docs/anvil/2026-06-17-f-11-mailer-port-resend-adapter-cert.md`; review `docs/reviews/...`; plan archived.
 - **F-PROD-02 ✅ SHIPPED 2026-06-17 (PR #49, squash `1a2ca3f`)** — KDS line-done undo with confirmation. Product session locked: 2nd tap on a done line → "Undo this line?" modal → reverts (`done_at`/`done_by` cleared); allowed on `printed` AND `completed` orders; on a `completed` order the undo **CASCADES** (order `completed→printed`, `completed_at` cleared) atomically; one `line_undone` audit event, **NULL user** for now (deferred to F-RLS-04a-kds). Hexagonal: new deep port method `markLineUndone` on `OrdersRepository` (folds the order-revert in — the cascade is one atomic op the CHECK constraint forbids splitting) + Supabase (`kds_undo_line` RPC) + Fake adapters; `OrdersService.undoLineDone`; use-case `lib/usecases/kdsLineUndone.ts` (butcher/warehouse identity guard → 404/403); new route `app/api/kds/lines/[lineId]/undo`; UI in `app/kds/page.tsx` (confirm modal + optimistic undo + reopen-warning copy). **Two ADDITIVE migrations** (`20260617130000` enum value, `20260617130001` trigger fix + RPC — split for the PG enum-add-in-same-txn rule); trigger now emits `line_undone` on the reverse transition (no false orange flash). **No new dep, no PITR** (additive). code-critic SHIP-WITH-NITS (0 blockers; 3 🟢 test-coverage gaps → closed by ANVIL). FORGE+ANVIL: unit 1777 · tsc/lint 0 · integration 196 · pgTAP 88 (+3 trigger proofs in `004`, +9 cascade/TOCTOU in new `008`) · **preview smoke 10/10 runnable @critical** (reopen-warning E2E conditionally skipped — preview seed didn't stage a completed-still-visible card; proven at integration+pgTAP+unit) · **prod smoke 0×5xx**. Migrations applied to prod FIRST, then merge. Cert `docs/anvil/2026-06-17-f-prod-02-kds-line-undo-cert.md`; review `docs/reviews/2026-06-17-f-prod-02-kds-line-undo-review.md`; rollback `docs/anvil/2026-06-17-f-prod-02-kds-line-undo-rollback.sql`; plan archived. **Ops note:** fresh Supabase preview branches inject their DB env into Vercel a few minutes late — the first preview builds 500 `supabaseUrl is required` and the smoke fail-closes at the DB identity probe; wait for a redeploy whose build started after the branch reports ACTIVE_HEALTHY. **Day 7 block COMPLETE (F-11 ✓ + F-PROD-02 ✓).**
 
-### Day 8 — Thu 19 Jun
+### Day 8 — Sat 20 Jun
 
 - **F-14** — Delivery Routes domain (compressed to 2 PRs: ports+adapter+service, then route rewrites)
 - **F-24** — `MapProvider` port + Leaflet adapter (rides with Routes — same screens)
 - **F-RLS-04c** — Routes-context RLS
 
-### Day 9 — Fri 20 Jun
+### Day 9 — Sun 21 Jun
 
 - **F-15** — Pricing domain (2 PRs; absorbs `pricing-email.ts` raw-fetch per ADR-0005)
 - **F-22** — `PdfRenderer` port + jsPDF adapter (rides with Pricing)
 - **F-RLS-04d** — Pricing-context RLS
 
-### Day 10 — Sat 21 Jun
+### Day 10 — Mon 22 Jun
 
 - **F-16** — Cash domain (2 PRs; absorbs `detail/discrepancy` raw-fetch)
 - **F-RLS-04e** — Cash-context RLS
 
-### Day 11 — Sun 22 Jun
+### Day 11 — Tue 23 Jun
 
 - **F-17** — Compliments + Complaints (2 PRs; absorbs 5 `screen2` + `detail/complaint` raw-fetch sites + complaint/compliment email helpers)
 - **F-RLS-04f** — Complaints-context RLS
 
-### Day 12 — Mon 23 Jun
+### Day 12 — Wed 24 Jun
 
 - **F-18** — Visits / Screen 3 (2 PRs; absorbs `detail/visit` raw-fetch)
 - **F-RLS-04g** — Visits-context RLS
 
-### Days 13–14 — Tue 24 – Wed 25 Jun ⚠️ the crunch
+### Days 13–14 — Thu 25 – Fri 26 Jun ⚠️ the crunch
 
 - **F-19** — HACCP, largest domain (~30 routes; sub-domain split: audit, allergen, cold-storage, calibration, training, cleaning, recall — 5–8 PRs across both days)
 - **F-23** — `SpreadsheetWriter` port + XLSX adapter (rides with HACCP export)
 - **F-PROD-01** — Allergen Assessment version-history UI (rides with the allergen sub-domain)
 - **F-RLS-04h** — HACCP-context RLS
 
-### Day 15 — Thu 26 Jun
+### Day 15 — Sat 27 Jun
 
 - **F-20** — Admin (3 PRs; absorbs `admin/geocode-all` + `map/data` raw-fetch)
 - **F-21** — Dashboard split into `DashboardService` over the now-existing repositories (1 PR)
@@ -179,7 +179,7 @@ After all three ship, resume the Day-2 order below.
 - **F-26** — `LocalCache` port + Dexie adapter
 - **F-RLS-04i** — Admin-context RLS
 
-### Day 16 — Fri 27 Jun — seal + close
+### Day 16 — Sun 28 Jun — seal + close
 
 - **F-27** — ESLint rule extended to ALL vendor SDKs outside `lib/adapters/**` (+ no-eslint-disable check per F-TD-11 Guard note) — the Lego principle gets teeth
 - **F-RLS-final** — retire service-role from all user-facing paths; `requireServiceRole()` for admin routes; lint rule
