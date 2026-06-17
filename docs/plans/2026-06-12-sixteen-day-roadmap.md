@@ -139,9 +139,11 @@ After all three ship, resume the Day-2 order below.
 
 ### Day 8 — Sat 20 Jun
 
-- **F-14** — Delivery Routes domain (compressed to 2 PRs: ports+adapter+service, then route rewrites)
-- **F-24** — `MapProvider` port + Leaflet adapter (rides with Routes — same screens)
-- **F-RLS-04c** — Routes-context RLS
+- **F-14** — Delivery Routes domain (2 PRs: ports+adapter+service introduce, then route rewrites). Scope locked at Frame (2026-06-17): F-14 alone this pass; F-24 + F-RLS-04c sequence after as separate passes; the `optimise` endpoint (Google Routes v2 + postcodes.io) left untouched → deferred to **ARCH-FU-06** (Geocoder + RouteOptimizer ports).
+  - **PR1 ✅ SHIPPED 2026-06-17 (PR #50, squash `cf97a89`)** — Routes-domain foundation, PURE hexagonal extraction, ZERO behaviour change, NO route edited, NO migration, NO new dep, introduce-only (no production caller). New `lib/domain/Route.ts` (Route/RouteStop + RouteWithStops/RouteSummary shapes), `RoutesRepository` port (8 methods, 1:1 to the PR2 endpoints) + shared contract suite, Supabase + Fake adapters, `RoutesService` (owns 7pm UK rollover + Mon–Sun week boundary via `getUKWeekBounds`, atomic header+stops replace), `lib/wiring/routes.ts` (service-role singleton + `routesServiceForCaller` ready-but-UNUSED, commented for F-RLS-04c). Rip-out PASS. code-critic SHIP (no blockers). FORGE+ANVIL: unit 1803 · tsc/lint 0 · integration 211 (RoutesRepository contract 15/15 vs local PG — UNIQUE rollback + cascade proven) · pgTAP unaffected (88/88 sweep) · E2E unaffected · **preview smoke 10/10 @critical** · **prod smoke 5/5 non-5xx**. Cert `docs/anvil/2026-06-17-f-14-pr1-routes-domain-cert.md`; review `docs/reviews/2026-06-17-f-14-pr1-routes-domain-review.md`. **PR2 carry-forward (from Guard review, NOT addressed in PR1): W1** (`createdAt: ""` sentinel — PR2 must not echo `createdAt` on `[id]`/`today`), **N1** (Fake-vs-Supabase single-read divergence — tighten), **N2** (PR2 ADDS `visited` to `[id]` GET — own consciously). Plan NOT archived (PR2 still uses it).
+  - **PR2** — re-point the 5 in-scope routes (`/api/routes` POST+GET, `/api/routes/[id]` GET+PUT, `/api/routes/today` GET, `/api/admin/runs` GET, `/api/admin/runs/[id]` PATCH+DELETE) through `routesService`; drop direct `@supabase/*` imports; map domain→snake_case wire byte-identical. Pick up W1/N1/N2.
+- **F-24** — `MapProvider` port + Leaflet adapter (separate pass, same day — rides with Routes screens)
+- **F-RLS-04c** — Routes-context RLS (separate pass, same day — after F-14 PR2 re-points)
 
 ### Day 9 — Sun 21 Jun
 
