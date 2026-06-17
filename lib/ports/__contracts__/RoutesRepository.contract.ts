@@ -192,6 +192,39 @@ export function routesRepositoryContract(
       expect(full).toBeNull();
     });
 
+    // N1 — single reads must be fully hydrated on createdAt/createdBy/creator
+    // so the Fake and Supabase adapters can never silently drift again. The
+    // [id]/today WIRE still omits these keys; this is internal honesty +
+    // adapter parity, asserted against BOTH adapters.
+    it("getRouteById populates createdAt (non-empty), createdBy and creator", async () => {
+      ctx = await setup();
+      const created = await create({ name: "ANVIL-TEST-hydrate" });
+      const full = await ctx.repo.getRouteById(created.id);
+      expect(full).not.toBeNull();
+      if (full === null) throw new Error("route was null after expect");
+      expect(typeof full.createdAt).toBe("string");
+      expect(full.createdAt.length).toBeGreaterThan(0);
+      expect(full.createdBy).toBe(ctx.assignedTo);
+      expect(full.creator).not.toBeNull();
+      expect(full.creator?.id).toBe(ctx.assignedTo);
+    });
+
+    it("getNextRouteForUser populates createdAt (non-empty), createdBy and creator", async () => {
+      ctx = await setup();
+      await create({ name: "ANVIL-TEST-hydrate-next", plannedDate: "2026-06-20" });
+      const next = await ctx.repo.getNextRouteForUser(
+        ctx.assignedTo,
+        "2026-06-20",
+      );
+      expect(next).not.toBeNull();
+      if (next === null) throw new Error("route was null after expect");
+      expect(typeof next.createdAt).toBe("string");
+      expect(next.createdAt.length).toBeGreaterThan(0);
+      expect(next.createdBy).toBe(ctx.assignedTo);
+      expect(next.creator).not.toBeNull();
+      expect(next.creator?.id).toBe(ctx.assignedTo);
+    });
+
     // ─── replaceRoute ───────────────────────────────────────────
 
     it("replaceRoute swaps the stops entirely; reusing a position does not collide", async () => {
