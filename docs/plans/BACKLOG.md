@@ -216,6 +216,16 @@ the trail matters.
 
 ---
 
+### ARCH-FU-07 — Lint-enforce the components→adapters render-only carve-out
+
+- **Deferred:** 2026-06-18 (F-24 PR1 — flagged 🔵 by code-critic at Guard)
+- **What:** the CLAUDE.md blocker "anything in `app/**`/`components/**` importing from `lib/adapters/**` directly" is NOT lint-enforced — the F-TD-11 `no-restricted-imports` adapter-path ban (`@/lib/adapters/**`) is scoped to `lib/services/**` + `lib/usecases/**` only. F-24 PR1 introduced a deliberate, code-critic-approved exception: `components/RouteMap.tsx` imports the render-only `MapCanvas` adapter directly (a render-only React component carries no vendor type across the port, so it is NOT the UI→DB coupling the rule guards against). That carve-out currently rests on human judgement + the plan, not a rule — so a *future* component could import a **data** adapter (e.g. a Supabase adapter) directly and lint would stay green.
+- **Fix shape:** a narrow ESLint rule banning `components/**` + `app/**` from importing `@/lib/adapters/**` EXCEPT a small render-only allow-list (the `leaflet` map adapter, and any future pure-render adapter). Turns the carve-out from "trusted" into "enforced", and closes the pre-existing data-adapter gap.
+- **Priority:** Low (pre-existing gap, not introduced by F-24; the specific F-24 import was ruled acceptable).
+- **Owner unit:** unscheduled.
+
+---
+
 ## Migration hygiene (F-TD-)
 
 ### F-TD-15 — Migration filename convention collides for same-day migrations
