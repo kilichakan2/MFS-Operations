@@ -324,6 +324,10 @@ SELECT policy (F-RLS-04b baseline). **Mitigation:** ANVIL pgTAP/integration must
 embedded `assignee`/`creator`/`customer`/`route_stops` objects are populated (not null) under
 a valid-user GUC. If `customers` lacks an authenticated SELECT policy, that is a blocker
 surfaced here — loop back to add it (in scope for "the policies these tables need").
+**UPDATE (see Addendum):** the `users`-join half of R2 turned out to be a REAL regression —
+the baseline `users_select` policy is own-row-OR-admin, so a non-admin sees NULL names for
+peers. RESOLVED by the addendum's user-directory read policy. The `customers` half remains
+to be verified in ANVIL.
 
 ### R3 — Concurrency / per-request client memoization leak  ·  Severity: HIGH  ·  must-fix (already mitigated by design)
 A memoized authenticated client would leak one caller's identity (GUC) to another.
@@ -391,3 +395,324 @@ migration spec (§5) and test matrix (§8); none require re-architecture → non
    and all 7 policies confirmed present on the preview DB.
 7. Ship: prod migration applied FIRST via MCP `apply_migration`, then merge, then prod smoke
    non-500; preview branch confirmed cleaned up.
+
+---
+
+## Addendum — user-directory read access (loop-back from Guard)
+
+Date appended: 2026-06-18 · Trigger: Guard (code-critic) found, and Hakan confirmed, a
+REAL regression in the cutover. This addendum is APPENDED — §1–§11 above are unchanged.
+
+### A0. Mini-map (this addendum)
+
+```
+DOMAIN (Routes core — reads embed user names via PostgREST FK joins)
+  └─ routes GET → assignee:users / creator:users  (FK-embed of public.users)
+     ├─ TODAY: service-role plug → RLS bypassed → all names resolve
+     └─ AFTER 04c: authenticated plug → users_select = own-row-OR-admin → non-admin sees NULL names 🔴
+🗣 the cutover swaps the plug; the users table's lock only opens for "your own row or admin",
+   so a warehouse user looking at someone else's route gets blank names. Fix = a directory
+   lock that lets any logged-in user read NAMES/ROLES only — never the password/PIN hashes.
+```
+
+### A1. The regression, precisely
+
+The 04c cutover (§4a) flips the 5 Routes routes to the `authenticated`-role client. The GET
+wires embed user names via PostgREST FK-embedding in `lib/adapters/supabase/RoutesRepository.ts`:
+- `assignee:users!routes_assigned_to_fkey (id, name, role)` (LIST_COLS L67, SINGLE_COLS L82, admin-runs L91)
+- `creator:users!routes_created_by_fkey (id, name)` (LIST_COLS L68, SINGLE_COLS L83)
+
+These embeds resolve through the `public.users` table's OWN RLS policy, not the `routes`
+policy. The baseline policy is:
+
+```sql
+-- supabase/migrations/20260101000000_baseline.sql (the users_select line near 2488)
+CREATE POLICY "users_select" ON "public"."users" FOR SELECT
+  USING ( ("id" = (current_setting('app.current_user_id', true))::uuid) OR public.is_admin() );
+```
+
+`public.is_admin()` is role='admin' only. So under the `authenticated` role, a non-admin
+caller (role `office`/`warehouse`) can SELECT only THEIR OWN users row. When they load a
+route assigned to/created by someone else, the FK-embed for that other user returns NULL —
+the `assignee`/`creator` sub-object comes back null with no error. Today this is masked
+because the Routes routes use the service-role key (RLS bypassed → every users row visible).
+
+🗣 In plain English: the name labels on a route are pulled from the staff table, and that
+table's lock only lets you see your OWN staff record (unless you're an admin). The moment we
+make the Route screens use the per-user keycard instead of the master key, a non-admin
+viewing a colleague's route sees blank names where the colleague's name should be. Hakan's
+call: keep the names visible — staff names/roles are not secret.
+
+### A2. The hard constraint (why this isn't a one-line policy)
+
+`public.users` carries credential-hash columns `pin_hash` and `password_hash`
+(`lib/adapters/supabase/UsersRepository.ts:55-56`, `CREDENTIAL_COLS`). The whole F-13 effort
+was "credential-hash quarantine." Baseline runs `GRANT ALL ON TABLE public.users TO
+authenticated` AND `TO anon` (baseline.sql near 2778) — so the `authenticated` role already
+holds privilege on ALL columns; only RLS limits the ROWS.
+
+Postgres RLS is row-level, NOT column-level. A naive "any logged-in user can SELECT any
+users row" policy would, at the DB boundary, make `pin_hash`/`password_hash` of EVERY user
+readable by ANY authenticated caller. That must NOT happen.
+
+🗣 In plain English: the staff table's lock controls which ROWS you can see, not which
+COLUMNS. If we just unlock all the rows so names show, we'd also be unlocking the password
+and PIN hash columns for every staff member to every logged-in user. We have to widen the
+rows but keep the two hash columns sealed.
+
+### A3. Options evaluated
+
+| Option | Leaks hashes at DB boundary? | Breaks an existing path? | Invasiveness |
+|--------|------------------------------|--------------------------|--------------|
+| **1 · Permissive directory SELECT policy + column-privilege lockdown** | **NO** (column GRANT denies hashes to `authenticated`) | **NO** (verified A4 — all credential reads run under service-role, which has separate grants + bypasses RLS) | LOW — one migration; zero app-code change; the existing FK-embed select strings keep working unchanged |
+| **2 · SECURITY DEFINER view/RPC `user_directory`** | NO (view projects only id/name/role) | YES, indirectly — see below | HIGH — a view cannot be FK-embedded by PostgREST the way `users!routes_assigned_to_fkey(...)` embeds the real table; re-pointing the joins forces rewriting the adapter select strings, leaving the original byte-identical scope |
+| **3 · Accept + scope-defer** | N/A | leaves the regression in prod | none, but NOT chosen — non-admins see blank names |
+
+**Why option 2 fails on feasibility:** the GET reads use PostgREST FK-embedding
+(`assignee:users!routes_assigned_to_fkey (id, name, role)`). That syntax embeds the real
+`public.users` table by its foreign-key relationship. A SECURITY DEFINER view named
+`user_directory` has no FK relationship from `routes` to it, so PostgREST cannot embed it the
+same way — you'd have to rewrite every embed in `RoutesRepository.ts` (LIST_COLS, SINGLE_COLS,
+and the admin-runs select) to a different shape, then re-map the row parsing. That drops the
+adapter out of the "no adapter edit / byte-identical wire" scope the 04c plan rests on (§4
+"NOT in scope — do not touch lib/adapters/**"), and adds a new DB object (view/RPC) to
+maintain. More surface, more risk, for no security gain over option 1.
+
+**RECOMMENDED: Option 1.** It keeps the FK-embed select strings untouched (zero app-code
+change beyond §4a's already-planned cutover), and seals the hashes at the privilege layer —
+column GRANTs and RLS compose, so even with a permissive row policy, `SELECT pin_hash` as
+`authenticated` is denied for lack of column privilege.
+
+🗣 In plain English: option 1 = widen the rows with a new lock, then physically remove the
+two hash columns from the authenticated keycard's permission list. The name labels light up;
+the password/PIN columns become un-selectable for any logged-in user, full stop. Option 2
+would mean rebuilding how the Route screens fetch names — more work, more to break, same
+end result on security. Option 1 wins.
+
+### A4. Credential-read caller verification (this is the proof the REVOKE is safe)
+
+The ONLY two methods that project the hash columns (`CREDENTIAL_COLS`) are
+`findCredentialByName` and `listCredentialsByRoles` (`UsersRepository.ts:175,192`). Every
+production caller and the Supabase client it runs under:
+
+| Caller (file) | Method | Service used | Underlying client | Role at DB | Affected by REVOKE on `authenticated`? |
+|---------------|--------|--------------|-------------------|-----------|----------------------------------------|
+| `app/api/auth/login/route.ts:123` | `findCredentialByName` | `usersService` (singleton) | `supabaseService` (service-role key) | **service-role** — bypasses RLS, separate grants | **NO** |
+| `app/api/auth/kds-pin/route.ts:47` | `listCredentialsByRoles` | `usersService` (singleton) | `supabaseService` (service-role key) | **service-role** — bypasses RLS, separate grants | **NO** |
+
+`usersService` is wired to `supabaseUsersRepository`, the service-role singleton
+(`lib/wiring/users.ts:32-35` → `UsersRepository.ts:306-307` → `supabaseService`). It is
+the deliberate engine for the pre-auth routes (login, kds-pin, team, haccp-team, auth-type)
+that run before any session/JWT exists (`lib/wiring/users.ts:39-42` comment).
+
+`usersServiceForCaller` (the `authenticated`-role factory, `lib/wiring/users.ts:59`) is used
+ONLY by the 4 admin user-management routes (`app/api/admin/users/**`), and those call
+`listAllUsers` / `createUser` / `updateUser` / `deleteUser` — **none of which project the
+hash columns** (they use `SUMMARY_COLS`, hash-free). Verified: no `usersServiceForCaller`
+caller anywhere reads credentials (grep for `usersServiceForCaller` + credential/login/pin =
+zero hits).
+
+**Conclusion: NO credential read runs under the `authenticated` role.** Revoking the hash
+columns from `authenticated` cannot break login, KDS-pin, or any HACCP auth path. The
+service-role's grants are independent of `authenticated`'s; the REVOKE targets only
+`authenticated` and leaves the service-role (and the createUser INSERT path on
+`SUMMARY_COLS`) fully intact.
+
+🗣 In plain English: the only code that ever reads password/PIN hashes is the login and the
+KDS PIN check, and both use the master key, not the per-user keycard. We're only trimming the
+keycard's permissions — the master key keeps everything. So login and PIN sign-in cannot
+break. Verified by tracing every caller, not assumed.
+
+### A5. Recommended SQL sketch (option 1)
+
+Fold into a SIBLING migration, NOT the existing `20260618120000_routes_authenticated_rls_policies.sql`.
+**Decision: sibling file** — rationale: (a) the 04c routes migration is purely about the
+`routes`/`route_stops` tables; mixing a `public.users` privilege change into it muddies the
+rollback story and the header discipline; (b) a separate file makes the rollback (re-GRANT)
+self-contained and the diff legible to code-critic. Name it AFTER the 04c migration so
+ordering is monotonic:
+
+`supabase/migrations/20260618HHMMSS_users_directory_read_for_authenticated.sql`
+(pick a 14-digit timestamp later than `20260618120000`).
+
+```sql
+-- 20260618HHMMSS_users_directory_read_for_authenticated.sql
+--
+-- F-RLS-04c addendum — user-directory read access (loop-back from Guard).
+-- ADDITIVE row policy + a column-privilege RESHAPE (REVOKE then narrowed GRANT).
+-- Lets ANY valid-user GUC SELECT id/name/role (+ other NON-HASH cols) of ANY
+-- users row, so Route screens resolve assignee/creator names under the
+-- authenticated role. The two hash columns (pin_hash, password_hash) are
+-- SEALED at the privilege layer — RLS + column GRANTs compose, so the
+-- permissive row policy CANNOT expose hashes to the authenticated role.
+--
+-- NON-DESTRUCTIVE: no DROP TABLE/TRUNCATE/ALTER TYPE/DROP COLUMN/DROP NOT NULL.
+-- REVOKE/GRANT change the PRIVILEGE SURFACE only (no data touched) -> no PITR gate.
+-- Service-role is UNAFFECTED (its grants are separate; it bypasses RLS). The
+-- login + kds-pin credential reads run under service-role (verified), so the
+-- REVOKE cannot break them.
+-- Rollback = DROP the directory policy + re-GRANT ALL/SELECT on users to
+-- authenticated (see ROLLBACK block).
+
+-- 1) Row policy: any valid-user GUC may SELECT any users row. OR's with the
+--    existing baseline users_select (own-row OR is_admin) -- PostgreSQL OR's
+--    permissive SELECT policies, so this WIDENS reads to "any logged-in user".
+DROP POLICY IF EXISTS users_directory_select ON public.users;
+CREATE POLICY users_directory_select ON public.users
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM users u
+      WHERE u.id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  );
+
+-- 2) Column-privilege lockdown: remove blanket SELECT, re-grant only NON-HASH
+--    columns. Even with the permissive row policy above, selecting pin_hash /
+--    password_hash as `authenticated` is then DENIED for lack of column priv.
+--    (Enumerated from baseline CREATE TABLE public.users -- the 8 non-hash cols.)
+REVOKE SELECT ON public.users FROM authenticated;
+GRANT  SELECT (id, created_at, name, role, active, last_login_at, email, secondary_roles)
+  ON public.users TO authenticated;
+-- INSERT/UPDATE/DELETE privileges on authenticated are UNCHANGED (baseline
+-- GRANT ALL still covers them; the admin write routes need them and their RLS
+-- policies (users_insert/update/delete) gate the rows). Only SELECT is reshaped.
+
+-- NOTE on `anon`: baseline also GRANT ALL ON users TO anon. The pre-auth routes
+-- (login/kds-pin) do NOT use the anon role -- they use service-role. No anon
+-- path reads users under RLS today, so anon's grant is left AS-IS in this
+-- migration (touching it is out of scope and risks the pre-auth flows). The
+-- hash-seal here is specifically for the `authenticated` role, which is the
+-- role the 04c cutover introduces to the Routes reads.
+
+-- ── ROLLBACK (manual; not auto-run) ──────────────────────────────
+-- DROP POLICY IF EXISTS users_directory_select ON public.users;
+-- REVOKE SELECT (id, created_at, name, role, active, last_login_at, email, secondary_roles)
+--   ON public.users FROM authenticated;
+-- GRANT SELECT ON public.users TO authenticated;   -- restore blanket SELECT
+```
+
+Non-hash columns enumerated from `baseline.sql` CREATE TABLE `public.users` (lines 1271-1283):
+`id, created_at, name, role, active, last_login_at, email, secondary_roles`. The TWO excluded
+columns are exactly `pin_hash` and `password_hash`. `SUMMARY_COLS` in the adapter
+(`UsersRepository.ts:51-52`) selects `id, name, role, active, secondary_roles, email,
+last_login_at, created_at` — a SUBSET of the granted columns, so `listAllUsers` /
+`findUserById` etc. under the authenticated admin routes keep working unchanged.
+
+🗣 In plain English: step 1 adds a new lock that opens the staff table's rows for any
+logged-in user. Step 2 takes away the keycard's blanket read permission and hands back read
+permission for only the eight harmless columns — names, roles, email, timestamps — explicitly
+omitting the two hash columns. The master key (service-role) is untouched, so login still
+reads hashes fine. Rollback just re-hands the blanket permission back.
+
+### A6. Interaction with F-RLS-04b (Users RLS) — verdict
+
+The new `users_directory_select` is a permissive SELECT policy that OR's with the shipped
+baseline `users_select` (own-row-OR-admin). PostgreSQL OR's permissive SELECT policies, so
+the effective read posture WIDENS from "non-admin sees only own row" to "any logged-in user
+sees every user's NON-HASH columns."
+
+- **Acceptable for a staff directory?** YES per Hakan's decision — names/roles are not secret;
+  they already appear on routes/orders today (under service-role). The widening is exactly the
+  intent.
+- **Does it break any shipped 04b test/expectation?** NO. The shipped 04b pgTAP
+  (`supabase/tests/007-rls-users.test.sql`) asserts ONLY the WRITE policies
+  (INSERT/UPDATE/DELETE: admin allowed, non-admin denied, empty-GUC fail-closed). It does
+  NOT assert that a non-admin CANNOT SELECT another user's row — there is no read-isolation
+  assertion to break. Verified by reading all 10 plan() assertions in 007.
+- **04b integration tests:** the admin user routes call `listAllUsers` (admin-gated at the
+  route layer + RLS) — the directory policy doesn't change admin behaviour (admins already
+  saw all rows via `is_admin()`), and non-admins never reach those routes (403 at the route
+  layer). No 04b integration expectation changes.
+
+**Flag:** if a FUTURE 04b hardening adds a "non-admin cannot read another user's row" pgTAP
+assertion, this directory policy would invalidate it. None exists today. Documented so it
+isn't a surprise later.
+
+🗣 In plain English: the shipped Users security tests only check who can CREATE/EDIT/DELETE
+users — they never test "can a non-admin see another person's row." So widening reads breaks
+none of them. The only thing to remember: don't later add a test that assumes non-admins are
+blind to other rows, because we've deliberately changed that for the directory.
+
+### A7. Tests to ADD (fold into the 04c test matrix §8)
+
+| Layer | New case | Proves |
+|-------|----------|--------|
+| Integration (Vitest) | A NON-ADMIN caller (role `office` or `warehouse`) loads a route assigned-to / created-by a DIFFERENT user → the embedded `assignee` and `creator` objects are NON-NULL (names resolve). This is the REGRESSION LOCK the current admin-only route tests miss. | the directory policy fixes the blank-names regression under the authenticated role |
+| pgTAP (extend `009-rls-routes` OR a new `010-rls-users-directory.test.sql` — recommend a NEW file so 009 stays purely routes-scoped) | (a) a non-admin valid-user GUC CAN SELECT id/name/role of ANOTHER user's row | directory read works for non-admins |
+| pgTAP (same file) | (b) the SAME non-admin caller CANNOT read `pin_hash`/`password_hash` of another user — assert the column-level denial (selecting the hash column as `authenticated` raises `42501 insufficient_privilege` / column not accessible). To exercise this faithfully the test must mirror the prod column GRANT: `REVOKE SELECT ON users FROM authenticated; GRANT SELECT (id, created_at, name, role, active, last_login_at, email, secondary_roles) ON users TO authenticated;` inside the BEGIN/ROLLBACK txn BEFORE `SET LOCAL ROLE authenticated` — because local Supabase otherwise has the blanket grant (see 007 line 27 precedent). | **THE hash-protection proof — hashes stay sealed** |
+| pgTAP (same file) | (c) the service-role connection CAN still read `pin_hash`/`password_hash` of any user | the login/kds-pin path stays intact |
+
+Note for the pgTAP author: case (b) is column-privilege, not RLS — so it must run with the
+narrowed column grant in place. Without the in-txn REVOKE/GRANT it would pass for the wrong
+reason (or fail), giving a false signal. Make the grant reshape explicit in the test, exactly
+as 007 makes the table grant explicit.
+
+🗣 In plain English: three new database tests prove the fix is honest — (a) a warehouse user
+CAN see another person's name, (b) that same user CANNOT see anyone's password/PIN hash, and
+(c) the login machinery (master key) CAN still read hashes. Plus one integration test that
+loads a peer's route as a non-admin and checks the names aren't blank — the exact thing that
+was broken.
+
+### A8. Risk Assessment (addendum)
+
+#### R10 — Permissive row policy exposing hashes at the DB boundary · Severity: CRITICAL · MUST-FIX (RESOLVED by design)
+A row-only policy would expose `pin_hash`/`password_hash` of every user to every authenticated
+caller (RLS is row-level, not column-level). **Mitigation:** option 1 pairs the row policy
+with a column-privilege REVOKE+narrowed-GRANT, so the hashes are denied at the privilege
+layer regardless of the row policy. pgTAP case (b) is the mandatory proof. **Does it leak
+hashes? NO** — provided the column GRANT ships WITH the row policy in the SAME migration (do
+not ship the policy without the REVOKE/GRANT). Sequencing risk: if an implementer adds the
+policy and forgets the column lockdown, hashes leak — hence both live in one migration file
+and case (b) gates the merge.
+
+#### R11 — REVOKE breaking a legitimate credential read · Severity: CRITICAL · MUST-FIX (RESOLVED — verified NOT broken)
+A REVOKE on `authenticated`'s SELECT could break a path that reads hashes under the
+authenticated role. **Verification (A4):** the only hash-reading methods
+(`findCredentialByName`, `listCredentialsByRoles`) are called ONLY by login + kds-pin, both
+on the service-role singleton (`usersService`), which bypasses RLS and uses separate grants.
+No `authenticated`-role caller reads hashes. **The REVOKE does NOT break any credential path.**
+If this verification were ever falsified (e.g. a future PR re-points login onto
+`usersServiceForCaller`), the REVOKE would break login — so that re-point must re-grant the
+hash columns or keep login on service-role. Documented as a tripwire.
+
+#### R12 — Widened Users read posture (04b interaction) · Severity: LOW · not must-fix
+The directory policy OR's with `users_select`, widening non-admin reads to all rows
+(non-hash). **Mitigation:** Hakan-approved (staff names/roles not secret); no shipped 04b test
+asserts read-isolation (A6). Tripwire noted for future 04b hardening.
+
+#### R13 — `anon` role still holds GRANT ALL on users · Severity: LOW · not must-fix (out of scope, unchanged)
+Baseline grants `anon` ALL on `users`. This addendum does NOT touch `anon` — the pre-auth
+routes use service-role, not anon, so no anon path reads users under RLS today, and changing
+anon's grant risks the pre-auth flows. **No action** — flagged so it isn't mistaken for a
+regression introduced here; it predates 04c. (If anon hardening is ever wanted, it's a
+separate unit.)
+
+#### R14 — Rollback changes the privilege surface (not a data DROP) · Severity: LOW · not must-fix
+REVOKE/GRANT alter the privilege surface, not data — non-destructive, no PITR gate. **Rollback
+= DROP the directory policy + re-GRANT blanket SELECT on users to authenticated** (in the
+ROLLBACK block). Note: rollback restores the blanket grant, which would re-expose hashes to
+authenticated — but rollback is only used WITH the code rollback (routes back on service-role),
+at which point no authenticated client reads users at all, so the re-exposure is inert.
+
+**Updated must-fix summary (Gate 2):** R10 and R11 are CRITICAL but BOTH RESOLVED in this
+plan — R10 by the column-privilege lockdown shipped in the same migration (proven by pgTAP
+case b), R11 by the A4 caller verification (all credential reads on service-role). **No
+must-fix risk remains unresolved → no loop-back to Order.** The original §10 must-fixes (R1
+SELECT policy, R2 embedded-join SELECT — of which the users-join NULL was THIS regression)
+stand; this addendum is the resolution of the users-join half of R2.
+
+### A9. Hexagonal verdict (addendum)
+
+- **Port/adapter:** UNCHANGED. No new port, no new adapter. The fix is entirely a DB
+  migration (RLS policy + column grant on `public.users`). The FK-embed select strings in
+  `lib/adapters/supabase/RoutesRepository.ts` stay byte-identical.
+- **New dependencies:** NONE. No `package.json` change.
+- **Original byte-identical scope:** PRESERVED. Option 1 requires ZERO app-code change beyond
+  the §4a cutover already planned — the adapter select strings are untouched (this is the
+  decisive reason option 1 beats option 2, which would have forced an adapter rewrite).
+- **Rip-out test:** PASS (unchanged — no port/adapter/dep added).
+
+🗣 In plain English: the fix is pure database plumbing — a new lock and a trimmed permission
+list on the staff table. No new code, no new vendor, no socket touched. The Route screens'
+fetch code is untouched. Lego rules fully intact.
