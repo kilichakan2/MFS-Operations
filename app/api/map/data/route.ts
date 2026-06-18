@@ -7,36 +7,19 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 
+// MapCustomer / MapVisit were DECLARED here; F-24 PR2 relocated them into
+// lib/services/mapScene.ts (so buildMarkerScene doesn't import UPWARD from
+// app/**). This route RE-EXPORTS them so every existing import site keeps
+// resolving unchanged. Mirrors PR1's RouteStop relocation.
+export type { MapCustomer, MapVisit } from '@/lib/services/mapScene'
+import type { MapCustomer, MapVisit } from '@/lib/services/mapScene'
+
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
 const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
 const h = {
   'apikey':         SUPA_KEY,
   'Authorization': `Bearer ${SUPA_KEY}`,
-}
-
-export interface MapCustomer {
-  id:           string
-  name:         string
-  postcode:     string
-  code:         string | null
-  active:       boolean
-  lat:          number
-  lng:          number
-  is_approximate: boolean
-}
-
-export interface MapVisit {
-  id:            string
-  lat:           number
-  lng:           number
-  visit_type:    string
-  outcome:       string
-  rep:           string
-  customer_name: string
-  created_at:    string
-  is_prospect:   boolean
-  is_approximate: boolean
 }
 
 export async function GET(req: NextRequest) {
