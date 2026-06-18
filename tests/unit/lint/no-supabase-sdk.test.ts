@@ -52,6 +52,19 @@ const ANTHROPIC_FORBIDDEN_MESSAGE =
   "@anthropic-ai/sdk may only be imported inside lib/adapters/anthropic/. " +
   "See ADR-0002 / F-12.";
 
+// F-24 — leaflet / react-leaflet may only be imported inside lib/adapters/leaflet/.
+// The strings below MUST be byte-identical to those in .eslintrc.json and
+// no-adapter-imports.test.ts (the no-adapter-imports pin asserts them verbatim).
+const LEAFLET_FORBIDDEN_MESSAGE =
+  "Use the MapProvider port via @/lib/adapters/leaflet. " +
+  "leaflet may only be imported inside lib/adapters/leaflet/. " +
+  "See ADR-0002 / F-24.";
+
+const REACT_LEAFLET_FORBIDDEN_MESSAGE =
+  "Use the MapProvider port via @/lib/adapters/leaflet. " +
+  "react-leaflet may only be imported inside lib/adapters/leaflet/. " +
+  "See ADR-0002 / F-24.";
+
 /**
  * The F-04 config under test. Mirrors `.eslintrc.json` exactly.
  *
@@ -88,6 +101,14 @@ const f04Config = {
             name: "@anthropic-ai/sdk",
             message: ANTHROPIC_FORBIDDEN_MESSAGE,
           },
+          {
+            name: "leaflet",
+            message: LEAFLET_FORBIDDEN_MESSAGE,
+          },
+          {
+            name: "react-leaflet",
+            message: REACT_LEAFLET_FORBIDDEN_MESSAGE,
+          },
         ],
       },
     ],
@@ -98,6 +119,7 @@ const f04Config = {
         "lib/adapters/supabase/**/*.ts",
         "lib/adapters/bcrypt/**/*.ts",
         "lib/adapters/anthropic/**/*.ts",
+        "lib/adapters/leaflet/**/*.{ts,tsx}",
         "tests/**",
       ],
       rules: {
@@ -262,5 +284,65 @@ describe("F-12 no-restricted-imports — @anthropic-ai/sdk may only live in lib/
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(ANTHROPIC_FORBIDDEN_MESSAGE);
+  });
+});
+
+describe("F-24 no-restricted-imports — leaflet/react-leaflet may only live in lib/adapters/leaflet", () => {
+  // ── (a) ────────────────────────────────────────────────────────
+  it("reports an error when leaflet is imported from components", async () => {
+    const messages = await lint(
+      "components/RouteMap.tsx",
+      "import L from 'leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (b) ────────────────────────────────────────────────────────
+  it("reports an error when react-leaflet is imported from components", async () => {
+    const messages = await lint(
+      "components/RouteMap.tsx",
+      "import { MapContainer } from 'react-leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (c) ────────────────────────────────────────────────────────
+  it("allows leaflet inside lib/adapters/leaflet/**/*.{ts,tsx} (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/leaflet/MapCanvas.tsx",
+      "import L from 'leaflet'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (d) ────────────────────────────────────────────────────────
+  it("allows react-leaflet inside lib/adapters/leaflet/**/*.{ts,tsx} (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/leaflet/MapCanvas.tsx",
+      "import { MapContainer } from 'react-leaflet'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (e) ────────────────────────────────────────────────────────
+  it("reports the configured leaflet custom-message text verbatim", async () => {
+    const messages = await lint(
+      "components/RouteMap.tsx",
+      "import L from 'leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(LEAFLET_FORBIDDEN_MESSAGE);
+  });
+
+  // ── (f) ────────────────────────────────────────────────────────
+  it("reports the configured react-leaflet custom-message text verbatim", async () => {
+    const messages = await lint(
+      "components/RouteMap.tsx",
+      "import { MapContainer } from 'react-leaflet'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(REACT_LEAFLET_FORBIDDEN_MESSAGE);
   });
 });

@@ -16,7 +16,11 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 
+// F-24 PR2: Leaflet stays direct here until PR2 migrates MapView onto MapProvider
+// eslint-disable-next-line no-restricted-imports
 import L from 'leaflet'
+// F-24 PR2: Leaflet stays direct here until PR2 migrates MapView onto MapProvider
+// eslint-disable-next-line no-restricted-imports
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import MarkerClusterGroup from 'react-leaflet-cluster'
 import { useEffect, useRef } from 'react'
