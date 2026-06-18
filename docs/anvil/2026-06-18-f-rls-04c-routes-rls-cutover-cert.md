@@ -1,4 +1,4 @@
-# ANVIL Clearance Certificate (DRAFT — preview smoke conductor-pending)
+# ANVIL Clearance Certificate (FINAL — all layers green incl. preview smoke)
 
 Date: 2026-06-18
 App: MFS-Operations
@@ -27,7 +27,7 @@ PR: F-RLS-04c — Routes RLS cutover (+ user-directory read fix)
 | Integration (Vitest) | ✅ 235/235 passed | Real local Supabase (Docker), no mocked client. Incl. all 4 F-RLS-04c routes cases (populated authenticated GET-by-id, populated list, **non-admin peer-name regression lock**, full authenticated write cycle create→save→setStatus→delete) + users credential reads still return hashes under service-role. |
 | Database (pgTAP) | ✅ 10/10 test files `ok` | Per-file breakdown below. Overall harness `Result: FAIL` is the documented `_helpers.sql` cosmetic artifact — NOT a real failure. |
 | Edge Functions (Deno) | n/a — not required | No `supabase/functions/` change in this diff. |
-| E2E (Playwright) | PENDING — conductor (no runner egress) | High-risk RLS tier → FULL E2E suite on the Vercel preview wired to its Supabase preview branch (Route Planner save/load + admin runs status/delete). Conductor runs this before merge. |
+| E2E (Playwright) | ✅ 12/12 @critical passed (1 conditional skip) | Conductor-run on the Vercel preview `dpl_F3VUfkycamM9LBpuQUJSqiTQs5XW` (commit `41444bf`) wired to Supabase preview branch `uiwhhuhjkrffyqnbeyma` (parent prod `uqgecljspgtevoylwkep`). `previewProbe`: all 4 DB identity checks passed — confirmed reading a seed-born preview DB, NOT prod. Spec `05-routes-planner-map` drives `/routes` (add stop → save → read back) — exercises the flipped Routes create/read path under the authenticated role + new policies. 1.2m runtime. Log: `/tmp/f-rls-04c-preview-smoke.log`. |
 
 ### pgTAP per-file breakdown (judge PER-FILE `ok`)
 
@@ -78,6 +78,6 @@ PITR confirmed: N/A — non-destructive, additive.
 
 ## Verdict
 
-✅ CLEARED FOR PRODUCTION — **subject to the conductor running the E2E `@critical` preview smoke (Route Planner save/load + admin runs status/delete) against the Vercel preview wired to its Supabase preview branch and confirming green before merge.**
+✅ CLEARED FOR PRODUCTION — all layers green, no outstanding rungs.
 
-All runner-executable layers (Unit 1860/1860, Integration 235/235, pgTAP 10/10 files `ok`) are green with zero real code bugs and no destructive migration. The only outstanding rung is the network-dependent preview E2E, which the runner has no egress to run; the conductor finalises this `CLEARED FOR PRODUCTION` verdict once that smoke passes.
+Unit 1860/1860, Integration 235/235, pgTAP 10/10 files `ok` (104 tests), E2E 12/12 @critical on the preview (seed-born preview DB confirmed) — zero real code bugs, no destructive migration, no PITR gate. The preview smoke (conductor-run, the runner has no egress) is now GREEN, finalising this verdict. Cleared to ship via the merge sequence above: apply both migrations to prod FIRST, then merge, then prod smoke.
