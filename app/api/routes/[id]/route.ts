@@ -17,7 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { routesService } from '@/lib/wiring/routes'
+import { routesService, routesServiceForCaller } from '@/lib/wiring/routes'
 import { ServiceError } from '@/lib/errors'
 import type { RouteWithStops, RouteEndPoint, StopPriority } from '@/lib/domain'
 
@@ -72,6 +72,10 @@ export async function GET(
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
+    // F-RLS-04c: run under the per-caller authenticated client (RLS fires).
+    // Rollback = swap `routesServiceForCaller(userId)` → `routesService`.
+    const routesService = await routesServiceForCaller(userId)
+
     const { id } = await params
 
     const route = await routesService.getRouteById(id)
@@ -122,6 +126,10 @@ export async function PUT(
   try {
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+    // F-RLS-04c: run under the per-caller authenticated client (RLS fires).
+    // Rollback = swap `routesServiceForCaller(userId)` → `routesService`.
+    const routesService = await routesServiceForCaller(userId)
 
     const { id } = await params
     const body   = await req.json() as PutBody

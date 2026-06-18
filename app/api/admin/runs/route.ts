@@ -16,13 +16,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { routesService } from '@/lib/wiring/routes'
+import { routesService, routesServiceForCaller } from '@/lib/wiring/routes'
 import { ServiceError } from '@/lib/errors'
 
 export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+    // F-RLS-04c: run under the per-caller authenticated client (RLS fires).
+    // Rollback = swap `routesServiceForCaller(userId)` → `routesService`.
+    const routesService = await routesServiceForCaller(userId)
 
     const { searchParams } = new URL(req.url)
     const fromParam = searchParams.get('from') ?? undefined
