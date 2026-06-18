@@ -111,3 +111,13 @@ DB probe 4/4). Integration / pgTAP-RLS / Edge all n/a by design (render-only wra
 migration, no schema/policy/server change). Guard (code-critic) verdict SHIP, 0 blockers.
 Rip-out test PASS — improved (last leaflet-family imports removed from outside the adapter).
 No migration → no PITR. Clear to ship via Gate 4.
+
+## SHIPPED — 2026-06-18
+
+PR #53 squash-merged to main as `2c17a75` (Gate 4 approved by Hakan). Local feature branch
+deleted both sides. Production deploy `dpl_FY7rM1y1MEnq19vZa9AMCtbVhWV2` (commit `2c17a75`,
+target=production) READY, aliased to www.mfsops.com / mfs-operations.vercel.app.
+**Post-deploy prod smoke: 5/5 non-5xx** — `/login` 200; `/`, `/routes`, `/map`,
+`/api/reference` all 307→login (auth middleware healthy; both map screens redirect, no 5xx).
+No migration → no `db push`, no PITR. Supabase orphaned-branch check (MCP `list_branches`):
+only `main` — zero orphaned preview branches. F-24 COMPLETE (PR1 #52 + PR2 #53).
