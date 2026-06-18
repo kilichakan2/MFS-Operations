@@ -25,3 +25,8 @@ export {
   type RoutesServiceDeps,
   type WeekRuns,
 } from "./RoutesService";
+export {
+  createPricingService,
+  type PricingService,
+  type PricingServiceDeps,
+} from "./PricingService";
