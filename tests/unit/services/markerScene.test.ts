@@ -20,6 +20,7 @@ import {
   type MapCustomer,
   type MapVisit,
 } from "@/lib/services/mapScene";
+import type { MarkerMapScene } from "@/lib/ports/MapProvider";
 
 function customer(overrides: Partial<MapCustomer> = {}): MapCustomer {
   return {
@@ -51,7 +52,7 @@ function visit(overrides: Partial<MapVisit> = {}): MapVisit {
   };
 }
 
-const layerById = (scene: { layers: readonly { id: string }[] }, id: string) =>
+const layerById = (scene: MarkerMapScene, id: string) =>
   scene.layers.find((l) => l.id === id);
 
 describe("buildMarkerScene", () => {
