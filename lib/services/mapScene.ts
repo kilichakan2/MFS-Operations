@@ -16,12 +16,19 @@
  */
 
 import type {
+  ClusterBadge,
   LatLng,
   MapLine,
   MapPin,
   MapPopup,
   MapScene,
   MapViewport,
+  MarkerLayer,
+  MarkerMapScene,
+  MarkerMapViewport,
+  MarkerPin,
+  MarkerPinShape,
+  MarkerPopup,
 } from "@/lib/ports/MapProvider";
 
 /**
@@ -175,4 +182,178 @@ export function buildMapScene(
   }
 
   return { viewport, pins, line };
+}
+
+// ─── F-24 PR2: buildMarkerScene (the admin Map View, Screen 6) ────────────────
+//
+// The flat view-models below were DECLARED in app/api/map/data/route.ts. They
+// are moved HERE (field-for-field identical) so this logic layer never imports
+// UPWARD from app/**; app/api/map/data/route.ts RE-EXPORTS both names, so the 3
+// existing import sites (app/map/page.tsx, components/MapTabContent.tsx, and the
+// route itself) keep resolving unchanged. Mirrors PR1's RouteStop relocation.
+
+/** Geocoded customer row the Map View plots. Flat presentation shape. */
+export interface MapCustomer {
+  id: string;
+  name: string;
+  postcode: string;
+  code: string | null;
+  active: boolean;
+  lat: number;
+  lng: number;
+  is_approximate: boolean;
+}
+
+/** Geocoded visit row the Map View plots. Flat presentation shape. */
+export interface MapVisit {
+  id: string;
+  lat: number;
+  lng: number;
+  visit_type: string;
+  outcome: string;
+  rep: string;
+  customer_name: string;
+  created_at: string;
+  is_prospect: boolean;
+  is_approximate: boolean;
+}
+
+// Visit type → colour. Moved verbatim from components/MapView.tsx.
+const VISIT_COLOURS: Record<string, string> = {
+  routine: "#16205B", // navy
+  new_pitch: "#EB6619", // orange
+  complaint_followup: "#DC2626", // red
+  delivery_issue: "#D97706", // amber
+};
+
+// Rep name → shape. Moved verbatim from components/MapView.tsx.
+function repShape(repName: string): "circle" | "square" {
+  const lower = repName.toLowerCase();
+  if (lower.includes("mehmet")) return "square";
+  return "circle";
+}
+
+// Sheffield HQ as default centre — DISTINCT from buildMapScene's MFS hub coords.
+const MARKER_DEFAULT_CENTRE: LatLng = { lat: 53.383331, lng: -1.46686 };
+
+const CUSTOMER_CLUSTER: ClusterBadge = {
+  shape: "circle",
+  size: 36,
+  background: "#16205B",
+  colour: "white",
+};
+
+const VISIT_CLUSTER: ClusterBadge = {
+  shape: "square",
+  size: 32,
+  background: "#EB6619",
+  colour: "white",
+};
+
+/**
+ * Build the vendor-neutral scene for the admin Map View.
+ *
+ * Reproduces, BYTE-IDENTICALLY, what components/MapView.tsx decided inline —
+ * the layer filter, the customer teardrop active/inactive colour, the visit
+ * rep-shape + visit-type colour fallback, the SPLIT approximate conditions, the
+ * cluster badges, and the one-shot bounds-fit over the shown pins. Pure: depends
+ * only on the MapProvider PORT types, never on leaflet / react-leaflet / JSX.
+ *
+ * @param customers geocoded customer rows
+ * @param visits    geocoded visit rows
+ * @param layer     which layers to emit ("all" | "customers" | "visits")
+ */
+export function buildMarkerScene(
+  customers: MapCustomer[],
+  visits: MapVisit[],
+  layer: "all" | "customers" | "visits",
+): MarkerMapScene {
+  const showCustomers = layer === "all" || layer === "customers";
+  const showVisits = layer === "all" || layer === "visits";
+
+  const layers: MarkerLayer[] = [];
+
+  if (showCustomers) {
+    const pins: MarkerPin[] = customers.map((c): MarkerPin => {
+      const approximate = c.is_approximate ?? false;
+      const popup: MarkerPopup = {
+        title: c.name,
+        subtitle: `${c.postcode}${c.code ? ` · ${c.code}` : ""}`,
+        statusPill: c.active
+          ? { label: "Active", background: "#DCFCE7", colour: "#15803D" }
+          : { label: "Inactive", background: "#F3F4F6", colour: "#6B7280" },
+        approxPill: c.is_approximate
+          ? { label: "⚠ Approx. location" }
+          : undefined,
+      };
+      return {
+        id: c.id,
+        at: { lat: c.lat, lng: c.lng },
+        shape: "teardrop",
+        colour: c.active ? "#16205B" : "#6B7280",
+        approximate,
+        popup,
+        clickable: false,
+      };
+    });
+    layers.push({
+      id: "customers",
+      pins,
+      cluster: CUSTOMER_CLUSTER,
+      maxClusterRadius: 40,
+    });
+  }
+
+  if (showVisits) {
+    const pins: MarkerPin[] = visits.map((v): MarkerPin => {
+      const shape: MarkerPinShape = repShape(v.rep);
+      const popup: MarkerPopup = {
+        title: v.customer_name,
+        subtitle: `${v.visit_type.replace(/_/g, " ")} · ${v.rep}`,
+        prospectTag: v.is_prospect ? { label: "Prospect" } : undefined,
+        approxPill:
+          v.is_prospect && v.is_approximate
+            ? { label: "⚠ Approx. location" }
+            : undefined,
+        footnote: "Tap to see full details",
+      };
+      return {
+        id: v.id,
+        at: { lat: v.lat, lng: v.lng },
+        shape,
+        colour: VISIT_COLOURS[v.visit_type] ?? "#6B7280",
+        approximate: v.is_approximate,
+        popup,
+        clickable: true,
+      };
+    });
+    layers.push({
+      id: "visits",
+      pins,
+      cluster: VISIT_CLUSTER,
+      maxClusterRadius: 30,
+    });
+  }
+
+  // fitBounds: every SHOWN pin's coords, mirroring MapView's BoundsFitter which
+  // received (showCustomers ? customers : []) and (showVisits ? visits : []).
+  const fitBounds: LatLng[] = [
+    ...(showCustomers
+      ? customers.map((c): LatLng => ({ lat: c.lat, lng: c.lng }))
+      : []),
+    ...(showVisits
+      ? visits.map((v): LatLng => ({ lat: v.lat, lng: v.lng }))
+      : []),
+  ];
+
+  const viewport: MarkerMapViewport = {
+    center: MARKER_DEFAULT_CENTRE,
+    zoom: 9,
+    zoomControl: true,
+    fitBounds,
+    fitPadding: 40,
+    fitMaxZoom: 13,
+  };
+
+  return { viewport, layers };
 }
