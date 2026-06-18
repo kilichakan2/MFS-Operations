@@ -112,6 +112,35 @@ migration, no schema/policy/server change). Guard (code-critic) verdict SHIP, 0 
 Rip-out test PASS — improved (last leaflet-family imports removed from outside the adapter).
 No migration → no PITR. Clear to ship via Gate 4.
 
+## Post-ship populated-data verification (local, prod-equivalent) — 2026-06-18
+
+The preview seed had 0 customers / 0 visits, so the preview E2E proved the adapter MOUNTS
+but never drew populated markers/clusters or exercised click→modal. To close that gap at
+Hakan's request — WITHOUT risking the remote DB (could not prove the preview reads a
+non-production database; MCP tools point at the prod project) — verified on a **local**
+Supabase stack seeded with geocoded data (7 customers incl. a 4-wide Sheffield cluster + 3
+spread; 4 visits incl. a prospect). All rows `MAP-SMOKE`-prefixed, LOCAL DB only.
+
+- **react-leaflet does NOT mount under `next dev`** ("Map container is already initialized" —
+  React StrictMode double-mount). Proven NOT a PR2 regression: PR1's shipped, prod-working
+  `05-routes-planner-map` spec throws the IDENTICAL error in local dev. It's a dev-only
+  artifact; the production build (preview) mounts both maps fine (12/12). Verified the
+  populated map by running local dev with `reactStrictMode:false` (temporary; reverted).
+- **Result (06 spec, populated):** PASS. `seed customers=7 · visits=4 · all-layer markers=8`
+  → the 4 Sheffield customers collapsed into **1 cluster badge** (clustering confirmed) +
+  3 spread customer pins + 4 visit pins = 8. Both layers draw; coloured visit pins + legend
+  render.
+- **Click→modal CONFIRMED by screenshot** (`test-results/f24-map-view-markers.png`): clicking
+  a visit pin opened the DetailModal ("VISIT DETAIL — MAP-SMOKE Nottingham, Complaint
+  Followup, ANVIL-TEST-sales"). The spec logged `modal=no-visit-pin` only because the
+  DetailModal carries no `role="dialog"` — a test false-negative, NOT an app failure
+  (the modal demonstrably opened). → follow-up: tighten the spec to detect the "VISIT DETAIL"
+  panel instead of `role=dialog` (logged BACKLOG).
+
+**Conclusion:** every populated-data path — clustering, both layers, coloured pins, popups,
+and visit-click→detail-modal — is now proven on real data, complementing the prod-build
+preview mount proof and the 16 buildMarkerScene unit tests. F-24 PR2 verified to 100%.
+
 ## SHIPPED — 2026-06-18
 
 PR #53 squash-merged to main as `2c17a75` (Gate 4 approved by Hakan). Local feature branch

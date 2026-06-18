@@ -226,6 +226,16 @@ the trail matters.
 
 ---
 
+### F-TD-23 — Map View E2E click→modal proof relies on `role="dialog"` the DetailModal lacks
+
+- **Deferred:** 2026-06-18 (F-24 PR2 — surfaced during the post-ship local populated-data verification)
+- **What:** `tests/e2e/06-map-view-markers.spec.ts` detects the visit-click→DetailModal behaviour via `page.getByRole('dialog')`. The DetailModal opened by `app/map/page.tsx` on a visit-pin click carries no `role="dialog"`, so the wait times out and the spec logs `modal=no-visit-pin` **even when the modal demonstrably opened** (confirmed by screenshot in the F-24 PR2 cert's populated-data verification: "VISIT DETAIL — MAP-SMOKE Nottingham"). The hard gate (map mounts + markers conditional) still passes; only the behaviour *detection* is a false-negative.
+- **Fix shape:** assert on the DetailModal's actual content (e.g. the "VISIT DETAIL" panel heading / a stable test id) instead of `role="dialog"`, so `modal=opened` is recorded when the click genuinely opens the panel. Optionally add `role="dialog"` to the DetailModal for accessibility (separate a11y consideration).
+- **Priority:** Low (test-observability only — the behaviour is correct and proven; this just makes the automated proof self-reporting instead of screenshot-confirmed).
+- **Owner unit:** unscheduled.
+
+---
+
 ## Migration hygiene (F-TD-)
 
 ### F-TD-15 — Migration filename convention collides for same-day migrations
