@@ -1,4 +1,4 @@
-# ANVIL Clearance Certificate — CLEARED
+# ANVIL Clearance Certificate — CLEARED FOR PRODUCTION
 
 Date: 2026-06-18
 App: MFS-Operations
@@ -106,7 +106,7 @@ PITR: n/a — no migration → no data-loss surface → no PITR required.
 
 ## Verdict
 
-✅ CLEARED. Unit 1860/1860 · Typecheck 0 · Lint 0 · E2E @critical 12/12 (preview, EXIT 0,
+✅ CLEARED FOR PRODUCTION. Unit 1860/1860 · Typecheck 0 · Lint 0 · E2E @critical 12/12 (preview, EXIT 0,
 DB probe 4/4). Integration / pgTAP-RLS / Edge all n/a by design (render-only wrap, no
 migration, no schema/policy/server change). Guard (code-critic) verdict SHIP, 0 blockers.
 Rip-out test PASS — improved (last leaflet-family imports removed from outside the adapter).
