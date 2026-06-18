@@ -87,6 +87,20 @@ const REACT_LEAFLET_MESSAGE =
   "react-leaflet may only be imported inside lib/adapters/leaflet/. " +
   "See ADR-0002 / F-24.";
 
+// F-24 PR2 — leaflet.markercluster / react-leaflet-cluster join the fence (all
+// four Leaflet packages adapter-only). Drift-catcher pins: asserted verbatim
+// against the SHIPPED .eslintrc.json (loaded from disk). Restated in BOTH the
+// top-level paths block and the services/usecases override.
+const LEAFLET_MARKERCLUSTER_MESSAGE =
+  "Use the MapProvider port via @/lib/adapters/leaflet. " +
+  "leaflet.markercluster may only be imported inside lib/adapters/leaflet/. " +
+  "See ADR-0002 / F-24.";
+
+const REACT_LEAFLET_CLUSTER_MESSAGE =
+  "Use the MapProvider port via @/lib/adapters/leaflet. " +
+  "react-leaflet-cluster may only be imported inside lib/adapters/leaflet/. " +
+  "See ADR-0002 / F-24.";
+
 /**
  * Load the SHIPPED config from disk so the pin fails if the guard is
  * weakened or deleted in `.eslintrc.json` itself. `extends` is removed
@@ -419,5 +433,93 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(REACT_LEAFLET_MESSAGE);
+  });
+
+  // ── (30) F-24 PR2 ──────────────────────────────────────────────
+  it("bans leaflet.markercluster inside components (the MapView surface this PR fixes)", async () => {
+    const messages = await lint(
+      "components/MapView.tsx",
+      "import 'leaflet.markercluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (31) F-24 PR2 ──────────────────────────────────────────────
+  it("bans react-leaflet-cluster inside components (the MapView surface this PR fixes)", async () => {
+    const messages = await lint(
+      "components/MapView.tsx",
+      "import MarkerClusterGroup from 'react-leaflet-cluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (32) F-24 PR2 ──────────────────────────────────────────────
+  it("bans react-leaflet-cluster inside lib/services (services override RESTATES the path)", async () => {
+    const messages = await lint(
+      "lib/services/Foo.ts",
+      "import MarkerClusterGroup from 'react-leaflet-cluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (33) F-24 PR2 ──────────────────────────────────────────────
+  it("bans leaflet.markercluster inside app/api routes", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import 'leaflet.markercluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (34) F-24 PR2 ──────────────────────────────────────────────
+  it("allows both cluster libs inside lib/adapters/leaflet/MarkerMapCanvas.tsx (the one allowed plug)", async () => {
+    const cluster = await lint(
+      "lib/adapters/leaflet/MarkerMapCanvas.tsx",
+      "import 'leaflet.markercluster'\n",
+    );
+    expect(cluster).toEqual([]);
+    const reactCluster = await lint(
+      "lib/adapters/leaflet/MarkerMapCanvas.tsx",
+      "import MarkerClusterGroup from 'react-leaflet-cluster'\n",
+    );
+    expect(reactCluster).toEqual([]);
+  });
+
+  // ── (35) F-24 PR2 ──────────────────────────────────────────────
+  it("allows leaflet + react-leaflet inside the new MarkerMapCanvas.tsx adapter file", async () => {
+    const leaflet = await lint(
+      "lib/adapters/leaflet/MarkerMapCanvas.tsx",
+      "import L from 'leaflet'\n",
+    );
+    expect(leaflet).toEqual([]);
+    const reactLeaflet = await lint(
+      "lib/adapters/leaflet/MarkerMapCanvas.tsx",
+      "import { MapContainer } from 'react-leaflet'\n",
+    );
+    expect(reactLeaflet).toEqual([]);
+  });
+
+  // ── (36) F-24 PR2 ──────────────────────────────────────────────
+  it("reports the shipped leaflet.markercluster message text verbatim", async () => {
+    const messages = await lint(
+      "components/MapView.tsx",
+      "import 'leaflet.markercluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(LEAFLET_MARKERCLUSTER_MESSAGE);
+  });
+
+  // ── (37) F-24 PR2 ──────────────────────────────────────────────
+  it("reports the shipped react-leaflet-cluster message text verbatim", async () => {
+    const messages = await lint(
+      "components/MapView.tsx",
+      "import MarkerClusterGroup from 'react-leaflet-cluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(REACT_LEAFLET_CLUSTER_MESSAGE);
   });
 });

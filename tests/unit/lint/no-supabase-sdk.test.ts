@@ -65,6 +65,19 @@ const REACT_LEAFLET_FORBIDDEN_MESSAGE =
   "react-leaflet may only be imported inside lib/adapters/leaflet/. " +
   "See ADR-0002 / F-24.";
 
+// F-24 PR2 — leaflet.markercluster / react-leaflet-cluster join the fence so all
+// FOUR Leaflet packages are adapter-only. Byte-identical to .eslintrc.json and
+// no-adapter-imports.test.ts.
+const LEAFLET_MARKERCLUSTER_FORBIDDEN_MESSAGE =
+  "Use the MapProvider port via @/lib/adapters/leaflet. " +
+  "leaflet.markercluster may only be imported inside lib/adapters/leaflet/. " +
+  "See ADR-0002 / F-24.";
+
+const REACT_LEAFLET_CLUSTER_FORBIDDEN_MESSAGE =
+  "Use the MapProvider port via @/lib/adapters/leaflet. " +
+  "react-leaflet-cluster may only be imported inside lib/adapters/leaflet/. " +
+  "See ADR-0002 / F-24.";
+
 /**
  * The F-04 config under test. Mirrors `.eslintrc.json` exactly.
  *
@@ -108,6 +121,14 @@ const f04Config = {
           {
             name: "react-leaflet",
             message: REACT_LEAFLET_FORBIDDEN_MESSAGE,
+          },
+          {
+            name: "leaflet.markercluster",
+            message: LEAFLET_MARKERCLUSTER_FORBIDDEN_MESSAGE,
+          },
+          {
+            name: "react-leaflet-cluster",
+            message: REACT_LEAFLET_CLUSTER_FORBIDDEN_MESSAGE,
           },
         ],
       },
@@ -344,5 +365,77 @@ describe("F-24 no-restricted-imports — leaflet/react-leaflet may only live in 
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(REACT_LEAFLET_FORBIDDEN_MESSAGE);
+  });
+});
+
+describe("F-24 PR2 no-restricted-imports — the cluster libs join the leaflet fence", () => {
+  // ── (a) ────────────────────────────────────────────────────────
+  it("reports an error when leaflet.markercluster is imported from components/MapView.tsx", async () => {
+    const messages = await lint(
+      "components/MapView.tsx",
+      "import 'leaflet.markercluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (b) ────────────────────────────────────────────────────────
+  it("reports an error when react-leaflet-cluster is imported from components/MapView.tsx", async () => {
+    const messages = await lint(
+      "components/MapView.tsx",
+      "import MarkerClusterGroup from 'react-leaflet-cluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (c) ────────────────────────────────────────────────────────
+  it("allows leaflet.markercluster + react-leaflet-cluster inside lib/adapters/leaflet/MarkerMapCanvas.tsx (the one allowed plug)", async () => {
+    const cluster = await lint(
+      "lib/adapters/leaflet/MarkerMapCanvas.tsx",
+      "import 'leaflet.markercluster'\n",
+    );
+    expect(cluster).toEqual([]);
+    const reactCluster = await lint(
+      "lib/adapters/leaflet/MarkerMapCanvas.tsx",
+      "import MarkerClusterGroup from 'react-leaflet-cluster'\n",
+    );
+    expect(reactCluster).toEqual([]);
+  });
+
+  // ── (d) ────────────────────────────────────────────────────────
+  it("allows leaflet + react-leaflet inside the new MarkerMapCanvas.tsx adapter file", async () => {
+    const leaflet = await lint(
+      "lib/adapters/leaflet/MarkerMapCanvas.tsx",
+      "import L from 'leaflet'\n",
+    );
+    expect(leaflet).toEqual([]);
+    const reactLeaflet = await lint(
+      "lib/adapters/leaflet/MarkerMapCanvas.tsx",
+      "import { MapContainer } from 'react-leaflet'\n",
+    );
+    expect(reactLeaflet).toEqual([]);
+  });
+
+  // ── (e) ────────────────────────────────────────────────────────
+  it("reports the configured leaflet.markercluster custom-message text verbatim", async () => {
+    const messages = await lint(
+      "components/MapView.tsx",
+      "import 'leaflet.markercluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(
+      LEAFLET_MARKERCLUSTER_FORBIDDEN_MESSAGE,
+    );
+  });
+
+  // ── (f) ────────────────────────────────────────────────────────
+  it("reports the configured react-leaflet-cluster custom-message text verbatim", async () => {
+    const messages = await lint(
+      "components/MapView.tsx",
+      "import MarkerClusterGroup from 'react-leaflet-cluster'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(REACT_LEAFLET_CLUSTER_FORBIDDEN_MESSAGE);
   });
 });

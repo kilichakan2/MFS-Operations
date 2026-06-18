@@ -28,6 +28,14 @@
           {
             "name": "react-leaflet",
             "message": "Use the MapProvider port via @/lib/adapters/leaflet. react-leaflet may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
+          },
+          {
+            "name": "leaflet.markercluster",
+            "message": "Use the MapProvider port via @/lib/adapters/leaflet. leaflet.markercluster may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
+          },
+          {
+            "name": "react-leaflet-cluster",
+            "message": "Use the MapProvider port via @/lib/adapters/leaflet. react-leaflet-cluster may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
           }
         ]
       }
@@ -77,6 +85,14 @@
               {
                 "name": "react-leaflet",
                 "message": "Use the MapProvider port via @/lib/adapters/leaflet. react-leaflet may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
+              },
+              {
+                "name": "leaflet.markercluster",
+                "message": "Use the MapProvider port via @/lib/adapters/leaflet. leaflet.markercluster may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
+              },
+              {
+                "name": "react-leaflet-cluster",
+                "message": "Use the MapProvider port via @/lib/adapters/leaflet. react-leaflet-cluster may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
               }
             ],
             "patterns": [
