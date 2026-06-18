@@ -317,9 +317,21 @@ export function createSupabasePricingRepository(
       id: string,
       patch: UpdateAgreementInput,
     ): Promise<PatchedAgreement | null> {
+      // Map the camelCase domain patch to snake_case columns, only for the
+      // keys actually present (mirrors the route's field loop + the F-14
+      // RoutesRepository template). The camelCase shape must NEVER reach
+      // the vendor call (ADR-0002 line 27).
+      const update: Record<string, unknown> = {};
+      if ("status" in patch) update.status = patch.status;
+      if ("validFrom" in patch) update.valid_from = patch.validFrom;
+      if ("validUntil" in patch) update.valid_until = patch.validUntil;
+      if ("notes" in patch) update.notes = patch.notes;
+      if ("customerId" in patch) update.customer_id = patch.customerId;
+      if ("prospectName" in patch) update.prospect_name = patch.prospectName;
+
       const { data, error } = await client
         .from("price_agreements")
-        .update(patch)
+        .update(update)
         .eq("id", id)
         .select("id, reference_number, status, updated_at")
         .maybeSingle();
@@ -426,9 +438,22 @@ export function createSupabasePricingRepository(
       lineId: string,
       patch: UpdateLineInput,
     ): Promise<PriceLine | null> {
+      // Map the camelCase domain patch to snake_case columns, only for the
+      // keys actually present (mirrors the route's field loop). The
+      // camelCase shape must NEVER reach the vendor call (ADR-0002 line 27).
+      const update: Record<string, unknown> = {};
+      if ("productId" in patch) update.product_id = patch.productId;
+      if ("productNameOverride" in patch) {
+        update.product_name_override = patch.productNameOverride;
+      }
+      if ("price" in patch) update.price = patch.price;
+      if ("unit" in patch) update.unit = patch.unit;
+      if ("notes" in patch) update.notes = patch.notes;
+      if ("position" in patch) update.position = patch.position;
+
       const { data, error } = await client
         .from("price_agreement_lines")
-        .update(patch)
+        .update(update)
         .eq("id", lineId)
         .select(LINE_COLS)
         .maybeSingle();

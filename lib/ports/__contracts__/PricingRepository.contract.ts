@@ -315,6 +315,29 @@ export function pricingRepositoryContract(
       expect(res).toBeNull();
     });
 
+    // Patch the line fields whose camelCase ≠ snake_case spelling
+    // (productId→product_id, productNameOverride→product_name_override): flip
+    // a product-linked line to a free-text override. If an adapter forwards
+    // the camelCase patch unmapped, the wrong column names go over the wire
+    // and the read does NOT reflect the change. Locks the line mapping.
+    it("updateLine persists differently-spelled fields (productId→override)", async () => {
+      ctx = await setup();
+      const created = await create({ lines: [line({ position: 0 })] });
+      const full = await ctx.repo.getAgreementById(created.id);
+      const lineId = full!.lines[0].id;
+
+      const updated = await ctx.repo.updateLine(lineId, {
+        productId: null,
+        productNameOverride: "ANVIL-TEST-line-freetext",
+      });
+      expect(updated).not.toBeNull();
+      expect(updated?.productId).toBeNull();
+      expect(updated?.productNameOverride).toBe("ANVIL-TEST-line-freetext");
+      expect(updated?.isFreetext).toBe(true);
+      // product join no longer resolves → name falls back to the override
+      expect(updated?.productName).toBe("ANVIL-TEST-line-freetext");
+    });
+
     it("deleteLine removes only that line", async () => {
       ctx = await setup();
       const created = await create({
@@ -382,6 +405,34 @@ export function pricingRepositoryContract(
       const missing = "00000000-0000-0000-0000-0000000000fc";
       const echo = await ctx.repo.updateAgreement(missing, { status: "active" });
       expect(echo).toBeNull();
+    });
+
+    // Patch the header fields whose camelCase ≠ snake_case spelling
+    // (validFrom→valid_from, validUntil→valid_until, customerId→customer_id,
+    // prospectName→prospect_name). If an adapter forwards the camelCase patch
+    // straight to the vendor, the wrong column names go over the wire and the
+    // read does NOT reflect the change. Both adapters must land the new
+    // values — this locks the snake_case mapping in the adapter boundary.
+    it("updateAgreement persists differently-spelled header fields", async () => {
+      ctx = await setup();
+      const created = await create({ lines: [] });
+      const echo = await ctx.repo.updateAgreement(created.id, {
+        validFrom: "2027-01-02",
+        validUntil: "2027-03-04",
+        customerId: null,
+        prospectName: "ANVIL-TEST-becomes-prospect",
+      });
+      expect(echo).not.toBeNull();
+
+      const full = await ctx.repo.getAgreementById(created.id);
+      expect(full).not.toBeNull();
+      if (full === null) throw new Error("agreement was null after expect");
+      expect(full.validFrom).toBe("2027-01-02");
+      expect(full.validUntil).toBe("2027-03-04");
+      expect(full.customerId).toBeNull();
+      expect(full.prospectName).toBe("ANVIL-TEST-becomes-prospect");
+      expect(full.isProspect).toBe(true);
+      expect(full.customerName).toBe("ANVIL-TEST-becomes-prospect");
     });
 
     // ─── deleteAgreement + owners ───────────────────────────────
