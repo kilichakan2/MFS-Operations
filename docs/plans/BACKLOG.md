@@ -174,7 +174,7 @@ the trail matters.
 - **Why deferred:** narrowing F-01 to one rule kept the unit shippable.
 - **Detail:** `docs/adr/0005-f01-narrowed-raw-fetch-deferred-to-port-extractions.md` (Per-Site Map of 13 sites with owners)
 - **Owner units:** F-11, F-15, F-16, F-17, F-18, F-20 (distributed)
-- **Status:** open (owner-tracked, not a single unit)
+- **Status:** open (owner-tracked, not a single unit). **F-15 progress (2026-06-19):** F-15 PR1 shipped the Pricing-domain foundation (port + adapters, dark) but did NOT touch `lib/pricing-email.ts` — its raw `fetch()` against the PostgREST `users` endpoint is queued for **F-15 PR2**, where the recipient read routes through the **F-13 UsersRepository** (extend with a "notifiable users by role" method, NOT a new pricing method — Hakan-decided 2026-06-19). PR1's port exposes `getAgreementForEmail` so PR2 composes the activation email through the service. The `pricing-email.ts` site stays OPEN until PR2 merges.
 
 ### ARCH-FU-03 — `editOrder` unused `callerUserId` parameter
 
