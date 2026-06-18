@@ -9,3 +9,4 @@
  * so a future native map adapter can reuse it without importing this folder.
  */
 export { MapCanvas } from "./MapCanvas";
+export { MarkerMapCanvas } from "./MarkerMapCanvas";
