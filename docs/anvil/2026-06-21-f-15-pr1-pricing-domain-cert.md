@@ -3,11 +3,14 @@
 Date: 2026-06-21
 App: MFS-Operations
 Branch: feat/f-15-pr1-pricing-domain
-PR: (not yet pushed — local branch)
+PR: #55 (https://github.com/kilichakan2/MFS-Operations/pull/55)
 
-> **DRAFT** — local layers only. The E2E / preview `@critical` smoke is PENDING and is run by
-> the conductor after push (no network egress in this runner). This PR introduces **no new live
-> behaviour** — it is a regression-guard pass only (the new Pricing module is dark).
+> **FINAL** — all layers green incl. the conductor's preview `@critical` smoke.
+> Preview smoke: **12 passed / 0 failed** (1 conditional skip) on
+> `mfs-operations-git-feat-f-aec035-…vercel.app`, DB identity probe 4/4
+> (seed-born preview branch `htwxcfswdngzsylsqmoo`, PR #55). This PR introduces
+> **no new live behaviour** — the preview run is a regression-guard confirmation
+> (the new Pricing module is dark).
 
 ## Scope — what this certificate actually covers
 
@@ -58,7 +61,7 @@ performs after push.
 | Integration (Vitest)  | ✅ 263/263 passed    | 20 files, real local Supabase. New Supabase PricingRepository contract = **28/28**.      |
 | Database (pgTAP)      | ✅ 104/104 real      | Regression-only (no new DB object). 10 test files all `ok`. See pgTAP note below.        |
 | Edge Functions (Deno) | n/a — not required   | No edge function touched.                                                                |
-| E2E (Playwright)      | ⏳ PENDING           | Preview `@critical` smoke run by the conductor post-push (no egress in this runner).     |
+| E2E (Playwright)      | ✅ 12 passed / 0 fail | Preview `@critical` smoke (1 conditional skip); DB identity probe 4/4 seed-born preview. |
 
 ### pgTAP note (non-blocking, pre-existing — identical to F-13/F-14/F-RLS certs)
 
