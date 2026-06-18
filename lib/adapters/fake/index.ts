@@ -39,5 +39,13 @@ export {
   fakeRoutesRepository,
   type FakeRoutesSeed,
 } from "./RoutesRepository";
+export {
+  createFakePricingRepository,
+  fakePricingRepository,
+  type FakePricingSeed,
+  type FakeCustomerRef,
+  type FakePersonRef,
+  type FakeProductRef,
+} from "./PricingRepository";
 export { createFakeLLMExtractor, fakeLLMExtractor } from "./LLMExtractor";
 export { createFakeMailer, fakeMailer, type FakeMailerSeed } from "./Mailer";
