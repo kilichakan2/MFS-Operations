@@ -556,6 +556,39 @@ describe("/api/routes + /api/admin/runs integration (F-14 PR2 re-point)", () => 
     expect(stops[0].customer).not.toBeNull();
   });
 
+  it("F-RLS-04c (directory): a NON-ADMIN reading a PEER's route gets NON-NULL assignee + creator names", async () => {
+    // The regression lock for the user-directory addendum. Seed a route
+    // CREATED BY the admin and ASSIGNED TO the driver, then read the list as a
+    // NON-ADMIN third party (office). Under the authenticated cutover the
+    // assignee/creator names embed through the users table's RLS — before the
+    // users_directory_select policy a non-admin saw only their OWN users row,
+    // so both joins came back NULL for a peer's route (blank names in prod).
+    // With the directory policy + non-hash column grant, the names resolve.
+    const created = await createRoute({ name: "ANVIL-TEST-rls-dir-peer" });
+    const id = (created.body as { route: { id: string } }).route.id;
+
+    // Read as the OFFICE user (non-admin) — not the creator, not the assignee.
+    const res = await api(`/api/routes?all=true&assignedTo=${users.driver.id}`, {
+      method: "GET",
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as { routes: Record<string, unknown>[] };
+    const mine = body.routes.find((r) => r.id === id);
+    expect(mine).toBeTruthy();
+    if (!mine) throw new Error("peer route not visible to a non-admin caller");
+
+    // assignee (the DRIVER) — embedded from users, must resolve a NON-NULL name.
+    expect(mine.assignee).not.toBeNull();
+    expect(mine.assignee).toMatchObject({ id: users.driver.id });
+    expect((mine.assignee as { name: unknown }).name).toBeTruthy();
+    // creator (the ADMIN) — embedded from users, must resolve a NON-NULL name.
+    expect(mine.creator).not.toBeNull();
+    expect(mine.creator).toMatchObject({ id: users.admin.id });
+    expect((mine.creator as { name: unknown }).name).toBeTruthy();
+  });
+
   it("F-RLS-04c: full authenticated write cycle — create → save → setStatus → delete all succeed for a valid user", async () => {
     // create (POST → routes_insert + route_stops_insert under authenticated)
     const created = await createRoute({ name: "ANVIL-TEST-rls-cycle" });
