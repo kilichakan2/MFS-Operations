@@ -502,4 +502,135 @@ describe("/api/routes + /api/admin/runs integration (F-14 PR2 re-point)", () => 
     });
     expect(res.status).toBe(403);
   });
+
+  // ── F-RLS-04c: RLS-cutover proofs (the per-caller authenticated flip) ──
+  //
+  // These pin the headline must-fix (R1/R2): under the per-request
+  // authenticated client (RLS firing), reads must return POPULATED rows incl.
+  // the embedded joins, and the full create/save/setStatus/delete write cycle
+  // must succeed for a valid user. If the migration shipped without
+  // routes_select / route_stops_select (or any joined table lacked an
+  // authenticated SELECT policy), these would go empty / null silently.
+
+  it("F-RLS-04c: authenticated GET /api/routes/[id] returns a POPULATED row with embedded joins (not null)", async () => {
+    const created = await createRoute({ name: "ANVIL-TEST-rls-read" });
+    const id = (created.body as { route: { id: string } }).route.id;
+    const res = await api(`/api/routes/${id}`, {
+      method: "GET",
+      role: "admin",
+      userId: users.admin.id,
+    });
+    expect(res.status).toBe(200);
+    const route = (res.body as { route: Record<string, unknown> }).route;
+    // The route header itself came back (routes_select fired under authenticated).
+    expect(route.id).toBe(id);
+    // assignee join (from users) is populated, not null.
+    expect(route.assignee).not.toBeNull();
+    expect(route.assignee).toMatchObject({ id: users.driver.id });
+    // route_stops came back (route_stops_select fired) — non-empty.
+    const stops = route.route_stops as Record<string, unknown>[];
+    expect(stops.length).toBe(2);
+    // the customer join on each stop is populated, not null.
+    expect(stops[0].customer).not.toBeNull();
+    expect(stops[0].customer).toMatchObject({ id: customer.id });
+  });
+
+  it("F-RLS-04c: authenticated GET /api/routes (list) returns rows with creator + assignee + stops populated", async () => {
+    await createRoute({ name: "ANVIL-TEST-rls-list" });
+    const res = await api(`/api/routes?all=true&assignedTo=${users.driver.id}`, {
+      method: "GET",
+      role: "admin",
+      userId: users.admin.id,
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as { routes: Record<string, unknown>[] };
+    const mine = body.routes.find((r) => r.name === "ANVIL-TEST-rls-list");
+    expect(mine).toBeTruthy();
+    if (!mine) throw new Error("rls-list route not found under authenticated read");
+    // creator join (from users) populated — proves users has an authenticated SELECT policy.
+    expect(mine.creator).not.toBeNull();
+    expect(mine.creator).toMatchObject({ id: users.admin.id });
+    expect(mine.assignee).not.toBeNull();
+    const stops = mine.route_stops as Record<string, unknown>[];
+    expect(stops.length).toBe(2);
+    expect(stops[0].customer).not.toBeNull();
+  });
+
+  it("F-RLS-04c (directory): a NON-ADMIN reading a PEER's route gets NON-NULL assignee + creator names", async () => {
+    // The regression lock for the user-directory addendum. Seed a route
+    // CREATED BY the admin and ASSIGNED TO the driver, then read the list as a
+    // NON-ADMIN third party (office). Under the authenticated cutover the
+    // assignee/creator names embed through the users table's RLS — before the
+    // users_directory_select policy a non-admin saw only their OWN users row,
+    // so both joins came back NULL for a peer's route (blank names in prod).
+    // With the directory policy + non-hash column grant, the names resolve.
+    const created = await createRoute({ name: "ANVIL-TEST-rls-dir-peer" });
+    const id = (created.body as { route: { id: string } }).route.id;
+
+    // Read as the OFFICE user (non-admin) — not the creator, not the assignee.
+    const res = await api(`/api/routes?all=true&assignedTo=${users.driver.id}`, {
+      method: "GET",
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as { routes: Record<string, unknown>[] };
+    const mine = body.routes.find((r) => r.id === id);
+    expect(mine).toBeTruthy();
+    if (!mine) throw new Error("peer route not visible to a non-admin caller");
+
+    // assignee (the DRIVER) — embedded from users, must resolve a NON-NULL name.
+    expect(mine.assignee).not.toBeNull();
+    expect(mine.assignee).toMatchObject({ id: users.driver.id });
+    expect((mine.assignee as { name: unknown }).name).toBeTruthy();
+    // creator (the ADMIN) — embedded from users, must resolve a NON-NULL name.
+    expect(mine.creator).not.toBeNull();
+    expect(mine.creator).toMatchObject({ id: users.admin.id });
+    expect((mine.creator as { name: unknown }).name).toBeTruthy();
+  });
+
+  it("F-RLS-04c: full authenticated write cycle — create → save → setStatus → delete all succeed for a valid user", async () => {
+    // create (POST → routes_insert + route_stops_insert under authenticated)
+    const created = await createRoute({ name: "ANVIL-TEST-rls-cycle" });
+    expect(created.status).toBe(201);
+    const id = (created.body as { route: { id: string } }).route.id;
+
+    // save (PUT → routes_update + route_stops_delete + route_stops_insert)
+    const saved = await api(`/api/routes/${id}`, {
+      method: "PUT",
+      role: "admin",
+      userId: users.admin.id,
+      body: {
+        name: "ANVIL-TEST-rls-cycle-saved",
+        plannedDate: PLANNED_DATE,
+        assignedTo: users.driver.id,
+        departureTime: "10:15",
+        endPoint: "mfs",
+        stops: [
+          { customerId: customer.id, position: 1, priority: "none", lockedPosition: false },
+        ],
+      },
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body).toEqual({ id, updated: true });
+
+    // setStatus (PATCH → routes_update; admin role-gate still runs first)
+    const patched = await api(`/api/admin/runs/${id}`, {
+      method: "PATCH",
+      role: "admin",
+      userId: users.admin.id,
+      body: { status: "completed" },
+    });
+    expect(patched.status).toBe(200);
+    expect((patched.body as { status: string }).status).toBe("completed");
+
+    // delete (DELETE → routes_delete; route_stops cascade)
+    const deleted = await api(`/api/admin/runs/${id}`, {
+      method: "DELETE",
+      role: "admin",
+      userId: users.admin.id,
+    });
+    expect(deleted.status).toBe(204);
+    createdRouteIds.delete(id); // already gone
+  });
 });

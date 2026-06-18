@@ -41,10 +41,10 @@ export const routesService: RoutesService = createRoutesService({
 // The factory below builds a fresh Routes graph bound to ONE caller, reaching
 // the DB as the Postgres `authenticated` role so the (future) GUC-based RLS
 // policies fire. It mirrors `ordersServiceForCaller` / `usersServiceForCaller`
-// exactly. It is wired here for F-RLS-04c Routes RLS cutover — READY BUT
-// UNUSED this pass: the `routes` / `route_stops` tables have RLS enabled with
-// NO policies yet, so routing through the authenticated role would block every
-// call. No PR2 route imports it; the routes use `routesService` (service-role).
+// exactly. CONSUMED by the 5 Routes routes since F-RLS-04c (the cutover that
+// also added the `routes` / `route_stops` authenticated RLS policy set —
+// migration 20260618120000). The routes/compute-road-times, routes/users and
+// cron paths stay on the `routesService` service-role singleton.
 //
 // Per-request — NEVER memoize: the minted token is per-caller, and a memoized
 // client would leak one caller's identity to another. Each call mints a fresh
@@ -56,7 +56,7 @@ export const routesService: RoutesService = createRoutesService({
 
 /** Build a RoutesService bound to ONE caller, reaching the DB as the Postgres
  *  `authenticated` role so RLS fires. Per-request — never memoize.
- *  Wired here for F-RLS-04c Routes RLS cutover — ready but UNUSED in F-14. */
+ *  Consumed by the 5 Routes routes since F-RLS-04c. */
 export async function routesServiceForCaller(
   callerUserId: string,
 ): Promise<RoutesService> {

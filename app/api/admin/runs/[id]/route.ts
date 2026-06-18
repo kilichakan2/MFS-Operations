@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { routesService } from '@/lib/wiring/routes'
+import { routesService, routesServiceForCaller } from '@/lib/wiring/routes'
 import { ServiceError } from '@/lib/errors'
 
 const VALID_STATUSES = ['draft', 'active', 'completed'] as const
@@ -26,6 +26,15 @@ export async function PATCH(
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
+    // F-RLS-04c: the per-caller authenticated client needs the user id, which
+    // this handler did not previously read (it only role-gated). The role-gate
+    // above still runs FIRST, so a non-admin still gets 403; in production
+    // middleware always injects x-mfs-user-id alongside x-mfs-user-role, so this
+    // 401 is unreachable for real admin traffic (documented wire deviation).
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    // Rollback = swap `routesServiceForCaller(userId)` → `routesService`.
+    const routesService = await routesServiceForCaller(userId)
 
     const { id }  = await params
     const body    = await req.json() as { status?: string }
@@ -76,6 +85,15 @@ export async function DELETE(
     return NextResponse.json({ error: 'Admin only' }, { status: 403 })
   }
 
+    // F-RLS-04c: the per-caller authenticated client needs the user id, which
+    // this handler did not previously read (it only role-gated). The role-gate
+    // above still runs FIRST, so a non-admin still gets 403; in production
+    // middleware always injects x-mfs-user-id alongside x-mfs-user-role, so this
+    // 401 is unreachable for real admin traffic (documented wire deviation).
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    // Rollback = swap `routesServiceForCaller(userId)` → `routesService`.
+    const routesService = await routesServiceForCaller(userId)
 
     const { id } = await params
 
