@@ -30,3 +30,8 @@ export {
   type PricingService,
   type PricingServiceDeps,
 } from "./PricingService";
+export {
+  createCashService,
+  type CashService,
+  type CashServiceDeps,
+} from "./CashService";
