@@ -101,6 +101,34 @@ const REACT_LEAFLET_CLUSTER_MESSAGE =
   "react-leaflet-cluster may only be imported inside lib/adapters/leaflet/. " +
   "See ADR-0002 / F-24.";
 
+// F-22 — the `jspdf` / `jspdf-autotable` forbidden messages. Drift-catcher pins:
+// asserted verbatim against the SHIPPED .eslintrc.json (loaded from disk), so a
+// typo in the config's message fails this test. Restated in BOTH the top-level
+// paths block and the services/usecases override (legacy overrides REPLACE rule
+// options — they do not merge), so both must carry them.
+const JSPDF_MESSAGE =
+  "Use the PdfRenderer port via @/lib/wiring/pdf. " +
+  "jspdf may only be imported inside lib/adapters/jspdf/. " +
+  "See ADR-0002 / F-22.";
+
+const JSPDF_AUTOTABLE_MESSAGE =
+  "Use the PdfRenderer port via @/lib/wiring/pdf. " +
+  "jspdf-autotable may only be imported inside lib/adapters/jspdf/. " +
+  "See ADR-0002 / F-22.";
+
+// F-22 (conductor ruling) — the no-restricted-syntax DYNAMIC-import messages.
+// The static no-restricted-imports ban only catches `import … from 'jspdf'`;
+// the page used `await import('jspdf')` (a dynamic ImportExpression), which the
+// static rule cannot see. These pins assert the dynamic-import ban verbatim
+// against the SHIPPED .eslintrc.json so a typo or deletion fails the test.
+const JSPDF_DYNAMIC_MESSAGE =
+  "Dynamic import('jspdf') is banned outside lib/adapters/jspdf/. " +
+  "Use the PdfRenderer port via @/lib/wiring/pdf. See ADR-0002 / F-22.";
+
+const JSPDF_AUTOTABLE_DYNAMIC_MESSAGE =
+  "Dynamic import('jspdf-autotable') is banned outside lib/adapters/jspdf/. " +
+  "Use the PdfRenderer port via @/lib/wiring/pdf. See ADR-0002 / F-22.";
+
 /**
  * Load the SHIPPED config from disk so the pin fails if the guard is
  * weakened or deleted in `.eslintrc.json` itself. `extends` is removed
@@ -521,5 +549,140 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(REACT_LEAFLET_CLUSTER_MESSAGE);
+  });
+
+  // ── (38) F-22 ──────────────────────────────────────────────────
+  it("bans jspdf inside app/pricing (the page surface this PR fixes)", async () => {
+    const messages = await lint(
+      "app/pricing/page.tsx",
+      "import { jsPDF } from 'jspdf'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (39) F-22 ──────────────────────────────────────────────────
+  it("bans jspdf-autotable inside app/pricing (the page surface this PR fixes)", async () => {
+    const messages = await lint(
+      "app/pricing/page.tsx",
+      "import autoTable from 'jspdf-autotable'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (40) F-22 ──────────────────────────────────────────────────
+  it("bans jspdf inside lib/services (services override RESTATES the path)", async () => {
+    const messages = await lint(
+      "lib/services/Foo.ts",
+      "import { jsPDF } from 'jspdf'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (41) F-22 ──────────────────────────────────────────────────
+  it("bans jspdf-autotable inside app/api routes", async () => {
+    const messages = await lint(
+      "app/api/foo/route.ts",
+      "import autoTable from 'jspdf-autotable'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (42) F-22 ──────────────────────────────────────────────────
+  it("allows jspdf inside lib/adapters/jspdf (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/jspdf/JsPdfRenderer.ts",
+      "import { jsPDF } from 'jspdf'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (43) F-22 ──────────────────────────────────────────────────
+  it("allows jspdf-autotable inside lib/adapters/jspdf (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/jspdf/JsPdfRenderer.ts",
+      "import autoTable from 'jspdf-autotable'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (44) F-22 ──────────────────────────────────────────────────
+  it("reports the shipped jspdf message text verbatim", async () => {
+    const messages = await lint(
+      "app/pricing/page.tsx",
+      "import { jsPDF } from 'jspdf'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(JSPDF_MESSAGE);
+  });
+
+  // ── (45) F-22 ──────────────────────────────────────────────────
+  it("reports the shipped jspdf-autotable message text verbatim", async () => {
+    const messages = await lint(
+      "app/pricing/page.tsx",
+      "import autoTable from 'jspdf-autotable'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(JSPDF_AUTOTABLE_MESSAGE);
+  });
+
+  // ── (46) F-22 (conductor ruling: harden the guard) ─────────────
+  // The page imported jspdf DYNAMICALLY (`await import('jspdf')`), which
+  // no-restricted-imports CANNOT see (it only catches static `import … from`).
+  // A static-only ban left a hole exactly the shape of the pattern we removed:
+  // someone could re-add `await import('jspdf')` to app code with lint green.
+  // The no-restricted-syntax rule (ImportExpression selector) closes it.
+  it("bans DYNAMIC import('jspdf') inside app/pricing (the hole the static ban missed)", async () => {
+    const messages = await lint(
+      "app/pricing/page.tsx",
+      "async function f(){ const { jsPDF } = await import('jspdf') }\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-syntax");
+    expect(messages[0].message).toContain(JSPDF_DYNAMIC_MESSAGE);
+  });
+
+  // ── (47) F-22 (conductor ruling) ───────────────────────────────
+  it("bans DYNAMIC import('jspdf-autotable') inside app/pricing", async () => {
+    const messages = await lint(
+      "app/pricing/page.tsx",
+      "async function f(){ const { default: autoTable } = await import('jspdf-autotable') }\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-syntax");
+    expect(messages[0].message).toContain(JSPDF_AUTOTABLE_DYNAMIC_MESSAGE);
+  });
+
+  // ── (48) F-22 (conductor ruling) ───────────────────────────────
+  // The dynamic ban also bites in services (inherited from the top-level
+  // no-restricted-syntax rule — the services override only re-declares
+  // no-restricted-imports, so no-restricted-syntax applies there too).
+  it("bans DYNAMIC import('jspdf') inside lib/services (top-level rule inherited)", async () => {
+    const messages = await lint(
+      "lib/services/Foo.ts",
+      "async function f(){ const { jsPDF } = await import('jspdf') }\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-syntax");
+  });
+
+  // ── (49) F-22 (conductor ruling) ───────────────────────────────
+  // The adapter legitimately uses `await import('jspdf')` to keep the lazy
+  // load — it MUST NOT be flagged. The override turns no-restricted-syntax
+  // off for lib/adapters/jspdf/**.
+  it("allows DYNAMIC import('jspdf') + import('jspdf-autotable') inside lib/adapters/jspdf (the lazy-load plug)", async () => {
+    const jspdf = await lint(
+      "lib/adapters/jspdf/JsPdfRenderer.ts",
+      "async function f(){ const { jsPDF } = await import('jspdf') }\n",
+    );
+    expect(jspdf).toEqual([]);
+    const autotable = await lint(
+      "lib/adapters/jspdf/JsPdfRenderer.ts",
+      "async function f(){ const { default: autoTable } = await import('jspdf-autotable') }\n",
+    );
+    expect(autotable).toEqual([]);
   });
 });

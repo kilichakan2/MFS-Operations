@@ -253,6 +253,16 @@ the trail matters.
 - **Owner unit:** unscheduled (or rides with F-RLS-04d / a future pricing E2E unit).
 - **Status:** open
 
+### F-TD-26 — `PdfRenderer` port owns the browser download → no headless unit test of PDF output
+
+- **Deferred:** 2026-06-19 (F-22 planning — Gate 1 design choice, accepted to preserve byte-identity)
+- **What:** F-22 moves the price-agreement PDF routine behind a `PdfRenderer` port + jsPDF adapter, but the adapter keeps jsPDF's `doc.save(filename)` (the browser download) **inside** it — the port is "render+deliver this agreement as a PDF," not a pure "give me the bytes" function. Chosen because moving the 170-line routine verbatim (download line included) guarantees byte-identical output with zero new code; the alternative (port returns a `Blob`/bytes, the page triggers the download itself) would re-implement jsPDF's download in our own code = new behaviour surface on a "byte-identical" PR. Mirrors the F-24 Leaflet adapter's same call.
+- **Why it's worth revisiting:** because the port produces a side-effect (a browser download) rather than a return value, the PDF can't be exercised in a headless Node unit test — coverage of the renderer stays at "it's called" + manual/E2E, not "the bytes are correct." A future split (port returns bytes; a thin presentation helper does the download) would make the renderer unit-testable AND keep the rip-out test at one adapter + one wiring line.
+- **Fix shape:** change the port to `renderPriceAgreement(data): Promise<Blob>` (or `Uint8Array`); keep the jsPDF drawing verbatim in the adapter but `return doc.output('blob')` instead of `doc.save()`; add a tiny owned download helper (blob URL → anchor click) called by `app/pricing/page.tsx`. Pair with a unit test asserting the Blob is a non-empty `application/pdf`.
+- **Priority:** Low (testability/purity improvement; the PDF is already proven by E2E + manual verify — this is about *unit*-level confidence, not a correctness bug).
+- **Owner unit:** unscheduled (or rides with a future pricing E2E / a second PdfRenderer adapter if one is ever added).
+- **Status:** open
+
 ---
 
 ## Migration hygiene (F-TD-)
