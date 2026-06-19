@@ -185,16 +185,41 @@ describe("toAgreementWireDto", () => {
     expect(dto.lines.map((l) => l.position)).toEqual([0, 1]);
   });
 
-  it("works for a header-only PriceAgreement (list shape) — lines emitted as []", () => {
-    // toAgreementWireDto accepts a header-only PriceAgreement (no lines field);
-    // the list route maps PriceAgreement[] and the wire carries lines: [].
+  it("defensive header-only fallback: a PriceAgreement with no lines field emits lines: []", () => {
+    // toAgreementWireDto accepts a header-only PriceAgreement (no lines field)
+    // as a defensive fallback — it must never crash on an object that omits
+    // `lines`. This is NOT the list's real shape: both the Supabase and Fake
+    // adapters now return PriceAgreementWithLines from listAgreements (B1 fix),
+    // so the list wire carries populated lines (covered by the case below).
     const headerOnly: PriceAgreement = { ...AGREEMENT };
-    // strip the lines property to model a list-row PriceAgreement
+    // strip the lines property to model an object that omits `lines`
     const { lines: _lines, ...rest } = headerOnly as PriceAgreementWithLines;
     void _lines;
     const dto = toAgreementWireDto(rest as PriceAgreement);
     expect(dto.lines).toEqual([]);
     expect(Object.keys(dto)).toEqual(AGREEMENT_KEY_ORDER);
+  });
+
+  it("list-with-lines: a PriceAgreementWithLines emits populated, position-sorted line DTOs", () => {
+    // The real list shape after the B1 fix: listAgreements returns
+    // PriceAgreementWithLines, so the wire must carry the lines (the list page
+    // reads the product count / detail / PDF off this object with no re-fetch).
+    // Lines supplied out of order to prove the wire reflects the position sort
+    // the adapter applied.
+    const listRow: PriceAgreementWithLines = {
+      ...AGREEMENT,
+      lines: [FREETEXT_LINE, LINE], // positions 1, 0 — out of order on input
+    };
+    const dto = toAgreementWireDto(listRow);
+    expect(dto.lines).toHaveLength(2);
+    expect(Object.keys(dto.lines[0]!)).toEqual(LINE_KEY_ORDER);
+    expect(Object.keys(dto.lines[1]!)).toEqual(LINE_KEY_ORDER);
+    // toAgreementWireDto maps in the order given — the position SORT is the
+    // adapter's job (pinned by the contract test); here we assert the DTO
+    // faithfully carries the lines + their position field, not re-sorting.
+    expect(dto.lines.map((l) => l.position)).toEqual([1, 0]);
+    expect(dto.lines[0]!.is_freetext).toBe(true);
+    expect(dto.lines[1]!.product_name).toBe("Lamb Shoulder");
   });
 });
 
