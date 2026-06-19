@@ -9,10 +9,13 @@ export const dynamic = 'force-dynamic'
  * F-15 PR2: re-pointed through `pricingService`. The adapter computes the next
  * position (max + 1). RBAC owner-read error is swallowed to a 403 to match
  * today (F-TD-24). Response byte-identical via toLineWireDto.
+ *
+ * F-RLS-04d: runs under the per-caller authenticated client so RLS fires.
+ * Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { pricingService }            from '@/lib/wiring/pricing'
+import { pricingServiceForCaller }   from '@/lib/wiring/pricing'
 import { toLineWireDto }             from '@/lib/api/pricing/dto'
 import type { PriceUnit } from '@/lib/domain'
 
@@ -25,6 +28,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!userId || !['sales', 'office', 'admin'].includes(role)) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
+
+  // F-RLS-04d: run under the per-caller authenticated client (RLS fires).
+  // Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+  const pricingService = await pricingServiceForCaller(userId)
 
   let body: {
     product_id?:            string

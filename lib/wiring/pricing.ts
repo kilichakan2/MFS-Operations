@@ -14,15 +14,29 @@
  * + edits to THIS file. `PricingService` and `lib/domain` are untouched.
  *
  * This file is a parts list, not logic: no decisions, no I/O at module
- * load beyond what the adapter singleton already does. It composes the
- * SERVICE-ROLE singleton — the same security posture the five pricing
- * endpoints use today (service-role key, RLS bypassed). PR1 is
- * introduce-only: nothing imports `pricingService` in production yet
- * (PR2 re-points the five routes).
+ * load beyond what the adapter singleton already does. It composes BOTH:
+ *   - the SERVICE-ROLE `pricingService` singleton (master key — bypasses RLS),
+ *     which STAYS as the one-line rollback parachute and as the engine for the
+ *     activation-email use-case (a server-side back-office read); and
+ *   - the per-request `pricingServiceForCaller(userId)` factory (F-RLS-04d),
+ *     which builds a fresh Pricing graph bound to ONE caller, reaching the DB
+ *     as the Postgres `authenticated` role so the GUC-based RLS policies fire.
  *
- * DO NOT add a `pricingServiceForCaller` per-request authenticated variant
- * here — that belongs with RLS (F-RLS-04d), exactly as Routes added
- * `routesServiceForCaller` only at its RLS cutover (F-RLS-04c).
+ * CONSUMED by the 6 Pricing route files (11 handlers) since F-RLS-04d (the
+ * cutover that also added the price_agreements / price_agreement_lines
+ * authenticated RLS policy set — migration 20260619120000). The
+ * activation-email recipient/full-agreement reads STAY on the service-role
+ * singleton (E1: server-side, not a user-facing screen — same posture Routes
+ * kept for its non-cutover back-office paths).
+ *
+ * Per-request — NEVER memoize: the minted token is per-caller, and a memoized
+ * client would leak one caller's identity to another. Each call mints a fresh
+ * token and builds a fresh client. Mirrors `routesServiceForCaller` /
+ * `usersServiceForCaller` exactly.
+ *
+ * Hexagonal (ADR-0002): the vendor `SupabaseClient` is constructed and
+ * consumed entirely inside this wiring file; the route never sees it — it
+ * receives a ready PricingService built from ports.
  */
 import { createPricingService, type PricingService } from "@/lib/services";
 import {
@@ -32,7 +46,10 @@ import {
 import {
   supabasePricingRepository,
   supabaseUsersRepository,
+  createSupabasePricingRepository,
+  authenticatedClientForCaller,
 } from "@/lib/adapters/supabase";
+import { dbTokenMinter } from "@/lib/wiring/dbToken";
 
 export const pricingService: PricingService = createPricingService({
   pricing: supabasePricingRepository,
@@ -50,3 +67,25 @@ export const pricingActivationEmail: PricingActivationEmail =
     pricing: pricingService,
     users: supabaseUsersRepository,
   });
+
+// ─── Per-request authenticated composition (F-RLS-04d) ──────────────
+//
+// The pre-wired `pricingService` singleton above uses the SERVICE-ROLE client
+// (master key — bypasses RLS) and STAYS: it is the one-line rollback parachute
+// and the engine for the activation-email use-case. The factory below builds a
+// fresh Pricing graph bound to ONE caller, reaching the DB as the Postgres
+// `authenticated` role so the GUC-based RLS policies fire. Per-request — NEVER
+// memoize (a memoized client would leak one caller's identity to another).
+
+/** Build a PricingService bound to ONE caller, reaching the DB as the Postgres
+ *  `authenticated` role so RLS fires. Per-request — never memoize. Mirrors
+ *  routesServiceForCaller. Consumed by the pricing routes since F-RLS-04d. */
+export async function pricingServiceForCaller(
+  callerUserId: string,
+): Promise<PricingService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createPricingService({
+    pricing: createSupabasePricingRepository(client),
+  });
+}

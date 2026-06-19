@@ -444,4 +444,106 @@ describe("/api/pricing integration (F-15 PR2 re-point)", () => {
     expect(res.body).toEqual({ deleted: true });
     createdIds.delete(id); // already gone
   });
+
+  // ── F-RLS-04d: RLS-cutover proofs (the per-caller authenticated flip) ──
+  //
+  // The pricing routes now reach the DB as the Postgres `authenticated` role so
+  // the price_agreements / price_agreement_lines RLS policies fire. These pin
+  // the headline must-fix: under the per-request authenticated client, a real
+  // valid (non-admin) caller must still see/create/edit through the screens (no
+  // blank lists), the app-layer "sales own only" RBAC must still bite, and the
+  // FK-embedded rep name must still resolve via the users_directory_select
+  // policy shipped in 04c. If any pricing SELECT policy were missing these would
+  // silently go empty / null. (The replace route stays on service-role — its RPC
+  // is authenticated-revoked by the T3 hardening — and is exercised above.)
+
+  it("F-RLS-04d: a non-admin (sales) caller can create→list→view→add-line→edit-line under the authenticated cutover", async () => {
+    // create as the sales owner (price_agreements_insert + lines insert)
+    const created = await createAgreement({}, users.sales.id, "sales");
+    expect(created.status).toBe(201);
+    const id = (created.body as { id: string }).id;
+
+    // list as the same sales caller — the agreement is visible (SELECT policy)
+    const list = await api("/api/pricing", {
+      method: "GET",
+      role: "sales",
+      userId: users.sales.id,
+    });
+    expect(list.status).toBe(200);
+    const listed = (list.body as { agreements: Record<string, unknown>[] })
+      .agreements.find((a) => a.id === id);
+    expect(listed).toBeDefined();
+    expect((listed!.lines as unknown[]).length).toBe(2);
+
+    // view single as the sales caller (price_agreements_select + lines select)
+    const single = await api(`/api/pricing/${id}`, {
+      method: "GET",
+      role: "sales",
+      userId: users.sales.id,
+    });
+    expect(single.status).toBe(200);
+    expect((single.body as { lines: unknown[] }).lines).toHaveLength(2);
+
+    // add a line as the sales owner (price_agreement_lines_insert)
+    const added = await api(`/api/pricing/${id}/lines`, {
+      method: "POST",
+      role: "sales",
+      userId: users.sales.id,
+      body: { product_name_override: "rls add", price: 7, unit: "per_kg" },
+    });
+    expect(added.status).toBe(201);
+    const newLineId = (added.body as { id: string }).id;
+
+    // edit that line in place as the sales owner (price_agreement_lines_UPDATE —
+    // the divergence from routes; a missing UPDATE policy would silently no-op)
+    const edited = await api(`/api/pricing/lines/${newLineId}`, {
+      method: "PATCH",
+      role: "sales",
+      userId: users.sales.id,
+      body: { price: 13 },
+    });
+    expect(edited.status).toBe(200);
+    expect((edited.body as { price: number }).price).toBe(13);
+  });
+
+  it("F-RLS-04d: the sales-own-only RBAC still 403s a sales user on a peer's agreement (RBAC stayed in the app layer, not RLS)", async () => {
+    // owned by sales; a DIFFERENT user with the sales role attempts the edit.
+    const created = await createAgreement({}, users.sales.id, "sales");
+    const id = (created.body as { id: string }).id;
+    const res = await api(`/api/pricing/${id}`, {
+      method: "PATCH",
+      role: "sales",
+      userId: users.admin.id, // distinct userId, still 'sales' role
+      body: { notes: "hijack" },
+    });
+    expect(res.status).toBe(403);
+    expect((res.body as { error: string }).error).toBe(
+      "Not authorised to edit this agreement",
+    );
+  });
+
+  it("F-RLS-04d (directory): rep_name is NON-BLANK for a non-admin caller (users_directory_select covers the pricing FK-embed)", async () => {
+    // Agreement created by the SALES rep; read the list as a NON-ADMIN third
+    // party (office). The rep name embeds through the users table's RLS — before
+    // the users_directory_select policy a non-admin saw only their OWN users row,
+    // so the FK-embed came back NULL (blank rep name in prod). With the directory
+    // policy the name resolves under the authenticated cutover.
+    const created = await createAgreement({}, users.sales.id, "sales");
+    const id = (created.body as { id: string }).id;
+
+    const res = await api("/api/pricing", {
+      method: "GET",
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(res.status).toBe(200);
+    const mine = (res.body as { agreements: Record<string, unknown>[] })
+      .agreements.find((a) => a.id === id);
+    expect(mine).toBeDefined();
+    expect(mine!.rep_id).toBe(users.sales.id);
+    // the resolved display name must be present and non-blank
+    expect(typeof mine!.rep_name).toBe("string");
+    expect((mine!.rep_name as string).length).toBeGreaterThan(0);
+    expect(mine!.rep_name).toBe(users.sales.name);
+  });
 });

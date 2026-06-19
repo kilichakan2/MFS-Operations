@@ -26,10 +26,13 @@ export const dynamic = 'force-dynamic'
  * The adapter owns is_expired, the line sort, the invalid-line filter, the
  * 'draft' status literal and the header-survives-line-failure semantics; the
  * route only translates body→input and domain→snake_case via the dto helper.
+ *
+ * F-RLS-04d: each handler runs under the per-caller authenticated client so RLS
+ * fires. Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { pricingService }            from '@/lib/wiring/pricing'
+import { pricingServiceForCaller }   from '@/lib/wiring/pricing'
 import { toAgreementWireDto }        from '@/lib/api/pricing/dto'
 import type { CreateLineInput, PriceUnit } from '@/lib/domain'
 
@@ -53,6 +56,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
 
+  // F-RLS-04d: run under the per-caller authenticated client (RLS fires).
+  // Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+  const pricingService = await pricingServiceForCaller(userId)
+
   let agreements
   try {
     agreements = await pricingService.listAgreements({})
@@ -72,6 +79,10 @@ export async function POST(req: NextRequest) {
   if (!userId || !ALLOWED_ROLES.includes(role)) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
+
+  // F-RLS-04d: run under the per-caller authenticated client (RLS fires).
+  // Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+  const pricingService = await pricingServiceForCaller(userId)
 
   let body: {
     customer_id?:   string

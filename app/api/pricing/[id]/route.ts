@@ -15,11 +15,17 @@ export const dynamic = 'force-dynamic'
  * The service throws ServiceError on DB failure; each call is wrapped to
  * reproduce today's exact status code + log line (incl. the GET DB-error→404
  * and the RBAC owner-read error→403 swallow, F-TD-24).
+ *
+ * F-RLS-04d: the user-facing reads/writes run under the per-caller authenticated
+ * client so RLS fires (rollback = `pricingServiceForCaller(userId)` →
+ * `pricingService`). The activation-email use-case (`pricingActivationEmail`)
+ * STAYS on the service-role posture — a server-side back-office recipient +
+ * full-agreement read, untouched here (E1).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { sendPricingEmail }          from '@/lib/pricing-email'
-import { pricingService, pricingActivationEmail } from '@/lib/wiring/pricing'
+import { pricingServiceForCaller, pricingActivationEmail } from '@/lib/wiring/pricing'
 import { toAgreementWireDto, toPricingEmailData } from '@/lib/api/pricing/dto'
 import type { UpdateAgreementInput, AgreementStatus } from '@/lib/domain'
 
@@ -37,6 +43,10 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (!userId || !ALLOWED_ROLES.includes(role)) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
+
+  // F-RLS-04d: run under the per-caller authenticated client (RLS fires).
+  // Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+  const pricingService = await pricingServiceForCaller(userId)
 
   // Today: `if (error || !data) return 404` — a DB error also surfaced as 404.
   // The service throws on DB failure, so catch it and reproduce the 404.
@@ -62,6 +72,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (!userId || !ALLOWED_ROLES.includes(role)) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
+
+  // F-RLS-04d: run under the per-caller authenticated client (RLS fires).
+  // Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+  const pricingService = await pricingServiceForCaller(userId)
 
   let body: Record<string, unknown> | null = null
   try { body = await req.json() } catch { /**/ }
@@ -159,6 +173,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   if (!userId || !ALLOWED_ROLES.includes(role)) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
+
+  // F-RLS-04d: run under the per-caller authenticated client (RLS fires).
+  // Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+  const pricingService = await pricingServiceForCaller(userId)
 
   // Fetch owner + status to check ownership. Today this ignored the DB error
   // (`const { data: agreement }`), so a DB hiccup → undefined → 404. Reproduce.

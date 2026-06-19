@@ -15,6 +15,16 @@ export const dynamic = 'force-dynamic'
  * the array index (`l.position ?? i`), matching today's route. RBAC owner-read
  * error is swallowed to a 403 (F-TD-24). The response count stays
  * `body.lines.length` to be byte-identical with today.
+ *
+ * F-RLS-04d: this route STAYS on the service-role `pricingService` singleton —
+ * it is the ONLY pricing route NOT flipped to the per-caller authenticated
+ * client. `replaceLines` calls the `replace_agreement_lines` SECURITY DEFINER
+ * RPC, whose EXECUTE was deliberately REVOKED from the `authenticated` role by
+ * the T3 hardening migration (20260613020000_harden_security_definer_fns.sql,
+ * with an asserting post-check). Running it under the badge would 500 on a
+ * permission-denied. Keeping it on service-role mirrors the E1 decision for the
+ * activation-email path (a server-side back-office operation). The app-layer
+ * owner check below still runs exactly as today.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -40,6 +50,11 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (!userId || !['sales', 'office', 'admin'].includes(role)) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
+
+  // F-RLS-04d: stays on the service-role singleton (NOT pricingServiceForCaller).
+  // `replaceLines` → `replace_agreement_lines` RPC is authenticated-REVOKED by the
+  // T3 hardening migration, so the badge would 500. Mirrors the email-path E1
+  // decision; this route is byte-identical to current production.
 
   let body: { lines: LineInput[] } | null = null
   try { body = await req.json() } catch { /**/ }
