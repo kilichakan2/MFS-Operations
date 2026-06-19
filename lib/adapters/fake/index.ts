@@ -49,3 +49,16 @@ export {
 } from "./PricingRepository";
 export { createFakeLLMExtractor, fakeLLMExtractor } from "./LLMExtractor";
 export { createFakeMailer, fakeMailer, type FakeMailerSeed } from "./Mailer";
+export {
+  createFakeCashRepository,
+  fakeCashRepository,
+  type FakeCashSeed,
+  type FakeCashPersonRef,
+  type FakeCashCustomerRef,
+} from "./CashRepository";
+export {
+  createFakeAttachmentStorage,
+  fakeAttachmentStorage,
+  type FakeAttachmentStorage,
+  type FakeUpload,
+} from "./AttachmentStorage";

@@ -44,6 +44,14 @@ export {
   supabasePricingRepository,
 } from "./PricingRepository";
 export {
+  createSupabaseCashRepository,
+  supabaseCashRepository,
+} from "./CashRepository";
+export {
+  createSupabaseAttachmentStorage,
+  supabaseAttachmentStorage,
+} from "./AttachmentStorage";
+export {
   authenticatedClientForCaller,
   requireServiceRole,
 } from "./authenticatedClient";
