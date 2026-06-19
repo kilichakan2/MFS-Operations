@@ -8,16 +8,28 @@ export const dynamic = 'force-dynamic'
  * F-15 PR2: re-pointed through `pricingService`. RBAC walks the line →
  * agreement owner via getLineOwner; a DB error there is swallowed to a denial
  * (→ 403) to match today (F-TD-24). Responses byte-identical via toLineWireDto.
+ *
+ * F-RLS-04d: runs under the per-caller authenticated client so RLS fires.
+ * Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+ * The owner check lives in `checkAccess`, so the per-caller service is built
+ * ONCE per handler (after the 401 check) and threaded into `checkAccess` AND
+ * reused for the mutation — one token per request, never two (R-BIZ-3).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { pricingService }            from '@/lib/wiring/pricing'
+import { pricingServiceForCaller }   from '@/lib/wiring/pricing'
 import { toLineWireDto }             from '@/lib/api/pricing/dto'
+import type { PricingService } from '@/lib/services'
 import type { UpdateLineInput, PriceUnit } from '@/lib/domain'
 
 type Params = { params: Promise<{ lineId: string }> }
 
-async function checkAccess(lineId: string, userId: string, role: string): Promise<boolean> {
+async function checkAccess(
+  svc: PricingService,
+  lineId: string,
+  userId: string,
+  role: string,
+): Promise<boolean> {
   const isManager = role === 'office' || role === 'admin'
   if (isManager) return true
 
@@ -25,7 +37,7 @@ async function checkAccess(lineId: string, userId: string, role: string): Promis
   // a DB error here was ignored (`const { data }`) → false; reproduce that.
   let owner
   try {
-    owner = await pricingService.getLineOwner(lineId)
+    owner = await svc.getLineOwner(lineId)
   } catch {
     owner = null
   }
@@ -40,7 +52,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
 
-  const allowed = await checkAccess(lineId, userId, role)
+  // F-RLS-04d: build the per-caller authenticated service ONCE (RLS fires) and
+  // reuse it for the owner check AND the mutation — one token per request.
+  // Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+  const pricingService = await pricingServiceForCaller(userId)
+
+  const allowed = await checkAccess(pricingService, lineId, userId, role)
   if (!allowed) return NextResponse.json({ error: 'Not authorised' }, { status: 403 })
 
   let body: Record<string, unknown> | null = null
@@ -92,7 +109,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
 
-  const allowed = await checkAccess(lineId, userId, role)
+  // F-RLS-04d: build the per-caller authenticated service ONCE (RLS fires) and
+  // reuse it for the owner check AND the mutation — one token per request.
+  // Rollback = swap `pricingServiceForCaller(userId)` → `pricingService`.
+  const pricingService = await pricingServiceForCaller(userId)
+
+  const allowed = await checkAccess(pricingService, lineId, userId, role)
   if (!allowed) return NextResponse.json({ error: 'Not authorised' }, { status: 403 })
 
   try {
