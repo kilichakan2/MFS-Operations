@@ -263,6 +263,16 @@ the trail matters.
 - **Owner unit:** unscheduled (or rides with a future pricing E2E / a second PdfRenderer adapter if one is ever added).
 - **Status:** open
 
+### F-TD-27 — Pricing edits write no "who edited" entry to `audit_log`
+
+- **Deferred:** 2026-06-19 (surfaced during F-RLS-04d prod verification of THE MARAKKESH YORK / `MFS-2026-0008`).
+- **What:** the generic `audit_log` table (`user_id`, `screen`, `action`, `record_id`, `summary`) records order/screen actions (and there's a dedicated `order_audit_log`), but **pricing create/edit/delete and line changes write NO row to it**. During the F-RLS-04d cutover proof, the edit was confirmed via `price_agreements.updated_at` + a direct RLS probe (authenticated role sees the rows, no-user sees zero) — but there was no stored "edited by X at Y" record, unlike the F-RLS-04a order test which read its identity straight from the audit trail.
+- **Why it's worth fixing:** pricing agreements are commercial commitments (prices a customer is quoted/charged); a tamper-evident "who changed what, when" trail is valuable for disputes, accountability, and confirming RLS-cutover behaviour in future. Today the only trace of an edit is `updated_at` (overwritten on every save, no actor, no history).
+- **Fix shape:** write an `audit_log` row on each pricing mutation, capturing the actor. Two options to weigh: (a) **app-layer** — `PricingService`/the routes append an `audit_log` entry (actor = the authenticated caller's `userId`, already threaded in post-04d), mirroring how the order/screen actions log today; or (b) **DB-layer trigger** — an `AFTER INSERT/UPDATE/DELETE` trigger on `price_agreements` + `price_agreement_lines` that reads the actor from the `app.current_user_id` GUC (set per request by the F-RLS-03 bridge) and inserts the row, so it can't be bypassed. Prefer (b) for tamper-evidence (works regardless of which route mutates), but (b) needs care for the `replace`/email paths that run as **service-role** (the GUC may be unset → log actor as NULL/'system', same shape as the order create=NULL boundary). Pick a `screen` enum value for pricing (or extend the enum). Pair with an integration test asserting an edit produces an `audit_log` row with the correct `user_id`/`record_id`.
+- **Priority:** Low–Medium (accountability/observability gap, not a correctness or security bug — RLS already enforces access; this is about *recording* who exercised it).
+- **Owner unit:** unscheduled (natural fit alongside a future pricing-domain pass or an audit-trail standardisation unit).
+- **Status:** open
+
 ---
 
 ## Migration hygiene (F-TD-)
