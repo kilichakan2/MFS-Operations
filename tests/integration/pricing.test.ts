@@ -171,10 +171,20 @@ describe("/api/pricing integration (F-15 PR2 re-point)", () => {
     expect(mine!.customer_name).toBe(customer.name);
     expect(mine!.status).toBe("draft");
     expect(mine!.is_expired).toBe(false);
-    expect(Array.isArray(mine!.lines)).toBe(true);
-    for (const l of mine!.lines as Record<string, unknown>[]) {
+    // The list endpoint carries each agreement's lines (position-sorted),
+    // exactly like the pre-PR2 list route — the pricing list page reads the
+    // per-card product count + detail view + PDF export from this object with
+    // no re-fetch. Held to the same bar as the single-GET (B1 regression guard).
+    const lines = mine!.lines as Record<string, unknown>[];
+    expect(Array.isArray(lines)).toBe(true);
+    expect(lines).toHaveLength(2);
+    for (const l of lines) {
       expect(Object.keys(l).sort()).toEqual(LINE_KEYS);
     }
+    // at least one line's key shape matches the wire DTO (sanity on values)
+    expect(typeof lines[0]!.price).toBe("number");
+    expect(typeof lines[0]!.is_freetext).toBe("boolean");
+    expect(typeof lines[0]!.product_name).toBe("string");
   });
 
   // ── GET single ──────────────────────────────────────────────
