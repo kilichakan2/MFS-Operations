@@ -12,8 +12,6 @@
 
 import { mailer } from '@/lib/wiring/mailer'
 
-const SUPA_URL   = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
-const SUPA_KEY   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 const RESEND_KEY = process.env.RESEND_API_KEY            ?? ''
 const APP_URL    = process.env.NEXT_PUBLIC_APP_URL        ?? 'https://www.mfsops.com'
 const FROM       = 'MFS Operations <notifications@mfsglobal.co.uk>'
@@ -40,24 +38,14 @@ export interface PricingEmailData {
   }[]
 }
 
-export async function sendPricingEmail(data: PricingEmailData): Promise<void> {
+export async function sendPricingEmail(
+  data: PricingEmailData,
+  recipients: string[],
+): Promise<void> {
   if (!RESEND_KEY) {
     console.log('[pricing-email] RESEND_API_KEY not set — skipping')
     return
   }
-
-  // Recipients: admin + sales + office only
-  const res = await fetch(
-    `${SUPA_URL}/rest/v1/users?active=eq.true&role=in.(admin,sales,office)&select=name,email`,
-    { headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` } }
-  )
-  if (!res.ok) {
-    console.error('[pricing-email] failed to fetch recipients:', res.status)
-    return
-  }
-
-  const all        = await res.json() as { name: string; email: string | null }[]
-  const recipients = all.filter(u => u.email?.includes('@')).map(u => u.email!)
 
   if (!recipients.length) {
     console.log('[pricing-email] no recipients with email — skipping')

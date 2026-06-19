@@ -25,8 +25,28 @@
  * `routesServiceForCaller` only at its RLS cutover (F-RLS-04c).
  */
 import { createPricingService, type PricingService } from "@/lib/services";
-import { supabasePricingRepository } from "@/lib/adapters/supabase";
+import {
+  createPricingActivationEmail,
+  type PricingActivationEmail,
+} from "@/lib/usecases/pricingActivationEmail";
+import {
+  supabasePricingRepository,
+  supabaseUsersRepository,
+} from "@/lib/adapters/supabase";
 
 export const pricingService: PricingService = createPricingService({
   pricing: supabasePricingRepository,
 });
+
+/**
+ * Activation-email assembly use-case (F-15 PR2): composes the pricing service
+ * with the Users port to resolve the agreement body + recipient list when a
+ * PATCH activates an agreement. Service-role singletons — same posture as the
+ * five pricing endpoints (RLS cutover is F-RLS-04d; do NOT add a
+ * `pricingServiceForCaller` here).
+ */
+export const pricingActivationEmail: PricingActivationEmail =
+  createPricingActivationEmail({
+    pricing: pricingService,
+    users: supabaseUsersRepository,
+  });

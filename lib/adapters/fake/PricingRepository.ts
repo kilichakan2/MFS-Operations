@@ -208,12 +208,14 @@ export function createFakePricingRepository(
   return {
     async listAgreements(
       _filter: ListAgreementsFilter,
-    ): Promise<readonly PriceAgreement[]> {
+    ): Promise<readonly PriceAgreementWithLines[]> {
       const today = londonToday();
       // today's GET applies NO agreed_by filter; order created_at desc.
+      // Each row carries its position-sorted lines (mirrors the Supabase
+      // embedded select) so the contract holds identically on both adapters.
       return [...agreements.values()]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((a) => toAgreement(a, today));
+        .map((a) => toAgreementWithLines(a, today));
     },
 
     async getAgreementById(

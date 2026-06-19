@@ -21,7 +21,6 @@
  */
 
 import type {
-  PriceAgreement,
   PriceAgreementWithLines,
   PriceLine,
   CreateAgreementInput,
@@ -47,10 +46,10 @@ export interface PricingServiceDeps {
 // ─── The PricingService interface ───────────────────────────
 
 export interface PricingService {
-  /** List all agreement headers (passthrough; adapter computes is_expired). */
+  /** List all agreements with their lines (passthrough; adapter computes is_expired + sorts lines). */
   listAgreements(
     filter: ListAgreementsFilter,
-  ): Promise<readonly PriceAgreement[]>;
+  ): Promise<readonly PriceAgreementWithLines[]>;
 
   /** Fetch one full agreement by id; null on miss (passthrough). */
   getAgreementById(id: string): Promise<PriceAgreementWithLines | null>;

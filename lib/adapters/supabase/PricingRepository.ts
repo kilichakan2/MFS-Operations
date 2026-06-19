@@ -192,7 +192,11 @@ export function createSupabasePricingRepository(
   return {
     async listAgreements(
       _filter: ListAgreementsFilter,
-    ): Promise<readonly PriceAgreement[]> {
+    ): Promise<readonly PriceAgreementWithLines[]> {
+      // AGREEMENT_COLS already embeds price_agreement_lines (one select, no
+      // N+1) — exactly the embedded select the pre-PR2 list route used. Map
+      // each row WITH its position-sorted lines so the list page's product
+      // count, detail view and PDF export read off the list object directly.
       const { data, error } = await client
         .from("price_agreements")
         .select(AGREEMENT_COLS)
@@ -205,7 +209,7 @@ export function createSupabasePricingRepository(
       }
       const today = londonToday();
       return (data ?? []).map((r) =>
-        toAgreement(r as unknown as AgreementRow, today),
+        toAgreementWithLines(r as unknown as AgreementRow, today),
       );
     },
 

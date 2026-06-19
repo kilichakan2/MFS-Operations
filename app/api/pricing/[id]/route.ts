@@ -8,14 +8,20 @@ export const dynamic = 'force-dynamic'
  *   Status validation: only 'draft'|'active'|'cancelled' accepted (expired is computed)
  * DELETE /api/pricing/[id]   — delete agreement
  *   Access: admin can delete any; sales/office can delete own drafts only
+ *
+ * F-15 PR2: re-pointed through `pricingService` + the `pricingActivationEmail`
+ * use-case. No direct @supabase import. Responses stay byte-identical — the
+ * dto helpers (lib/api/pricing/dto.ts) reproduce the snake_case wire shapes.
+ * The service throws ServiceError on DB failure; each call is wrapped to
+ * reproduce today's exact status code + log line (incl. the GET DB-error→404
+ * and the RBAC owner-read error→403 swallow, F-TD-24).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { sendPricingEmail }           from '@/lib/pricing-email'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-import { londonToday }               from '@/lib/dates'
-
-const supabase = supabaseService
+import { sendPricingEmail }          from '@/lib/pricing-email'
+import { pricingService, pricingActivationEmail } from '@/lib/wiring/pricing'
+import { toAgreementWireDto, toPricingEmailData } from '@/lib/api/pricing/dto'
+import type { UpdateAgreementInput, AgreementStatus } from '@/lib/domain'
 
 const ALLOWED_ROLES  = ['sales', 'office', 'admin']
 const VALID_STATUSES = ['draft', 'active', 'cancelled'] as const
@@ -32,47 +38,19 @@ export async function GET(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
 
-  const { data, error } = await supabase
-    .from('price_agreements')
-    .select(`
-      id, reference_number, status, valid_from, valid_until, notes, created_at, updated_at,
-      customer_id, prospect_name,
-      customer:customers!price_agreements_customer_id_fkey(id, name),
-      rep:users!price_agreements_agreed_by_fkey(id, name),
-      price_agreement_lines(
-        id, product_id, product_name_override, price, unit, notes, position,
-        product:products!price_agreement_lines_product_id_fkey(id, name, box_size, code)
-      )
-    `)
-    .eq('id', id)
-    .single()
-
-  if (error || !data) {
+  // Today: `if (error || !data) return 404` — a DB error also surfaced as 404.
+  // The service throws on DB failure, so catch it and reproduce the 404.
+  let agreement
+  try {
+    agreement = await pricingService.getAgreementById(id)
+  } catch {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+  if (!agreement) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  const today = londonToday()
-  const rep = data.rep as unknown as { id: string; name: string } | null
-
-  return NextResponse.json({
-    id:               data.id,
-    reference_number: data.reference_number,
-    status:           data.status,
-    is_expired:       data.status === 'active' && data.valid_until != null && data.valid_until < today,
-    valid_from:       data.valid_from,
-    valid_until:      data.valid_until,
-    notes:            data.notes,
-    created_at:       data.created_at,
-    updated_at:       data.updated_at,
-    customer_id:      data.customer_id,
-    customer_name:    (data.customer as unknown as { id: string; name: string } | null)?.name ?? data.prospect_name ?? 'Unknown',
-    is_prospect:      !data.customer_id,
-    rep_id:           rep?.id   ?? null,
-    rep_name:         rep?.name ?? 'Unknown',
-    lines:            ((data.price_agreement_lines ?? []) as unknown as PriceLine[])
-                        .sort((a, b) => a.position - b.position)
-                        .map(shapeLine),
-  })
+  return NextResponse.json(toAgreementWireDto(agreement))
 }
 
 // ─── PATCH ────────────────────────────────────────────────────────────────────
@@ -102,91 +80,74 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const isManager = role === 'office' || isAdmin
 
   if (!isManager) {
-    const { data: own } = await supabase
-      .from('price_agreements')
-      .select('agreed_by')
-      .eq('id', id)
-      .single()
-    if (!own || own.agreed_by !== userId) {
+    // Today the owner pre-check ignored the DB error (`const { data: own }`),
+    // so a DB hiccup → undefined → 403. Reproduce that swallow (F-TD-24).
+    let owner
+    try {
+      owner = await pricingService.getAgreementOwner(id)
+    } catch {
+      owner = null
+    }
+    if (!owner || owner.agreedBy !== userId) {
       return NextResponse.json({ error: 'Not authorised to edit this agreement' }, { status: 403 })
     }
   }
 
-  const patch: Record<string, unknown> = {}
-  for (const f of ['status', 'valid_from', 'valid_until', 'notes', 'customer_id', 'prospect_name']) {
-    if (f in body) patch[f] = body[f] === '' ? null : body[f]
+  // Build the patch from the 6 PATCH-able fields, keeping the '' → null
+  // normalisation in the route (matches today's field loop). Only keys
+  // present in the body are set, so the adapter's `"x" in patch` checks fire
+  // exactly as today's column loop did.
+  const patch: {
+    status?: AgreementStatus
+    validFrom?: string
+    validUntil?: string | null
+    notes?: string | null
+    customerId?: string | null
+    prospectName?: string | null
+  } = {}
+  const norm = (v: unknown) => (v === '' ? null : v)
+  if ('status' in body)        patch.status       = norm(body.status) as AgreementStatus
+  if ('valid_from' in body)    patch.validFrom    = norm(body.valid_from) as string
+  if ('valid_until' in body)   patch.validUntil   = norm(body.valid_until) as string | null
+  if ('notes' in body)         patch.notes        = norm(body.notes) as string | null
+  if ('customer_id' in body)   patch.customerId   = norm(body.customer_id) as string | null
+  if ('prospect_name' in body) patch.prospectName = norm(body.prospect_name) as string | null
+
+  let patched
+  try {
+    patched = await pricingService.updateAgreement(id, patch as UpdateAgreementInput)
+  } catch (err) {
+    console.error('[pricing PATCH]', err instanceof Error ? err.message : err)
+    return NextResponse.json({ error: 'Update failed' }, { status: 500 })
   }
-
-  const { data, error } = await supabase
-    .from('price_agreements')
-    .update(patch)
-    .eq('id', id)
-    .select('id, reference_number, status, updated_at')
-    .single()
-
-  if (error || !data) {
-    console.error('[pricing PATCH]', error?.message)
+  if (!patched) {
+    console.error('[pricing PATCH]', undefined)
     return NextResponse.json({ error: 'Update failed' }, { status: 500 })
   }
 
-  console.log(`[pricing PATCH] ${data.reference_number} → ${data.status}`)
+  console.log(`[pricing PATCH] ${patched.referenceNumber} → ${patched.status}`)
 
   // Fire email when agreement is activated — await before returning (no fire-and-forget in serverless)
-  if (data.status === 'active') {
+  if (patched.status === 'active') {
     try {
-      // Fetch full agreement with lines for email content
-      const { data: full } = await supabase
-        .from('price_agreements')
-        .select(`
-          id, reference_number, valid_from, valid_until, notes,
-          customer_id, prospect_name,
-          customer:customers!price_agreements_customer_id_fkey(name),
-          rep:users!price_agreements_agreed_by_fkey(name),
-          price_agreement_lines(
-            product_name_override, price, unit, notes,
-            product:products!price_agreement_lines_product_id_fkey(name, box_size)
-          )
-        `)
-        .eq('id', id)
-        .single()
-
-      if (full) {
-        const lines = ((full.price_agreement_lines ?? []) as unknown as EmailLine[])
-          .map(l => ({
-            product_name: (l.product as {name:string}|null)?.name ?? l.product_name_override ?? 'Unknown',
-            box_size:     (l.product as {name:string;box_size:string|null}|null)?.box_size ?? null,
-            price:        Number(l.price),
-            unit:         l.unit,
-            notes:        l.notes ?? null,
-            is_freetext:  !((l.product as {name:string}|null)?.name),
-          }))
-
-        await sendPricingEmail({
-          id:               full.id,
-          reference_number: full.reference_number,
-          customer_name:    (full.customer as unknown as {name:string}|null)?.name ?? full.prospect_name ?? 'Unknown',
-          is_prospect:      !full.customer_id,
-          rep_name:         (full.rep as unknown as {name:string}|null)?.name ?? 'Unknown',
-          valid_from:       full.valid_from,
-          valid_until:      full.valid_until ?? null,
-          notes:            full.notes ?? null,
-          lines,
-        }).catch(err => console.error('[pricing PATCH] email error:', err))
+      const result = await pricingActivationEmail.resolveActivationEmail(id)
+      if (result) {
+        await sendPricingEmail(
+          toPricingEmailData(result.agreement),
+          result.recipients,
+        ).catch(err => console.error('[pricing PATCH] email error:', err))
       }
     } catch (err) {
       console.error('[pricing PATCH] failed to fetch full agreement for email:', err)
     }
   }
 
-  return NextResponse.json(data)
-}
-
-interface EmailLine {
-  product_name_override: string | null
-  price: number
-  unit: string
-  notes: string | null
-  product: { name: string; box_size: string | null } | null
+  return NextResponse.json({
+    id:               patched.id,
+    reference_number: patched.referenceNumber,
+    status:           patched.status,
+    updated_at:       patched.updatedAt,
+  })
 }
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
@@ -199,61 +160,36 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
   }
 
-  // Fetch agreement to check ownership + status
-  const { data: agreement } = await supabase
-    .from('price_agreements')
-    .select('id, status, agreed_by, reference_number')
-    .eq('id', id)
-    .single()
-
-  if (!agreement) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // Fetch owner + status to check ownership. Today this ignored the DB error
+  // (`const { data: agreement }`), so a DB hiccup → undefined → 404. Reproduce.
+  let owner
+  try {
+    owner = await pricingService.getAgreementOwner(id)
+  } catch {
+    owner = null
+  }
+  if (!owner) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const isAdmin = role === 'admin'
-  const isOwner = agreement.agreed_by === userId
+  const isOwner = owner.agreedBy === userId
 
   // Non-admins can only delete own drafts
-  if (!isAdmin && (!isOwner || agreement.status !== 'draft')) {
+  if (!isAdmin && (!isOwner || owner.status !== 'draft')) {
     return NextResponse.json(
       { error: 'Only admins can delete active/cancelled agreements, or agreements not owned by you' },
       { status: 403 }
     )
   }
 
-  const { error } = await supabase
-    .from('price_agreements')
-    .delete()
-    .eq('id', id)
-
-  if (error) {
-    console.error('[pricing DELETE]', error.message)
+  try {
+    await pricingService.deleteAgreement(id)
+  } catch (err) {
+    console.error('[pricing DELETE]', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Delete failed' }, { status: 500 })
   }
 
-  console.log(`[pricing DELETE] ${agreement.reference_number} deleted by ${userId}`)
+  // Decision R5 (accepted): getAgreementOwner returns no reference_number, so
+  // the log line drops the ref (log-only, non-wire change). F-TD-24-adjacent.
+  console.log(`[pricing DELETE] deleted by ${userId}`)
   return NextResponse.json({ deleted: true })
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-interface PriceLine {
-  id: string; product_id: string | null; product_name_override: string | null
-  price: number; unit: string; notes: string | null; position: number
-  product: { id: string; name: string; box_size: string | null; code: string | null } | null
-}
-
-function shapeLine(l: PriceLine) {
-  return {
-    id:                    l.id,
-    product_id:            l.product_id,
-    product_name_override: l.product_name_override,
-    product_name:          l.product?.name ?? l.product_name_override ?? 'Unknown',
-    box_size:              l.product?.box_size ?? null,
-    code:                  l.product?.code     ?? null,
-    price:                 Number(l.price),
-    unit:                  l.unit,
-    notes:                 l.notes,
-    position:              l.position,
-    is_freetext:           !l.product_id,
-  }
-}
-

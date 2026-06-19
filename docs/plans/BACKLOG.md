@@ -234,6 +234,16 @@ the trail matters.
 - **Priority:** Low (test-observability only — the behaviour is correct and proven; this just makes the automated proof self-reporting instead of screenshot-confirmed).
 - **Owner unit:** unscheduled.
 
+### F-TD-24 — Pricing RBAC owner-read swallows a DB error into a 403 (should be 500)
+
+- **Deferred:** 2026-06-19 (F-15 PR2 planning — Gate 2 decision R6, accepted to preserve byte-identity)
+- **What:** in the pricing routes' ownership pre-check ("is this your deal?"), a database error during the owner read is silently treated as "not found" → **403 Forbidden** instead of **500**. Pre-F-15-PR2 the route did `const { data: own } = await supabase.…` and ignored the error object, so `own` came back `undefined` and fell through to the 403 branch. F-15 PR2 deliberately **reproduces** this (catching the service's `ServiceError` and returning 403) so the re-point stays byte-identical.
+- **Why it's wrong:** a DB hiccup is a server fault, not an authorization decision — it should surface as a 500, not masquerade as "access denied." Masking it also hides real outages behind a misleading status code.
+- **Fix shape:** in the PATCH/DELETE/line-RBAC owner pre-checks (`app/api/pricing/[id]/route.ts`, `app/api/pricing/lines/[lineId]/route.ts`), let `getAgreementOwner`/`getLineOwner`'s `ServiceError` propagate to a 500 (only a genuine `null`/no-row result → 403). Pair with a route test asserting DB-error → 500.
+- **Priority:** Low (latent pre-existing quirk; not customer-data-affecting — wrong status code on a rare DB-failure path only).
+- **Owner unit:** F-RLS-04d (the pricing RLS cutover re-touches these routes) — or unscheduled.
+- **Status:** open
+
 ---
 
 ## Migration hygiene (F-TD-)
