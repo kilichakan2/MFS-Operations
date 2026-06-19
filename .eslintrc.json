@@ -36,8 +36,27 @@
           {
             "name": "react-leaflet-cluster",
             "message": "Use the MapProvider port via @/lib/adapters/leaflet. react-leaflet-cluster may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
+          },
+          {
+            "name": "jspdf",
+            "message": "Use the PdfRenderer port via @/lib/wiring/pdf. jspdf may only be imported inside lib/adapters/jspdf/. See ADR-0002 / F-22."
+          },
+          {
+            "name": "jspdf-autotable",
+            "message": "Use the PdfRenderer port via @/lib/wiring/pdf. jspdf-autotable may only be imported inside lib/adapters/jspdf/. See ADR-0002 / F-22."
           }
         ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "ImportExpression[source.value='jspdf']",
+        "message": "Dynamic import('jspdf') is banned outside lib/adapters/jspdf/. Use the PdfRenderer port via @/lib/wiring/pdf. See ADR-0002 / F-22."
+      },
+      {
+        "selector": "ImportExpression[source.value='jspdf-autotable']",
+        "message": "Dynamic import('jspdf-autotable') is banned outside lib/adapters/jspdf/. Use the PdfRenderer port via @/lib/wiring/pdf. See ADR-0002 / F-22."
       }
     ]
   },
@@ -49,10 +68,12 @@
         "lib/adapters/anthropic/**/*.ts",
         "lib/adapters/resend/**/*.ts",
         "lib/adapters/leaflet/**/*.{ts,tsx}",
+        "lib/adapters/jspdf/**/*.{ts,tsx}",
         "tests/**"
       ],
       "rules": {
-        "no-restricted-imports": "off"
+        "no-restricted-imports": "off",
+        "no-restricted-syntax": "off"
       }
     },
     {
@@ -93,6 +114,14 @@
               {
                 "name": "react-leaflet-cluster",
                 "message": "Use the MapProvider port via @/lib/adapters/leaflet. react-leaflet-cluster may only be imported inside lib/adapters/leaflet/. See ADR-0002 / F-24."
+              },
+              {
+                "name": "jspdf",
+                "message": "Use the PdfRenderer port via @/lib/wiring/pdf. jspdf may only be imported inside lib/adapters/jspdf/. See ADR-0002 / F-22."
+              },
+              {
+                "name": "jspdf-autotable",
+                "message": "Use the PdfRenderer port via @/lib/wiring/pdf. jspdf-autotable may only be imported inside lib/adapters/jspdf/. See ADR-0002 / F-22."
               }
             ],
             "patterns": [
