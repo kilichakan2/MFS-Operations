@@ -72,3 +72,19 @@ export type {
   CustomerExtraction,
   ProductExtraction,
 } from "./Import";
+export type {
+  CashEntryType,
+  ChequeStatusFilter,
+  NamedRef,
+  CashMonth,
+  CashEntry,
+  ChequeRecord,
+  CashMonthSummary,
+  CreateMonthInput,
+  CreateEntryInput,
+  UpdateEntryInput,
+  CreateChequeInput,
+  UpdateChequeInput,
+  ChequeListFilter,
+  MonthExistsProbe,
+} from "./Cash";

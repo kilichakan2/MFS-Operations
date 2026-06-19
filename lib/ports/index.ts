@@ -46,3 +46,5 @@ export type {
   MapScene,
   MapCanvasProps,
 } from "./MapProvider";
+export type { CashRepository } from "./CashRepository";
+export type { AttachmentStorage } from "./AttachmentStorage";
