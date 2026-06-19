@@ -41,7 +41,6 @@
  */
 
 import type {
-  PriceAgreement,
   PriceAgreementWithLines,
   PriceLine,
   CreateAgreementInput,
@@ -69,15 +68,18 @@ export interface PricingRepository {
   // ─── Reads ──────────────────────────────────────────────────
 
   /**
-   * List all agreement headers (with computed `isExpired`, customer/rep
-   * joins) ordered created_at desc — today's GET order. No agreed_by
-   * filter is applied (sales see all). Hides the embedded joins + the
-   * per-row is_expired computation + vendor mapping.
+   * List all agreements (header + position-sorted lines + joins) with the
+   * computed `isExpired`, ordered created_at desc — today's GET order. No
+   * agreed_by filter is applied (sales see all). Carries lines per row
+   * because the list page renders the per-card product count, the detail
+   * view, and the PDF export straight off the list object with no re-fetch —
+   * byte-identical to the pre-PR2 list route. Hides the embedded joins + the
+   * per-row line sort + is_expired computation + vendor mapping.
    * → app/api/pricing GET. @throws ServiceError on DB failure.
    */
   listAgreements(
     filter: ListAgreementsFilter,
-  ): Promise<readonly PriceAgreement[]>;
+  ): Promise<readonly PriceAgreementWithLines[]>;
 
   /**
    * Fetch one full agreement (header + position-sorted lines + joins) by

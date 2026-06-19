@@ -241,6 +241,37 @@ export function pricingRepositoryContract(
       }
     });
 
+    // The list carries each agreement's lines, position-sorted, with the
+    // product join resolved — byte-identical to the pre-PR2 list route and
+    // identical on BOTH adapters. The list page reads its product count,
+    // detail view and PDF export straight off this list object (no re-fetch),
+    // so an empty `lines` here is the B1 regression. Lines are supplied out of
+    // order to prove the read sorts them.
+    it("listAgreements carries each agreement's position-sorted lines", async () => {
+      ctx = await setup();
+      const withLines = await create({
+        notes: "ANVIL-TEST-list-lines",
+        lines: [
+          line({ position: 2, price: 12 }),
+          line({ position: 1, price: 8 }),
+        ],
+      });
+
+      const all = await ctx.repo.listAgreements({});
+      const row = all.find((x) => x.id === withLines.id);
+      expect(row).toBeDefined();
+      if (row === undefined) throw new Error("listed agreement was undefined");
+      // lines present and sorted ascending by position (NOT empty — B1 guard)
+      expect(row.lines.map((l) => l.position)).toEqual([1, 2]);
+      // the join resolves the product display name + numeric price coercion,
+      // same as the single-GET read
+      expect(row.lines[0].productId).toBe(ctx.productId);
+      expect(row.lines[0].productName).toBe(ctx.productName);
+      expect(row.lines[0].isFreetext).toBe(false);
+      expect(typeof row.lines[0].price).toBe("number");
+      expect(row.lines[0].price).toBe(8);
+    });
+
     // ─── addLine ────────────────────────────────────────────────
 
     it("addLine appends with next position = max + 1 and resolves the product join", async () => {
