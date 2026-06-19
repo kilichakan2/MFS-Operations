@@ -5,12 +5,16 @@ export const dynamic = 'force-dynamic'
  * Add a line to an existing agreement.
  * Body: { product_id?, product_name_override?, price, unit, notes?, position? }
  * Access: same as PATCH on the agreement (sales own only, office/admin any)
+ *
+ * F-15 PR2: re-pointed through `pricingService`. The adapter computes the next
+ * position (max + 1). RBAC owner-read error is swallowed to a 403 to match
+ * today (F-TD-24). Response byte-identical via toLineWireDto.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { pricingService }            from '@/lib/wiring/pricing'
+import { toLineWireDto }             from '@/lib/api/pricing/dto'
+import type { PriceUnit } from '@/lib/domain'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -39,64 +43,35 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'product_id or product_name_override required' }, { status: 400 })
   }
 
-  // Access: sales can only add lines to own agreements
+  // Access: sales can only add lines to own agreements. Today's pre-check
+  // ignored the DB error → undefined → 403; reproduce that swallow (F-TD-24).
   const isManager = role === 'office' || role === 'admin'
   if (!isManager) {
-    const { data: own } = await supabase
-      .from('price_agreements')
-      .select('agreed_by')
-      .eq('id', agreementId)
-      .single()
-    if (!own || own.agreed_by !== userId) {
+    let owner
+    try {
+      owner = await pricingService.getAgreementOwner(agreementId)
+    } catch {
+      owner = null
+    }
+    if (!owner || owner.agreedBy !== userId) {
       return NextResponse.json({ error: 'Not authorised' }, { status: 403 })
     }
   }
 
-  // Get max position for this agreement
-  const { data: existing } = await supabase
-    .from('price_agreement_lines')
-    .select('position')
-    .eq('agreement_id', agreementId)
-    .order('position', { ascending: false })
-    .limit(1)
-
-  const nextPosition = body.position ?? ((existing?.[0]?.position ?? -1) + 1)
-
-  const { data: line, error } = await supabase
-    .from('price_agreement_lines')
-    .insert({
-      agreement_id:          agreementId,
-      product_id:            body.product_id            || null,
-      product_name_override: body.product_name_override || null,
-      price:                 body.price,
-      unit:                  body.unit ?? 'per_kg',
-      notes:                 body.notes                 || null,
-      position:              nextPosition,
+  let line
+  try {
+    line = await pricingService.addLine(agreementId, {
+      productId:           body.product_id            || null,
+      productNameOverride: body.product_name_override || null,
+      price:               body.price,
+      unit:                (body.unit ?? 'per_kg') as PriceUnit,
+      notes:               body.notes                 || null,
+      position:            body.position ?? null,
     })
-    .select(`
-      id, product_id, product_name_override, price, unit, notes, position,
-      product:products!price_agreement_lines_product_id_fkey(id, name, box_size, code)
-    `)
-    .single()
-
-  if (error || !line) {
-    console.error('[pricing lines POST]', error?.message)
+  } catch (err) {
+    console.error('[pricing lines POST]', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Failed to add line' }, { status: 500 })
   }
 
-  const p = line.product as unknown as { id: string; name: string; box_size: string | null; code: string | null } | null
-  return NextResponse.json({
-    id:                    line.id,
-    product_id:            line.product_id,
-    product_name_override: line.product_name_override,
-    product_name:          p?.name ?? line.product_name_override ?? 'Unknown',
-    box_size:              p?.box_size ?? null,
-    code:                  p?.code     ?? null,
-    price:                 Number(line.price),
-    unit:                  line.unit,
-    notes:                 line.notes,
-    position:              line.position,
-    is_freetext:           !line.product_id,
-  }, { status: 201 })
+  return NextResponse.json(toLineWireDto(line), { status: 201 })
 }
-

@@ -4,12 +4,16 @@ export const dynamic = 'force-dynamic'
  * PATCH  /api/pricing/lines/[lineId]  — edit a line
  * DELETE /api/pricing/lines/[lineId]  — remove a line
  * Access: sales own agreements only; office/admin any
+ *
+ * F-15 PR2: re-pointed through `pricingService`. RBAC walks the line →
+ * agreement owner via getLineOwner; a DB error there is swallowed to a denial
+ * (→ 403) to match today (F-TD-24). Responses byte-identical via toLineWireDto.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { pricingService }            from '@/lib/wiring/pricing'
+import { toLineWireDto }             from '@/lib/api/pricing/dto'
+import type { UpdateLineInput, PriceUnit } from '@/lib/domain'
 
 type Params = { params: Promise<{ lineId: string }> }
 
@@ -17,16 +21,15 @@ async function checkAccess(lineId: string, userId: string, role: string): Promis
   const isManager = role === 'office' || role === 'admin'
   if (isManager) return true
 
-  // Sales: verify line belongs to an agreement owned by this user
-  const { data } = await supabase
-    .from('price_agreement_lines')
-    .select('agreement_id, price_agreements!inner(agreed_by)')
-    .eq('id', lineId)
-    .single()
-
-  if (!data) return false
-  const agreement = data.price_agreements as unknown as { agreed_by: string } | null
-  return agreement?.agreed_by === userId
+  // Sales: verify the line belongs to an agreement owned by this user. Today
+  // a DB error here was ignored (`const { data }`) → false; reproduce that.
+  let owner
+  try {
+    owner = await pricingService.getLineOwner(lineId)
+  } catch {
+    owner = null
+  }
+  return owner !== null && owner.agreedBy === userId
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -48,40 +51,37 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'price must be > 0' }, { status: 400 })
   }
 
-  const patch: Record<string, unknown> = {}
-  for (const f of ['product_id', 'product_name_override', 'price', 'unit', 'notes', 'position']) {
-    if (f in body) patch[f] = body[f] === '' ? null : body[f]
+  // Build the patch from the present fields, keeping the '' → null
+  // normalisation in the route (matches today's field loop).
+  const patch: {
+    productId?: string | null
+    productNameOverride?: string | null
+    price?: number
+    unit?: PriceUnit
+    notes?: string | null
+    position?: number
+  } = {}
+  const norm = (v: unknown) => (v === '' ? null : v)
+  if ('product_id' in body)            patch.productId           = norm(body.product_id) as string | null
+  if ('product_name_override' in body) patch.productNameOverride = norm(body.product_name_override) as string | null
+  if ('price' in body)                 patch.price               = norm(body.price) as number
+  if ('unit' in body)                  patch.unit                = norm(body.unit) as PriceUnit
+  if ('notes' in body)                 patch.notes               = norm(body.notes) as string | null
+  if ('position' in body)              patch.position            = norm(body.position) as number
+
+  let line
+  try {
+    line = await pricingService.updateLine(lineId, patch as UpdateLineInput)
+  } catch (err) {
+    console.error('[pricing lines PATCH]', err instanceof Error ? err.message : err)
+    return NextResponse.json({ error: 'Update failed' }, { status: 500 })
   }
-
-  const { data, error } = await supabase
-    .from('price_agreement_lines')
-    .update(patch)
-    .eq('id', lineId)
-    .select(`
-      id, product_id, product_name_override, price, unit, notes, position,
-      product:products!price_agreement_lines_product_id_fkey(id, name, box_size, code)
-    `)
-    .single()
-
-  if (error || !data) {
-    console.error('[pricing lines PATCH]', error?.message)
+  if (!line) {
+    console.error('[pricing lines PATCH]', undefined)
     return NextResponse.json({ error: 'Update failed' }, { status: 500 })
   }
 
-  const p = data.product as unknown as { id: string; name: string; box_size: string | null; code: string | null } | null
-  return NextResponse.json({
-    id:                    data.id,
-    product_id:            data.product_id,
-    product_name_override: data.product_name_override,
-    product_name:          p?.name ?? data.product_name_override ?? 'Unknown',
-    box_size:              p?.box_size ?? null,
-    code:                  p?.code     ?? null,
-    price:                 Number(data.price),
-    unit:                  data.unit,
-    notes:                 data.notes,
-    position:              data.position,
-    is_freetext:           !data.product_id,
-  })
+  return NextResponse.json(toLineWireDto(line))
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {
@@ -95,16 +95,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
   const allowed = await checkAccess(lineId, userId, role)
   if (!allowed) return NextResponse.json({ error: 'Not authorised' }, { status: 403 })
 
-  const { error } = await supabase
-    .from('price_agreement_lines')
-    .delete()
-    .eq('id', lineId)
-
-  if (error) {
-    console.error('[pricing lines DELETE]', error.message)
+  try {
+    await pricingService.deleteLine(lineId)
+  } catch (err) {
+    console.error('[pricing lines DELETE]', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Delete failed' }, { status: 500 })
   }
 
   return NextResponse.json({ deleted: true })
 }
-

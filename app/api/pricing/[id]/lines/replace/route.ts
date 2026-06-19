@@ -9,12 +9,17 @@ export const dynamic = 'force-dynamic'
  *
  * Body: { lines: LineInput[] }
  * Access: sales own agreements only; office/admin any.
+ *
+ * F-15 PR2: re-pointed through `pricingService.replaceLines` (the adapter owns
+ * the atomic `replace_agreement_lines` RPC). The adapter defaults position to
+ * the array index (`l.position ?? i`), matching today's route. RBAC owner-read
+ * error is swallowed to a 403 (F-TD-24). The response count stays
+ * `body.lines.length` to be byte-identical with today.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { pricingService }            from '@/lib/wiring/pricing'
+import type { CreateLineInput, PriceUnit } from '@/lib/domain'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -53,38 +58,35 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
-  // Access control: sales can only edit their own agreements
+  // Access control: sales can only edit their own agreements. Today's pre-check
+  // ignored the DB error → undefined → 403; reproduce that swallow (F-TD-24).
   const isManager = role === 'office' || role === 'admin'
   if (!isManager) {
-    const { data: own } = await supabase
-      .from('price_agreements')
-      .select('agreed_by')
-      .eq('id', agreementId)
-      .single()
-    if (!own || own.agreed_by !== userId) {
+    let owner
+    try {
+      owner = await pricingService.getAgreementOwner(agreementId)
+    } catch {
+      owner = null
+    }
+    if (!owner || owner.agreedBy !== userId) {
       return NextResponse.json({ error: 'Not authorised' }, { status: 403 })
     }
   }
 
-  // Build new lines array for the RPC
-  const newLines = body.lines.map((l, i) => ({
-    agreement_id:          agreementId,
-    product_id:            l.product_id            || null,
-    product_name_override: l.product_name_override || null,
-    price:                 l.price,
-    unit:                  l.unit ?? 'per_kg',
-    notes:                 l.notes                 || null,
-    position:              l.position ?? i,
+  // Translate to CreateLineInput[]; the adapter applies position ?? index.
+  const lines: CreateLineInput[] = body.lines.map(l => ({
+    productId:           l.product_id            || null,
+    productNameOverride: l.product_name_override || null,
+    price:               l.price,
+    unit:                (l.unit ?? 'per_kg') as PriceUnit,
+    notes:               l.notes                 || null,
+    position:            l.position ?? null,
   }))
 
-  // Single atomic Postgres call — delete old lines + insert new lines in one transaction
-  const { error } = await supabase.rpc('replace_agreement_lines', {
-    p_agreement_id: agreementId,
-    p_lines:        newLines,
-  })
-
-  if (error) {
-    console.error('[pricing lines replace]', error.message)
+  try {
+    await pricingService.replaceLines(agreementId, lines)
+  } catch (err) {
+    console.error('[pricing lines replace]', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Failed to replace lines' }, { status: 500 })
   }
 
