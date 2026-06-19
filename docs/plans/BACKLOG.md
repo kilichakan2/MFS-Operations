@@ -244,6 +244,15 @@ the trail matters.
 - **Owner unit:** F-RLS-04d (the pricing RLS cutover re-touches these routes) — or unscheduled.
 - **Status:** open
 
+### F-TD-25 — `seed.sql` plants no pricing fixture → preview pricing smoke can't auto-verify
+
+- **Deferred:** 2026-06-19 (F-15 PR2 — surfaced during the deep preview browser verify)
+- **What:** `supabase/seed.sql` seeds no `price_agreements`/`price_agreement_lines`, and preview branches are `with_data:false` — so a preview's `GET /api/pricing` returns `{agreements: []}`. The F-15 PR2 deep verify had to **create** an agreement via the deployed `POST /api/pricing` route before it could exercise list/detail/edit/activate (stronger proof, but it means there's no standing fixture for an automated pricing preview smoke).
+- **Fix shape:** add one `ANVIL-TEST-` price agreement with 2 lines (one catalogue product, one free-text) to `supabase/seed.sql`, so preview branches carry a pricing fixture and a future `@critical` (or smoke) pricing spec can assert "list card shows N products" without self-seeding. Pairs naturally with writing a pricing `@critical` E2E spec (none exists today).
+- **Priority:** Low (coverage/observability — pricing correctness is already proven by the contract + integration tests on real Postgres; this just enables an automated *preview* assertion).
+- **Owner unit:** unscheduled (or rides with F-RLS-04d / a future pricing E2E unit).
+- **Status:** open
+
 ---
 
 ## Migration hygiene (F-TD-)
