@@ -226,6 +226,17 @@ the trail matters.
 
 ---
 
+### ARCH-FU-08 — Discrepancies domain extraction (retire `app/api/detail/discrepancy` raw fetch)
+
+- **Deferred:** 2026-06-20 (F-16 PR2 — dropped from scope at Gate 2 by Hakan's ruling).
+- **What:** `app/api/detail/discrepancy/route.ts` does a raw `fetch()` to `${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/discrepancies?...` with the Supabase service-role key inlined in the request headers (the privileged env-var key, not the singleton client). It reads the **`discrepancies`** table (with `customers`/`products`/`users` joins) and maps to a camelCase detail shape `{ id, createdAt, status, reason, orderedQty, sentQty, unit, note, customer, product, category, loggedBy }`. F-16 PR2 was briefed to "absorb" this onto `cashService`, but the route has **nothing to do with the Cash domain** — `cashService`/`CashRepository` cover only `cash_months`/`cash_entries`/`cheque_records`. Forcing a `discrepancies` read onto the Cash port would violate ADR-0002 cohesion and the frozen-foundation rule, so it was dropped from PR2 (the 8 genuine cash routes shipped clean).
+- **Why it matters:** it is the last raw-fetch vendor leak + inline service-role-key usage on the detail surface — a direct breach of the hexagonal rule (vendor SDK/REST only inside `lib/adapters/<vendor>/`). The inline key in a route header is also a small security smell vs the singleton client.
+- **Fix shape:** extract a small **Discrepancies domain** — `lib/domain/Discrepancy.ts` (the detail model), `lib/ports/DiscrepancyRepository.ts` (a `findById(id)` read port), `lib/adapters/supabase/DiscrepancyRepository.ts` + a fake, a `DiscrepancyService` (or fold into an existing detail/orders service if cohesive), wired in `lib/wiring/`. Then re-point the route through the service + a `lib/api/<domain>/dto.ts` translator so the wire shape stays byte-identical. Same strangler-fig pattern as F-13/F-15/F-16. Retires the raw fetch and the inline key in one go.
+- **Priority:** Low–medium (pre-existing leak, not introduced by F-16; isolated single route).
+- **Owner unit:** unscheduled (its own future F- extraction).
+
+---
+
 ### F-TD-23 — Map View E2E click→modal proof relies on `role="dialog"` the DetailModal lacks
 
 - **Deferred:** 2026-06-18 (F-24 PR2 — surfaced during the post-ship local populated-data verification)
@@ -326,7 +337,19 @@ the trail matters.
 - **What:** editing a non-existent user id returns `500 { error: 'User not found' }`, not a `404`. Historically the route used `.update(...).select(...).single()`, and PostgREST's `.single()` errors (`PGRST116`) on a zero-row UPDATE → the route's `if (error)` path emitted 500. PR1's `updateUser` adapter uses `.maybeSingle()` and returns `null` on no-row. To keep PR2 a pure no-behaviour-change re-point, the re-pointed route maps that `null` to the SAME 500 (`app/api/admin/users/[id]/route.ts` PATCH handler). Pinned by `tests/integration/admin-users.test.ts` ("PATCH missing-id returns 500").
 - **Fix shape:** change the `null` branch to `404 { error: 'User not found' }` (semantically correct) — a deliberate status-code change (500→404) that belongs in its own small unit, not a re-pointing PR. Update the integration pin from 500 to 404 at the same time, and check the admin UI handles a 404 from the toggle/reset/secondary-role flows.
 - **Priority:** LOW (error path only; missing-id PATCH is not a live happy path).
-- **Status:** open.
+- **Status:** open. **See F-TD-29** — F-16 PR2 made the *opposite* call for the cash PATCH routes (fixed them to 404 inline); F-TD-29 tracks the resulting app-wide inconsistency and recommends finishing this one as part of a uniform sweep.
+
+### F-TD-29 — App-wide consistency sweep: PATCH-by-id missing-id should return 404, not 500
+
+- **Logged:** 2026-06-20 (F-16 PR2, D2 ruling). **Hakan asked for this to be tracked + fixed app-wide.**
+- **What:** the `.single()`→`.maybeSingle()` re-point pattern surfaced a status-code question on every "edit/lock a record by id" PATCH route: when the id doesn't exist, the historical `.single()` code errored (PostgREST `PGRST116`) and the route's `if (error)` path returned **500**, when the semantically-correct answer is **404 (not found)**. This only fires on a missing id (concurrent delete / stale tab / a hand-made API call) — never on the normal UI happy path, since the id always comes from a list the screen just loaded.
+- **Current inconsistency (the reason to sweep):**
+  - **Cash PATCH routes — FIXED to 404 in F-16 PR2** (`app/api/cash/month/[id]` lock, `app/api/cash/entry/[id]` edit, `app/api/cash/cheques/[id]` edit): missing id now returns `404 { error: '<resource> not found' }`. Pinned by the F-16 PR2 integration suite.
+  - **Users PATCH route — STILL 500** (`app/api/admin/users/[id]`, **F-TD-20**): deliberately kept at 500 to stay byte-identical in the F-13 PR2 re-point; pinned at 500 by `tests/integration/admin-users.test.ts`.
+  - **Others unaudited:** any remaining `PATCH /[id]` route across orders/pricing/haccp/etc. that still uses the old `.single()`-error→500 shape.
+- **Fix shape:** one small sweep unit — grep every `app/api/**/[id]/route.ts` PATCH handler for the missing-id branch, make them all return 404, update the pinned tests (incl. flipping F-TD-20's users pin from 500→404 and **closing F-TD-20** as part of this), and spot-check each consuming UI handles a 404 gracefully. Pure error-path status alignment, no happy-path change.
+- **Priority:** LOW (error path only; never a live happy path) — but Hakan wants the app uniform, so schedule it as its own small unit rather than someday-maybe.
+- **Status:** open (supersedes/absorbs F-TD-20).
 
 ### F-TD-22 — `users.name` uniqueness guard (case-insensitive) — ✅ SHIPPED 2026-06-16 (PR #46, `1f46857`)
 
