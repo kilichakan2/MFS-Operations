@@ -253,6 +253,50 @@ describe("/api/cash integration (F-16 PR2 re-point)", () => {
     expect((res.body as { error: string }).error).toBe("Month already exists");
   });
 
+  // ── month lock/unlock PATCH (§15.5 lossless shape + §15.6 D2 404) ──
+
+  it("PATCH /api/cash/month/[id] (admin) locks a month → 200 { month } lossless shape, is_locked flips", async () => {
+    const m = await seedMonth(11, 0);
+    const res = await api(`/api/cash/month/${m.id}`, {
+      method: "PATCH",
+      role: "admin",
+      userId: users.admin.id,
+      body: { is_locked: true },
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as { month: Record<string, unknown> };
+    // §15.5: { month: toMonthWireDto(m) } — same shape as month GET/POST.
+    expect(Object.keys(body.month)).toEqual(MONTH_KEYS); // exact SET + ORDER
+    expect(body.month.id).toBe(m.id);
+    expect(body.month.is_locked).toBe(true);
+
+    // unlock again so afterAll cleanup (delete) isn't blocked by lock semantics.
+    const unlock = await api(`/api/cash/month/${m.id}`, {
+      method: "PATCH",
+      role: "admin",
+      userId: users.admin.id,
+      body: { is_locked: false },
+    });
+    expect(unlock.status).toBe(200);
+    expect((unlock.body as { month: Record<string, unknown> }).month.is_locked).toBe(
+      false,
+    );
+  });
+
+  it("PATCH /api/cash/month/[id] 404 on a missing id (D2: 404 'Month not found' not 500)", async () => {
+    const res = await api(
+      "/api/cash/month/00000000-0000-0000-0000-000000000000",
+      {
+        method: "PATCH",
+        role: "admin",
+        userId: users.admin.id,
+        body: { is_locked: true },
+      },
+    );
+    expect(res.status).toBe(404);
+    expect((res.body as { error: string }).error).toBe("Month not found");
+  });
+
   it("POST /api/cash/month first-ever month without opening_balance → 400", async () => {
     // Make this deterministic: clear cash_months globally so probeMonth() is
     // first-ever. Local test DB has no cash seed. We recreate nothing; our own
