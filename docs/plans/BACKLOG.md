@@ -351,6 +351,16 @@ the trail matters.
 - **Priority:** LOW (error path only; never a live happy path) — but Hakan wants the app uniform, so schedule it as its own small unit rather than someday-maybe.
 - **Status:** open (supersedes/absorbs F-TD-20).
 
+### F-TD-30 — 🔴 URGENT: Cash + cheque operations write NO audit-trail entry (no who-changed-what on money)
+
+- **Logged:** 2026-06-20 (surfaced during F-16 PR2 prod manual smoke; **Hakan flagged URGENT**).
+- **What:** create / edit / delete of a **cash entry**, plus **cheque** bank/edit/delete and **month lock/unlock**, write **nothing** to `public.audit_log`. Confirmed by read-only prod query (ref `uqgecljspgtevoylwkep`) on 2026-06-20: `audit_log` only ever records the `screen` enum values `screen1` / `screen2` / `screen3` (none of them cash; most-recent row 2026-06-16). Hakan's own smoke (create £0.01 → edit £0.02 → delete) left **zero** trace — the delete was clean (good), but there is no who/when/what history of any of it. Same accountability theme as **F-TD-27** (pricing edits write no audit entry) — cash has the identical hole.
+- **Why URGENT:** this is the **money-handling** surface (cash book + cheque register). With no audit trail, an entry can be created, altered, or deleted with no record of who did it or when — no accountability on financial data. (Orders DO log — the gap is cash/cheque/pricing specifically.)
+- **NOT introduced by F-16 PR2:** pre-existing — the original raw-Supabase cash routes never logged either, and PR2 was byte-identical, so it changed nothing here. PR2 only made it *visible*.
+- **Fix shape:** append to `audit_log` on every cash mutation — cash entry create/edit/delete, cheque create/bank/edit/delete, month create/lock/unlock. The routes already resolve `{ userId, role }` (PR1/PR2 design) so the app-layer append is cheap and has the actor in hand; alternatively a DB trigger reading the `app.current_user_id` GUC (the orders pattern). Needs a new `screen` enum value (e.g. `cash`) or a documented mapping — check how `screen3` (the live one) is written and mirror it. Write a `summary` per action (e.g. `"+£0.01 expense"`, `"edited £0.01→£0.02"`, `"deleted entry"`). Pin with integration tests asserting an `audit_log` row per mutation. **Consider doing F-TD-27 (pricing) in the same unit** — identical mechanism, shared enum/trigger work.
+- **Priority:** **HIGH / urgent** (financial accountability gap on live money data; Hakan's explicit flag).
+- **Status:** open — schedule near-term (own unit, or paired with F-TD-27).
+
 ### F-TD-22 — `users.name` uniqueness guard (case-insensitive) — ✅ SHIPPED 2026-06-16 (PR #46, `1f46857`)
 
 - **Logged:** 2026-06-16 (F-13 PR3 Guard, 🟡 W1). **Hakan explicitly wants this enforced** — not a someday-maybe.
