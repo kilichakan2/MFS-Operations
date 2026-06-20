@@ -152,7 +152,7 @@ export interface CashService {
   buildCashBookCsv(args: {
     year: number;
     month: number;
-    month_: CashMonth;
+    monthRecord: CashMonth;
     entries: readonly CashEntry[];
     generatedAt: Date;
   }): { filename: string; csv: string };
@@ -341,9 +341,9 @@ export function createCashService(deps: CashServiceDeps): CashService {
       return { ok: true, path, name: fileName };
     },
 
-    buildCashBookCsv({ year, month, month_, entries, generatedAt }) {
+    buildCashBookCsv({ year, month, monthRecord, entries, generatedAt }) {
       const generatedAtStr = fmtDateTime(generatedAt.toISOString());
-      const opening = Number(month_.openingBalance);
+      const opening = Number(monthRecord.openingBalance);
       const totalIn = entries
         .filter((r) => r.type === "income")
         .reduce((s, r) => s + Number(r.amount), 0);
@@ -425,7 +425,7 @@ export function createCashService(deps: CashServiceDeps): CashService {
         BLANK,
 
         // ── Footer ──
-        row(month_.isLocked ? "Status: LOCKED" : "Status: Open"),
+        row(monthRecord.isLocked ? "Status: LOCKED" : "Status: Open"),
         row(`Total transactions: ${entries.length}`),
         row("MFS Global Ltd · mfsops.com"),
       );

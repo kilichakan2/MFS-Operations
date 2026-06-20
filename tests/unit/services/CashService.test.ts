@@ -601,7 +601,7 @@ describe("CashService.buildCashBookCsv", () => {
     const { filename } = service.buildCashBookCsv({
       year: 2026,
       month: 4,
-      month_: month({ openingBalance: 0 }),
+      monthRecord: month({ openingBalance: 0 }),
       entries: [],
       generatedAt,
     });
@@ -629,7 +629,7 @@ describe("CashService.buildCashBookCsv", () => {
     const { csv } = service.buildCashBookCsv({
       year: 2026,
       month: 4,
-      month_: month({ openingBalance: 100, isLocked: true }),
+      monthRecord: month({ openingBalance: 100, isLocked: true }),
       entries,
       generatedAt,
     });
@@ -673,7 +673,7 @@ describe("CashService.buildCashBookCsv", () => {
     const { csv } = service.buildCashBookCsv({
       year: 2026,
       month: 4,
-      month_: month({ openingBalance: 0, isLocked: false }),
+      monthRecord: month({ openingBalance: 0, isLocked: false }),
       entries: [],
       generatedAt,
     });
