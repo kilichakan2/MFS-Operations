@@ -1,9 +1,17 @@
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
+/**
+ * PATCH  /api/cash/entry/[id] → admin only. Edits an entry's mutable fields.
+ * DELETE /api/cash/entry/[id] → admin only. Removes the attachment then the row.
+ *
+ * F-16 PR2: re-pointed off raw Supabase onto cashService. Header parsing +
+ * the 401/403 gates + invalid-JSON gate stay here.
+ */
 
-const supabase = supabaseService
+import { NextRequest, NextResponse } from 'next/server'
+import { cashService }               from '@/lib/wiring/cash'
+import { toEntryEditWireDto }        from '@/lib/api/cash/dto'
+import type { UpdateEntryInput }     from '@/lib/domain'
 
 export async function PATCH(
   req: NextRequest,
@@ -19,24 +27,24 @@ export async function PATCH(
     const body   = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
 
-    const updates: Record<string, unknown> = { edited_by: userId, edited_at: new Date().toISOString() }
-    if (body.amount      != null) updates.amount      = Number(body.amount)
-    if (body.description != null) updates.description = String(body.description).trim()
-    if (body.category    != null) updates.category    = body.category
-    if (body.reference   != null) updates.reference   = body.reference
-    if (body.attachment_path != null) updates.attachment_path = body.attachment_path
-    if (body.attachment_name != null) updates.attachment_name = body.attachment_name
+    const patch: {
+      -readonly [K in keyof UpdateEntryInput]: UpdateEntryInput[K]
+    } = { editedBy: userId }
+    if (body.amount      != null) patch.amount      = Number(body.amount)
+    if (body.description != null) patch.description = String(body.description).trim()
+    if (body.category    != null) patch.category    = body.category
+    if (body.reference   != null) patch.reference   = body.reference
+    if (body.attachment_path != null) patch.attachmentPath = body.attachment_path
+    if (body.attachment_name != null) patch.attachmentName = body.attachment_name
 
-    const { data, error } = await supabase
-      .from('cash_entries')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ entry: data })
+    const e = await cashService.updateEntry(id, patch)
+    // Missing id → null (adapter .maybeSingle). Today's .single set an error
+    // → accidental 500 on an unreachable path; PR2 returns an explicit 404
+    // (Gate-2 ruling D2, plan §15.6).
+    if (!e) return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
+    return NextResponse.json({ entry: toEntryEditWireDto(e) })
   } catch (err) {
+    console.error('[cash/entry/[id] PATCH] error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
@@ -52,23 +60,10 @@ export async function DELETE(
     if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
     const { id } = await params
-
-    // Delete attachment from storage if present
-    const { data: entry } = await supabase
-      .from('cash_entries')
-      .select('attachment_path')
-      .eq('id', id)
-      .single()
-
-    if (entry?.attachment_path) {
-      await supabase.storage.from('cash-attachments').remove([entry.attachment_path])
-    }
-
-    const { error } = await supabase.from('cash_entries').delete().eq('id', id)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
+    await cashService.deleteEntry(id)
     return NextResponse.json({ ok: true })
   } catch (err) {
+    console.error('[cash/entry/[id] DELETE] error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

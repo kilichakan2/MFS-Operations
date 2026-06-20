@@ -9,27 +9,21 @@ export const dynamic = 'force-dynamic'
  *   Creates a month record. Admin only.
  *   First-ever month: body must include opening_balance.
  *   Subsequent months: opening_balance auto-computed from previous month's closing.
+ *
+ * F-16 PR2: re-pointed off raw Supabase onto cashService. Header parsing +
+ * the 401/403/400 gates + the first-month opening_balance 400 stay here; the
+ * data reads, the month-summary math and the duplicate-month conflict move to
+ * the Cash service/adapter + DTO.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
-
-function closingBalance(opening: number, entries: { type: string; amount: number }[]) {
-  return entries.reduce(
-    (bal, e) => bal + (e.type === 'income' ? Number(e.amount) : -Number(e.amount)),
-    Number(opening)
-  )
-}
-
-async function getSignedUrl(path: string): Promise<string | null> {
-  if (!path) return null
-  const { data } = await supabase.storage
-    .from('cash-attachments')
-    .createSignedUrl(path, 3600)
-  return data?.signedUrl ?? null
-}
+import { cashService }               from '@/lib/wiring/cash'
+import { ConflictError }             from '@/lib/errors'
+import {
+  toMonthWireDto,
+  toSummaryWireDto,
+  toEntryListWireDto,
+} from '@/lib/api/cash/dto'
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,82 +38,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'year and month required' }, { status: 400 })
     }
 
-    // Fetch the month record
-    const { data: monthRow } = await supabase
-      .from('cash_months')
-      .select('*')
-      .eq('year', year)
-      .eq('month', month)
-      .single()
+    const monthRecord = await cashService.findMonth(year, month)
 
-    if (!monthRow) {
-      // Doesn't exist yet — compute suggested opening from previous month
-      const { data: prevRows } = await supabase
-        .from('cash_months')
-        .select('id, year, month, opening_balance')
-        .order('year',  { ascending: false })
-        .order('month', { ascending: false })
-        .limit(1)
-
-      if (!prevRows || prevRows.length === 0) {
-        return NextResponse.json({ exists: false, isFirst: true, suggestedOpening: null })
-      }
-
-      const prev = prevRows[0]
-      const { data: prevEntries } = await supabase
-        .from('cash_entries')
-        .select('type, amount')
-        .eq('month_id', prev.id)
-
-      const suggestedOpening = closingBalance(prev.opening_balance, prevEntries ?? [])
-      return NextResponse.json({ exists: false, isFirst: false, suggestedOpening })
+    if (!monthRecord) {
+      // Doesn't exist yet — probe the previous month for the suggested opening.
+      const probe = await cashService.probeMonth()
+      return NextResponse.json({
+        exists: false,
+        isFirst: probe.isFirst,
+        suggestedOpening: probe.suggestedOpening,
+      })
     }
 
-    // Fetch entries for this month
-    const { data: entries, error: entriesErr } = await supabase
-      .from('cash_entries')
-      .select(`
-        id, month_id, entry_date, type, category, amount,
-        description, reference, attachment_path, attachment_name,
-        created_at, edited_at, customer_id,
-        created_by_user:users!cash_entries_created_by_fkey(name),
-        edited_by_user:users!cash_entries_edited_by_fkey(name),
-        customer:customers(id, name)
-      `)
-      .eq('month_id', monthRow.id)
-      .order('entry_date', { ascending: true })
-      .order('created_at', { ascending: true })
-
-    if (entriesErr) {
-      console.error('[cash/month GET] entries error:', entriesErr)
-      return NextResponse.json({ error: entriesErr.message }, { status: 500 })
-    }
-
-    // Generate signed URLs for attachments
-    const entriesWithUrls = await Promise.all(
-      (entries ?? []).map(async (e: Record<string, unknown>) => ({
-        ...e,
-        signed_url: e.attachment_path ? await getSignedUrl(e.attachment_path as string) : null,
-        created_by_name: (e.created_by_user as { name: string } | null)?.name ?? 'Unknown',
-        edited_by_name:  (e.edited_by_user  as { name: string } | null)?.name ?? null,
-        customer_name:   (e.customer as { name: string } | null)?.name ?? null,
-      }))
-    )
-
-    const totalIncome  = entriesWithUrls.filter(e => (e as { type?: string }).type === 'income').reduce((s, e)  => s + Number((e as { amount?: unknown }).amount), 0)
-    const totalExpense = entriesWithUrls.filter(e => (e as { type?: string }).type === 'expense').reduce((s, e) => s + Number((e as { amount?: unknown }).amount), 0)
-    const closing      = Number(monthRow.opening_balance) + totalIncome - totalExpense
+    const entries = await cashService.listEntriesForMonth(monthRecord.id)
+    const summary = cashService.monthSummary(monthRecord.openingBalance, entries)
 
     return NextResponse.json({
       exists:  true,
-      month:   monthRow,
-      entries: entriesWithUrls,
-      summary: {
-        opening:       Number(monthRow.opening_balance),
-        total_income:  totalIncome,
-        total_expense: totalExpense,
-        closing,
-      },
+      month:   toMonthWireDto(monthRecord),
+      entries: entries.map(toEntryListWireDto),
+      summary: toSummaryWireDto(summary),
     })
   } catch (err) {
     console.error('[cash/month GET] error:', err)
@@ -142,54 +80,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'year and month required' }, { status: 400 })
     }
 
-    // Check if already exists
-    const { data: existing } = await supabase
-      .from('cash_months')
-      .select('id')
-      .eq('year', year)
-      .eq('month', month)
-      .single()
+    // First-ever month: admin must supply opening_balance (carry-forward #1).
+    // probeMonth().isFirst ⇔ today's "no prior month exists".
+    const probe = await cashService.probeMonth()
+    if (probe.isFirst && (body?.opening_balance == null || isNaN(Number(body.opening_balance)))) {
+      return NextResponse.json({ error: 'opening_balance required for first month' }, { status: 400 })
+    }
 
-    if (existing) return NextResponse.json({ error: 'Month already exists' }, { status: 409 })
-
-    // Check if this is the first ever month
-    const { data: anyMonth } = await supabase
-      .from('cash_months')
-      .select('id, year, month, opening_balance')
-      .order('year',  { ascending: false })
-      .order('month', { ascending: false })
-      .limit(1)
-
-    let openingBalance: number
-
-    if (!anyMonth || anyMonth.length === 0) {
-      // First ever month — admin must supply opening_balance
-      if (body?.opening_balance == null || isNaN(Number(body.opening_balance))) {
-        return NextResponse.json({ error: 'opening_balance required for first month' }, { status: 400 })
+    try {
+      const { month: created, summary } = await cashService.createMonth({
+        year,
+        month,
+        createdBy: userId,
+        openingBalance: body?.opening_balance == null ? null : Number(body.opening_balance),
+      })
+      return NextResponse.json(
+        { month: toMonthWireDto(created), summary: toSummaryWireDto(summary) },
+        { status: 201 },
+      )
+    } catch (e) {
+      // Duplicate (year,month) surfaces from the UNIQUE constraint via the
+      // adapter (PG 23505 → ConflictError), closing today's check-then-insert
+      // race with the same 409 wire result (carry-forward #2).
+      if (e instanceof ConflictError) {
+        return NextResponse.json({ error: 'Month already exists' }, { status: 409 })
       }
-      openingBalance = Number(body.opening_balance)
-    } else {
-      // Auto-compute from previous month closing
-      const prev = anyMonth[0]
-      const { data: prevEntries } = await supabase
-        .from('cash_entries')
-        .select('type, amount')
-        .eq('month_id', prev.id)
-      openingBalance = closingBalance(prev.opening_balance, prevEntries ?? [])
+      throw e
     }
-
-    const { data: created, error: createErr } = await supabase
-      .from('cash_months')
-      .insert({ year, month, opening_balance: openingBalance, created_by: userId })
-      .select()
-      .single()
-
-    if (createErr) {
-      console.error('[cash/month POST] error:', createErr)
-      return NextResponse.json({ error: createErr.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ month: created, summary: { opening: openingBalance, total_income: 0, total_expense: 0, closing: openingBalance } }, { status: 201 })
   } catch (err) {
     console.error('[cash/month POST] error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

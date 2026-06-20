@@ -6,12 +6,14 @@ export const dynamic = 'force-dynamic'
  *   { action: 'edit', ...fields } → admin only
  *
  * DELETE /api/cash/cheques/[id] → admin only
+ *
+ * F-16 PR2: re-pointed off raw Supabase onto cashService. Header parsing +
+ * the 401/403 role gates + the action branching stay here.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { cashService }               from '@/lib/wiring/cash'
+import { toChequeEditWireDto }       from '@/lib/api/cash/dto'
 
 export async function PATCH(
   req: NextRequest,
@@ -30,39 +32,27 @@ export async function PATCH(
       if (!['office', 'admin'].includes(role ?? '')) {
         return NextResponse.json({ error: 'Office or admin only' }, { status: 403 })
       }
-      const { data, error } = await supabase
-        .from('cheque_records')
-        .update({ banked: true, banked_by: userId, banked_at: new Date().toISOString() })
-        .eq('id', id)
-        .eq('banked', false) // idempotency — only bank once
-        .select()
-        .single()
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-      if (!data)  return NextResponse.json({ error: 'Already banked or not found' }, { status: 404 })
-      const d = data as Record<string, unknown>
-      return NextResponse.json({ ok: true, banked_at: d.banked_at })
+      const res = await cashService.bankCheque(id, userId)
+      if (!res) return NextResponse.json({ error: 'Already banked or not found' }, { status: 404 })
+      return NextResponse.json({ ok: true, banked_at: res.bankedAt })
 
     } else if (body.action === 'edit') {
       if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-      const updates: Record<string, unknown> = {}
-      if (body.date          != null) updates.date          = body.date
-      if (body.customer_id   != null) updates.customer_id   = body.customer_id
-      if (body.amount        != null) updates.amount        = Number(body.amount)
-      if (body.driver_id     != null) updates.driver_id     = body.driver_id
-      if (body.cheque_number != null) updates.cheque_number = body.cheque_number || null
-      if (body.notes         != null) updates.notes         = body.notes || null
+      const patch: Record<string, unknown> = {}
+      if (body.date          != null) patch.date         = body.date
+      if (body.customer_id   != null) patch.customerId   = body.customer_id
+      if (body.amount        != null) patch.amount       = Number(body.amount)
+      if (body.driver_id     != null) patch.driverId     = body.driver_id
+      if (body.cheque_number != null) patch.chequeNumber = body.cheque_number
+      if (body.notes         != null) patch.notes        = body.notes
 
-      const { data, error } = await supabase
-        .from('cheque_records')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-      return NextResponse.json({ ok: true, record: data })
+      const c = await cashService.updateCheque(id, patch)
+      // Missing id → null (adapter .maybeSingle). Today's .single set an error
+      // → accidental 500 on an unreachable path; PR2 returns an explicit 404
+      // (Gate-2 ruling D2, plan §15.6).
+      if (!c) return NextResponse.json({ error: 'Cheque not found' }, { status: 404 })
+      return NextResponse.json({ ok: true, record: toChequeEditWireDto(c) })
 
     } else {
       return NextResponse.json({ error: 'action must be bank or edit' }, { status: 400 })
@@ -84,10 +74,10 @@ export async function DELETE(
     if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
     const { id } = await params
-    const { error } = await supabase.from('cheque_records').delete().eq('id', id)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await cashService.deleteCheque(id)
     return NextResponse.json({ ok: true })
   } catch (err) {
+    console.error('[cash/cheques/[id] DELETE] error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

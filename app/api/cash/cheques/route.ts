@@ -8,12 +8,16 @@ export const dynamic = 'force-dynamic'
  * POST /api/cash/cheques
  *   Logs a new cheque. Office + admin only.
  *   Body: { date, customer_id, amount, driver_id, cheque_number?, notes? }
+ *
+ * F-16 PR2: re-pointed off raw Supabase onto cashService. Header parsing +
+ * the 401/403 role gates stay here; the query/filter/insert logic and the
+ * snake_case wire shaping move to the Cash service/adapter + DTO.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { cashService }               from '@/lib/wiring/cash'
+import { toChequeWireDto }           from '@/lib/api/cash/dto'
+import type { ChequeStatusFilter }   from '@/lib/domain'
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,51 +25,12 @@ export async function GET(req: NextRequest) {
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
     const sp     = req.nextUrl.searchParams
-    const status = sp.get('status') ?? 'all'   // all | not_banked | banked
+    const status = (sp.get('status') ?? 'all') as ChequeStatusFilter   // all | not_banked | banked
     const from   = sp.get('from')
     const to     = sp.get('to')
 
-    let query = supabase
-      .from('cheque_records')
-      .select(`
-        id, date, amount, cheque_number, notes, created_at,
-        banked, banked_at, customer_name,
-        customer:customers(id, name),
-        driver:users!cheque_records_driver_id_fkey(id, name),
-        logged_by_user:users!cheque_records_logged_by_fkey(name),
-        banked_by_user:users!cheque_records_banked_by_fkey(name)
-      `)
-      .order('date',       { ascending: false })
-      .order('created_at', { ascending: false })
-
-    if (status === 'not_banked') query = query.eq('banked', false)
-    if (status === 'banked')     query = query.eq('banked', true)
-    if (from) query = query.gte('date', from)
-    if (to)   query = query.lte('date', to)
-
-    const { data, error } = await query
-    if (error) {
-      console.error('[cash/cheques GET] error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    const shaped = (data ?? []).map((r: Record<string, unknown>) => ({
-      id:             r.id,
-      date:           r.date,
-      amount:         Number(r.amount),
-      cheque_number:  r.cheque_number,
-      notes:          r.notes,
-      created_at:     r.created_at,
-      banked:         Boolean(r.banked),
-      banked_at:      r.banked_at ?? null,
-      customer:       r.customer as { id: string; name: string } | null,
-      customer_name:  r.customer_name as string | null,
-      driver:         r.driver   as { id: string; name: string } | null,
-      logged_by_name: (r.logged_by_user as { name: string } | null)?.name ?? 'Unknown',
-      banked_by_name: (r.banked_by_user as { name: string } | null)?.name ?? null,
-    }))
-
-    return NextResponse.json(shaped)
+    const cheques = await cashService.listCheques({ status, from, to })
+    return NextResponse.json(cheques.map(toChequeWireDto))
   } catch (err) {
     console.error('[cash/cheques GET] error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -86,6 +51,11 @@ export async function POST(req: NextRequest) {
 
     const { date, customer_id, customer_name, amount, driver_id, cheque_number, notes } = body
 
+    // Amount validation runs on the RAW body value (before coercion) to stay
+    // byte-identical to the original route: a falsy raw value (missing/empty/
+    // numeric 0) trips the required-fields message; a present-but-non-positive
+    // value (e.g. the string "0") trips the positive message. Coercing before
+    // the check would collapse string "0" into the required branch (wrong msg).
     if (!date || (!customer_id && !customer_name) || !amount || !driver_id) {
       return NextResponse.json({ error: 'date, customer (id or name), amount, driver_id required' }, { status: 400 })
     }
@@ -93,48 +63,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'amount must be positive' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
-      .from('cheque_records')
-      .insert({
-        date,
-        customer_id:   customer_id   || null,
-        customer_name: customer_name || null,
-        amount:        Number(amount),
-        driver_id,
-        cheque_number: cheque_number?.trim() || null,
-        notes:         notes?.trim()         || null,
-        logged_by:     userId,
-        banked:        false,
-      })
-      .select(`
-        id, date, amount, cheque_number, notes, created_at, banked, banked_at, customer_name,
-        customer:customers(id, name),
-        driver:users!cheque_records_driver_id_fkey(id, name),
-        logged_by_user:users!cheque_records_logged_by_fkey(name)
-      `)
-      .single()
-
-    if (error) {
-      console.error('[cash/cheques POST] error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    const input = {
+      date,
+      customerId:   customer_id   ?? null,
+      customerName: customer_name ?? null,
+      amount:       Number(amount),
+      driverId:     driver_id,
+      chequeNumber: cheque_number ?? null,
+      notes:        notes ?? null,
+      loggedBy:     userId,
     }
 
-    const r = data as Record<string, unknown>
-    return NextResponse.json({
-      id:             r.id,
-      date:           r.date,
-      amount:         Number(r.amount),
-      cheque_number:  r.cheque_number,
-      notes:          r.notes,
-      created_at:     r.created_at,
-      banked:         false,
-      banked_at:      null,
-      customer:       r.customer,
-      customer_name:  r.customer_name as string | null,
-      driver:         r.driver,
-      logged_by_name: (r.logged_by_user as { name: string } | null)?.name ?? 'Unknown',
-      banked_by_name: null,
-    }, { status: 201 })
+    const v = cashService.validateCheque(input)
+    if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
+
+    const cheque = await cashService.createCheque(input)
+    return NextResponse.json(toChequeWireDto(cheque), { status: 201 })
   } catch (err) {
     console.error('[cash/cheques POST] error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
