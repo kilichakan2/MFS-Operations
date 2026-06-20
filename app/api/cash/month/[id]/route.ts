@@ -1,9 +1,15 @@
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
+/**
+ * PATCH /api/cash/month/[id] → admin only. Locks/unlocks a month.
+ *
+ * F-16 PR2: re-pointed off raw Supabase onto cashService. Header parsing +
+ * the 401/403 gates + the is_locked boolean gate stay here.
+ */
 
-const supabase = supabaseService
+import { NextRequest, NextResponse } from 'next/server'
+import { cashService }               from '@/lib/wiring/cash'
+import { toMonthLockWireDto }        from '@/lib/api/cash/dto'
 
 export async function PATCH(
   req: NextRequest,
@@ -22,16 +28,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'is_locked (boolean) required' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
-      .from('cash_months')
-      .update({ is_locked: body.is_locked })
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ month: data })
+    const m = await cashService.setMonthLocked(id, body.is_locked)
+    // Missing id → null (adapter .maybeSingle). Today's .single set an error
+    // → accidental 500 on an unreachable path; PR2 returns an explicit 404
+    // (Gate-2 ruling D2, plan §15.6).
+    if (!m) return NextResponse.json({ error: 'Month not found' }, { status: 404 })
+    return NextResponse.json(toMonthLockWireDto(m))
   } catch (err) {
+    console.error('[cash/month/[id] PATCH] error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
