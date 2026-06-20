@@ -367,9 +367,10 @@ describe("/api/cash integration (F-16 PR2 re-point)", () => {
     expect((res.body as { error: string }).error).toBe("Month not found");
   });
 
-  it("entry POST 400 on amount <= 0 (required-fields gate, parity)", async () => {
+  it("entry POST 400 'required' on a falsy raw amount (numeric 0 / missing) — original message parity", async () => {
     const m = await seedMonth(7, 0);
-    const res = await api("/api/cash/entry", {
+    // numeric 0 is falsy → original tripped the required-fields gate, not positive.
+    const zero = await api("/api/cash/entry", {
       method: "POST",
       role: "admin",
       userId: users.admin.id,
@@ -381,7 +382,47 @@ describe("/api/cash integration (F-16 PR2 re-point)", () => {
         description: "x",
       },
     });
+    expect(zero.status).toBe(400);
+    expect((zero.body as { error: string }).error).toBe(
+      "month_id, entry_date, type, amount, description required",
+    );
+
+    // amount key omitted entirely → same required message.
+    const missing = await api("/api/cash/entry", {
+      method: "POST",
+      role: "admin",
+      userId: users.admin.id,
+      body: {
+        month_id: m.id,
+        entry_date: `${Y}-07-01`,
+        type: "income",
+        description: "x",
+      },
+    });
+    expect(missing.status).toBe(400);
+    expect((missing.body as { error: string }).error).toBe(
+      "month_id, entry_date, type, amount, description required",
+    );
+  });
+
+  it("entry POST 400 'amount must be positive' on a present non-positive raw amount (string \"0\") — original message parity", async () => {
+    // string "0" is TRUTHY → original passed the required gate then hit the
+    // positive gate. Validating the raw body value (not Number()) preserves this.
+    // The positive gate fires BEFORE the month lookup, so no real month is needed.
+    const res = await api("/api/cash/entry", {
+      method: "POST",
+      role: "admin",
+      userId: users.admin.id,
+      body: {
+        month_id: "00000000-0000-0000-0000-000000000000",
+        entry_date: `${Y}-07-01`,
+        type: "income",
+        amount: "0",
+        description: "x",
+      },
+    });
     expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toBe("amount must be positive");
   });
 
   it("entry PATCH 404 on a missing id (D2: 404 not 500)", async () => {
@@ -502,6 +543,55 @@ describe("/api/cash integration (F-16 PR2 re-point)", () => {
     );
     expect(res.status).toBe(404);
     expect((res.body as { error: string }).error).toBe("Cheque not found");
+  });
+
+  it("cheque POST 400 'required' on a falsy raw amount (numeric 0 / missing) — original message parity", async () => {
+    const zero = await api("/api/cash/cheques", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      body: {
+        date: `${Y}-09-15`,
+        customer_id: customer.id,
+        amount: 0,
+        driver_id: users.driver.id,
+      },
+    });
+    expect(zero.status).toBe(400);
+    expect((zero.body as { error: string }).error).toBe(
+      "date, customer (id or name), amount, driver_id required",
+    );
+
+    const missing = await api("/api/cash/cheques", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      body: {
+        date: `${Y}-09-15`,
+        customer_id: customer.id,
+        driver_id: users.driver.id,
+      },
+    });
+    expect(missing.status).toBe(400);
+    expect((missing.body as { error: string }).error).toBe(
+      "date, customer (id or name), amount, driver_id required",
+    );
+  });
+
+  it("cheque POST 400 'amount must be positive' on a present non-positive raw amount (string \"0\") — original message parity", async () => {
+    const res = await api("/api/cash/cheques", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      body: {
+        date: `${Y}-09-15`,
+        customer_id: customer.id,
+        amount: "0",
+        driver_id: users.driver.id,
+      },
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toBe("amount must be positive");
   });
 
   // ── export CSV ──────────────────────────────────────────────

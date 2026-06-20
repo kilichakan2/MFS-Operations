@@ -51,6 +51,18 @@ export async function POST(req: NextRequest) {
 
     const { date, customer_id, customer_name, amount, driver_id, cheque_number, notes } = body
 
+    // Amount validation runs on the RAW body value (before coercion) to stay
+    // byte-identical to the original route: a falsy raw value (missing/empty/
+    // numeric 0) trips the required-fields message; a present-but-non-positive
+    // value (e.g. the string "0") trips the positive message. Coercing before
+    // the check would collapse string "0" into the required branch (wrong msg).
+    if (!date || (!customer_id && !customer_name) || !amount || !driver_id) {
+      return NextResponse.json({ error: 'date, customer (id or name), amount, driver_id required' }, { status: 400 })
+    }
+    if (Number(amount) <= 0) {
+      return NextResponse.json({ error: 'amount must be positive' }, { status: 400 })
+    }
+
     const input = {
       date,
       customerId:   customer_id   ?? null,
