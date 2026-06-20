@@ -273,6 +273,16 @@ the trail matters.
 - **Owner unit:** unscheduled (natural fit alongside a future pricing-domain pass or an audit-trail standardisation unit).
 - **Status:** open
 
+### F-TD-28 — Cash entry "current month" check uses local-server time, not London time
+
+- **Deferred:** 2026-06-22 (F-16 PR1 planning — Gate 2 design choice, accepted to preserve byte-identity).
+- **What:** the cash-entry permission rule "office users can only add entries to the current calendar month" compares the entry's month against `new Date()` (the server's **local** clock), not the app's `londonToday()` helper. F-16 PR1 extracted this logic into `CashService` verbatim (the `now: Date` is injected so tests can pin it) rather than silently switching it to London time — changing the clock would be an unannounced behaviour change on a "byte-identical" extraction PR. The original route (`app/api/cash/entry/route.ts`) has always used local server time.
+- **Why it's worth revisiting:** the business operates in the UK (London). Near a month boundary, server-local time and London time can disagree (e.g. a server running UTC in the last/first hour of a month, or any DST edge), so an office user could be wrongly blocked from — or wrongly allowed — adding an entry to "the current month" depending on the server's timezone rather than the user's. Every other date-sensitive rule in the app that's been hardened uses `londonToday()`.
+- **Fix shape:** in `CashService` (or at the F-16 PR2 wiring/route layer), pass `londonToday()` as the `now` input to the entry-validation path instead of the raw server `new Date()`. The service already takes `now` as an injected parameter, so this is a one-line change at the call site plus a test pinning a month-boundary case across the London/UTC offset. Do it as its own small change (or fold into F-16 PR2) so it's a *named* behaviour change, not a silent one.
+- **Priority:** Low (edge-only: bites only near a month boundary AND only if the server clock ≠ London; office-role-only; admins are unaffected by the current-month rule).
+- **Owner unit:** F-16 PR2 (opportunistic) or a future cash-domain pass.
+- **Status:** open
+
 ---
 
 ## Migration hygiene (F-TD-)
