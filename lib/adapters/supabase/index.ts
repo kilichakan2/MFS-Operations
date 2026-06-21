@@ -60,6 +60,10 @@ export {
   supabaseComplimentsRepository,
 } from "./ComplimentsRepository";
 export {
+  createSupabaseVisitsRepository,
+  supabaseVisitsRepository,
+} from "./VisitsRepository";
+export {
   authenticatedClientForCaller,
   requireServiceRole,
 } from "./authenticatedClient";
