@@ -92,7 +92,20 @@ PITR confirmed: N/A (non-destructive migration).
 
 ## Verdict
 
-✅ CLEARED FOR PRODUCTION (DRAFT — pending Hakan's Lock/Ship gate)
+✅ CLEARED FOR PRODUCTION — SHIPPED 2026-06-21 (PR #64, squash `65b8963`)
 
 All required layers ran and passed. No 🔴 blockers, no real-code bugs found, no FORGE
 eject needed. 0 iteration loops used.
+
+## Ship outcome (2026-06-21)
+
+- Migration applied to PROD FIRST via Supabase MCP `apply_migration` — 12 policies verified
+  live (4 × complaints/complaint_notes/compliments, all `current_user_is_valid()`, UPDATE with
+  both USING+WITH CHECK), the 3 stale owner-only baseline `complaints` policies confirmed gone.
+- PR #64 squash-merged (`65b8963`); prod deploy `dpl_E2rfFoCkEYwNE1otGoJyW96L6iDg` READY on
+  www.mfsops.com. Post-deploy prod smoke 6/6 non-5xx (all 307 auth-redirect).
+- **Manual prod write-smoke by Hakan — PASS (both paths, all steps, DB-confirmed read-only):**
+  complaint `307c00b9-4b49-4bc6-bfd7-a3c15c60a8d3` (A LA TURKA/MAIZEME LIMITED, raise→note→
+  resolve, status=resolved / note_count=1) + compliment `c3b3c6fb-c8ed-4800-806a-707609996bcf`
+  ("TEST AGAIN", team-wide, posted_by=Hakan). All four write paths fired under the per-caller
+  authenticated client → F-RLS-04f 100% validated in production.
