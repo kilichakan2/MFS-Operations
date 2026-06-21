@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { complimentsService }        from '@/lib/wiring/compliments'
+import { complimentsServiceForCaller } from '@/lib/wiring/compliments'
 import { toRecipientWireDto }        from '@/lib/api/compliments/dto'
 import { ServiceError }              from '@/lib/errors'
 
@@ -15,6 +15,9 @@ export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    // F-RLS-04f: run as authenticated caller (RLS fires). Rollback = swap complimentsServiceForCaller(userId) → complimentsService.
+    const complimentsService = await complimentsServiceForCaller(userId)
 
     const recipients = await complimentsService.listActiveRecipients()
     return NextResponse.json({ users: recipients.map(toRecipientWireDto) })
