@@ -62,3 +62,16 @@ export {
   type FakeAttachmentStorage,
   type FakeUpload,
 } from "./AttachmentStorage";
+export {
+  createFakeComplaintsRepository,
+  fakeComplaintsRepository,
+  type FakeComplaintsSeed,
+  type FakeComplaintsPersonRef,
+  type FakeComplaintsCustomerRef,
+} from "./ComplaintsRepository";
+export {
+  createFakeComplimentsRepository,
+  fakeComplimentsRepository,
+  type FakeComplimentsSeed,
+  type FakeComplimentsUserRef,
+} from "./ComplimentsRepository";
