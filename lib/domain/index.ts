@@ -88,3 +88,22 @@ export type {
   ChequeListFilter,
   MonthExistsProbe,
 } from "./Cash";
+export type {
+  ComplaintCategory,
+  ComplaintReceivedVia,
+  ComplaintStatus,
+  ComplaintNote,
+  Complaint,
+  ComplaintDetail,
+  CreateComplaintInput,
+  CreatedComplaint,
+  ResolveComplaintInput,
+  ComplaintEmailContext,
+  CreateNoteInput,
+  CreatedNote,
+} from "./Complaint";
+export type {
+  Compliment,
+  ComplimentRecipient,
+  CreateComplimentInput,
+} from "./Compliment";
