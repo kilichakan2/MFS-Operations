@@ -35,3 +35,13 @@ export {
   type CashService,
   type CashServiceDeps,
 } from "./CashService";
+export {
+  createComplaintsService,
+  type ComplaintsService,
+  type ComplaintsServiceDeps,
+} from "./ComplaintsService";
+export {
+  createComplimentsService,
+  type ComplimentsService,
+  type ComplimentsServiceDeps,
+} from "./ComplimentsService";
