@@ -108,8 +108,11 @@ PITR confirmed: **N/A — no destructive migration, no migration at all.**
 - **Production deploy — `dpl_8NaNwZn68GHmtkuKrf7jRYendENi`** (commit `968035b`) READY on www.mfsops.com.
 - **Post-deploy prod smoke (read-only) — DONE ✅.** `/`, `/api/screen2/{all,open}`, `/api/compliments`,
   `/api/compliments/users`, `/api/detail/complaint` all return 307 (auth redirect) — **all non-5xx**.
-- **Pending Hakan:** manual write-smoke on the live site (log a complaint → resolve → add a note;
-  post a compliment) — warranted because PR2 changes live behaviour.
+- **Manual write-smoke (Hakan) — DONE ✅ 2026-06-21.** Raised a complaint for BATCH BURGERS LTD
+  ("TEST HAKAN") → added note "TEST NOTE" → resolved with "TEST RESOLVE" on www.mfsops.com.
+  Verified live via Supabase MCP read-only: complaint `6a36eba9-7bde-499e-a8df-acdc2b2de5ca`,
+  status=resolved, note_count=1, logged_by+resolved_by=Hakan — full create→note→resolve chain
+  coherent through the re-pointed services. PR2 fully validated in production.
 
 ## Verdict
 
