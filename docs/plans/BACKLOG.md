@@ -294,6 +294,16 @@ the trail matters.
 - **Owner unit:** F-16 PR2 (opportunistic) or a future cash-domain pass.
 - **Status:** open
 
+### F-TD-31 — General `audit_log` has no owned port (written by raw fetch in screen2 + others)
+
+- **Deferred:** 2026-06-23 (F-17 PR1 planning — Decision 2: audit write left out of the Complaints port).
+- **What:** the general-purpose `audit_log` table is written by raw `fetch` POSTs scattered across routes — the three complaint routes (`screen2/sync`, `screen2/resolve`, `screen2/note`) and others (the `audit_screen` enum spans `screen1`/`screen2`/`screen3`/`screen5`). There is **no owned `AuditLog` port, service, or adapter**. The only audit code in the hexagonal layers is Orders-specific (`order_audit_log`, read inside `OrdersRepository`, which itself documents deliberately NOT building a shared audit port until a second consumer exists — `OrdersRepository.ts:541–556`). F-17 PR1 followed that precedent: the Complaints port owns the customer-name read (Decision 1) but NOT the cross-cutting audit write, so PR2 keeps logging via the same raw call it uses today.
+- **Why it's worth fixing:** `audit_log` is a genuinely cross-cutting, whole-company concern; baking it into each feature port would make a per-feature copy of a shared concern. Once a second real consumer makes the abstraction non-premature, a shared `AuditLog` port + Supabase/Fake adapters give a single tamper-evident "who did what" surface that any feature can append to without re-importing the vendor SDK.
+- **Fix shape:** build a shared `AuditLog` port (`record(entry)`) + Supabase adapter (mapping to the `audit_log` columns `user_id`/`screen`/`action`/`record_id`/`summary`) + Fake adapter, wired master-key (or per-caller once RLS lands). Re-point the screen2 + other raw-fetch audit writes through it. Pairs naturally with **F-TD-27 / F-TD-30** (the pricing + cash audit-trail gaps) — same mechanism, do the enum/adapter design once.
+- **Priority:** 🟢 Low (no correctness/security bug — the writes are fire-and-forget today and don't affect responses; this is a hexagonal-cleanliness + future-standardisation item).
+- **Owner unit:** unscheduled — strong candidate to fold into the F-TD-27 / F-TD-30 "audit-trail standardisation" unit.
+- **Status:** open
+
 ---
 
 ## Migration hygiene (F-TD-)
