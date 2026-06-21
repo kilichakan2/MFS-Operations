@@ -91,6 +91,17 @@ function nextId(): string {
   return `00000000-0000-0000-0000-${suffix}`;
 }
 
+/** Newest-first by created_at, tie-broken by descending id (later insert =
+ *  higher id), so same-instant ordering is deterministic in tests. The real DB
+ *  leaves exact-tie ordering unspecified — this never changes distinct order. */
+function byNewestThenId(
+  a: { createdAt: string; id: string },
+  b: { createdAt: string; id: string },
+): number {
+  if (a.createdAt !== b.createdAt) return b.createdAt.localeCompare(a.createdAt);
+  return b.id.localeCompare(a.id);
+}
+
 export function createFakeComplaintsRepository(
   seed?: FakeComplaintsSeed,
 ): ComplaintsRepository {
@@ -149,14 +160,14 @@ export function createFakeComplaintsRepository(
   return {
     async listAllWithNotes(): Promise<readonly Complaint[]> {
       return [...complaints.values()]
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .sort(byNewestThenId)
         .map((c) => toComplaint(c, notesFor(c.id)));
     },
 
     async listOpen(): Promise<readonly Complaint[]> {
       return [...complaints.values()]
         .filter((c) => c.status === "open")
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .sort(byNewestThenId)
         .map((c) => toComplaint(c, []));
     },
 

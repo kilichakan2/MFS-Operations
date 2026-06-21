@@ -81,7 +81,15 @@ export function createFakeComplimentsRepository(
   return {
     async listRecent(): Promise<readonly Compliment[]> {
       return [...compliments.values()]
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .sort((a, b) => {
+          if (a.createdAt !== b.createdAt) {
+            return b.createdAt.localeCompare(a.createdAt);
+          }
+          // Same-instant tie-break: later insert (higher id) first, so the
+          // ordering is deterministic in tests (the real DB leaves exact-tie
+          // ordering unspecified — this never changes distinct-timestamp order).
+          return b.id.localeCompare(a.id);
+        })
         .slice(0, 100)
         .map(toCompliment);
     },
