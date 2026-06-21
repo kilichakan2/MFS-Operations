@@ -50,3 +50,4 @@ export type { CashRepository } from "./CashRepository";
 export type { AttachmentStorage } from "./AttachmentStorage";
 export type { ComplaintsRepository } from "./ComplaintsRepository";
 export type { ComplimentsRepository } from "./ComplimentsRepository";
+export type { VisitsRepository } from "./VisitsRepository";

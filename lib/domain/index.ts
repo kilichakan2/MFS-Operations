@@ -107,3 +107,19 @@ export type {
   ComplimentRecipient,
   CreateComplimentInput,
 } from "./Compliment";
+export type {
+  VisitType,
+  VisitOutcome,
+  PipelineStatus,
+  VisitNote,
+  Visit,
+  VisitDetail,
+  CreateVisitInput,
+  CreatedVisit,
+  ProspectLocation,
+  UpdatePipelineStatusInput,
+  CreateVisitNoteInput,
+  UpdateVisitNoteInput,
+  AdminVisitFilter,
+} from "./Visit";
+export { VALID_PIPELINE_STATUSES } from "./Visit";
