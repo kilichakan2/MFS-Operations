@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { cashService }               from '@/lib/wiring/cash'
+import { cashServiceForCaller }      from '@/lib/wiring/cash'
 import { toEntryCreateWireDto }      from '@/lib/api/cash/dto'
 import type { CashEntryType }        from '@/lib/domain'
 
@@ -21,6 +21,11 @@ export async function POST(req: NextRequest) {
     const userId = req.headers.get('x-mfs-user-id')
     const role   = req.headers.get('x-mfs-user-role')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    // F-RLS-04e: table read + insert run as the authenticated caller (RLS fires).
+    // validateEntry stays a pure in-process check (incl. its F-TD-28 new Date()).
+    // Rollback = swap `cashServiceForCaller(userId)` → `cashService`.
+    const cashService = await cashServiceForCaller(userId)
 
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })

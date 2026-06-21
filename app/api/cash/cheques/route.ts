@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { cashService }               from '@/lib/wiring/cash'
+import { cashServiceForCaller }      from '@/lib/wiring/cash'
 import { toChequeWireDto }           from '@/lib/api/cash/dto'
 import type { ChequeStatusFilter }   from '@/lib/domain'
 
@@ -23,6 +23,10 @@ export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    // F-RLS-04e: run as the authenticated caller (RLS fires).
+    // Rollback = swap `cashServiceForCaller(userId)` → `cashService`.
+    const cashService = await cashServiceForCaller(userId)
 
     const sp     = req.nextUrl.searchParams
     const status = (sp.get('status') ?? 'all') as ChequeStatusFilter   // all | not_banked | banked
@@ -45,6 +49,10 @@ export async function POST(req: NextRequest) {
     if (!['office', 'admin'].includes(role ?? '')) {
       return NextResponse.json({ error: 'Office or admin only' }, { status: 403 })
     }
+
+    // F-RLS-04e: run as the authenticated caller (RLS fires).
+    // Rollback = swap `cashServiceForCaller(userId)` → `cashService`.
+    const cashService = await cashServiceForCaller(userId)
 
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })

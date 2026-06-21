@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { cashService }               from '@/lib/wiring/cash'
+import { cashServiceForCaller }      from '@/lib/wiring/cash'
 import { ConflictError }             from '@/lib/errors'
 import {
   toMonthWireDto,
@@ -29,6 +29,12 @@ export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    // F-RLS-04e: table reads run as the authenticated caller (RLS fires); the
+    // signed-URL mint inside listEntriesForMonth uses the storage port, which
+    // stays master-key inside this per-caller service.
+    // Rollback = swap `cashServiceForCaller(userId)` → `cashService`.
+    const cashService = await cashServiceForCaller(userId)
 
     const sp    = req.nextUrl.searchParams
     const year  = parseInt(sp.get('year')  ?? '0', 10)
@@ -71,6 +77,10 @@ export async function POST(req: NextRequest) {
     const role   = req.headers.get('x-mfs-user-role')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+    // F-RLS-04e: run as the authenticated caller (RLS fires).
+    // Rollback = swap `cashServiceForCaller(userId)` → `cashService`.
+    const cashService = await cashServiceForCaller(userId)
 
     const body = await req.json().catch(() => null)
     const year  = parseInt(body?.year  ?? '0', 10)

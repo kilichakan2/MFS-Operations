@@ -718,6 +718,182 @@ describe("/api/cash integration (F-16 PR2 re-point)", () => {
     expect(res.status).toBe(400);
     expect((res.body as { error: string }).error).toBe("File too large (max 10MB)");
   });
+
+  // ── F-RLS-04e: RLS-cutover proofs (the per-caller authenticated flip) ──
+  //
+  // The cash routes now reach the DB as the Postgres `authenticated` role so the
+  // cash_months / cash_entries / cheque_records RLS policies fire. These pin the
+  // headline must-fix: under the per-request authenticated client a real valid
+  // (non-admin / office) caller must still see/create through the screens (no
+  // blank lists), the app-layer role gates must still bite (the office/admin
+  // split + the office current-month rule stayed in the app, NOT in RLS), and
+  // the FK-embedded names (driver/customer) must still resolve via the
+  // users_directory_select + customers_select policies. If any cash SELECT
+  // policy were missing these would silently go empty / null. The upload route
+  // stays on the master-key client (cash-attachments has no authenticated
+  // storage policies) — its still-works behaviour is exercised above.
+
+  // Seed a cash_months row for the ACTUAL current calendar month (LOCAL time,
+  // matching CashService.validateEntry) so an office caller's create-entry path
+  // passes the app-layer "office current-month only" gate. Uses a high opening
+  // balance + tracks the id for afterAll cleanup. If the row already exists
+  // (a developer's ambient current month, or a prior run) reuse it.
+  async function seedCurrentMonth(): Promise<{
+    id: string;
+    year: number;
+    month: number;
+  }> {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    const supa = getServiceClient();
+    const existing = await supa
+      .from("cash_months")
+      .select("id")
+      .eq("year", year)
+      .eq("month", month)
+      .maybeSingle();
+    if (existing.data) {
+      return { id: existing.data.id as string, year, month };
+    }
+    const { data, error } = await supa
+      .from("cash_months")
+      .insert({ year, month, opening_balance: 0, created_by: users.admin.id })
+      .select("id")
+      .single();
+    if (error) throw new Error(`seedCurrentMonth failed: ${error.message}`);
+    createdMonthIds.add(data.id as string);
+    return { id: data.id as string, year, month };
+  }
+
+  it("F-RLS-04e: an office (non-admin) caller can open a month, list entries and list cheques under the authenticated cutover (SELECT policies end-to-end)", async () => {
+    const m = await seedMonth(11, 500);
+    // open the month as OFFICE (cash_months_select + cash_entries_select)
+    const monthRes = await api(`/api/cash/month?year=${Y}&month=11`, {
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(monthRes.status).toBe(200);
+    expect((monthRes.body as { exists: boolean }).exists).toBe(true);
+    expect((monthRes.body as { month: { id: string } }).month.id).toBe(m.id);
+    expect(Array.isArray((monthRes.body as { entries: unknown[] }).entries)).toBe(
+      true,
+    );
+
+    // list cheques as OFFICE (cheque_records_select) — non-blank ARRAY
+    const chequesRes = await api(`/api/cash/cheques?from=${Y}-01-01&to=${Y}-12-31`, {
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(chequesRes.status).toBe(200);
+    expect(Array.isArray(chequesRes.body)).toBe(true);
+  });
+
+  it("F-RLS-04e: an office caller can create an entry in the current month and log a cheque (INSERT under the badge + the app office gate passes)", async () => {
+    // create an entry into the REAL current month as OFFICE
+    // (cash_entries_insert + the office current-month app gate)
+    const cur = await seedCurrentMonth();
+    const entryDate = `${cur.year}-${String(cur.month).padStart(2, "0")}-01`;
+    const entry = await api("/api/cash/entry", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      body: {
+        month_id: cur.id,
+        entry_date: entryDate,
+        type: "income",
+        amount: 42,
+        description: "rls office entry",
+      },
+    });
+    expect(entry.status).toBe(201);
+    const entryId = (entry.body as { entry: { id: string } }).entry.id;
+    // clean the entry we just inserted (the current month may be ambient)
+    await getServiceClient().from("cash_entries").delete().eq("id", entryId);
+
+    // log a cheque as OFFICE (cheque_records_insert; no current-month gate)
+    const cheque = await api("/api/cash/cheques", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      body: {
+        date: `${Y}-11-01`,
+        customer_id: customer.id,
+        amount: 90,
+        driver_id: users.driver.id,
+      },
+    });
+    expect(cheque.status).toBe(201);
+    createdChequeIds.add((cheque.body as { id: string }).id);
+  });
+
+  it("F-RLS-04e: the role gates still bite — office POST /month → 403 and office PATCH /entry/[id] → 403 (the role split stayed in the app, not RLS)", async () => {
+    // admin-only month creation
+    const monthForbidden = await api("/api/cash/month", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      body: { year: Y, month: 12, opening_balance: 0 },
+    });
+    expect(monthForbidden.status).toBe(403);
+    expect((monthForbidden.body as { error: string }).error).toBe("Admin only");
+
+    // admin-only entry edit
+    const entryForbidden = await api(
+      "/api/cash/entry/00000000-0000-0000-0000-000000000000",
+      {
+        method: "PATCH",
+        role: "office",
+        userId: users.office.id,
+        body: { amount: 5 },
+      },
+    );
+    expect(entryForbidden.status).toBe(403);
+    expect((entryForbidden.body as { error: string }).error).toBe("Admin only");
+  });
+
+  it("F-RLS-04e (directory): the cheque FK-embed driver name is NON-BLANK for an office caller (users_directory_select covers the cash embed)", async () => {
+    // a cheque logged by office, embedding the driver's name through the users
+    // table's RLS. Before users_directory_select a non-admin saw only their OWN
+    // users row, so the FK-embed came back null (blank driver name in prod).
+    // Under the authenticated cutover the directory policy resolves it.
+    const post = await api("/api/cash/cheques", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      body: {
+        date: `${Y}-11-02`,
+        customer_id: customer.id,
+        amount: 120,
+        driver_id: users.driver.id,
+      },
+    });
+    expect(post.status).toBe(201);
+    const id = (post.body as { id: string }).id;
+    createdChequeIds.add(id);
+
+    const list = await api(`/api/cash/cheques?from=${Y}-01-01&to=${Y}-12-31`, {
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(list.status).toBe(200);
+    const found = (list.body as Record<string, unknown>[]).find(
+      (r) => r.id === id,
+    );
+    expect(found).toBeDefined();
+    // the embedded driver NamedRef must resolve to a non-blank name
+    const driver = found!.driver as { id: string; name: string } | null;
+    expect(driver).not.toBe(null);
+    expect(driver!.id).toBe(users.driver.id);
+    expect(typeof driver!.name).toBe("string");
+    expect(driver!.name.length).toBeGreaterThan(0);
+    expect(driver!.name).toBe(users.driver.name);
+    // and the customer NamedRef embed resolves too (customers_select)
+    const cust = found!.customer as { id: string; name: string } | null;
+    expect(cust).not.toBe(null);
+    expect(cust!.id).toBe(customer.id);
+    expect((cust!.name ?? "").length).toBeGreaterThan(0);
+  });
 });
 
 // ── raw fetch helpers (CSV + multipart) ───────────────────────
