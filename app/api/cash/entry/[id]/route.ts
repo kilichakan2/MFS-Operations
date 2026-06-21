@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { cashService }               from '@/lib/wiring/cash'
+import { cashServiceForCaller }      from '@/lib/wiring/cash'
 import { toEntryEditWireDto }        from '@/lib/api/cash/dto'
 import type { UpdateEntryInput }     from '@/lib/domain'
 
@@ -22,6 +22,10 @@ export async function PATCH(
     const role   = req.headers.get('x-mfs-user-role')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+    // F-RLS-04e: run as the authenticated caller (RLS fires).
+    // Rollback = swap `cashServiceForCaller(userId)` → `cashService`.
+    const cashService = await cashServiceForCaller(userId)
 
     const { id } = await params
     const body   = await req.json().catch(() => null)
@@ -58,6 +62,12 @@ export async function DELETE(
     const role   = req.headers.get('x-mfs-user-role')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+    // F-RLS-04e: table read + delete run as the authenticated caller (RLS fires);
+    // the attachments.remove inside deleteEntry runs via the storage port, which
+    // stays master-key inside this per-caller service.
+    // Rollback = swap `cashServiceForCaller(userId)` → `cashService`.
+    const cashService = await cashServiceForCaller(userId)
 
     const { id } = await params
     await cashService.deleteEntry(id)
