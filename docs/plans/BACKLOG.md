@@ -302,6 +302,7 @@ the trail matters.
 - **Fix shape:** build a shared `AuditLog` port (`record(entry)`) + Supabase adapter (mapping to the `audit_log` columns `user_id`/`screen`/`action`/`record_id`/`summary`) + Fake adapter, wired master-key (or per-caller once RLS lands). Re-point the screen2 + other raw-fetch audit writes through it. Pairs naturally with **F-TD-27 / F-TD-30** (the pricing + cash audit-trail gaps) — same mechanism, do the enum/adapter design once.
 - **Priority:** 🟢 Low (no correctness/security bug — the writes are fire-and-forget today and don't affect responses; this is a hexagonal-cleanliness + future-standardisation item).
 - **Owner unit:** unscheduled — strong candidate to fold into the F-TD-27 / F-TD-30 "audit-trail standardisation" unit.
+- **Post-F-RLS-04f note (2026-06-21):** the complaints RLS cutover did NOT touch these raw audit writes — they keep their own `SUPABASE_SERVICE_ROLE_KEY` fetch and so still bypass RLS (the service swap only re-bound the table repos). When the shared `AuditLog` port is eventually built and these routes run `authenticated`, the audit insert must EITHER stay master-key OR satisfy the existing baseline `audit_log_insert` policy (`WITH CHECK user_id = app.current_user_id`) — i.e. it would already pass under the per-caller client since the actor is the caller, but only if routed through the authenticated client. Decide master-key-vs-authenticated for the audit port at that time.
 - **Status:** open
 
 ### F-TD-32 — complaint-email.ts / compliment-email.ts still read users via raw Supabase fetch
