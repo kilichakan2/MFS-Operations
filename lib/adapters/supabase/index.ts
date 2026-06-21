@@ -52,6 +52,14 @@ export {
   supabaseAttachmentStorage,
 } from "./AttachmentStorage";
 export {
+  createSupabaseComplaintsRepository,
+  supabaseComplaintsRepository,
+} from "./ComplaintsRepository";
+export {
+  createSupabaseComplimentsRepository,
+  supabaseComplimentsRepository,
+} from "./ComplimentsRepository";
+export {
   authenticatedClientForCaller,
   requireServiceRole,
 } from "./authenticatedClient";
