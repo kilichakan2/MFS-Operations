@@ -7,51 +7,22 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-
-const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
-const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+import { complaintsService }         from '@/lib/wiring/complaints'
+import { toOpenComplaintWireDto }    from '@/lib/api/complaints/dto'
 
 export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
-    const params = new URLSearchParams({
-      select: 'id,created_at,category,description,customers(name),users!complaints_user_id_fkey(name)',
-      status: 'eq.open',
-      order:  'created_at.desc',
+    const open = await complaintsService.listOpen()
+
+    // Translate to the wire shape, then prettify category at the edge (RAW enum
+    // in the domain; underscore->space is a route concern — G1). Bare array.
+    const complaints = open.map((c) => {
+      const dto = toOpenComplaintWireDto(c)
+      return { ...dto, category: dto.category.replace(/_/g, ' ') }
     })
-
-    const res = await fetch(`${SUPA_URL}/rest/v1/complaints?${params}`, {
-      headers: {
-        'apikey':        SUPA_KEY,
-        'Authorization': `Bearer ${SUPA_KEY}`,
-      },
-    })
-
-    if (!res.ok) {
-      const text = await res.text()
-      console.error('[screen2/open] Supabase error:', res.status, text.slice(0, 200))
-      return NextResponse.json({ error: 'Failed to fetch complaints' }, { status: 500 })
-    }
-
-    const rows = await res.json() as {
-      id: string
-      created_at: string
-      category: string
-      description: string
-      customers: { name: string } | null
-      users:     { name: string } | null
-    }[]
-
-    const complaints = rows.map((r) => ({
-      id:          r.id,
-      createdAt:   r.created_at,
-      category:    r.category.replace(/_/g, ' '),
-      description: r.description,
-      customer:    r.customers?.name ?? 'Unknown',
-      loggedBy:    r.users?.name     ?? 'Unknown',
-    }))
 
     return NextResponse.json(complaints)
 

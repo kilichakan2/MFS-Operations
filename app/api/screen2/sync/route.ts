@@ -6,7 +6,16 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { complaintsService }         from '@/lib/wiring/complaints'
+import type {
+  ComplaintCategory,
+  ComplaintReceivedVia,
+  ComplaintStatus,
+} from '@/lib/domain'
 
+// audit_log is a cross-cutting write with no owned port yet (F-TD-31) — it
+// stays as a raw REST fetch. Only the complaint DATA surface moved to the
+// service.
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
 const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
@@ -23,18 +32,6 @@ async function supaPost(table: string, body: Record<string, unknown>) {
   })
   const text = await res.text()
   return { ok: res.ok, status: res.status, text }
-}
-
-async function supaGet(table: string, params: string) {
-  const res = await fetch(`${SUPA_URL}/rest/v1/${table}?${params}`, {
-    headers: {
-      'apikey':         SUPA_KEY,
-      'Authorization': `Bearer ${SUPA_KEY}`,
-    },
-  })
-  if (!res.ok) return null
-  const rows = await res.json() as { name?: string }[]
-  return rows[0] ?? null
 }
 
 export async function POST(req: NextRequest) {
@@ -57,59 +54,47 @@ export async function POST(req: NextRequest) {
     const status          = body.status          as string | undefined
     const resolution_note = (body.resolution_note as string | null | undefined) ?? null
 
-    const missing: string[] = []
-    if (!customer_id)  missing.push('customer_id')
-    if (!category)     missing.push('category')
-    if (!description || description.trim().length < 5) missing.push('description')
-    if (!received_via) missing.push('received_via')
-    if (!status)       missing.push('status')
-    if (status === 'resolved' && !resolution_note?.trim()) missing.push('resolution_note')
-    if (missing.length > 0) {
-      console.warn('[screen2/sync] validation failed:', missing.join(', '))
-      return NextResponse.json({ error: `Missing: ${missing.join(', ')}` }, { status: 400 })
+    const input = {
+      ...(id ? { id } : {}),
+      customerId:     (customer_id ?? '') as string,
+      category:       (category ?? '') as ComplaintCategory,
+      description:    (description ?? '') as string,
+      receivedVia:    (received_via ?? '') as ComplaintReceivedVia,
+      status:         (status ?? '') as ComplaintStatus,
+      resolutionNote: resolution_note,
+      loggedBy:       userId,
     }
 
-    const payload: Record<string, unknown> = {
-      ...(id ? { id } : {}),
-      user_id:     userId,
-      customer_id,
-      category,
-      description:     description!.trim(),
-      received_via,
-      status,
-      resolution_note: status === 'resolved' ? (resolution_note?.trim() ?? null) : null,
-      resolved_by:     status === 'resolved' ? userId : null,
-      resolved_at:     status === 'resolved' ? new Date().toISOString() : null,
+    const valid = complaintsService.validateCreate(input)
+    if (!valid.ok) {
+      console.warn('[screen2/sync] validation failed:', valid.message)
+      return NextResponse.json({ error: valid.message }, { status: valid.status })
     }
 
     console.log('[screen2/sync] inserting complaint, status:', status)
-    const { ok, status: httpStatus, text } = await supaPost('complaints', payload)
+    const created = await complaintsService.createComplaint(input)
 
-    if (!ok) {
-      // 23505 = unique_violation — already inserted on a previous retry
-      if (httpStatus === 409 || text.includes('23505')) {
-        console.log('[screen2/sync] Duplicate insert — already exists, returning 200')
-        return NextResponse.json({ id, duplicate: true }, { status: 200 })
-      }
-      console.error('[screen2/sync] insert failed:', httpStatus, text.slice(0, 200))
-      return NextResponse.json({ error: `Insert failed: ${text.slice(0, 100)}` }, { status: 500 })
+    // 23505 = unique_violation — already inserted on a previous retry. The
+    // adapter maps it to duplicate:true; the till's offline queue needs a 200
+    // here (a 500 would make it retry forever) — W1.
+    if (created.duplicate) {
+      console.log('[screen2/sync] Duplicate insert — already exists, returning 200')
+      return NextResponse.json({ id: created.id, duplicate: true }, { status: 200 })
     }
 
-    const rows = JSON.parse(text) as { id: string }[]
-    const recordId = rows[0]?.id
+    const recordId = created.id
     console.log('[screen2/sync] inserted:', recordId)
 
-    // Fetch customer name for audit log + email
-    const customer = await supaGet('customers', `select=name&id=eq.${customer_id}`)
+    // Customer name now comes back with the create receipt (no second read).
     const label = category!.replace(/_/g, ' ')
 
-    // Audit log (fire-and-forget)
+    // Audit log (fire-and-forget) — raw REST, F-TD-31 (no owned port yet)
     supaPost('audit_log', {
       user_id:   userId,
       screen:    'screen2',
       action:    'created',
       record_id: recordId ?? null,
-      summary:   `Complaint logged: ${customer?.name ?? customer_id} — ${label} — ${status!.toUpperCase()} — by ${userName}`,
+      summary:   `Complaint logged: ${created.customerName} — ${label} — ${status!.toUpperCase()} — by ${userName}`,
     }).catch((e) => console.error('[screen2/sync] audit error:', e))
 
     // Send email — awaited so errors surface in this request context
@@ -120,7 +105,7 @@ export async function POST(req: NextRequest) {
         author:    userName,
         complaint: {
           id:          recordId ?? '',
-          customer:    customer?.name ?? 'Unknown',
+          customer:    created.customerName,
           category:    label,
           description: (description ?? '').trim(),
           receivedVia: received_via?.replace(/_/g, ' '),

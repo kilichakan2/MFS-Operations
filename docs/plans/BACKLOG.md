@@ -304,6 +304,18 @@ the trail matters.
 - **Owner unit:** unscheduled — strong candidate to fold into the F-TD-27 / F-TD-30 "audit-trail standardisation" unit.
 - **Status:** open
 
+### F-TD-32 — complaint-email.ts / compliment-email.ts still read users via raw Supabase fetch
+- **Deferred:** 2026-06-21 (F-17 PR2 — email helpers left as-is; they read the
+  users domain, not complaint/compliment data).
+- **What:** `lib/complaint-email.ts` and `lib/compliment-email.ts` fetch their
+  staff recipient list with a raw `fetch` POST to `/rest/v1/users` (active,
+  non-driver / active). This is a USERS-domain read living outside the owned
+  layer — it should go through `usersService` (the Users port shipped F-13).
+- **Fix shape:** add a recipient-list read to the Users port/service (e.g.
+  `listNotificationRecipients({ includeDrivers })`) + map in the adapter; re-point
+  both email helpers onto `usersService`, dropping their direct Supabase users read.
+- **Owner unit:** unscheduled. Pairs with any Users-domain follow-up.
+
 ---
 
 ## Migration hygiene (F-TD-)

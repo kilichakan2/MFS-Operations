@@ -1,9 +1,9 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-
-const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
-const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+import { complaintsService }         from '@/lib/wiring/complaints'
+import { toComplaintDetailWireDto }  from '@/lib/api/complaints/dto'
+import { ServiceError }              from '@/lib/errors'
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,38 +13,25 @@ export async function GET(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-    const params = new URLSearchParams({
-      select: [
-        'id', 'created_at', 'category', 'description', 'received_via',
-        'status', 'resolution_note', 'resolved_at',
-        'customers(id,name)',
-        'users!complaints_user_id_fkey(name)',
-        'resolvedBy:users!complaints_resolved_by_fkey(name)',
-      ].join(','),
-      id: `eq.${id}`,
-    })
+    let detail
+    try {
+      detail = await complaintsService.findDetailById(id)
+    } catch (err) {
+      if (err instanceof ServiceError) {
+        return NextResponse.json({ error: 'DB error' }, { status: 500 })
+      }
+      throw err
+    }
+    if (!detail) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const res = await fetch(`${SUPA_URL}/rest/v1/complaints?${params}`, {
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` },
-    })
-
-    if (!res.ok) return NextResponse.json({ error: 'DB error' }, { status: 500 })
-    const rows = await res.json()
-    if (!rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    const r = rows[0]
+    // Translate, then prettify BOTH category and received_via at the edge (G1).
+    // The spread-override keeps the DTO's insertion order intact (overriding an
+    // existing key does not move it).
+    const dto = toComplaintDetailWireDto(detail)
     return NextResponse.json({
-      id:             r.id,
-      createdAt:      r.created_at,
-      category:       String(r.category ?? '').replace(/_/g, ' '),
-      description:    r.description ?? '',
-      receivedVia:    String(r.received_via ?? '').replace(/_/g, ' '),
-      status:         r.status,
-      resolutionNote: r.resolution_note ?? null,
-      resolvedAt:     r.resolved_at ?? null,
-      customer:       r.customers?.name ?? 'Unknown',
-      loggedBy:       r.users?.name ?? 'Unknown',
-      resolvedBy:     r.resolvedBy?.name ?? null,
+      ...dto,
+      category:    dto.category.replace(/_/g, ' '),
+      receivedVia: dto.receivedVia.replace(/_/g, ' '),
     })
   } catch (err) {
     console.error('[detail/complaint]', err)

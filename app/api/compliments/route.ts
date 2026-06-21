@@ -9,9 +9,9 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { sendComplimentEmail }        from '@/lib/compliment-email'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { complimentsService }         from '@/lib/wiring/compliments'
+import { toComplimentWireDto }        from '@/lib/api/compliments/dto'
+import { ServiceError }               from '@/lib/errors'
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
@@ -19,32 +19,14 @@ export async function GET(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
-  const { data, error } = await supabase
-    .from('compliments')
-    .select(`
-      id, body, created_at,
-      poster:users!compliments_posted_by_fkey(id, name),
-      recipient:users!compliments_recipient_id_fkey(id, name)
-    `)
-    .order('created_at', { ascending: false })
-    .limit(100)
-
-  if (error) {
-    console.error('[compliments GET]', error.message)
+  try {
+    const list = await complimentsService.listRecent()
+    const compliments = list.map(toComplimentWireDto)
+    return NextResponse.json({ compliments })
+  } catch (err) {
+    console.error('[compliments GET]', err instanceof Error ? err.message : String(err))
     return NextResponse.json({ error: 'Failed to load' }, { status: 500 })
   }
-
-  const compliments = (data ?? []).map(c => ({
-    id:             c.id,
-    body:           c.body,
-    created_at:     c.created_at,
-    posted_by_id:   (c.poster as unknown as { id: string; name: string } | null)?.id   ?? null,
-    posted_by_name: (c.poster as unknown as { id: string; name: string } | null)?.name ?? 'Unknown',
-    recipient_id:   (c.recipient as unknown as { id: string; name: string } | null)?.id   ?? null,
-    recipient_name: (c.recipient as unknown as { id: string; name: string } | null)?.name ?? null,
-  }))
-
-  return NextResponse.json({ compliments })
 }
 
 // ─── POST ─────────────────────────────────────────────────────────────────────
@@ -56,47 +38,36 @@ export async function POST(req: NextRequest) {
   let body: { body?: string; recipient_id?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }
 
-  if (!body?.body?.trim()) {
-    return NextResponse.json({ error: 'body required' }, { status: 400 })
+  const input = {
+    body:        body?.body ?? '',
+    postedBy:    userId,
+    recipientId: body?.recipient_id || null,
   }
 
-  const { data, error } = await supabase
-    .from('compliments')
-    .insert({
-      body:         body.body.trim(),
-      posted_by:    userId,
-      recipient_id: body.recipient_id || null,
-    })
-    .select(`
-      id, body, created_at,
-      poster:users!compliments_posted_by_fkey(id, name),
-      recipient:users!compliments_recipient_id_fkey(id, name)
-    `)
-    .single()
-
-  if (error) {
-    console.error('[compliments POST]', error.message)
-    return NextResponse.json({ error: 'Failed to post' }, { status: 500 })
+  const valid = complimentsService.validateCreate(input)
+  if (!valid.ok) {
+    return NextResponse.json({ error: valid.message }, { status: valid.status })
   }
 
-  const c = data
+  let c
+  try {
+    c = await complimentsService.createCompliment(input)
+  } catch (err) {
+    console.error('[compliments POST]', err instanceof Error ? err.message : String(err))
+    if (err instanceof ServiceError) {
+      return NextResponse.json({ error: 'Failed to post' }, { status: 500 })
+    }
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
 
   // Send email notification — await before responding (no fire-and-forget in serverless)
+  // Email keeps the route's old 'Someone' fallback (the domain defaults the poster
+  // name to 'Unknown'; the poster is always the authenticated caller in practice).
   await sendComplimentEmail({
     body:          c.body,
-    postedByName:  (c.poster  as unknown as { id: string; name: string } | null)?.name ?? 'Someone',
-    recipientName: (c.recipient as unknown as { id: string; name: string } | null)?.name ?? null,
+    postedByName:  c.postedByName === 'Unknown' ? 'Someone' : c.postedByName,
+    recipientName: c.recipientName,
   }).catch(err => console.error('[compliments POST] email error:', err))
 
-  return NextResponse.json({
-    compliment: {
-      id:             c.id,
-      body:           c.body,
-      created_at:     c.created_at,
-      posted_by_id:   (c.poster as unknown as { id: string; name: string } | null)?.id   ?? null,
-      posted_by_name: (c.poster as unknown as { id: string; name: string } | null)?.name ?? 'Unknown',
-      recipient_id:   (c.recipient as unknown as { id: string; name: string } | null)?.id   ?? null,
-      recipient_name: (c.recipient as unknown as { id: string; name: string } | null)?.name ?? null,
-    },
-  }, { status: 201 })
+  return NextResponse.json({ compliment: toComplimentWireDto(c) }, { status: 201 })
 }
