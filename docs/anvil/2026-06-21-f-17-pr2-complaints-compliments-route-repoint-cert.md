@@ -108,11 +108,16 @@ PITR confirmed: **N/A — no destructive migration, no migration at all.**
 - **Production deploy — `dpl_8NaNwZn68GHmtkuKrf7jRYendENi`** (commit `968035b`) READY on www.mfsops.com.
 - **Post-deploy prod smoke (read-only) — DONE ✅.** `/`, `/api/screen2/{all,open}`, `/api/compliments`,
   `/api/compliments/users`, `/api/detail/complaint` all return 307 (auth redirect) — **all non-5xx**.
-- **Manual write-smoke (Hakan) — DONE ✅ 2026-06-21.** Raised a complaint for BATCH BURGERS LTD
-  ("TEST HAKAN") → added note "TEST NOTE" → resolved with "TEST RESOLVE" on www.mfsops.com.
-  Verified live via Supabase MCP read-only: complaint `6a36eba9-7bde-499e-a8df-acdc2b2de5ca`,
-  status=resolved, note_count=1, logged_by+resolved_by=Hakan — full create→note→resolve chain
-  coherent through the re-pointed services. PR2 fully validated in production.
+- **Manual write-smoke (Hakan) — COMPLAINT path DONE ✅ 2026-06-21.** Raised a complaint for
+  BATCH BURGERS LTD ("TEST HAKAN") → added note "TEST NOTE" → resolved with "TEST RESOLVE" on
+  www.mfsops.com. Verified live via Supabase MCP read-only: complaint
+  `6a36eba9-7bde-499e-a8df-acdc2b2de5ca`, status=resolved, note_count=1, logged_by+resolved_by=Hakan
+  — full create→note→resolve chain coherent through the re-pointed services.
+- **Manual write-smoke — COMPLIMENT path: NOT manually prod-tested.** The compliment POST is proven
+  by the integration suite AND by browser spec `09-compliments` on local Docker + on the PR #63
+  preview (part of preview @critical 15/15), but no human has posted a compliment on real production.
+  (Note: a live compliment POST also fires the staff email helper.) Low residual risk — the path is
+  byte-identical to the preview-proven path — but a 30-second manual prod post would close it to 100%.
 
 ## Verdict
 
