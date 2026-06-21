@@ -45,3 +45,8 @@ export {
   type ComplimentsService,
   type ComplimentsServiceDeps,
 } from "./ComplimentsService";
+export {
+  createVisitsService,
+  type VisitsService,
+  type VisitsServiceDeps,
+} from "./VisitsService";

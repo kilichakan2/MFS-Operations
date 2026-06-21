@@ -75,3 +75,10 @@ export {
   type FakeComplimentsSeed,
   type FakeComplimentsUserRef,
 } from "./ComplimentsRepository";
+export {
+  createFakeVisitsRepository,
+  fakeVisitsRepository,
+  type FakeVisitsSeed,
+  type FakeVisitsPersonRef,
+  type FakeVisitsCustomerRef,
+} from "./VisitsRepository";
