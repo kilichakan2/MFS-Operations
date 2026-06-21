@@ -98,9 +98,11 @@ describe("/api/complaints + /api/compliments integration (F-17 PR2 re-point)", (
     receivedVia?: string;
     description?: string;
     status?: "open" | "resolved";
+    ownerId?: string;
   } = {}): Promise<string> {
     const supa = getServiceClient();
     const resolved = opts.status === "resolved";
+    const ownerId = opts.ownerId ?? users.office.id;
     const { data, error } = await supa
       .from("complaints")
       .insert({
@@ -108,10 +110,10 @@ describe("/api/complaints + /api/compliments integration (F-17 PR2 re-point)", (
         category: opts.category ?? "quality",
         description: opts.description ?? "seed complaint description",
         received_via: opts.receivedVia ?? "phone",
-        user_id: users.office.id,
+        user_id: ownerId,
         status: opts.status ?? "open",
         resolution_note: resolved ? "seed resolution" : null,
-        resolved_by: resolved ? users.office.id : null,
+        resolved_by: resolved ? ownerId : null,
         resolved_at: resolved ? new Date().toISOString() : null,
       })
       .select("id")
@@ -506,5 +508,93 @@ describe("/api/complaints + /api/compliments integration (F-17 PR2 re-point)", (
     expect((res.body as { error: string }).error).toBe(
       "Missing: customer_id, category, description, received_via, resolution_note",
     );
+  });
+
+  // ── F-RLS-04f authenticated cutover assertions ──────────────
+  // The routes now run as the authenticated caller (RLS fires). These prove the
+  // shared-board policy, the FK embeds resolving under the badge, and the raw
+  // audit_log writes still succeeding (service-role) after the flip.
+
+  it("F-RLS-04f shared board: a complaint LOGGED BY user-A is visible to user-B via screen2/all and screen2/open", async () => {
+    // Seed a complaint OWNED BY admin, then read it as office (a different,
+    // non-admin user). Under the dropped owner-only baseline policy office would
+    // NOT see it; the permissive valid-user policy means it does — the shared board.
+    const id = await seedComplaint({
+      category: "missing_item",
+      status: "open",
+      ownerId: users.admin.id,
+    });
+
+    const all = await api("/api/screen2/all", {
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(all.status).toBe(200);
+    const allArr = all.body as Record<string, unknown>[];
+    const inAll = allArr.find((c) => c.id === id);
+    expect(inAll, "user-B sees user-A's complaint in /all").toBeDefined();
+    // FK embeds resolve under the badge (customers_select + users_directory_select).
+    expect(inAll!.customer).toBe(customer.name);
+    expect(inAll!.loggedBy).toBe(users.admin.name);
+
+    const open = await api("/api/screen2/open", {
+      role: "office",
+      userId: users.office.id,
+    });
+    const openArr = open.body as Record<string, unknown>[];
+    expect(
+      openArr.find((c) => c.id === id),
+      "user-B sees user-A's open complaint in /open",
+    ).toBeDefined();
+  });
+
+  it("F-RLS-04f shared board: user-B can open the DETAIL of a complaint logged by user-A (FK names non-blank)", async () => {
+    const id = await seedComplaint({
+      category: "missing_item",
+      receivedVia: "in_person",
+      status: "open",
+      ownerId: users.admin.id,
+    });
+    const res = await api(`/api/detail/complaint?id=${id}`, {
+      role: "office",
+      userId: users.office.id,
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as Record<string, unknown>;
+    expect(body.customer).toBe(customer.name); // customers embed under the badge
+    expect(body.loggedBy).toBe(users.admin.name); // users embed under the badge
+  });
+
+  it("F-RLS-04f the raw audit_log write still succeeds (service-role) after the route flip", async () => {
+    const supa = getServiceClient();
+    const id = await seedComplaint({ status: "open" });
+    const before = new Date().toISOString();
+
+    const res = await api("/api/screen2/resolve", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      name: users.office.name,
+      body: { complaint_id: id, resolution_note: "audit-still-works check" },
+    });
+    expect(res.status).toBe(200);
+
+    // The audit write is fire-and-forget; poll briefly for the row.
+    let auditRow: unknown = null;
+    for (let i = 0; i < 20 && !auditRow; i++) {
+      const { data } = await supa
+        .from("audit_log")
+        .select("id, action, record_id")
+        .eq("record_id", id)
+        .eq("action", "resolved")
+        .gte("created_at", before)
+        .maybeSingle();
+      if (data) {
+        auditRow = data;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(auditRow, "audit_log resolved row written via service-role").not.toBeNull();
   });
 });

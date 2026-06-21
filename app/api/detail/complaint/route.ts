@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { complaintsService }         from '@/lib/wiring/complaints'
+import { complaintsServiceForCaller } from '@/lib/wiring/complaints'
 import { toComplaintDetailWireDto }  from '@/lib/api/complaints/dto'
 import { ServiceError }              from '@/lib/errors'
 
@@ -9,6 +9,9 @@ export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    // F-RLS-04f: run as authenticated caller (RLS fires). Rollback = swap complaintsServiceForCaller(userId) → complaintsService.
+    const complaintsService = await complaintsServiceForCaller(userId)
 
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })

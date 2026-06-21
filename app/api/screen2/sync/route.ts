@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { complaintsService }         from '@/lib/wiring/complaints'
+import { complaintsServiceForCaller } from '@/lib/wiring/complaints'
 import type {
   ComplaintCategory,
   ComplaintReceivedVia,
@@ -39,6 +39,9 @@ export async function POST(req: NextRequest) {
     const userId   = req.headers.get('x-mfs-user-id')
     const userName = req.headers.get('x-mfs-user-name') ?? 'Unknown'
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    // F-RLS-04f: run as authenticated caller (RLS fires). Rollback = swap complaintsServiceForCaller(userId) → complaintsService.
+    const complaintsService = await complaintsServiceForCaller(userId)
 
     let body: Record<string, unknown> | null = null
     try { body = await req.json() } catch { /* fall through */ }

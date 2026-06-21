@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { sendComplimentEmail }        from '@/lib/compliment-email'
-import { complimentsService }         from '@/lib/wiring/compliments'
+import { complimentsServiceForCaller } from '@/lib/wiring/compliments'
 import { toComplimentWireDto }        from '@/lib/api/compliments/dto'
 import { ServiceError }               from '@/lib/errors'
 
@@ -18,6 +18,9 @@ import { ServiceError }               from '@/lib/errors'
 export async function GET(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+  // F-RLS-04f: run as authenticated caller (RLS fires). Rollback = swap complimentsServiceForCaller(userId) → complimentsService.
+  const complimentsService = await complimentsServiceForCaller(userId)
 
   try {
     const list = await complimentsService.listRecent()
@@ -34,6 +37,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+  // F-RLS-04f: run as authenticated caller (RLS fires). Rollback = swap complimentsServiceForCaller(userId) → complimentsService.
+  const complimentsService = await complimentsServiceForCaller(userId)
 
   let body: { body?: string; recipient_id?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }
