@@ -11,7 +11,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { complaintsService }         from '@/lib/wiring/complaints'
 
+// audit_log is a cross-cutting write with no owned port yet (F-TD-31) — it
+// stays as a raw REST fetch. Only the complaint DATA surface moved to the
+// service.
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
 const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
@@ -28,69 +32,47 @@ export async function POST(req: NextRequest) {
     const complaint_id    = body.complaint_id    as string | undefined
     const resolution_note = body.resolution_note as string | undefined
 
-    if (!complaint_id?.trim())    return NextResponse.json({ error: 'complaint_id required' }, { status: 400 })
-    if (!resolution_note?.trim()) return NextResponse.json({ error: 'resolution_note required' }, { status: 400 })
+    const valid = complaintsService.validateResolve({
+      complaintId:    complaint_id ?? '',
+      resolutionNote: resolution_note ?? '',
+      resolvedBy:     userId,
+    })
+    if (!valid.ok) {
+      return NextResponse.json({ error: valid.message }, { status: valid.status })
+    }
 
-    // UUID format sanity check
+    // UUID format sanity check (presentation — stays in the route)
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-    if (!UUID_RE.test(complaint_id)) return NextResponse.json({ error: 'Invalid complaint_id' }, { status: 400 })
+    if (!UUID_RE.test(complaint_id!)) return NextResponse.json({ error: 'Invalid complaint_id' }, { status: 400 })
 
     console.log('[screen2/resolve] resolving complaint:', complaint_id, 'by:', userName)
 
-    // PATCH the complaint — DB constraint requires all four fields set together
-    const res = await fetch(
-      `${SUPA_URL}/rest/v1/complaints?id=eq.${complaint_id}&status=eq.open`,
-      {
-        method:  'PATCH',
-        headers: {
-          'Content-Type':  'application/json',
-          'apikey':         SUPA_KEY,
-          'Authorization': `Bearer ${SUPA_KEY}`,
-          'Prefer':         'return=representation',
-        },
-        body: JSON.stringify({
-          status:          'resolved',
-          resolution_note: resolution_note.trim(),
-          resolved_by:     userId,
-          resolved_at:     new Date().toISOString(),
-        }),
-      }
-    )
-
-    const text = await res.text()
-
-    if (!res.ok) {
-      console.error('[screen2/resolve] Supabase error:', res.status, text.slice(0, 200))
-      return NextResponse.json({ error: `Update failed: ${text.slice(0, 100)}` }, { status: 500 })
-    }
-
-    const rows = JSON.parse(text) as { id: string }[]
-    if (rows.length === 0) {
-      // No row matched — either wrong ID or already resolved
+    const resolved = await complaintsService.resolveOpen({
+      complaintId:    complaint_id!,
+      resolutionNote: resolution_note!.trim(),
+      resolvedBy:     userId,
+    })
+    if (!resolved) {
+      // No open row matched — either wrong ID or already resolved
       return NextResponse.json(
         { error: 'Complaint not found or already resolved' },
         { status: 404 }
       )
     }
 
-    console.log('[screen2/resolve] resolved:', rows[0].id)
+    console.log('[screen2/resolve] resolved:', resolved.id)
 
     // Send email — awaited so errors surface in this request context
     try {
-      const emailCtxRes = await fetch(
-        `${SUPA_URL}/rest/v1/complaints?id=eq.${complaint_id}&select=category,description,customers(name)`,
-        { headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}` } }
-      )
-      const emailCtx = emailCtxRes.ok ? await emailCtxRes.json() as { category: string; description: string; customers: { name: string } | null }[] : []
-      const comp = emailCtx[0]
+      const comp = await complaintsService.findEmailContext(complaint_id!)
       const { sendComplaintEmail } = await import('@/lib/complaint-email')
       await sendComplaintEmail({
         type:           'resolved',
         resolvedBy:     userName,
-        resolutionNote: resolution_note.trim(),
+        resolutionNote: resolution_note!.trim(),
         complaint: {
-          id:          rows[0].id,
-          customer:    comp?.customers?.name ?? 'Unknown',
+          id:          resolved.id,
+          customer:    comp?.customerName ?? 'Unknown',
           category:    (comp?.category ?? '').replace(/_/g, ' '),
           description: comp?.description ?? '',
           status:      'resolved',
@@ -100,7 +82,7 @@ export async function POST(req: NextRequest) {
       console.error('[screen2/resolve] email error:', e instanceof Error ? e.stack : String(e))
     }
 
-    // Audit log (fire-and-forget)
+    // Audit log (fire-and-forget) — raw REST, F-TD-31 (no owned port yet)
     fetch(`${SUPA_URL}/rest/v1/audit_log`, {
       method:  'POST',
       headers: {
@@ -112,12 +94,12 @@ export async function POST(req: NextRequest) {
         user_id:   userId,
         screen:    'screen2',
         action:    'resolved',
-        record_id: rows[0].id,
-        summary:   `Complaint resolved by ${userName}: "${resolution_note.trim().slice(0, 80)}"`,
+        record_id: resolved.id,
+        summary:   `Complaint resolved by ${userName}: "${resolution_note!.trim().slice(0, 80)}"`,
       }),
     }).catch((e) => console.error('[screen2/resolve] audit error:', e))
 
-    return NextResponse.json({ id: rows[0].id }, { status: 200 })
+    return NextResponse.json({ id: resolved.id }, { status: 200 })
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
