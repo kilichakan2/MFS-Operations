@@ -317,6 +317,27 @@ the trail matters.
   both email helpers onto `usersService`, dropping their direct Supabase users read.
 - **Owner unit:** unscheduled. Pairs with any Users-domain follow-up.
 
+### F-TD-33 — 🟡 Flaky `@critical` preview E2E specs (`04-kds-line-undo`, `08-complaints-board`)
+- **Raised:** 2026-06-22 (F-18 PR1 pre-ship preview smoke). **MUST verify before F-18 PR2 merges** (Hakan's explicit ask — confirm these genuinely work, not just flake).
+- **What:** the pre-ship `@critical` preview smoke failed 1/15 on two consecutive
+  runs against the PR #65 preview, but the failing spec ALTERNATED — run 1 failed
+  `tests/e2e/04-kds-line-undo.spec.ts:94` ("Cancel on the undo modal leaves the line
+  done"); run 2 failed `tests/e2e/08-complaints-board.spec.ts:55` ("log → board renders
+  → note → resolve") while `04` then passed. Non-deterministic + unrelated domains =
+  flaky, almost certainly shared-preview-data contention (write-flow specs mutate the
+  shared Supabase preview branch and trip each other when run back-to-back).
+- **Why it matters:** F-18 PR1 shipped over this red because the change was dead code
+  (provably can't touch KDS/Complaints) and the unit layer was green — but a flaky
+  `@critical` gate is a real reliability hole: it will cry wolf on every future preview
+  smoke, including PR2's (which is NOT dead code and DOES touch behaviour).
+- **Fix shape (investigate, then pick):** (a) confirm green on `main` / local Docker
+  in isolation to prove it's environment-not-code; (b) make the two write-flow specs
+  self-cleaning / data-isolated (unique fixture per run, or reset-then-act) so re-runs
+  don't collide; (c) consider a Supabase-preview-branch reset before the smoke.
+  Do NOT just add retries to paper over it.
+- **Owner unit:** **gate before F-18 PR2** — verify + (if real-but-flaky) stabilise the
+  two specs first, so PR2's preview smoke is a trustworthy signal.
+
 ---
 
 ## Migration hygiene (F-TD-)
