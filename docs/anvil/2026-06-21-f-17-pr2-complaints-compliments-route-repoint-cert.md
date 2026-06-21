@@ -113,11 +113,11 @@ PITR confirmed: **N/A — no destructive migration, no migration at all.**
   www.mfsops.com. Verified live via Supabase MCP read-only: complaint
   `6a36eba9-7bde-499e-a8df-acdc2b2de5ca`, status=resolved, note_count=1, logged_by+resolved_by=Hakan
   — full create→note→resolve chain coherent through the re-pointed services.
-- **Manual write-smoke — COMPLIMENT path: NOT manually prod-tested.** The compliment POST is proven
-  by the integration suite AND by browser spec `09-compliments` on local Docker + on the PR #63
-  preview (part of preview @critical 15/15), but no human has posted a compliment on real production.
-  (Note: a live compliment POST also fires the staff email helper.) Low residual risk — the path is
-  byte-identical to the preview-proven path — but a 30-second manual prod post would close it to 100%.
+- **Manual write-smoke — COMPLIMENT path DONE ✅ 2026-06-21.** Posted "TEST COMPLIMENT" (team-wide)
+  on www.mfsops.com. Verified live via Supabase MCP read-only: compliment
+  `cc45d290-d7fa-45c5-bf2a-e80824b081ff`, body intact, posted_by=Hakan, recipient_id=null
+  (valid "whole team" case) — wrote cleanly through the re-pointed complimentsService.
+- **F-17 PR2 manual prod write-smoke COMPLETE — both write paths hand-verified live.**
 
 ## Verdict
 
