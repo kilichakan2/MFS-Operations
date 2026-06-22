@@ -560,8 +560,14 @@ the trail matters.
 ### F-RLS-04g-thin-route-filters — Thin/remove the route-level visit owner filters now RLS enforces ownership (debt from F-RLS-04g)
 
 - **Logged:** 2026-06-22 (F-RLS-04g Gate 2)
-- **What:** the flipped visit routes still filter by owner in the route layer (`verifyVisitOwnership`, the `isManager = role === 'admin' || role === 'office'` branches) even though the DB now enforces owner-scoping via RLS. Kept as belt-and-braces (two locks on the same door) this copy. The `office`-as-manager branch is now effectively dead for reads — office is not `is_admin()`, so the DB denies office every visit/note row regardless (the intended office-empty board, plan §9).
+- **What:** the flipped visit routes still filter by owner in the route layer (`verifyVisitOwnership`) even though the DB now enforces owner-scoping via RLS. Kept as belt-and-braces (two locks on the same door) this copy. (W1, shipped in `b47d212`, already removed the `office`-as-manager branch on the notes route — `isManager = role === 'admin'` only — so office now gets a clean 404 there; this item is about thinning the remaining `verifyVisitOwnership` checks.)
 - **Fix:** thin or remove the route-level owner filtering once RLS is proven in prod, so ownership has a single source of truth (the DB). Low risk, no migration. Pair with a route-test sweep to confirm the 404/empty behaviour is preserved by RLS alone.
+
+### F-RLS-04g-empty-guard — Align the `visits` baseline RLS policies to the `nullif(...)::uuid` empty-guard (🔵 from F-RLS-04g Guard)
+
+- **Logged:** 2026-06-22 (F-RLS-04g Guard review)
+- **What:** the `visits` (and the new `visit_notes`) policies are the only RLS in the repo that cast `current_setting('app.current_user_id', true)::uuid` WITHOUT the `nullif(..., '')` empty-guard every other policy uses (cf. `20260618130000`, `20260618120000`, `20260617130001`). So an empty GUC THROWS `22P02` (fail-closed-by-throw) instead of returning empty. Safe today — the live path never sends an empty GUC (routes 401 without a userId) — but it is a latent inconsistency: a future route flipped onto these policies without a 401 guard, or a GUC-bridge bug, would surface as a 22P02 → 500 instead of a clean empty result.
+- **Fix:** when the dormant `visits` baseline policies are next legitimately touched, wrap the cast in `nullif(current_setting('app.current_user_id', true), '')::uuid` to match the rest of the repo (clean-deny on empty GUC). NOT done in F-RLS-04g by design (guardrail #5: don't rewrite the live `visits` policies during the cutover). Low risk, additive.
 
 ---
 
