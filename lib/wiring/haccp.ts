@@ -56,7 +56,6 @@ export const haccpCorrectiveActionsService: HaccpCorrectiveActionsService =
 
 export const submitHaccpDailyCheck: SubmitHaccpDailyCheck =
   createSubmitHaccpDailyCheck({
-    dailyChecks: haccpDailyChecksService,
     correctiveActions: haccpCorrectiveActionsService,
   });
 

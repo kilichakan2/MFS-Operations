@@ -1,23 +1,31 @@
 /**
  * lib/usecases/submitHaccpDailyCheck.ts
  *
- * The daily-check submit use-case (F-19 PR1). ONE business operation — "save a
- * daily-check row, then file any corrective actions" — that spans TWO services:
- * `HaccpDailyChecksService` (insert the log row) and
- * `HaccpCorrectiveActionsService` (file the CA rows into the shared ledger).
+ * The corrective-action FILING use-case (F-19 PR1). It owns exactly ONE thing:
+ * the soft-fail contract for filing corrective-action rows AFTER a daily-check
+ * row has already been committed — "a CA-insert failure is logged, not thrown,
+ * so a deviation submission still succeeds." The daily-check INSERT itself is
+ * NOT composed here (see Decision 1).
  *
- * DESIGN DECISION 1 (resolved at Render as Ousterhout would): the use-case
- * SPLIT (not folding the CA write into the daily-checks service). ADR-0002
- * forbids a service importing another service, so the two-service composition
- * lives here. This gives PR2's daily-check routes the SMALLEST interface — one
- * `submit…` call that hides BOTH the log insert AND the entire CA fan-out +
- * soft-fail contract. It is a deep module: a one-method facade over two-table
- * orchestration, heterogeneous CA payloads, and the "a CA-write failure must NOT
- * sink a submitted check" rule. The CA service must exist standalone anyway (the
- * admin queue/sign-off routes need it with no daily-check), so keeping it
- * separate and composing here keeps the CA ledger logic in exactly one place
- * (locality). Deletion test: delete this use-case and the composition + soft-
- * fail smears into every PR2 route — so it holds weight.
+ * design: DESIGN DECISION 1 (resolved at Render as Ousterhout would — option (a)
+ * "own the soft-fail contract", NOT option (b) "compose both writes"). The PR1
+ * plan originally sketched a use-case that composes the daily-check insert THEN
+ * the CA fan-out behind one method. We rejected that: the 7 daily-check
+ * sub-domains have HETEROGENEOUS inserts (delivery inserts one row + returns an
+ * id; cold-storage inserts N readings; mince-prep dispatches 3 different forms;
+ * calibration has two modes; process-room writes two tables) and a bespoke
+ * CA-derivation each. Forcing all seven insert+derive paths through one
+ * `submit…` method would NOT be a deep module — it would be a SHALLOW 7-way
+ * dispatcher whose interface (a union input covering all 7 forms) is nearly as
+ * large as the per-route code it hides, merely RELOCATING each route's
+ * complexity. Ousterhout's deep-module test prefers a small module that truly
+ * owns ONE thing over a shallow one pretending to own seven. So this use-case
+ * owns the soft-fail rule alone; PR2's routes call the daily-checks service for
+ * the (form-specific) insert, then this for the CA filing. Deletion test: delete
+ * this and the try/catch "log-don't-throw" rule smears into every PR2 route — so
+ * it holds weight. The CA service stays standalone anyway (admin queue/sign-off
+ * routes need it with no daily-check), and ADR-0002 forbids a service importing
+ * another service, so the CA-filing wrapper belongs in a use-case, not a service.
  *
  * THE SOFT-FAIL CONTRACT lives HERE, not in the adapter or the CA service: a
  * CA-insert failure is logged and turned into `ca_write_failed: true` — it is
@@ -29,14 +37,10 @@
  */
 
 import type { CorrectiveActionInsert } from "@/lib/domain";
-import type {
-  HaccpDailyChecksService,
-  HaccpCorrectiveActionsService,
-} from "@/lib/services";
+import type { HaccpCorrectiveActionsService } from "@/lib/services";
 import { log } from "@/lib/observability/log";
 
 export interface SubmitHaccpDailyCheckDeps {
-  readonly dailyChecks: HaccpDailyChecksService;
   readonly correctiveActions: HaccpCorrectiveActionsService;
 }
 

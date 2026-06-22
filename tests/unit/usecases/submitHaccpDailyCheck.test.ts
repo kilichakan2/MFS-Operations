@@ -10,14 +10,8 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { createSubmitHaccpDailyCheck } from "@/lib/usecases/submitHaccpDailyCheck";
-import {
-  createHaccpDailyChecksService,
-  createHaccpCorrectiveActionsService,
-} from "@/lib/services";
-import {
-  createFakeHaccpDailyChecksRepository,
-  createFakeHaccpCorrectiveActionsRepository,
-} from "@/lib/adapters/fake";
+import { createHaccpCorrectiveActionsService } from "@/lib/services";
+import { createFakeHaccpCorrectiveActionsRepository } from "@/lib/adapters/fake";
 import type { CorrectiveActionInsert } from "@/lib/domain";
 
 // Silence the use-case's structured error log on the soft-fail case.
@@ -41,14 +35,11 @@ function rows(n: number): CorrectiveActionInsert[] {
 }
 
 function makeUseCase(caRepo = createFakeHaccpCorrectiveActionsRepository()) {
-  const dailyChecks = createHaccpDailyChecksService({
-    dailyChecks: createFakeHaccpDailyChecksRepository(),
-  });
   const correctiveActions = createHaccpCorrectiveActionsService({
     correctiveActions: caRepo,
   });
   return {
-    uc: createSubmitHaccpDailyCheck({ dailyChecks, correctiveActions }),
+    uc: createSubmitHaccpDailyCheck({ correctiveActions }),
     caRepo,
   };
 }
