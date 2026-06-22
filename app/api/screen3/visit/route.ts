@@ -13,12 +13,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { visitsService } from '@/lib/wiring/visits'
+import { visitsServiceForCaller } from '@/lib/wiring/visits'
 import { ServiceError } from '@/lib/errors'
 
 export async function DELETE(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+  // F-RLS-04g: run as the caller (authenticated role → visits RLS fires). Per-request.
+  const visitsService = await visitsServiceForCaller(userId)
 
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
@@ -42,6 +45,9 @@ export async function PATCH(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
   const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+  // F-RLS-04g: run as the caller (authenticated role → visits RLS fires). Per-request.
+  const visitsService = await visitsServiceForCaller(userId)
 
   let body: { id?: string; pipeline_status?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }

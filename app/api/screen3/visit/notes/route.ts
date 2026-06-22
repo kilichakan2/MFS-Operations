@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { visitsService } from '@/lib/wiring/visits'
+import { visitsServiceForCaller } from '@/lib/wiring/visits'
 import { toVisitNoteWireDto, toNoteUpdateWireDto } from '@/lib/api/visits/dto'
 import { ServiceError } from '@/lib/errors'
 
@@ -33,6 +33,11 @@ export async function GET(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
   const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+  // F-RLS-04g: run as the caller (authenticated role → visits + visit_notes RLS
+  // fires). Per-request, never shared. Route-level verifyVisitOwnership stays as
+  // belt-and-braces (plan §13b).
+  const visitsService = await visitsServiceForCaller(userId)
 
   const visitId = req.nextUrl.searchParams.get('visit_id')
   if (!visitId) return NextResponse.json({ error: 'visit_id required' }, { status: 400 })
@@ -63,6 +68,9 @@ export async function POST(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
   const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+  // F-RLS-04g: run as the caller (authenticated role → RLS fires). Per-request.
+  const visitsService = await visitsServiceForCaller(userId)
 
   let body: { visit_id?: string; body?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }
@@ -106,6 +114,9 @@ export async function PATCH(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
   const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+  // F-RLS-04g: run as the caller (authenticated role → RLS fires). Per-request.
+  const visitsService = await visitsServiceForCaller(userId)
 
   let body: { id?: string; body?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }

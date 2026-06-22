@@ -28,7 +28,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { isValidRepId, isValidVisitType, isValidOutcome } from '@/lib/adminFilters'
-import { visitsService } from '@/lib/wiring/visits'
+import { visitsServiceForCaller } from '@/lib/wiring/visits'
 import { toAdminVisitWireDto } from '@/lib/api/visits/dto'
 import { ServiceError } from '@/lib/errors'
 
@@ -38,6 +38,11 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
     }
+
+    // F-RLS-04g: run reads as the caller (authenticated role → visits RLS fires).
+    // Admin-only route (middleware enforces the /api/admin prefix) → is_admin()
+    // in the visits policies grants admin ALL reps' rows. Per-request, never shared.
+    const visitsService = await visitsServiceForCaller(userId)
 
     const now = new Date()
     const todayMidnight = new Date(now); todayMidnight.setHours(0, 0, 0, 0)

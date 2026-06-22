@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { visitsService } from '@/lib/wiring/visits'
+import { visitsServiceForCaller } from '@/lib/wiring/visits'
 import { toVisitDetailWireDto } from '@/lib/api/visits/dto'
 import { ServiceError } from '@/lib/errors'
 
@@ -20,6 +20,11 @@ export async function GET(req: NextRequest) {
   try {
     const userId = req.headers.get('x-mfs-user-id')
     if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+
+    // F-RLS-04g: run the read as the caller (authenticated role → visits RLS fires;
+    // embedded customers/users resolve under the same badge). RLS-hidden rows return
+    // null → existing 404. Per-request, never shared.
+    const visitsService = await visitsServiceForCaller(userId)
 
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
