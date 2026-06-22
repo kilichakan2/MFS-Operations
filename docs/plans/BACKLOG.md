@@ -584,3 +584,32 @@ Not new entries — pointers. F-08 cannot ship until these are green:
 3. **F-INFRA-02 shipped** — the per-PR preview smoke is live (`npm run test:e2e:preview`, `docs/runbooks/preview-smoke.md`); the manual click-through compensating control is no longer required
 
 Owner unit for F-INFRA-02 itself: separate infra ticket, pre-F-08.
+
+---
+
+### F-TD-34 — 🔵 Local full-suite E2E has pre-existing failures on non-`@critical` specs
+- **Raised:** 2026-06-22 (F-18 PR2 ANVIL Docker rung).
+- **What:** Running the FULL chromium Playwright suite locally (against a production build)
+  yields **10 stable failures** that are NOT `@critical`: `route-manager.spec.ts` (the
+  `/routes` planner, 6 cases — all fail at the `loginAsAdmin` helper waiting for an
+  `admin` button), `desktop-chrome.spec.ts` (2 layout), `mobile-chrome.spec.ts` (2 layout).
+  A few others (`dashboard-admin-restyle`, `url-filter-init` `/complaints`+`/pricing`)
+  flake under full-suite load but pass in isolation.
+- **Proven pre-existing, NOT a regression:** rebuilt `main` (7a8ae0d) and ran the same spec
+  files on a production build → the **identical 10** fail. F-18 PR2's diff is clean.
+- **Why it matters (low):** the routine gate is the `@critical` relay + preview smoke, which
+  greps `@critical` only, so these never block. But the broader local suite isn't a
+  trustworthy "all green" signal: `loginAsAdmin` doesn't complete locally (likely a
+  PIN/seed/admin-login-flow env gap), and the url-filter / dashboard specs are load-sensitive.
+- **Fix shape (investigate, then pick):** (a) fix the local `loginAsAdmin` env so
+  `route-manager` runs locally; (b) data-isolate / de-flake the load-sensitive specs; (c) or
+  formally scope these as preview/CI-only and skip them in the local full run so the local
+  suite is honestly green. Do NOT add blanket retries.
+- **Owner unit:** unassigned (pick up alongside the next routes/planner or chrome-layout work).
+
+### F-18 PR2 — SHIPPED 2026-06-22 (PR #66, squash `66ed279`)
+Re-pointed the 6 Visits routes onto `visitsService` + new pure `lib/api/visits/dto.ts`
+wire-translator (5 fns, key-order tripwires). W1 fix: note-edit on missing id → 404 (was 500).
+F-TD-31 audit-raw-REST + postcodes.io geocode stay in `screen3/sync` (documented). No migration,
+no new dep. ANVIL: unit 2125 · integration 336 · build 114pp · preview `@critical` 15/15 + identity
+probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to **F-RLS-04g** (Visits).
