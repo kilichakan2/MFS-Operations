@@ -579,8 +579,16 @@ the trail matters.
 - **What:** `haccp_allergen_assessment` table stores each save as a new row (audit trail exists in DB) but `/haccp/allergens` page only shows the latest. No UI to view past versions.
 - **Fix shape:** same pattern as Food Fraud assessment.
 - **Priority:** Medium — SALSA auditor may ask to see previous assessments.
-- **Owner unit:** unscheduled
-- **Status:** open
+- **F-19 Frame finding (2026-06-22):** confirmed the table is ALREADY append-only — every
+  POST inserts a fresh row, full history kept, "latest" = newest by `assessed_at desc`. So the
+  history feature is mostly a **display** job (read all rows, show the timeline) and needs NO
+  schema change. ONE open product question: do you want an explicit **draft/published** state
+  (would need `version` int + `status` enum added to the table)? If drafts aren't required this
+  is pure read-side UI. Decision belongs to Cluster B Frame. Same append-only shape on
+  food-defence/food-fraud.
+- **Owner unit:** **F-19 Cluster B (PR3)** — rides the allergen/registers re-point. See roadmap
+  Days 13–14 F-19 plan.
+- **Status:** open (scheduled into F-19 Cluster B)
 
 ### F-PROD-02 — KDS line-done undo with confirmation
 

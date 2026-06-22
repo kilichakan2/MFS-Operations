@@ -174,12 +174,70 @@ After all three ship, resume the Day-2 order below.
 
 - **F-18 PR1 ✅ SHIPPED 2026-06-22 (PR #65, squash `660bdb5`)** — Visits domain foundation, pure introduce-only hexagonal extraction (mirror of F-17 Complaints PR1 / F-13 Users PR1). ZERO behaviour change: no route edited, no migration, no new dependency — the new code is DEAD (grep-confirmed zero prod imports) until PR2 re-points the routes. Built the full hexagon: `lib/domain/Visit.ts` (Visit/VisitNote/VisitDetail + input/output types, RAW enums), `lib/ports/VisitsRepository.ts` (11 methods, each 1:1 with a current route op), `lib/services/VisitsService.ts` (factory + 4 validation cascades, message strings lifted verbatim), `lib/adapters/supabase/VisitsRepository.ts` (only `@supabase/*` importer; verbatim `.select()` strings pinned char-for-char vs all 6 routes), `lib/adapters/fake/VisitsRepository.ts`, `lib/wiring/visits.ts` (exports `visitsService` SINGLETON ONLY — the per-caller `visitsServiceForCaller` factory deferred to F-RLS-04g, exactly as F-17 deferred its factory to F-RLS-04f). W1 designed out: `updateNote` uses `.maybeSingle()` → no-match returns null (404 in PR2), never 500. R-B1 (mixed snake_case/camelCase wire shapes across the 6 routes) documented + verbatim selects pinned — enforcement is PR2's job. code-critic verdict **SHIP** (0 blockers; 1 🔵 note: passthrough-heavy service body, acceptable as the documented F-RLS-04g injection seam; depth port/adapter/wiring all DEEP). FORGE+ANVIL: unit **2114/2114** (+68 Visits) · tsc 0 · lint 0 (no-adapter-imports pin green). Integration/RLS/E2E = N/A this PR (dead code, no surface) — deferred to PR2 (route re-point) + F-RLS-04g (RLS). No migration → no PITR. **Pre-ship preview smoke (Hakan asked to run anyway):** 14/15 @critical each of 2 runs, with the failing spec ALTERNATING (run 1 `04-kds-line-undo`, run 2 `08-complaints-board`) — textbook flaky shared-preview-data noise in domains UNRELATED to Visits; dead code can't have caused it. Merged over the flaky red (unit green + dead code + alternating unrelated failures). Prod deploy `dpl_iqkUKLAMoFNV5GmUYSq72UqmoRpt` (commit `660bdb5`) live on www.mfsops.com; **prod smoke 6/6 non-5xx** (`/login` 200 · `/` 307 · `/api/kds/orders` 200 · `/api/screen3/today` 307 · `/api/admin/visits` 307 · `/api/reference` 307). No manual write-smoke (no live behaviour changed — that's PR2's gate). Cert `docs/anvil/2026-06-21-f-18-pr1-visits-domain-foundation-cert.md` (CLEARED FOR PRODUCTION); review `docs/reviews/2026-06-21-f-18-pr1-visits-domain-foundation-review.md`; plan archived. **✅ GATE CLEARED 2026-06-22 (F-TD-33 RESOLVED): flaky `@critical` specs `04-kds-line-undo` + `08-complaints-board` reproduced (clean DB = green, dirty re-run = red → env/shared-data, not code), root-caused (seed creates 0 orders/complaints → specs accumulate junk → non-isolated `.first()`/outermost-div selectors grabbed the wrong entity) and STABILISED via data-isolation, NOT retries: `08` anchors to its own card-root by unique marker; `04` scopes every step to a single order card + only taps green lines on IN-PROGRESS orders + the reopen test now actually runs (no longer self-skips). Verified green across the full `@critical` relay 4× (1 fresh + 3 dirty re-runs, retries=0). Test-only change (no app code). Separate non-flake finding: `05`/`06` map specs fail in local `next dev` ONLY (passed on PR1 preview) — re-confirm on PR2's preview. Detail in BACKLOG F-TD-33.** **Next: F-18 PR2 — re-point the 6 Visits routes onto `visitsService` (enforce R-B1 wire shapes + W1).**
 
-### Days 13–14 — Thu 25 – Fri 26 Jun ⚠️ the crunch
+### Days 13–14 — Thu 25 – Fri 26 Jun ⚠️ the crunch — F-19 HACCP (IN PROGRESS, scope locked 2026-06-22)
 
-- **F-19** — HACCP, largest domain (~30 routes; sub-domain split: audit, allergen, cold-storage, calibration, training, cleaning, recall — 5–8 PRs across both days)
-- **F-23** — `SpreadsheetWriter` port + XLSX adapter (rides with HACCP export)
-- **F-PROD-01** — Allergen Assessment version-history UI (rides with the allergen sub-domain)
-- **F-RLS-04h** — HACCP-context RLS
+**FORGE Frame complete 2026-06-22 (Gate 1 spec locked).** A full surface map of
+`app/api/haccp/**` revised the estimate UP: the original "5–8 PRs" was light. The
+real surface is **33 route files · 55 handlers · 30 tables · ~17 sub-domains**, NONE
+extracted yet (every route imports `supabaseService` directly — pure raw-routes, zero
+hexagonal scaffolding). This is the Risk-#1 wildcard the roadmap named, now measured.
+
+**Rhythm = HYBRID (Hakan, 2026-06-22):** combine foundation+repoint into ONE PR for the
+simple clusters; keep the proven two-step (dead-code foundation PR, then a separate
+repoint PR) for the fat/coupled clusters. **~9–10 PRs + RLS**, ONE FORGE loop per PR.
+Build order follows dependencies (reviews/audit read from everything → go last). The
+17 sub-domains group into **7 clusters**:
+
+| # | PR | Cluster (sub-domains) | Rhythm | Carries |
+|---|---|---|---|---|
+| 1 | **A foundation** | delivery · cold-storage · calibration · cleaning · process-room · mince-prep · product-return **+ Corrective-Actions shared service** | foundation (dead code) | — |
+| 2 | A re-point | (flip those 7 routes onto the new services) | re-point | — |
+| 3 | B Assessments & registers | allergen-assessment (+monthly-reviews) · food-defence · food-fraud · product-specs | combined | **F-PROD-01** (allergen history UI) |
+| 4 | C People & training | training · people · visitor-kiosk (public, no-auth) | combined | — |
+| 5 | D Reviews foundation | weekly/monthly reviews · annual-review (+ data panels) | foundation | — |
+| 6 | D Reviews re-point | (flip review routes) | re-point | — |
+| 7 | E Audit & export foundation | audit · heatmap · **export (XLSX)** · overview · today-status | foundation | **F-23** SpreadsheetWriter port |
+| 8 | E Audit & export re-point | (flip + wire XLSX adapter) | re-point | F-23 XLSX adapter |
+| 9 | F Docs & lookups | handbook · search · documents · users · customers · supplier-code · recall · admin/suppliers | combined | — |
+| 10 | **G — F-RLS-04h** | HACCP-context RLS cutover across all HACCP tables | RLS cutover | the security lock, last |
+
+**Locked architecture calls (from Frame):**
+- **Corrective-Actions = SHARED SERVICE, not a peer domain.** One table
+  (`haccp_corrective_actions`) is written by ~7 daily-check routes via a
+  `(source_table, source_id)` FK pattern → build it once in PR1, inject into all 7. It is
+  a write-target hub, never its own silo.
+- **Audit / Overview / annual-review-data = QUERY SERVICES** (high read-coupling across
+  10+ tables is acceptable for aggregation; keep them decoupled from the domain models).
+- **F-23 (SpreadsheetWriter):** the ONLY XLSX home is `audit/export/route.ts` (13-sheet
+  workbook built inline via `xlsx@^0.18.5`, `XLSX.utils.aoa_to_sheet`). Port + adapter
+  land in Cluster E.
+- **F-PROD-01 (allergen history):** `haccp_allergen_assessment` is ALREADY append-only
+  (every POST inserts a fresh row; full history kept; "latest" = newest by `assessed_at`).
+  So the version-history feature is mostly a *display* job — UNLESS Hakan wants a
+  draft/published state, which would need a schema change (`version` int + `status` enum).
+  Decision deferred to Cluster B Frame. Same append-only shape on food-defence/food-fraud.
+- **No `.rpc()` calls and no Storage buckets anywhere in HACCP** → simpler ports than Cash
+  (no two-port storage split) and simpler than Pricing (no SECURITY DEFINER RPC exception).
+- **Delivery route is unusually fat:** one POST files THREE corrective-action rows
+  (temperature + contamination + allergen). Justified by the CA-001 spec; adds port design
+  complexity in PR1.
+- **RLS state:** all 30 HACCP tables have RLS ENABLED + ZERO policies (deny-all trap; app
+  bypasses via service-role) since T2 `20260613000000`. F-RLS-04h must ship the full policy
+  set per table, same blank-screen-trap fix as Routes/Cash/Complaints.
+
+**PR1 spec (Gate 1 approved → planning):** Cluster A foundation, introduce-only, mirror of
+F-16/F-17/F-18 PR1. Build domain types + ports + services + supabase & fake adapters + wiring
+for the 7 daily-check sub-domains + the shared Corrective-Actions service, ALL dead code
+(no route edited, no migration, no new dep, no prod caller, grep-proven unused). Service-role
+wiring only; the `…ForCaller` per-caller factory deferred to F-RLS-04h. Verbatim `.select()`
+strings pinned char-for-char vs the current routes so PR2's re-point is byte-identical.
+
+**Status 2026-06-22:** Frame ✓ / Gate 1 ✓. Next action on resume: `/forge` → Order (plan PR1
+= Cluster A foundation). Each subsequent cluster gets its own fresh FORGE loop + ANVIL cert.
+
+- **F-23** — `SpreadsheetWriter` port + XLSX adapter → rides Cluster E (PRs 7–8).
+- **F-PROD-01** — Allergen Assessment version-history UI → rides Cluster B (PR3); see BACKLOG.
+- **F-RLS-04h** — HACCP-context RLS → Cluster G (PR10), the closing lock.
 
 ### Day 15 — Sat 27 Jun
 
