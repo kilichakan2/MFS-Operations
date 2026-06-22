@@ -53,3 +53,22 @@ database hook that reads the user's id out of a per-request signed token and
 writes it into that variable, so the rules already written keep working
 unchanged. Inert until a route is actually switched onto the authenticated
 client.
+
+**Visit notes — there are TWO, on purpose.** A visit carries two unrelated
+note mechanisms that sit next to each other in the visit-detail pop-up, so
+they are easy to confuse:
+- **The visit's own note (`visits.notes`)** — one free-text box filled in on
+  the *Log a Visit* form ("Notes (optional)"), saved on the visit row itself.
+  One per visit; the rep's summary written at logging time. Editable only by
+  re-opening the whole visit (tap **Edit** on the card → change → re-submit),
+  which re-syncs through `screen3/sync`. In the detail pop-up it shows at the
+  top labelled **"Original note"**.
+- **The follow-up thread (`visit_notes` table)** — a running list of dated,
+  signed comments added *after* the visit, via the **"Add an update…"** field
+  inside the visit-detail pop-up. Many rows per visit, each with its own
+  author + timestamp, each individually editable (author or manager only).
+  This is the GET/POST/PATCH `screen3/visit/notes` feature.
+- Plain English: "Original note" = the box on the form; the list under
+  **Notes** = a comment thread stapled to the visit. Two stores, one screen.
+  When checking a note in the DB, look in `visits.notes` for the form note and
+  the `visit_notes` table for the thread — they are not the same place.
