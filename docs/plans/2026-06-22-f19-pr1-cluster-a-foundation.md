@@ -175,7 +175,7 @@ identical to today.
 6. `lib/services/HaccpCorrectiveActionsService.ts` — `createHaccpCorrectiveActionsService(deps)` factory.
 
 **Created — use-case (1):**
-7. `lib/usecases/submitHaccpDailyCheck.ts` — composes daily-checks insert + CA-row filing.
+7. `lib/usecases/submitHaccpDailyCheck.ts` — owns the CA-filing soft-fail contract (CA-insert failure logged, not thrown; daily-check still succeeds). Does NOT compose the daily-check insert — see Decision-1 (§3, option a).
 
 **Created — Supabase adapters (2):**
 8. `lib/adapters/supabase/HaccpDailyChecksRepository.ts` — only `@supabase/*` importer for the 7 tables.
@@ -390,7 +390,7 @@ never lose a submitted check over a secondary write.
    thin over the CA port.
 7. **`lib/services/HaccpDailyChecksService.ts`** — `createHaccpDailyChecksService(deps)`; owns the
    validation cascades (exact route error strings) + insert delegation; lift the pure helpers (§9).
-8. **`lib/usecases/submitHaccpDailyCheck.ts`** — compose the two services (§9).
+8. **`lib/usecases/submitHaccpDailyCheck.ts`** — owns the CA-filing soft-fail contract over the CA service ONLY (§9 / Decision-1 option a). Not a two-service composer.
 9. **`lib/adapters/supabase/HaccpCorrectiveActionsRepository.ts`** — verbatim CA selects (§7a) +
    `insertMany`; factory + service-role singleton; ONLY `@supabase/*` importer for the CA ledger.
 10. **`lib/adapters/supabase/HaccpDailyChecksRepository.ts`** — verbatim daily-check selects/inserts

@@ -96,6 +96,24 @@ No blocker → hand to ANVIL. W1 (→Render, wording/dead-dep) and W2 (→Order,
 are non-blocking for a dead-code PR but should be folded into PR2's plan as explicit pins so the
 re-point stays byte-identical and the use-case contract is honest before any live route calls it.
 
+## Re-audit (2026-06-22, after loop-back commits 75cf817 W2, e53984c W1)
+**Verdict: W2 CLOSED · W1 CLOSED · regression NONE. CLEAR — hand to ANVIL.**
+- **W2 closed:** `lib/services/HaccpDailyChecksService.ts:970-972` early-returns `[]` when
+  `!hasDeviationTemp && !hasDeviationContam` — De Morgan equivalent of the route gate
+  (`app/api/haccp/delivery/route.ts:498`). Row bodies byte-for-byte unchanged. Both gate sides
+  pinned: `HaccpDailyChecksService.test.ts:233-259` (allergen-only ⇒ `[]`) and `:261-289`
+  (temp+allergen ⇒ 2 rows).
+- **W1 closed:** `lib/usecases/submitHaccpDailyCheck.ts` — dead `dailyChecks` dep + unused import
+  removed; `SubmitHaccpDailyCheckDeps` carries `correctiveActions` only; docstring/`// design:`
+  rewritten to the honest "owns the soft-fail contract" scope; `lib/wiring/haccp.ts:57-60` no longer
+  passes `dailyChecks`. Soft-fail test intact (`submitHaccpDailyCheck.test.ts:70-78`). Depth: honest
+  small module owning one real thing (option-a Ousterhout call sound given heterogeneous 7-form inserts).
+- **Regression sweep NONE:** still introduce-only (delivery route diff vs main empty — READ not
+  MODIFIED), dead code, service-role only, no vendor leak, hexagonal lint GREEN (49/49). Verified
+  actuals: unit 2167/2167, typecheck 0, lint clean.
+- **🟢 doc nits fixed by conductor:** plan §5 line 178 + §10 step 8 line 393 (stale "compose"
+  claims) corrected to match the shipped option-(a) module.
+
 ## Relevant files
 - `lib/usecases/submitHaccpDailyCheck.ts` (W1)
 - `lib/services/HaccpDailyChecksService.ts` (W2, line 1005; lifted helpers)
