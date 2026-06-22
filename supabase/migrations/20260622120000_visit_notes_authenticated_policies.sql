@@ -10,6 +10,16 @@
 -- They simply START FIRING once the routes run as the `authenticated` role.
 -- DO NOT add/alter/drop any `visits` policy.
 --
+-- EMPTY-GUC NOTE (divergence from complaints/04f): the baseline `visits` policies
+-- cast current_setting('app.current_user_id', true)::uuid, so an empty-string GUC
+-- THROWS SQLSTATE 22P02 (''::uuid) before `OR is_admin()` short-circuits — and the
+-- visit_notes policies below reuse that cast inside their EXISTS subquery, so they
+-- throw too. This is fail-closed-by-throw (no rows either way; unreachable on the
+-- live path — routes 401 without a userId). Complaints/04f instead REPLACED its
+-- baseline with the current_user_is_valid() helper (clean empty); F-RLS-04g keeps
+-- the GUC-cast `visits` policies untouched, so pgTAP 014 asserts a 22P02 throw on
+-- empty-GUC SELECT (assertions #14a/#14b), not an empty result set.
+--
 -- THE TRAP this migration fixes: visit_notes has RLS ENABLED
 -- (20260613000000_enable_rls_42_tables.sql:115) with ZERO policies → deny-all to
 -- the authenticated role. Without these policies EVERY notes route returns
