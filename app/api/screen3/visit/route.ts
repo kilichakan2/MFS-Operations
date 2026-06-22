@@ -5,22 +5,16 @@
  * PATCH              — update pipeline_status for a visit
  *   Body: { id: string, pipeline_status: string }
  *   Admin/office can update any visit; sales can only update their own.
+ *
+ * F-18 PR2: re-pointed onto visitsService — no direct @supabase / /rest/v1
+ * access. Validation cascade lives in the service. The PATCH success echo is an
+ * inline {id, pipeline_status} literal built from request values (plan §3.6 —
+ * no dto helper). Wire output is byte-identical (snake_case).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-
-const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
-const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-
-const VALID_PIPELINE_STATUSES = [
-  'Logged',
-  'In Talks',
-  'Not Progressing',
-  'Trial Order Placed',
-  'Awaiting Feedback',
-  'Won',
-  'Not Won',
-] as const
+import { visitsService } from '@/lib/wiring/visits'
+import { ServiceError } from '@/lib/errors'
 
 export async function DELETE(req: NextRequest) {
   const userId = req.headers.get('x-mfs-user-id')
@@ -29,23 +23,16 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
-  // Only allow deletion of visits owned by this user
-  const res = await fetch(
-    `${SUPA_URL}/rest/v1/visits?id=eq.${id}&user_id=eq.${userId}`,
-    {
-      method: 'DELETE',
-      headers: {
-        'apikey':         SUPA_KEY,
-        'Authorization': `Bearer ${SUPA_KEY}`,
-        'Prefer':        'return=minimal',
-      },
+  // Only allow deletion of visits owned by this user (owner filter in service)
+  try {
+    await visitsService.deleteOwnVisit(id, userId)
+  } catch (err) {
+    // R3: preserve the exact DB-failure 500 body the route emitted today.
+    if (err instanceof ServiceError) {
+      console.error('[screen3/visit DELETE] error:', err.message)
+      return NextResponse.json({ error: 'Delete failed' }, { status: 500 })
     }
-  )
-
-  if (!res.ok) {
-    const err = await res.text()
-    console.error('[screen3/visit DELETE] error:', err)
-    return NextResponse.json({ error: 'Delete failed' }, { status: 500 })
+    throw err
   }
 
   return NextResponse.json({ deleted: true })
@@ -58,42 +45,42 @@ export async function PATCH(req: NextRequest) {
 
   let body: { id?: string; pipeline_status?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }
-  if (!body?.id)              return NextResponse.json({ error: 'id required' },              { status: 400 })
-  if (!body?.pipeline_status) return NextResponse.json({ error: 'pipeline_status required' }, { status: 400 })
 
-  const statusVal = body.pipeline_status as string
-  if (!VALID_PIPELINE_STATUSES.includes(statusVal as typeof VALID_PIPELINE_STATUSES[number])) {
-    return NextResponse.json(
-      { error: `Invalid status. Must be one of: ${VALID_PIPELINE_STATUSES.join(', ')}` },
-      { status: 400 }
-    )
+  const valid = visitsService.validatePipelineStatus({
+    id: body?.id,
+    status: body?.pipeline_status,
+  })
+  if (!valid.ok) {
+    return NextResponse.json({ error: valid.message }, { status: valid.status })
   }
+
+  const statusVal = body!.pipeline_status as string
 
   // Admin/office can update any visit; sales restricted to their own
-  const isManager  = role === 'admin' || role === 'office'
-  const ownerFilter = isManager ? '' : `&user_id=eq.${userId}`
-  const patchUrl   = `${SUPA_URL}/rest/v1/visits?id=eq.${body.id}${ownerFilter}`
+  const isManager = role === 'admin' || role === 'office'
 
-  const res = await fetch(patchUrl, {
-    method: 'PATCH',
-    headers: {
-      'apikey':         SUPA_KEY,
-      'Authorization': `Bearer ${SUPA_KEY}`,
-      'Content-Type':  'application/json',
-      'Prefer':        'return=representation',
-    },
-    body: JSON.stringify({ pipeline_status: statusVal }),
-  })
-
-  if (!res.ok) {
-    const err = await res.text()
-    console.error('[screen3/visit PATCH] error:', err)
-    return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+  let res
+  try {
+    res = await visitsService.updatePipelineStatus({
+      id: body!.id as string,
+      status: statusVal,
+      userId,
+      isManager,
+    })
+  } catch (err) {
+    // R3: preserve the exact DB-failure 500 body the route emitted today.
+    if (err instanceof ServiceError) {
+      console.error('[screen3/visit PATCH] error:', err.message)
+      return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+    }
+    throw err
   }
 
-  const rows = await res.json() as { id: string }[]
-  if (!rows.length) return NextResponse.json({ error: 'Visit not found or not authorised' }, { status: 404 })
+  if (res === null) {
+    return NextResponse.json({ error: 'Visit not found or not authorised' }, { status: 404 })
+  }
 
-  console.log(`[screen3/visit PATCH] visit ${body.id} pipeline_status → ${statusVal}`)
-  return NextResponse.json({ id: body.id, pipeline_status: statusVal })
+  console.log(`[screen3/visit PATCH] visit ${body!.id} pipeline_status → ${statusVal}`)
+  // Inline 2-key echo (plan §3.6) — built from request values, not a domain obj.
+  return NextResponse.json({ id: body!.id, pipeline_status: statusVal })
 }
