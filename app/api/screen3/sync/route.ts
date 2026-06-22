@@ -1,15 +1,24 @@
 /**
  * POST /api/screen3/sync
- * Inserts a queued visit. Uses raw fetch() to the Supabase REST API
- * rather than the supabase-js client, to avoid any cold-start initialisation
- * issues with the client library.
+ * Inserts a queued visit.
  *
  * Sprint 1 Map View: prospect visits now trigger a fire-and-forget geocoding
  * call to postcodes.io, writing prospect_lat/prospect_lng back to the row.
+ *
+ * F-18 PR2: the visit DATA surface (insert/upsert + geocode write-back) moved to
+ * visitsService. The postcodes.io geocode lookup stays here — it's a public HTTP
+ * API (not a vendor SDK). The audit_log write + customers name lookup STAY raw
+ * REST (F-TD-31 — no owned audit port yet; CreatedVisit does not carry the
+ * customer name). Mirrors the screen2/sync (complaints) precedent exactly.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { visitsService } from '@/lib/wiring/visits'
+import type { VisitType, VisitOutcome } from '@/lib/domain'
 
+// audit_log + the customers name lookup are cross-cutting reads/writes with no
+// owned port yet (F-TD-31) — they stay as raw REST fetches. Only the visit DATA
+// surface moved to the service.
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
 const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 
@@ -21,22 +30,6 @@ async function supaPost(table: string, body: Record<string, unknown>) {
       'apikey':         SUPA_KEY,
       'Authorization': `Bearer ${SUPA_KEY}`,
       'Prefer':         'return=representation',
-    },
-    body: JSON.stringify(body),
-  })
-  const text = await res.text()
-  return { ok: res.ok, status: res.status, text }
-}
-
-
-async function supaUpsert(table: string, body: Record<string, unknown>) {
-  const res = await fetch(`${SUPA_URL}/rest/v1/${table}?on_conflict=id`, {
-    method:  'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'apikey':         SUPA_KEY,
-      'Authorization': `Bearer ${SUPA_KEY}`,
-      'Prefer':         'resolution=merge-duplicates,return=representation',
     },
     body: JSON.stringify(body),
   })
@@ -79,76 +72,55 @@ export async function POST(req: NextRequest) {
     const commitment_detail = (body.commitment_detail as string  | undefined) ?? null
     const commitment_made   = body.commitment_made === true || body.commitment_made === 'true'
 
-    const missing: string[] = []
-    if (!customer_id && !prospect_name)  missing.push('customer_id or prospect_name required')
-    if (customer_id  && prospect_name)   missing.push('only one of customer_id/prospect_name allowed')
-    if (!visit_type)  missing.push('visit_type')
-    if (!outcome)     missing.push('outcome')
-    if (commitment_made && !commitment_detail) missing.push('commitment_detail')
-    if (missing.length > 0) {
-      console.warn('[screen3/sync] validation failed:', missing.join(', '))
-      return NextResponse.json({ error: `Missing: ${missing.join(', ')}` }, { status: 400 })
-    }
-
-    const payload: Record<string, unknown> = {
+    const input = {
       ...(id ? { id } : {}),
-      user_id:           userId,
-      customer_id,
-      prospect_name,
-      prospect_postcode,
-      visit_type,
-      outcome,
-      commitment_made,
-      commitment_detail: commitment_made ? (commitment_detail ?? null) : null,
+      upsert:           _upsert,
+      userId,
+      customerId:       customer_id,
+      prospectName:     prospect_name,
+      prospectPostcode: prospect_postcode,
+      visitType:        (visit_type ?? '') as VisitType,
+      outcome:          (outcome ?? '') as VisitOutcome,
+      commitmentMade:   commitment_made,
+      commitmentDetail: commitment_detail,
       notes,
     }
 
-    const isUpsert = _upsert  // extracted from body before payload was built
-
-    console.log('[screen3/sync] payload:', JSON.stringify({
-      id, _upsert, isUpsert,
-      customer_id, prospect_name, visit_type, outcome,
-      commitment_made, notes: notes?.slice(0,50),
-    }))
-    const { ok, status: httpStatus, text } = isUpsert
-      ? await supaUpsert('visits', payload)
-      : await supaPost('visits', payload)
-
-    if (!ok) {
-      if (httpStatus === 409 || text.includes('23505')) {
-        console.log('[screen3/sync] Duplicate insert — already exists, returning 200')
-        return NextResponse.json({ id, duplicate: true }, { status: 200 })
-      }
-      console.error('[screen3/sync] insert failed:', httpStatus, text.slice(0, 200))
-      return NextResponse.json({ error: `Insert failed: ${text.slice(0, 100)}` }, { status: 500 })
+    const valid = visitsService.validateCreate(input)
+    if (!valid.ok) {
+      console.warn('[screen3/sync] validation failed:', valid.message)
+      return NextResponse.json({ error: valid.message }, { status: valid.status })
     }
 
-    const rows = JSON.parse(text) as { id: string }[]
-    const recordId = rows[0]?.id
+    const created = await visitsService.createVisit(input)
+
+    // 23505/409 = unique_violation — already inserted on a previous retry. The
+    // adapter maps it to duplicate:true; the offline queue needs a 200 here (a
+    // 500 would make it retry forever).
+    if (created.duplicate) {
+      console.log('[screen3/sync] Duplicate insert — already exists, returning 200')
+      return NextResponse.json({ id: created.id, duplicate: true }, { status: 200 })
+    }
+
+    const recordId = created.id
     console.log('[screen3/sync] inserted:', recordId)
 
     // ── Geocode prospect postcode — fire-and-forget ───────────────────────────
-    // Writes prospect_lat/lng back to the visits row for the map view.
+    // Writes prospect_lat/lng back to the visits row for the map view via the
+    // service (the postcodes.io lookup is a public HTTP API, kept inline).
     // Fuzzy fallback: if full postcode fails, retries with just the outcode
-    // and sets is_approximate_location=true so the map can render a ghost pin.
+    // and sets approximate=true so the map can render a ghost pin.
     if (prospect_postcode && recordId) {
       ;(async () => {
-        const patchVisit = async (lat: number, lng: number, approximate: boolean) => {
-          await fetch(`${SUPA_URL}/rest/v1/visits?id=eq.${recordId}`, {
-            method: 'PATCH',
-            headers: { 'apikey': SUPA_KEY, 'Authorization': `Bearer ${SUPA_KEY}`,
-                       'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ prospect_lat: lat, prospect_lng: lng,
-                                   is_approximate_location: approximate }),
-          })
-        }
         try {
           // Pass 1 — exact postcode
           const clean = prospect_postcode.replace(/\s/g, '')
           const r1 = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(clean)}`)
           const d1 = await r1.json()
           if (d1.status === 200 && d1.result) {
-            await patchVisit(d1.result.latitude, d1.result.longitude, false)
+            await visitsService.updateProspectLocation({
+              visitId: recordId, lat: d1.result.latitude, lng: d1.result.longitude, approximate: false,
+            })
             console.log('[screen3/sync] geocoded prospect (exact):', prospect_postcode)
             return
           }
@@ -157,7 +129,10 @@ export async function POST(req: NextRequest) {
           const r2 = await fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(oc)}`)
           const d2 = await r2.json()
           if (d2.status === 200 && d2.result) {
-            await patchVisit(d2.result.latitude, d2.result.longitude, true)  // /outcodes/:oc returns result.latitude directly
+            // /outcodes/:oc returns result.latitude directly
+            await visitsService.updateProspectLocation({
+              visitId: recordId, lat: d2.result.latitude, lng: d2.result.longitude, approximate: true,
+            })
             console.log('[screen3/sync] geocoded prospect (outcode fallback):', oc)
           } else {
             console.warn('[screen3/sync] prospect postcode unresolvable:', prospect_postcode)
@@ -168,7 +143,7 @@ export async function POST(req: NextRequest) {
       })()
     }
 
-    // ── Audit log (fire-and-forget) ───────────────────────────────────────────
+    // ── Audit log (fire-and-forget) — raw REST, F-TD-31 (no owned port yet) ────
     let displayName = prospect_name ?? 'Unknown'
     if (customer_id) {
       const customer = await supaGet('customers', `select=name&id=eq.${customer_id}`)

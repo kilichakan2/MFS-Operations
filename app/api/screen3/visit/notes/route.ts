@@ -14,12 +14,18 @@ export const dynamic = 'force-dynamic'
  *   Body: { id: string; body: string }
  *   Edit a note. Author only (note.user_id must match caller).
  *   Admin/office: any note.
+ *
+ * F-18 PR2: re-pointed onto visitsService + toVisitNoteWireDto/toNoteUpdateWireDto
+ * — no direct @supabase / /rest/v1 access. Wire output byte-identical
+ * (snake_case). W1: PATCH on a non-existent note now returns 404 (was a latent
+ * 500 from `.single()` throwing) — the adapter uses `.maybeSingle()` → null →
+ * 404.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { visitsService } from '@/lib/wiring/visits'
+import { toVisitNoteWireDto, toNoteUpdateWireDto } from '@/lib/api/visits/dto'
+import { ServiceError } from '@/lib/errors'
 
 // ─── GET — load notes for a visit ─────────────────────────────────────────────
 
@@ -34,44 +40,21 @@ export async function GET(req: NextRequest) {
   const isManager = role === 'admin' || role === 'office'
 
   // For sales: verify this visit belongs to them before returning notes
-  if (!isManager) {
-    const { data: visit, error: vErr } = await supabase
-      .from('visits')
-      .select('id')
-      .eq('id', visitId)
-      .eq('user_id', userId)
-      .maybeSingle()
+  if (!isManager && !(await visitsService.verifyVisitOwnership(visitId, userId))) {
+    return NextResponse.json({ error: 'Visit not found or not authorised' }, { status: 404 })
+  }
 
-    if (vErr || !visit) {
-      return NextResponse.json({ error: 'Visit not found or not authorised' }, { status: 404 })
+  try {
+    const notes = await visitsService.listNotes(visitId)
+    return NextResponse.json({ notes: notes.map(toVisitNoteWireDto) })
+  } catch (err) {
+    // R3: preserve the exact DB-failure 500 body the route emitted today.
+    if (err instanceof ServiceError) {
+      console.error('[visit/notes GET] error:', err.message)
+      return NextResponse.json({ error: 'Failed to load notes' }, { status: 500 })
     }
+    throw err
   }
-
-  const { data: notes, error } = await supabase
-    .from('visit_notes')
-    .select(`
-      id, visit_id, body, created_at, updated_at,
-      author:users!visit_notes_user_id_fkey(id, name)
-    `)
-    .eq('visit_id', visitId)
-    .order('created_at', { ascending: true })
-
-  if (error) {
-    console.error('[visit/notes GET] error:', error.message)
-    return NextResponse.json({ error: 'Failed to load notes' }, { status: 500 })
-  }
-
-  const shaped = (notes ?? []).map(n => ({
-    id:           n.id,
-    visit_id:     n.visit_id,
-    body:         n.body,
-    created_at:   n.created_at,
-    updated_at:   n.updated_at,
-    author_id:    (n.author as unknown as { id: string; name: string } | null)?.id   ?? null,
-    author_name:  (n.author as unknown as { id: string; name: string } | null)?.name ?? 'Unknown',
-  }))
-
-  return NextResponse.json({ notes: shaped })
 }
 
 // ─── POST — add a note ────────────────────────────────────────────────────────
@@ -83,55 +66,38 @@ export async function POST(req: NextRequest) {
 
   let body: { visit_id?: string; body?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }
-  if (!body?.visit_id) return NextResponse.json({ error: 'visit_id required' }, { status: 400 })
-  if (!body?.body?.trim()) return NextResponse.json({ error: 'body required' }, { status: 400 })
 
+  const valid = visitsService.validateNote({
+    visitId: body?.visit_id,
+    body: body?.body,
+  })
+  if (!valid.ok) {
+    return NextResponse.json({ error: valid.message }, { status: valid.status })
+  }
+
+  const visitId = body!.visit_id as string
   const isManager = role === 'admin' || role === 'office'
 
   // Sales: verify visit ownership before allowing note
-  if (!isManager) {
-    const { data: visit, error: vErr } = await supabase
-      .from('visits')
-      .select('id')
-      .eq('id', body.visit_id)
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    if (vErr || !visit) {
-      return NextResponse.json({ error: 'Visit not found or not authorised' }, { status: 404 })
-    }
+  if (!isManager && !(await visitsService.verifyVisitOwnership(visitId, userId))) {
+    return NextResponse.json({ error: 'Visit not found or not authorised' }, { status: 404 })
   }
 
-  const { data: note, error } = await supabase
-    .from('visit_notes')
-    .insert({
-      visit_id:   body.visit_id,
-      user_id:    userId,
-      body:       body.body.trim(),
-      created_at: new Date().toISOString(),
+  try {
+    const note = await visitsService.createNote({
+      visitId,
+      body: body!.body as string,
+      userId,
     })
-    .select(`
-      id, visit_id, body, created_at, updated_at,
-      author:users!visit_notes_user_id_fkey(id, name)
-    `)
-    .single()
-
-  if (error) {
-    console.error('[visit/notes POST] error:', error.message)
-    return NextResponse.json({ error: 'Failed to add note' }, { status: 500 })
+    return NextResponse.json({ note: toVisitNoteWireDto(note) }, { status: 201 })
+  } catch (err) {
+    // R3: preserve the exact DB-failure 500 body the route emitted today.
+    if (err instanceof ServiceError) {
+      console.error('[visit/notes POST] error:', err.message)
+      return NextResponse.json({ error: 'Failed to add note' }, { status: 500 })
+    }
+    throw err
   }
-
-  return NextResponse.json({
-    note: {
-      id:          note.id,
-      visit_id:    note.visit_id,
-      body:        note.body,
-      created_at:  note.created_at,
-      updated_at:  note.updated_at,
-      author_id:   (note.author as unknown as { id: string; name: string } | null)?.id   ?? null,
-      author_name: (note.author as unknown as { id: string; name: string } | null)?.name ?? 'Unknown',
-    },
-  }, { status: 201 })
 }
 
 // ─── PATCH — edit a note ──────────────────────────────────────────────────────
@@ -143,30 +109,38 @@ export async function PATCH(req: NextRequest) {
 
   let body: { id?: string; body?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }
-  if (!body?.id)          return NextResponse.json({ error: 'id required' },   { status: 400 })
-  if (!body?.body?.trim()) return NextResponse.json({ error: 'body required' }, { status: 400 })
+
+  const valid = visitsService.validateUpdateNote({
+    id: body?.id,
+    body: body?.body,
+  })
+  if (!valid.ok) {
+    return NextResponse.json({ error: valid.message }, { status: valid.status })
+  }
 
   const isManager = role === 'admin' || role === 'office'
 
-  // Build filter: admin/office can edit any note; sales can only edit their own
-  const filter = supabase
-    .from('visit_notes')
-    .update({ body: body.body.trim(), updated_at: new Date().toISOString() })
-    .eq('id', body.id)
-
-  if (!isManager) filter.eq('user_id', userId)
-
-  const { data, error } = await filter
-    .select('id, body, updated_at')
-    .single()
-
-  if (error) {
-    console.error('[visit/notes PATCH] error:', error.message)
-    return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+  let note
+  try {
+    note = await visitsService.updateNote({
+      id: body!.id as string,
+      body: body!.body as string,
+      userId,
+      isManager,
+    })
+  } catch (err) {
+    // R3: preserve the exact DB-failure 500 body the route emitted today.
+    if (err instanceof ServiceError) {
+      console.error('[visit/notes PATCH] error:', err.message)
+      return NextResponse.json({ error: 'Update failed' }, { status: 500 })
+    }
+    throw err
   }
-  if (!data) {
+
+  // W1: no-match now returns 404 (was a latent 500 — `.single()` threw on 0 rows).
+  if (note === null) {
     return NextResponse.json({ error: 'Note not found or not authorised' }, { status: 404 })
   }
 
-  return NextResponse.json({ note: data })
+  return NextResponse.json({ note: toNoteUpdateWireDto(note) })
 }
