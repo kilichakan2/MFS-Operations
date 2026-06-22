@@ -229,6 +229,68 @@ describe("HaccpDailyChecksService — delivery", () => {
       "Quarantine — pending management review",
     );
   });
+
+  it("allergen-only delivery (temp pass, no contamination) → 0 CA rows (route gate parity)", () => {
+    // The live route gates the ENTIRE CA-insert block on
+    // (hasDeviationTemp || hasDeviationContam) — delivery/route.ts:498. The
+    // allergen push lives INSIDE that gate, so an allergen-only delivery writes
+    // the delivery row with corrective_action_required:true but ZERO CA rows
+    // today. The builder must reproduce that: allergen alone opens NO CA rows.
+    const s = svc();
+    const input: CreateDeliveryInput = {
+      supplier_name: "Acme",
+      product: "Lamb",
+      product_category: "lamb", // lamb is in ALLERGEN_CA_CATEGORIES
+      temperature_c: 2, // pass — no temp deviation
+      covered_contaminated: "no", // no contamination deviation
+      allergens_identified: true, // allergen flagged
+      born_in: "GB",
+      reared_in: "GB",
+      slaughter_site: "S1",
+      cut_site: "C1",
+    };
+    const cas = s.buildDeliveryCorrectiveActions({
+      input,
+      userId: "u1",
+      sourceId: "src1",
+      tempStatus: "pass",
+    });
+    expect(cas).toEqual([]);
+  });
+
+  it("temp deviation WITH allergen → gate opens, allergen row IS emitted (2 rows)", () => {
+    // Pins the OTHER side of the gate: once a temp (or contam) deviation opens
+    // the gate, the allergen row is emitted exactly as the route does.
+    const s = svc();
+    const input: CreateDeliveryInput = {
+      supplier_name: "Acme",
+      product: "Lamb",
+      product_category: "lamb",
+      temperature_c: 9, // fail — opens the gate
+      covered_contaminated: "no", // no contamination
+      allergens_identified: true,
+      born_in: "GB",
+      reared_in: "GB",
+      slaughter_site: "S1",
+      cut_site: "C1",
+      corrective_action_temp: {
+        cause: "Other",
+        disposition: "Reject",
+        recurrence: "Review",
+      },
+    };
+    const cas = s.buildDeliveryCorrectiveActions({
+      input,
+      userId: "u1",
+      sourceId: "src1",
+      tempStatus: "fail",
+    });
+    expect(cas).toHaveLength(2); // temp row + allergen row
+    expect(cas[1].product_disposition).toBe(
+      "Quarantine — pending management review",
+    );
+    expect(cas[1].management_verification_required).toBe(true);
+  });
 });
 
 describe("HaccpDailyChecksService — cold-storage", () => {

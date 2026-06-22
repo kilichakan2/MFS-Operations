@@ -961,6 +961,16 @@ export function createHaccpDailyChecksService(
 
       const caRows: CorrectiveActionInsert[] = [];
 
+      // Route-gate parity (delivery/route.ts:498): the ENTIRE CA-insert block —
+      // including the allergen push, which lives INSIDE this gate — only runs
+      // when a temperature OR contamination deviation is present. An
+      // allergen-only delivery (temp pass, covered_contaminated:'no') writes the
+      // delivery row with corrective_action_required:true but ZERO CA rows
+      // today. Returning [] here keeps the builder byte-identical to the route.
+      if (!hasDeviationTemp && !hasDeviationContam) {
+        return caRows;
+      }
+
       if (hasDeviationTemp && input.corrective_action_temp) {
         const ca = input.corrective_action_temp;
         const actionText = deriveTempAction(status, ca.cause);
