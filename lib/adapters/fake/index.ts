@@ -82,3 +82,16 @@ export {
   type FakeVisitsPersonRef,
   type FakeVisitsCustomerRef,
 } from "./VisitsRepository";
+export {
+  createFakeHaccpDailyChecksRepository,
+  fakeHaccpDailyChecksRepository,
+  type FakeHaccpDailyChecksRepository,
+  type FakeHaccpDailyChecksSeed,
+  type HaccpConflictMethod,
+} from "./HaccpDailyChecksRepository";
+export {
+  createFakeHaccpCorrectiveActionsRepository,
+  fakeHaccpCorrectiveActionsRepository,
+  type FakeHaccpCorrectiveActionsRepository,
+  type FakeHaccpCASeed,
+} from "./HaccpCorrectiveActionsRepository";

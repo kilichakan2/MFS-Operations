@@ -50,3 +50,16 @@ export {
   type VisitsService,
   type VisitsServiceDeps,
 } from "./VisitsService";
+export {
+  createHaccpDailyChecksService,
+  DISPOSITION_MAP,
+  type HaccpDailyChecksService,
+  type HaccpDailyChecksServiceDeps,
+  type DeliveryBuildResult,
+  type ColdStorageBuildResult,
+} from "./HaccpDailyChecksService";
+export {
+  createHaccpCorrectiveActionsService,
+  type HaccpCorrectiveActionsService,
+  type HaccpCorrectiveActionsServiceDeps,
+} from "./HaccpCorrectiveActionsService";
