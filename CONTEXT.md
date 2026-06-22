@@ -72,3 +72,15 @@ they are easy to confuse:
   **Notes** = a comment thread stapled to the visit. Two stores, one screen.
   When checking a note in the DB, look in `visits.notes` for the form note and
   the `visit_notes` table for the thread — they are not the same place.
+
+**Visit visibility (who sees which visits).** Visits are owner-scoped:
+- **admin** sees *every* visit (the only "see all" role).
+- **sales + drivers** are the field visit-loggers; each sees *only their own*
+  visits (and the notes on them). Drivers log visits too — not just sales.
+- **office** sees *nothing* in Visits by design: office staff never log client
+  visits and have no oversight role here, so their visits board is empty. This
+  is intentional, not a bug — do not "fix" an empty office board.
+This rule is enforced at the database via row-level security (the dormant
+baseline `visits` policies — own-row OR `is_admin()` — which `is_admin()`
+scopes to role `admin` only). Notes inherit it: you may read/add notes on a
+visit you can see, and edit a note only if you authored it or you are admin.

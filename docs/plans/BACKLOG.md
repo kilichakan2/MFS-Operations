@@ -550,6 +550,19 @@ the trail matters.
 - **⚠️ Blocks Orders cleanup:** until this lands, F-RLS-04a expand-contract **steps 5–6 (remove the Orders service-role fallback)** cannot fully complete — the KDS path still needs service-role.
 - **Schedule:** after F-RLS-04a proves out in prod. Tracked in the roadmap under Day-4's F-RLS-04a block.
 
+### F-RLS-04g-create — Cut `POST /api/screen3/sync` (create-visit) onto RLS (deferred from F-RLS-04g)
+
+- **Logged:** 2026-06-22 (F-RLS-04g Gate 2)
+- **What:** the create-visit path stays on the service-role (master-key) client in F-RLS-04g — exactly as Orders' create stayed master-key in F-RLS-04a. `POST /api/screen3/sync` creates the `visits` row AND writes `audit_log` AND touches `customers` via raw REST in one flow, so it was left on the master key this copy. The 7 read + own-mutate handlers were flipped; create was not.
+- **Fix:** flip the create flow to `visitsServiceForCaller` (the `visits_insert` baseline policy `WITH CHECK (user_id = GUC)` already encodes "create only as yourself"), and decide master-key-vs-authenticated for the raw `audit_log` write — likely paired with the **audit-trail trio** (F-TD-27 / F-TD-30 / F-TD-31), since the raw audit write is the same mechanism deferred in F-RLS-04f (see the Post-F-RLS-04f note under F-TD-31). Needs design alongside the audit-log master-key cleanup.
+- **Note:** until done, Visits cannot fully complete expand-contract step "remove the service-role fallback" — create still needs the singleton parachute (`visitsService`).
+
+### F-RLS-04g-thin-route-filters — Thin/remove the route-level visit owner filters now RLS enforces ownership (debt from F-RLS-04g)
+
+- **Logged:** 2026-06-22 (F-RLS-04g Gate 2)
+- **What:** the flipped visit routes still filter by owner in the route layer (`verifyVisitOwnership`, the `isManager = role === 'admin' || role === 'office'` branches) even though the DB now enforces owner-scoping via RLS. Kept as belt-and-braces (two locks on the same door) this copy. The `office`-as-manager branch is now effectively dead for reads — office is not `is_admin()`, so the DB denies office every visit/note row regardless (the intended office-empty board, plan §9).
+- **Fix:** thin or remove the route-level owner filtering once RLS is proven in prod, so ownership has a single source of truth (the DB). Low risk, no migration. Pair with a route-test sweep to confirm the 404/empty behaviour is preserved by RLS alone.
+
 ---
 
 ## Product features (F-PROD-)
