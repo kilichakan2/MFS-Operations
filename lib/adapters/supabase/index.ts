@@ -64,6 +64,14 @@ export {
   supabaseVisitsRepository,
 } from "./VisitsRepository";
 export {
+  createSupabaseHaccpDailyChecksRepository,
+  supabaseHaccpDailyChecksRepository,
+} from "./HaccpDailyChecksRepository";
+export {
+  createSupabaseHaccpCorrectiveActionsRepository,
+  supabaseHaccpCorrectiveActionsRepository,
+} from "./HaccpCorrectiveActionsRepository";
+export {
   authenticatedClientForCaller,
   requireServiceRole,
 } from "./authenticatedClient";
