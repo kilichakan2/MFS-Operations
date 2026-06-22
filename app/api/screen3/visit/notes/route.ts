@@ -4,16 +4,17 @@ export const dynamic = 'force-dynamic'
  * GET  /api/screen3/visit/notes?visit_id=<uuid>
  *   Load all notes for a visit.
  *   Sales: own visits only (verified by joining visits.user_id).
- *   Admin/office: any visit.
+ *   Admin: any visit. Office: owns no visits → clean 404 (sees nothing).
  *
  * POST /api/screen3/visit/notes
  *   Body: { visit_id: string; body: string }
- *   Add a note. Sales: own visits only. Admin/office: any visit.
+ *   Add a note. Sales: own visits only. Admin: any visit.
+ *   Office: owns no visits → clean 404 (sees nothing).
  *
  * PATCH /api/screen3/visit/notes
  *   Body: { id: string; body: string }
  *   Edit a note. Author only (note.user_id must match caller).
- *   Admin/office: any note.
+ *   Admin: any note. Office: owns no notes → clean 404.
  *
  * F-18 PR2: re-pointed onto visitsService + toVisitNoteWireDto/toNoteUpdateWireDto
  * — no direct @supabase / /rest/v1 access. Wire output byte-identical
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
   const visitId = req.nextUrl.searchParams.get('visit_id')
   if (!visitId) return NextResponse.json({ error: 'visit_id required' }, { status: 400 })
 
-  const isManager = role === 'admin' || role === 'office'
+  const isManager = role === 'admin'
 
   // For sales: verify this visit belongs to them before returning notes
   if (!isManager && !(await visitsService.verifyVisitOwnership(visitId, userId))) {
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest) {
   }
 
   const visitId = body!.visit_id as string
-  const isManager = role === 'admin' || role === 'office'
+  const isManager = role === 'admin'
 
   // Sales: verify visit ownership before allowing note
   if (!isManager && !(await visitsService.verifyVisitOwnership(visitId, userId))) {
@@ -129,7 +130,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: valid.message }, { status: valid.status })
   }
 
-  const isManager = role === 'admin' || role === 'office'
+  const isManager = role === 'admin'
 
   let note
   try {

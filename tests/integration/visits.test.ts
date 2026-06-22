@@ -232,6 +232,24 @@ describe("/api/.../visit* integration — F-RLS-04g authenticated cutover", () =
     expect((res.body as { error: string }).error).toBe("Not found");
   });
 
+  it("office POSTing a note gets a clean 404, not a 500 (W1: office is NOT a manager → falls through verifyVisitOwnership)", async () => {
+    // F-RLS-04g W1: office is not a manager on the notes route. It owns no
+    // visits, so verifyVisitOwnership fails → clean 404 refusal — never the
+    // RLS-INSERT-deny 500 it used to hit when treated as a manager.
+    const visitId = await seedVisit({ ownerId: users.sales.id });
+    const res = await api("/api/screen3/visit/notes", {
+      method: "POST",
+      role: "office",
+      userId: users.office.id,
+      name: users.office.name,
+      body: { visit_id: visitId, body: "office trying to note a visit" },
+    });
+    expect(res.status).toBe(404);
+    expect((res.body as { error: string }).error).toBe(
+      "Visit not found or not authorised",
+    );
+  });
+
   // ── own notes GET / POST / PATCH work ────────────────────────
 
   it("sales GET/POST/PATCH notes on OWN visit work (200/201, key SET + ORDER)", async () => {
