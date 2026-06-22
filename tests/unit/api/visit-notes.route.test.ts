@@ -16,7 +16,7 @@ import { NextRequest } from "next/server";
 
 // Stand in for the wired visitsService — never hits the DB.
 const updateNote = vi.fn();
-const validateUpdateNote = vi.fn(() => ({ ok: true }) as const);
+const validateUpdateNote = vi.fn((..._args: unknown[]) => ({ ok: true }) as const);
 
 vi.mock("@/lib/wiring/visits", () => ({
   visitsService: {
