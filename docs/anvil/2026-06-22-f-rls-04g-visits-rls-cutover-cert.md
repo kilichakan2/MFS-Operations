@@ -60,5 +60,6 @@ PITR confirmed: N/A — additive migration, PITR not required.
 Expected behaviour, spec-locked — not a regression.
 
 ## Verdict
-CLEARED — all ANVIL-owned automated layers GREEN (unit + integration + pgTAP), no real-code bugs, no FORGE
-eject. E2E closes at the Ship pre-smoke against PR #67's preview. Cleared to proceed to the Ship gate.
+CLEARED FOR PRODUCTION — all ANVIL-owned automated layers GREEN (unit 2128/2128 + integration 351/351 +
+pgTAP 014 17/17), no real-code bugs, no FORGE eject. Pre-ship preview smoke 15/15 @critical on PR #67's
+preview. Migration additive (visit_notes policies only) → PITR not required.
