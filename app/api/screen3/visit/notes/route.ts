@@ -4,16 +4,17 @@ export const dynamic = 'force-dynamic'
  * GET  /api/screen3/visit/notes?visit_id=<uuid>
  *   Load all notes for a visit.
  *   Sales: own visits only (verified by joining visits.user_id).
- *   Admin/office: any visit.
+ *   Admin: any visit. Office: owns no visits → clean 404 (sees nothing).
  *
  * POST /api/screen3/visit/notes
  *   Body: { visit_id: string; body: string }
- *   Add a note. Sales: own visits only. Admin/office: any visit.
+ *   Add a note. Sales: own visits only. Admin: any visit.
+ *   Office: owns no visits → clean 404 (sees nothing).
  *
  * PATCH /api/screen3/visit/notes
  *   Body: { id: string; body: string }
  *   Edit a note. Author only (note.user_id must match caller).
- *   Admin/office: any note.
+ *   Admin: any note. Office: owns no notes → clean 404.
  *
  * F-18 PR2: re-pointed onto visitsService + toVisitNoteWireDto/toNoteUpdateWireDto
  * — no direct @supabase / /rest/v1 access. Wire output byte-identical
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { visitsService } from '@/lib/wiring/visits'
+import { visitsServiceForCaller } from '@/lib/wiring/visits'
 import { toVisitNoteWireDto, toNoteUpdateWireDto } from '@/lib/api/visits/dto'
 import { ServiceError } from '@/lib/errors'
 
@@ -34,10 +35,15 @@ export async function GET(req: NextRequest) {
   const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
+  // F-RLS-04g: run as the caller (authenticated role → visits + visit_notes RLS
+  // fires). Per-request, never shared. Route-level verifyVisitOwnership stays as
+  // belt-and-braces (plan §13b).
+  const visitsService = await visitsServiceForCaller(userId)
+
   const visitId = req.nextUrl.searchParams.get('visit_id')
   if (!visitId) return NextResponse.json({ error: 'visit_id required' }, { status: 400 })
 
-  const isManager = role === 'admin' || role === 'office'
+  const isManager = role === 'admin'
 
   // For sales: verify this visit belongs to them before returning notes
   if (!isManager && !(await visitsService.verifyVisitOwnership(visitId, userId))) {
@@ -64,6 +70,9 @@ export async function POST(req: NextRequest) {
   const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
+  // F-RLS-04g: run as the caller (authenticated role → RLS fires). Per-request.
+  const visitsService = await visitsServiceForCaller(userId)
+
   let body: { visit_id?: string; body?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }
 
@@ -76,7 +85,7 @@ export async function POST(req: NextRequest) {
   }
 
   const visitId = body!.visit_id as string
-  const isManager = role === 'admin' || role === 'office'
+  const isManager = role === 'admin'
 
   // Sales: verify visit ownership before allowing note
   if (!isManager && !(await visitsService.verifyVisitOwnership(visitId, userId))) {
@@ -107,6 +116,9 @@ export async function PATCH(req: NextRequest) {
   const role   = req.headers.get('x-mfs-user-role') ?? 'sales'
   if (!userId) return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
 
+  // F-RLS-04g: run as the caller (authenticated role → RLS fires). Per-request.
+  const visitsService = await visitsServiceForCaller(userId)
+
   let body: { id?: string; body?: string } | null = null
   try { body = await req.json() } catch { /* fall through */ }
 
@@ -118,7 +130,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: valid.message }, { status: valid.status })
   }
 
-  const isManager = role === 'admin' || role === 'office'
+  const isManager = role === 'admin'
 
   let note
   try {

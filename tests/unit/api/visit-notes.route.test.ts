@@ -8,8 +8,13 @@
  *
  * The route invokes visitsService.updateNote, which (via the adapter's
  * `.maybeSingle()`) returns null on a no-match. The route maps null → 404. This
- * test calls the handler DIRECTLY with the wiring singleton mocked, so it never
- * touches the DB. A positive 200 case proves the path isn't always-404.
+ * test calls the handler DIRECTLY with the wiring mocked, so it never touches
+ * the DB. A positive 200 case proves the path isn't always-404.
+ *
+ * F-RLS-04g: the route now builds its service via the per-caller factory
+ * `visitsServiceForCaller(userId)` (authenticated badge). The mock returns the
+ * same stubbed service from that factory, so this test still drives updateNote
+ * directly without a DB.
  */
 import { describe, it, expect, vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -18,12 +23,16 @@ import { NextRequest } from "next/server";
 const updateNote = vi.fn();
 const validateUpdateNote = vi.fn((..._args: unknown[]) => ({ ok: true }) as const);
 
-vi.mock("@/lib/wiring/visits", () => ({
-  visitsService: {
+vi.mock("@/lib/wiring/visits", () => {
+  const stubService = {
     updateNote: (...args: unknown[]) => updateNote(...args),
     validateUpdateNote: (...args: unknown[]) => validateUpdateNote(...args),
-  },
-}));
+  };
+  return {
+    visitsService: stubService,
+    visitsServiceForCaller: vi.fn(async () => stubService),
+  };
+});
 
 import { PATCH } from "@/app/api/screen3/visit/notes/route";
 
