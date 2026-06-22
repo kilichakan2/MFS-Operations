@@ -1,9 +1,20 @@
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse } from 'next/server'
+/**
+ * GET /api/detail/visit?id=<uuid>
+ *
+ * One visit by id with its customer name + logger name resolved.
+ *
+ * F-18 PR2: re-pointed onto visitsService.findDetailById + toVisitDetailWireDto.
+ * The dto carries the RAW enums; the underscore->space prettify on
+ * visitType/outcome is applied HERE at the route edge (spread re-assigns in
+ * place so key ORDER is preserved). Wire output is byte-identical (camelCase).
+ */
 
-const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
-const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+import { NextRequest, NextResponse } from 'next/server'
+import { visitsService } from '@/lib/wiring/visits'
+import { toVisitDetailWireDto } from '@/lib/api/visits/dto'
+import { ServiceError } from '@/lib/errors'
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,39 +24,27 @@ export async function GET(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-    const params = new URLSearchParams({
-      select: [
-        'id', 'created_at', 'visit_type', 'outcome', 'pipeline_status',
-        'commitment_made', 'commitment_detail', 'notes',
-        'prospect_name', 'prospect_postcode',
-        'customers(id,name)',
-        'users!visits_user_id_fkey(name)',
-      ].join(','),
-      id: `eq.${id}`,
-    })
+    let d
+    try {
+      d = await visitsService.findDetailById(id)
+    } catch (err) {
+      // R3: preserve the exact DB-failure 500 body the route emitted today.
+      if (err instanceof ServiceError) {
+        return NextResponse.json({ error: 'DB error' }, { status: 500 })
+      }
+      throw err
+    }
 
-    const res = await fetch(`${SUPA_URL}/rest/v1/visits?${params}`, {
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` },
-    })
+    if (!d) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (!res.ok) return NextResponse.json({ error: 'DB error' }, { status: 500 })
-    const rows = await res.json()
-    if (!rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    const r = rows[0]
+    const dto = toVisitDetailWireDto(d)
+    // Route-edge prettify (enums carried RAW by the dto). Spread re-assigns
+    // visitType/outcome in place so key ORDER is unchanged. String(... ?? '')
+    // reproduces today's null->'' coercion exactly.
     return NextResponse.json({
-      id:               r.id,
-      createdAt:        r.created_at,
-      visitType:        String(r.visit_type ?? '').replace(/_/g, ' '),
-      outcome:          String(r.outcome ?? '').replace(/_/g, ' '),
-      commitmentMade:   r.commitment_made ?? false,
-      commitmentDetail: r.commitment_detail ?? null,
-      notes:            r.notes ?? null,
-      customer:         r.customers?.name ?? null,
-      prospectName:     r.prospect_name ?? null,
-      prospectPostcode: r.prospect_postcode ?? null,
-      loggedBy:         r.users?.name ?? 'Unknown',
-      pipelineStatus:   r.pipeline_status ?? 'Logged',
+      ...dto,
+      visitType: String(dto.visitType ?? '').replace(/_/g, ' '),
+      outcome:   String(dto.outcome ?? '').replace(/_/g, ' '),
     })
   } catch (err) {
     console.error('[detail/visit]', err)

@@ -27,10 +27,10 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService } from '@/lib/adapters/supabase/client'
 import { isValidRepId, isValidVisitType, isValidOutcome } from '@/lib/adminFilters'
-
-const supabase = supabaseService
+import { visitsService } from '@/lib/wiring/visits'
+import { toAdminVisitWireDto } from '@/lib/api/visits/dto'
+import { ServiceError } from '@/lib/errors'
 
 export async function GET(req: NextRequest) {
   try {
@@ -63,37 +63,26 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'invalid outcome' }, { status: 400 })
     }
 
-    let query = supabase
-      .from('visits')
-      .select('id, created_at, outcome, visit_type, notes, pipeline_status, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)')
-      .gte('created_at', from)
-      .lte('created_at', to)
-      .order('created_at', { ascending: false })
-      .limit(200)
-
-    if (repId)   query = query.eq('user_id',     repId)
-    if (type)    query = query.eq('visit_type',  type)
-    if (outcome) query = query.eq('outcome',     outcome)
-
-    const res = await query
-
-    if (res.error) {
-      console.error('[admin/visits] DB error:', res.error.code, res.error.message)
-      return NextResponse.json({ error: 'Database error' }, { status: 500 })
+    let visits
+    try {
+      visits = await visitsService.listAllWithFilters({ from, to, repId, type, outcome })
+    } catch (err) {
+      // R3: preserve the exact DB-failure 500 body the route emitted today.
+      if (err instanceof ServiceError) {
+        console.error('[admin/visits] DB error:', err.message)
+        return NextResponse.json({ error: 'Database error' }, { status: 500 })
+      }
+      throw err
     }
 
-    const rows = (res.data ?? []).map((v: Record<string, unknown>) => {
-      const cust = v.customers as { name: string } | null
-      const usr  = (v['users'] as { name: string } | null)
+    // Route-edge prettify (enums carried RAW by the dto). Spread re-assigns
+    // visitType/outcome in place so key ORDER is unchanged.
+    const rows = visits.map(v => {
+      const dto = toAdminVisitWireDto(v)
       return {
-        id:             v.id,
-        customer:       cust?.name ?? (v.prospect_name as string) ?? 'Unknown',
-        rep:            usr?.name ?? 'Unknown',
-        visitType:      String(v.visit_type ?? '').replace(/_/g, ' '),
-        outcome:        String(v.outcome ?? '').replace(/_/g, ' '),
-        notes:          v.notes ? String(v.notes) : null,
-        pipelineStatus: v.pipeline_status ? String(v.pipeline_status) : null,
-        createdAt:      v.created_at as string,
+        ...dto,
+        visitType: String(dto.visitType ?? '').replace(/_/g, ' '),
+        outcome:   String(dto.outcome ?? '').replace(/_/g, ' '),
       }
     })
 
