@@ -44,17 +44,69 @@ test.describe('@critical KDS line undo', () => {
     }
   }
 
-  const notDoneLine = (page: import('@playwright/test').Page) =>
-    page
-      .locator('button')
-      .filter({ has: page.locator('div.bg-slate-600') })
-      .first()
+  // ── Card- and line-scoped locators (F-TD-33) ────────────────────────────
+  // The KDS board ACCUMULATES orders across runs: the seed creates none, the
+  // order-pipeline specs CREATE orders and never delete them, and this file's
+  // 3rd test COMPLETES orders. So a global "first green line on the whole
+  // board" can land on a COMPLETED order left by spec 03 or a previous run —
+  // which opens the louder "Reopen the completed order?" modal instead of the
+  // plain "Undo this line?" one. That mismatch was the observed flake. Every
+  // interaction below is therefore scoped to a single order CARD
+  // (app/kds/page.tsx line 618 — `bg-slate-800 rounded-xl`), and the plain-undo
+  // flow only ever taps a green line that sits inside an IN-PROGRESS card.
+  type PW = import('@playwright/test').Page
+  type Loc = import('@playwright/test').Locator
 
-  const doneLine = (page: import('@playwright/test').Page) =>
-    page
-      .locator('button')
+  const cards = (page: PW) => page.locator('div.bg-slate-800.rounded-xl')
+
+  // Within a card, a not-done line button (slate circle) / a done line button
+  // (green circle). The done-count badge is a <span>, so `div.bg-green-600`
+  // only ever matches a line circle, never the badge.
+  const slateLine = (scope: Loc, page: PW) =>
+    scope.locator('button').filter({ has: page.locator('div.bg-slate-600') })
+  const greenLine = (scope: Loc, page: PW) =>
+    scope.locator('button').filter({ has: page.locator('div.bg-green-600') })
+
+  // A still-in-progress card (carries at least one not-done slate line).
+  // Completed cards have none, so they're excluded automatically.
+  const inProgressCard = (page: PW) =>
+    cards(page).filter({ has: page.locator('div.bg-slate-600') })
+
+  // Resolve a STABLE locator for an order that can drive the plain-undo flow:
+  // in-progress (so undoing a line never reopens) AND carrying a done line to
+  // tap. We anchor by the order reference text so the undo itself doesn't move
+  // the locator out from under us. Returns null when the board has no such
+  // order (caller skips — the undo logic is also proven deterministically at
+  // the unit + integration layers).
+  async function pickUndoableOrder(page: PW): Promise<Loc | null> {
+    // Preferred: an in-progress card that already has a done line — typically
+    // THIS run's order, left at 1/2 by spec 03. No mutation needed.
+    let seed: Loc | null = inProgressCard(page)
       .filter({ has: page.locator('div.bg-green-600') })
       .first()
+
+    if (!(await seed.count())) {
+      // Standalone fallback (this spec run without 03 first): mark one not-done
+      // line in an in-progress card that has ≥2 not-done lines, so it gains a
+      // done line yet stays in-progress.
+      seed = null
+      const candidates = inProgressCard(page)
+      const n = await candidates.count()
+      for (let i = 0; i < n; i++) {
+        const card = candidates.nth(i)
+        if ((await slateLine(card, page).count()) >= 2) {
+          await slateLine(card, page).first().click()
+          await expect(greenLine(card, page).first()).toBeVisible({ timeout: 5_000 })
+          seed = card
+          break
+        }
+      }
+      if (!seed) return null
+    }
+
+    const ref = (await seed.getByText(/MFS-\d{4}-\d{4}/).first().innerText()).trim()
+    return cards(page).filter({ has: page.getByText(ref, { exact: true }) })
+  }
 
   test('tap a done line → confirm modal (plain copy) → line reverts to pending', async ({
     page,
@@ -65,15 +117,15 @@ test.describe('@critical KDS line undo', () => {
       page.getByText(/MFS-\d{4}-\d{4}/).first(),
     ).toBeVisible({ timeout: 10_000 })
 
-    // Mark a line done so we have something to undo.
-    const line = notDoneLine(page)
-    await expect(line).toBeVisible({ timeout: 5_000 })
-    await line.click()
-    const green = doneLine(page)
-    await expect(green).toBeVisible({ timeout: 5_000 })
+    const card = await pickUndoableOrder(page)
+    if (!card) {
+      test.skip(true, 'no in-progress order with a done line on the board to undo')
+      return
+    }
+    const greenBefore = await greenLine(card, page).count()
 
-    // Second tap on the now-done line → the undo confirmation modal.
-    await green.click()
+    // Tap a done line on an IN-PROGRESS order → the plain undo modal.
+    await greenLine(card, page).first().click()
     await expect(
       page.getByRole('heading', { name: /Undo this line\?/i }),
     ).toBeVisible({ timeout: 5_000 })
@@ -81,10 +133,12 @@ test.describe('@critical KDS line undo', () => {
       page.getByText(/Mark this line as not done again/i),
     ).toBeVisible()
 
-    // Confirm → the line reverts to pending (a not-done slate circle
-    // returns).
+    // Confirm → the tapped line reverts to pending: the card holds exactly one
+    // fewer done line. expect.poll rides out the board's polling refresh.
     await page.getByRole('button', { name: /^Confirm$/ }).click()
-    await expect(notDoneLine(page)).toBeVisible({ timeout: 5_000 })
+    await expect
+      .poll(async () => greenLine(card, page).count(), { timeout: 5_000 })
+      .toBe(greenBefore - 1)
   })
 
   test('Cancel on the undo modal leaves the line done (no change)', async ({
@@ -96,29 +150,29 @@ test.describe('@critical KDS line undo', () => {
       page.getByText(/MFS-\d{4}-\d{4}/).first(),
     ).toBeVisible({ timeout: 10_000 })
 
-    const line = notDoneLine(page)
-    await expect(line).toBeVisible({ timeout: 5_000 })
-    await line.click()
-    const green = doneLine(page)
-    await expect(green).toBeVisible({ timeout: 5_000 })
+    const card = await pickUndoableOrder(page)
+    if (!card) {
+      test.skip(true, 'no in-progress order with a done line on the board to undo')
+      return
+    }
+    const greenBefore = await greenLine(card, page).count()
 
-    // Open the modal, then Cancel.
-    await green.click()
+    // Open the modal on an in-progress order's done line, then Cancel.
+    await greenLine(card, page).first().click()
     await expect(
       page.getByRole('heading', { name: /Undo this line\?/i }),
     ).toBeVisible({ timeout: 5_000 })
     await page.getByRole('button', { name: /^Cancel$/ }).click()
 
-    // Modal gone, line still done.
+    // Modal gone, and the card's done-line count is unchanged — Cancel is a
+    // no-op, so (unlike the previous version of this spec) there is nothing to
+    // "restore" afterwards.
     await expect(
       page.getByRole('heading', { name: /Undo this line\?/i }),
     ).toBeHidden()
-    await expect(doneLine(page)).toBeVisible({ timeout: 5_000 })
-
-    // Restore: actually undo it so the board ends where it started.
-    await doneLine(page).click()
-    await page.getByRole('button', { name: /^Confirm$/ }).click()
-    await expect(notDoneLine(page)).toBeVisible({ timeout: 5_000 })
+    await expect
+      .poll(async () => greenLine(card, page).count(), { timeout: 5_000 })
+      .toBe(greenBefore)
   })
 
   test('tapping the last done line of a completed card shows the reopen-warning copy', async ({
@@ -130,58 +184,70 @@ test.describe('@critical KDS line undo', () => {
       page.getByText(/MFS-\d{4}-\d{4}/).first(),
     ).toBeVisible({ timeout: 10_000 })
 
-    // Complete an order: mark every visible not-done line done until none
-    // remain on the first card's worth of work. We drive the simplest
-    // deterministic path — mark all currently-visible not-done lines done,
-    // which auto-completes any order whose lines are all done. The board
-    // keeps a completed order visible for a short fade window.
-    //
-    // To reach the reopen path we need a card to enter the completed
-    // state while still visible. We mark not-done lines until the
-    // reopen-warning heading becomes reachable on a done-line tap. If the
-    // seeded board never yields a single-card completion within the fade
-    // window (data-dependent), the test skips rather than flakes — the
-    // reopen copy is also proven deterministically at the unit/integration
-    // layers (willReopen + cascade route test).
-    for (let i = 0; i < 8; i++) {
-      const nd = notDoneLine(page)
-      if (!(await nd.isVisible().catch(() => false))) break
-      await nd.click()
-      await page.waitForTimeout(400)
+    // We need a COMPLETED card still on the board (all lines done, no slate
+    // line). Prefer one already present (left by spec 03 / a previous run — the
+    // common case on an accumulated board); otherwise complete one in-progress
+    // card by marking all of ITS not-done lines. Scope to a single card by
+    // reference throughout so a background refresh can't swap the target.
+    let completed: Loc = cards(page)
+      .filter({ hasNot: page.locator('div.bg-slate-600') })
+      .filter({ has: page.locator('div.bg-green-600') })
+      .first()
+
+    if (!(await completed.count())) {
+      const target = inProgressCard(page).first()
+      if (!(await target.count())) {
+        test.skip(true, 'no order available to drive the completed-order reopen path')
+        return
+      }
+      const ref = (await target.getByText(/MFS-\d{4}-\d{4}/).first().innerText()).trim()
+      const card = cards(page).filter({ has: page.getByText(ref, { exact: true }) })
+      // Mark every remaining not-done line done → the order completes.
+      for (let i = 0; i < 12; i++) {
+        const nd = slateLine(card, page).first()
+        if (!(await nd.isVisible().catch(() => false))) break
+        const slateBefore = await slateLine(card, page).count()
+        await nd.click()
+        await expect
+          .poll(async () => slateLine(card, page).count(), { timeout: 5_000 })
+          .toBeLessThan(slateBefore)
+      }
+      completed = card
     }
 
-    const green = doneLine(page)
-    if (!(await green.isVisible().catch(() => false))) {
-      test.skip(true, 'no done line visible to attempt a completed-order undo')
-      return
-    }
-    await green.click()
+    // The order's state flips to "completed" on a poll refresh, not the instant
+    // its last line is marked done — wait for the card to actually render the
+    // "✓ Completed" marker (app/kds/page.tsx line 759) so the tap yields the
+    // louder reopen modal rather than the plain one.
+    await expect(completed.getByText(/completed/i).first()).toBeVisible({
+      timeout: 10_000,
+    })
 
-    // Either the plain or the reopen modal opens depending on whether the
-    // tapped line's parent order is completed. We only ASSERT the reopen
-    // copy when it appears; otherwise this board state did not produce a
-    // visible completed card and we skip (proven elsewhere).
+    // Tap a done line of the completed card → the LOUDER reopen modal. (Data
+    // races on the fade window can still leave the card not-tappable; if the
+    // reopen copy doesn't surface we restore and skip rather than flake — it is
+    // also proven deterministically at the unit + integration layers.)
+    await greenLine(completed, page).first().click()
     const reopenHeading = page.getByRole('heading', {
       name: /Reopen the completed order\?/i,
     })
     const plainHeading = page.getByRole('heading', { name: /Undo this line\?/i })
     await expect(reopenHeading.or(plainHeading)).toBeVisible({ timeout: 5_000 })
 
-    if (await reopenHeading.isVisible().catch(() => false)) {
-      await expect(
-        page.getByText(/This will reopen the completed order/i),
-      ).toBeVisible()
-      // Confirm the reopen → the card returns to the in-progress board
-      // (a not-done line reappears for that work).
-      await page.getByRole('button', { name: /^Confirm$/ }).click()
-      await expect(notDoneLine(page)).toBeVisible({ timeout: 5_000 })
-    } else {
-      // Plain undo modal — restore and skip the reopen-specific assertion.
+    if (!(await reopenHeading.isVisible().catch(() => false))) {
       await page.getByRole('button', { name: /^Confirm$/ }).click()
       test.skip(
         true,
-        'board state did not surface a visible completed card; reopen copy proven at integration layer',
+        'completed card not reachable this run; reopen copy proven at integration layer',
       )
+      return
     }
+
+    await expect(
+      page.getByText(/This will reopen the completed order/i),
+    ).toBeVisible()
+    // Confirm the reopen → a not-done line reappears for that order's work.
+    await page.getByRole('button', { name: /^Confirm$/ }).click()
+    await expect(slateLine(completed, page).first()).toBeVisible({ timeout: 5_000 })
   })
 })

@@ -107,7 +107,19 @@ test.describe('@critical complaints board (F-17 PR2 re-point)', () => {
     // The sync is async; the board fetches /api/screen2/all on mount. Poll by
     // reloading the board until our marker row appears (the sync has drained
     // and the re-pointed GET returns it).
-    const card = page.locator('div').filter({ has: page.getByText(MARKER) }).first()
+    // Scope to THIS run's single complaint card-root (app/complaints/page.tsx
+    // line 322 — `bg-white rounded-2xl`, the only use of that class pair),
+    // keyed by our unique MARKER. The previous
+    // `page.locator('div').filter({has: MARKER}).first()` resolved to the
+    // OUTERMOST div containing the marker — effectively the whole board — so
+    // once the board held more than one open complaint (complaints are never
+    // cleaned up, so a prior run's row lingers) the card-scoped button lookups
+    // (`Add note`, `Resolve`) matched multiple cards → Playwright strict-mode
+    // violation → flake. Anchoring to the card-root makes this spec touch only
+    // its own row regardless of how many other complaints sit on the board. F-TD-33.
+    const card = page
+      .locator('div.bg-white.rounded-2xl')
+      .filter({ hasText: MARKER })
     await expect(async () => {
       await page.reload()
       await page.getByRole('button', { name: /all complaints/i }).click()

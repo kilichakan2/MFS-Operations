@@ -337,6 +337,37 @@ the trail matters.
   Do NOT just add retries to paper over it.
 - **Owner unit:** **gate before F-18 PR2** — verify + (if real-but-flaky) stabilise the
   two specs first, so PR2's preview smoke is a trustworthy signal.
+- **Status: RESOLVED 2026-06-22** (verified + stabilised; test-only, no app code touched).
+  - **Reproduced on demand:** ran the full `--grep @critical` chromium relay against
+    local Docker Supabase. On a **freshly seeded** DB both specs pass; on a **dirty
+    re-run** (no `db:reset`) `04` + `08` fail — proving environment/shared-data, not code.
+  - **Root cause (both):** the seed creates **zero** orders/complaints — the
+    order-pipeline specs CREATE them and never clean up, and `04`'s 3rd test COMPLETES
+    orders. So the board ACCUMULATES completed orders / multiple open complaints across
+    specs-in-a-run and across runs, and the specs used **non-isolated selectors**:
+    - `04` tapped "first green line on the whole board" → on a dirty board that's a line
+      on a COMPLETED order → app correctly shows the louder "Reopen the completed order?"
+      modal, but the test asserted the plain "Undo this line?" → timeout.
+    - `08` scoped its card as `page.locator('div').filter({has: MARKER}).first()` → the
+      OUTERMOST div containing the marker = the whole board → with >1 open complaint the
+      card-scoped `Add note`/`Resolve` lookups matched multiple cards → Playwright
+      strict-mode violation.
+  - **Fix (data-isolation, NOT retries):**
+    - `08`: anchor the card to its own root `div.bg-white.rounded-2xl` filtered by the
+      unique per-run `MARKER` → the spec only ever touches its own row.
+    - `04`: every interaction scoped to a single order CARD (`div.bg-slate-800.rounded-xl`);
+      the plain-undo flow only taps a green line inside an IN-PROGRESS card (anchored by
+      order reference so the undo can't move the locator); the reopen test waits for the
+      card's "✓ Completed" marker before tapping. Cancel test no longer does a bogus
+      "restore" (Cancel is a no-op).
+  - **Verified:** full `@critical` relay run **4×** (1 fresh + 3 dirty re-runs, data
+    accumulating to 3 orders / 3 complaints) — `04` + `08` green every time, retries=0.
+    `04`'s reopen test now ACTUALLY runs the reopen path (no longer self-skips).
+  - **Out of scope / separate finding:** `05` + `06` (Leaflet map specs) fail **locally
+    every run** — the `/map` page throws in `next dev` (dev-mode-only); they **passed on
+    the PR1 preview**. Deterministic local fail + preview pass = a local-dev-env issue, NOT
+    this flake. Re-confirm on PR2's actual preview; log a separate unit if it ever reds on
+    preview.
 
 ---
 
