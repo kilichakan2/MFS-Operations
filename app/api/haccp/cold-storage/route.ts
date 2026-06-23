@@ -57,6 +57,17 @@ export async function POST(req: NextRequest) {
     const input = body as CreateColdStorageReadingsInput
     const today = todayUK()
 
+    // Route-edge dispatch guards that fire BEFORE the units load in the original
+    // route, so their precedence (missing-fields 400 → today 400 → units-empty
+    // 500) is preserved exactly. The food-safety validation itself lives in the
+    // service (validateColdStorage).
+    if (!input.session || !input.date || !Array.isArray(input.readings) || input.readings.length === 0) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+    if (input.date !== today) {
+      return NextResponse.json({ error: "Readings may only be submitted for today's date." }, { status: 400 })
+    }
+
     // Derive unit set + thresholds from DB, not from client (A3 + A6).
     const units = await haccpDailyChecksService.listActiveColdStorageUnits()
     if (units.length === 0) {
@@ -68,10 +79,7 @@ export async function POST(req: NextRequest) {
     // an unknown unit, validateColdStorage returns the unit-unknown 400 first
     // (precedence preserved) and hasDeviation is never consulted.
     const unitIds = new Set(units.map((u) => u.id))
-    const allUnitsKnown =
-      Array.isArray(input.readings) &&
-      input.readings.length > 0 &&
-      input.readings.every((r) => unitIds.has(r.unit_id))
+    const allUnitsKnown = input.readings.every((r) => unitIds.has(r.unit_id))
     const hasDeviation = allUnitsKnown
       ? haccpDailyChecksService.buildColdStorage({ input, userId, units }).hasDeviation
       : false
