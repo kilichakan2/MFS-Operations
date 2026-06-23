@@ -24,6 +24,8 @@ vi.mock("@/lib/adapters/supabase", () => ({
   supabaseHaccpAssessmentsRepository: { __assessmentsRepoSingleton: true },
   supabaseHaccpTrainingRepository: { __trainingRepoSingleton: true },
   supabaseHaccpPeopleRepository: { __peopleRepoSingleton: true },
+  supabaseHaccpReviewsRepository: { __reviewsRepoSingleton: true },
+  supabaseHaccpAnnualReviewRepository: { __annualReviewRepoSingleton: true },
 }));
 
 const ASSESSMENTS_METHODS = [

@@ -35,11 +35,15 @@ import {
   createHaccpAssessmentsService,
   createHaccpTrainingService,
   createHaccpPeopleService,
+  createHaccpReviewsService,
+  createHaccpAnnualReviewService,
   type HaccpDailyChecksService,
   type HaccpCorrectiveActionsService,
   type HaccpAssessmentsService,
   type HaccpTrainingService,
   type HaccpPeopleService,
+  type HaccpReviewsService,
+  type HaccpAnnualReviewService,
 } from "@/lib/services";
 import {
   createSubmitHaccpDailyCheck,
@@ -51,6 +55,8 @@ import {
   supabaseHaccpAssessmentsRepository,
   supabaseHaccpTrainingRepository,
   supabaseHaccpPeopleRepository,
+  supabaseHaccpReviewsRepository,
+  supabaseHaccpAnnualReviewRepository,
 } from "@/lib/adapters/supabase";
 
 export const haccpDailyChecksService: HaccpDailyChecksService =
@@ -89,6 +95,19 @@ export const haccpTrainingService: HaccpTrainingService =
 export const haccpPeopleService: HaccpPeopleService =
   createHaccpPeopleService({
     people: supabaseHaccpPeopleRepository,
+  });
+
+// F-19 PR5 — Cluster D "reviews" (weekly + monthly reviews with the auto
+// corrective-action side-effect) + the annual SALSA review (draft/lock/sign-off).
+// Service-role singletons ONLY — exactly the access the 2 routes have today, so
+// the PR6 re-point is byte-identical. NO `…ForCaller` (per-caller RLS deferred
+// to F-RLS-04h, Cluster G). INTRODUCE-ONLY: no caller yet.
+export const haccpReviewsService: HaccpReviewsService =
+  createHaccpReviewsService({ reviews: supabaseHaccpReviewsRepository });
+
+export const haccpAnnualReviewService: HaccpAnnualReviewService =
+  createHaccpAnnualReviewService({
+    annualReview: supabaseHaccpAnnualReviewRepository,
   });
 
 // F-RLS-04h (LATER) will add the per-caller authenticated factories here,

@@ -113,3 +113,15 @@ export {
   type FakeHaccpPeopleRepository,
   type FakeHaccpPeopleSeed,
 } from "./HaccpPeopleRepository";
+export {
+  createFakeHaccpReviewsRepository,
+  fakeHaccpReviewsRepository,
+  type FakeHaccpReviewsRepository,
+  type FakeHaccpReviewsSeed,
+} from "./HaccpReviewsRepository";
+export {
+  createFakeHaccpAnnualReviewRepository,
+  fakeHaccpAnnualReviewRepository,
+  type FakeHaccpAnnualReviewRepository,
+  type FakeHaccpAnnualReviewSeed,
+} from "./HaccpAnnualReviewRepository";

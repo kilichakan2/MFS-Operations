@@ -56,3 +56,5 @@ export type { HaccpCorrectiveActionsRepository } from "./HaccpCorrectiveActionsR
 export type { HaccpAssessmentsRepository } from "./HaccpAssessmentsRepository";
 export type { HaccpTrainingRepository } from "./HaccpTrainingRepository";
 export type { HaccpPeopleRepository } from "./HaccpPeopleRepository";
+export type { HaccpReviewsRepository } from "./HaccpReviewsRepository";
+export type { HaccpAnnualReviewRepository } from "./HaccpAnnualReviewRepository";

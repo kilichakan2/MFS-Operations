@@ -84,6 +84,14 @@ export {
   supabaseHaccpPeopleRepository,
 } from "./HaccpPeopleRepository";
 export {
+  createSupabaseHaccpReviewsRepository,
+  supabaseHaccpReviewsRepository,
+} from "./HaccpReviewsRepository";
+export {
+  createSupabaseHaccpAnnualReviewRepository,
+  supabaseHaccpAnnualReviewRepository,
+} from "./HaccpAnnualReviewRepository";
+export {
   authenticatedClientForCaller,
   requireServiceRole,
 } from "./authenticatedClient";
