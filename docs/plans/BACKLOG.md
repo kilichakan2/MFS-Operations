@@ -616,6 +616,30 @@ the trail matters.
 - **Owner unit:** unscheduled (small standalone UI PR)
 - **Status:** open
 
+### F-TD-36 — 🔵 The public visitor kiosk and the staff "Visitor Log" tab diverge in 3 small ways (preserved byte-identical in F-19 PR4)
+
+- **Deferred:** 2026-06-23 (surfaced by F-19 PR4 Cluster C planning/Guard — R2/R3/R4)
+- **What:** `app/api/haccp/visitor/route.ts` (public kiosk, no-auth) and the `record_type:'visitor'`
+  path of `app/api/haccp/people/route.ts` (staff "Visitor Log" tab) write the SAME
+  `haccp_health_records` table but differ in three ways that exist in prod today:
+  (1) **manager sign-off validation** — people uses `!manager_signed_by` (a whitespace-only name
+  PASSES), kiosk uses `!manager_signed_by?.trim()` (whitespace FAILS → 400);
+  (2) **`fit_for_work` source** — people derives it from `visitor_declaration_confirmed ?? false`,
+  kiosk reads a separate `fit_for_work` body field;
+  (3) **two distinct `todayUK()` bodies** — people uses `en-CA`, kiosk uses an `en-GB` split/reverse
+  (same output normally; could differ on a TZ/locale edge).
+- **Why NOT changed in PR4:** PR4 was a byte-identical hexagonal re-point. The shared
+  `validateVisitor`/`buildVisitorHealthRecord` in `HaccpPeopleService` deliberately covers ONLY the 3
+  truly-shared fields (visitor_name/company/reason); the divergences were kept at each route edge so
+  no route's behaviour changed. Harmonising them is a PRODUCT decision (should the kiosk and the staff
+  tab behave identically?), not a refactor.
+- **Fix shape:** decide the intended single behaviour for each of the 3, then converge both routes
+  (likely: trim the manager name everywhere; unify the `todayUK()` helper; pick one `fit_for_work`
+  source). Small once the product call is made.
+- **Priority:** Low — both paths work correctly today; the differences are edge-case only.
+- **Owner unit:** unscheduled (small standalone PR; needs a product nod first)
+- **Status:** open
+
 ### F-PROD-02 — KDS line-done undo with confirmation
 
 - **Deferred:** 2026-06-09 (during F-06 session)
