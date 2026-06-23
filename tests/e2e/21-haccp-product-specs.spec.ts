@@ -32,9 +32,8 @@ test.describe('@critical HACCP product-specs (F-19 PR3 re-point)', () => {
     const name = `E2E-PS-${Date.now()}`
     await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
     await page.goto('/haccp/product-specs')
-    await expect(
-      page.getByRole('heading', { name: /product specifications/i }),
-    ).toBeVisible()
+    // The screen title renders as a <p> (not a heading element), so match on text.
+    await expect(page.getByText('Product Specifications', { exact: true })).toBeVisible()
 
     // ── create ──
     await page.getByRole('button', { name: /\+ Add spec/i }).click()

@@ -35,6 +35,24 @@ import { loginAsAdmin } from './_auth'
 test.describe('@critical HACCP allergens (F-19 PR3 re-point)', () => {
   test('admin updates the allergen assessment', async ({ page }) => {
     await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
+
+    // The Update button only renders once an assessment already exists
+    // (app/haccp/allergens/page.tsx:292) and the page offers no in-UI
+    // create-first path. Seed one through the SAME API the page's Save
+    // uses (POST /api/haccp/allergen-assessment) — the request carries the
+    // logged-in admin's mfs_role + mfs_user_id cookies, so it exercises the
+    // real admin-gated insert path, not a backdoor.
+    const seed = await page.request.post('/api/haccp/allergen-assessment', {
+      data: {
+        site_status: 'nil_allergens',
+        next_review_date: '2030-01-01',
+        cross_contam_risk: `E2E-ALG-SEED-${Date.now()} baseline assessment`,
+        procedure_notes: null,
+        raw_materials: [],
+      },
+    })
+    expect(seed.status()).toBe(201)
+
     await page.goto('/haccp/allergens')
     await expect(
       page.getByRole('heading', { name: /site allergen assessment/i }),
