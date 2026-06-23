@@ -30,11 +30,11 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { loginAs } from './_auth'
+import { loginAsAdmin } from './_auth'
 
 test.describe('@critical HACCP allergens (F-19 PR3 re-point)', () => {
   test('admin updates the allergen assessment', async ({ page }) => {
-    await loginAs(page, 'admin')
+    await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
     await page.goto('/haccp/allergens')
     await expect(
       page.getByRole('heading', { name: /site allergen assessment/i }),
@@ -58,7 +58,7 @@ test.describe('@critical HACCP allergens (F-19 PR3 re-point)', () => {
   test('admin runs a monthly review and re-runs the same month (upsert overwrite)', async ({
     page,
   }) => {
-    await loginAs(page, 'admin')
+    await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
     await page.goto('/haccp/allergens')
 
     // A far-past month owns no real deliveries → "No deliveries found".

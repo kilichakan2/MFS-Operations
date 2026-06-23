@@ -21,11 +21,11 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { loginAs } from './_auth'
+import { loginAsAdmin } from './_auth'
 
 test.describe('@critical HACCP food-defence (F-19 PR3 re-point)', () => {
   test('admin creates a new food-defence plan version (append-only)', async ({ page }) => {
-    await loginAs(page, 'admin')
+    await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
     await page.goto('/haccp/food-defence')
     await expect(
       page.getByRole('heading', { name: /food defence plan/i }),
