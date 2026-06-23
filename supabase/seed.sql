@@ -89,5 +89,19 @@ VALUES
   (gen_random_uuid(), 'ANVIL-TEST-butcher',   'butcher',   NULL, '$2a$10$PvHk6PoHsaZ/JiFG9xQQVuHpy./wEZGqI6wq4ZyMU4RJoeQVHPixG', true),
   (gen_random_uuid(), 'ANVIL-TEST-driver',    'driver',    NULL, '$2a$10$4dz5jU252RS3.c8CN/Y6GObKcIOesqXzD4zNpZfAmzDq35x9sN.mq', true);
 
+-- HACCP cold-storage units — the /haccp/cold-storage screen renders one tap-card
+-- per ACTIVE unit (CCP 2). With zero units the form cannot be submitted, so the
+-- E2E (and any populated-UI smoke) has nothing to drive. Seed the real fleet:
+-- four chillers (target ≤5°C, max 8°C) + one freezer (target ≤-18°C, max -15°C).
+-- Idempotent on name so a re-seed never duplicates.
+INSERT INTO haccp_cold_storage_units (name, unit_type, target_temp_c, max_temp_c, active, position)
+VALUES
+  ('Lamb Chiller',     'chiller',  5.0,   8.0, true, 1),
+  ('Beef Chiller',     'chiller',  5.0,   8.0, true, 2),
+  ('Dispatch Chiller', 'chiller',  5.0,   8.0, true, 3),
+  ('Dairy Chiller',    'chiller',  5.0,   8.0, true, 4),
+  ('Main Freezer',     'freezer', -18.0, -15.0, true, 5)
+ON CONFLICT (name) DO NOTHING;
+
 -- Preview branches: this file runs automatically on every Supabase preview branch creation
 -- (after migrations), seeding the ANVIL-TEST fixtures the Gate-4 preview smoke depends on.

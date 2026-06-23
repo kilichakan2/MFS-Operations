@@ -4,12 +4,15 @@
  * PATCH — sign off a corrective action
  * Sets verified_at = now(), verified_by = admin user ID, resolved = true
  * Admin only.
+ *
+ * F-19 PR2: re-pointed off raw Supabase onto `haccpCorrectiveActionsService`.
+ * The admin-only role gate + the `!id` param guard stay here; the update (which
+ * stamps `verified_at = now()`, `resolved = true` and applies the
+ * `management_verification_required` filter) moved to the service/adapter (PR1).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpCorrectiveActionsService } from '@/lib/wiring/haccp'
 
 export async function PATCH(
   req: NextRequest,
@@ -26,20 +29,7 @@ export async function PATCH(
     const { id } = await params
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
-    const { error } = await supabase
-      .from('haccp_corrective_actions')
-      .update({
-        verified_by: userId,
-        verified_at: new Date().toISOString(),
-        resolved:    true,
-      })
-      .eq('id', id)
-      .eq('management_verification_required', true)
-
-    if (error) {
-      console.error('[PATCH /api/haccp/corrective-actions/:id]', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    await haccpCorrectiveActionsService.signOff(id, userId)
 
     return NextResponse.json({ ok: true })
 
