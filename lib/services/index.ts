@@ -69,3 +69,13 @@ export {
   type HaccpAssessmentsServiceDeps,
   type RunMonthlyReviewResult,
 } from "./HaccpAssessmentsService";
+export {
+  createHaccpTrainingService,
+  type HaccpTrainingService,
+  type HaccpTrainingServiceDeps,
+} from "./HaccpTrainingService";
+export {
+  createHaccpPeopleService,
+  type HaccpPeopleService,
+  type HaccpPeopleServiceDeps,
+} from "./HaccpPeopleService";

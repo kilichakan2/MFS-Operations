@@ -216,3 +216,25 @@ export type {
   CreateProductSpecInput,
   ProductSpecPersist,
 } from "./HaccpAssessment";
+// F-19 PR4 — Cluster C training hexagon (staff + allergen training).
+export type {
+  StaffTrainingRow,
+  CreateStaffTrainingInput,
+  StaffTrainingPersist,
+  AllergenTrainingRow,
+  CreateAllergenTrainingInput,
+  AllergenTrainingPersist,
+  TrainingListResult,
+} from "./HaccpTraining";
+// F-19 PR4 — Cluster C people / fitness-to-work hexagon (haccp_health_records,
+// shared by people + the public visitor kiosk). NOTE: `HealthRecordUserRef` is
+// kept module-local in HaccpPeople.ts (NOT re-exported) to avoid colliding with
+// `HaccpUserRef` from HaccpDailyCheck.ts above (R11).
+export type {
+  HealthRecordRow,
+  HealthRecordsListResult,
+  CreateNewStaffDeclarationInput,
+  CreateReturnToWorkInput,
+  CreateVisitorInput,
+  HealthRecordPersist,
+} from "./HaccpPeople";
