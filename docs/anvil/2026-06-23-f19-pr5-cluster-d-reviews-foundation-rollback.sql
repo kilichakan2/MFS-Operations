@@ -1,0 +1,24 @@
+-- ANVIL rollback — F-19 PR5 · Cluster D Reviews foundation (PR #72)
+-- Date: 2026-06-23
+--
+-- NO SQL ROLLBACK REQUIRED.
+--
+-- This PR is introduce-only / dead code: it adds two new HACCP hexagons
+-- (HaccpReviews + HaccpAnnualReview) plus barrel/wiring edits and one new
+-- integration test. It contains:
+--   • ZERO migrations (git diff --stat origin/main -- supabase/ is empty),
+--   • ZERO app/** changes (no route, page, or component touched),
+--   • ZERO new package.json dependencies,
+--   • NO caller of the new singletons in app/** (grep clean).
+--
+-- Because nothing live calls the new code and no schema changed, the only
+-- rollback action needed is to REVERT THE SQUASH MERGE COMMIT on main:
+--
+--     git revert <squash-merge-sha>
+--
+-- Vercel auto-redeploys the reverted code. No data migration to undo, no
+-- PITR involvement, no schema state to reverse. The three tables this code
+-- reads/writes (haccp_weekly_review, haccp_monthly_review,
+-- haccp_annual_reviews, haccp_corrective_actions) and the unique-draft index
+-- (idx_annual_reviews_one_draft) all pre-exist in the baseline and are
+-- unchanged by this PR.
