@@ -87,3 +87,41 @@ PITR confirmed: N/A — no migration → no destructive operation → no PITR ne
 ## Verdict
 
 CLEARED FOR PRODUCTION — byte-identical re-point proven at the DB layer (32/32 new integration, all required pins incl. W2 zero-CA), live corrective-action loop proven through the UI (@critical E2E), unit/build/typecheck/lint/pgTAP regression all green. No real code bug; no migration (revert-only rollback). The two E2E reds are out-of-scope F-24 map specs failing on a known dev-server Leaflet artefact, not a F-19 regression.
+
+---
+
+## ADDENDUM (2026-06-23) — exhaustive HACCP browser coverage, breadth gap CLOSED
+
+At Hakan's instruction (HACCP is the most critical section → 100% tap/button confidence
+required before ship), the named breadth gap above was closed with a full browser E2E pass
+over every screen behind the 9 re-pointed routes.
+
+**New specs (commit `531c169`):** `tests/e2e/11-haccp-home-nav` · `12-haccp-delivery` ·
+`13-haccp-cold-storage` · `14-haccp-calibration` · `15-haccp-cleaning` ·
+`16-haccp-process-room` · `17-haccp-mince-prep` (all `@critical`, chromium).
+
+**Local Docker (clean db:reset):** 18/18 green — every form's happy path + deviation→CCAPopup
+→admin-queue loop + the W2 allergen-only-no-CA pin (verified at browser AND DB level) + home
+tile routing. No real bug; every iteration red was a test-selector fix, never a misbehaving
+screen.
+
+**Production-build PREVIEW (`--unprotected`, branch-alias, 4/4 DB-identity probes passed):**
+**34/34 @critical green** — the full suite (01–17), incl. all 8 HACCP specs and, on a real
+production build, the two F-24 Leaflet map specs (05/06) that only fail under local `next dev`.
+
+**Per-screen browser-tap coverage now proven:** delivery (happy + reject-temp deviation→queue +
+W2 zero-CA) · cold-storage (5 units + critical→queue) · calibration (manual pass/fail→queue +
+certified probe) · cleaning (happy + issue) · process-room (temps + diary phase + critical-room
+→queue) · mince/meat-prep/time-sep (+ mince temp deviation→queue) · home-tile nav.
+
+**Infra change (test/preview only, never production):** `supabase/seed.sql` gained 5 HACCP
+cold-storage units (4 chillers + 1 freezer, idempotent `ON CONFLICT DO NOTHING`) — the local/
+preview seed had zero, so the data-dependent cold-storage screen could not render. The PR #69
+Supabase preview branch was reset to re-seed before the preview smoke.
+
+**Could not test (out of scope for tap-through):** OS/native print dialogs (delivery/mince
+labels) — unobservable by Playwright; seeded supplier-picker chips (local seed has 0 suppliers)
+— the UI's documented "Other" free-text path was used instead and covers submission end-to-end.
+
+**Breadth gap from the original "Manual smoke at merge" note is now CLOSED** — a manual click is
+no longer advised; every HACCP screen tap is proven green on the production-build preview.
