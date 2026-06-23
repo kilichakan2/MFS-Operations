@@ -5,12 +5,14 @@
  *
  * GET  — fetch all assessments desc + latest (backward compatible)
  * POST — insert new assessment (admin only — never overwrites)
+ *
+ * F-19 PR3: persistence behind the HaccpAssessments hexagon. This route is
+ * presentation only — the role gate, the wall clock and response assembly stay
+ * here; everything touching a table moved into the service/adapter.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpAssessmentsService } from '@/lib/wiring/haccp'
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
@@ -21,30 +23,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
-      .from('haccp_allergen_assessment')
-      .select(`
-        id, site_status, raw_materials, cross_contam_risk, procedure_notes,
-        assessed_at, next_review_date,
-        assessor:assessed_by(name),
-        updater:updated_by(name)
-      `)
-      .order('assessed_at', { ascending: false })
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    const all        = data ?? []
-    const latest     = all[0] ?? null
-
+    const result = await haccpAssessmentsService.listAllergenAssessments()
     // backward compatible: assessment = latest (existing callers unaffected)
-    return NextResponse.json({ assessment: latest, all_assessments: all })
+    return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/allergen-assessment]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
 
-// ── POST — upsert (admin only) ────────────────────────────────────────────────
+// ── POST — insert (admin only) ────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,37 +43,21 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const {
-      site_status,
-      raw_materials,
-      cross_contam_risk,
-      procedure_notes,
-      next_review_date,
-    } = body
 
-    if (!site_status || !next_review_date) {
-      return NextResponse.json({ error: 'site_status and next_review_date required' }, { status: 400 })
+    const valid = haccpAssessmentsService.validateAllergenAssessment(body)
+    if (!valid.ok) {
+      return NextResponse.json({ error: valid.message }, { status: valid.status })
     }
 
     // Always insert a fresh record — keeps full history, latest is newest
-    const { data, error } = await supabase
-      .from('haccp_allergen_assessment')
-      .insert({
-        assessed_by:       userId,
-        assessed_at:       new Date().toISOString(),
-        next_review_date,
-        site_status,
-        raw_materials:     raw_materials    ?? [],
-        cross_contam_risk: cross_contam_risk ?? '',
-        procedure_notes:   procedure_notes  ?? null,
-        updated_by:        userId,
-        updated_at:        new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ assessment: data }, { status: 201 })
+    const assessment = await haccpAssessmentsService.insertAllergenAssessment(
+      haccpAssessmentsService.buildAllergenAssessmentPersist({
+        input: body,
+        userId,
+        now: new Date(),
+      }),
+    )
+    return NextResponse.json({ assessment }, { status: 201 })
   } catch (err) {
     console.error('[POST /api/haccp/allergen-assessment]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

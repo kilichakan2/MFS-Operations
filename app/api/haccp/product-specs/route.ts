@@ -6,12 +6,16 @@
  * GET   — all active specs + review status (any logged-in role)
  * POST  — create spec (admin only)
  * PATCH — update spec (admin only); deactivate via active=false
+ *
+ * F-19 PR3: persistence behind the HaccpAssessments hexagon. This route is
+ * presentation only — the role gate, the wall clock and response assembly stay
+ * here. The PATCH dynamic-allergens nuance stays at the route edge because it
+ * depends on `'allergens' in body`, which only the route can see; the route
+ * hands the ready `updates` map to the service.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpAssessmentsService } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,35 +24,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
-      .from('haccp_product_specs')
-      .select(`
-        id, product_name, description, ingredients, allergens, allergen_notes,
-        portion_weight_g, storage_temp_c,
-        shelf_life_chilled_days, shelf_life_frozen_days,
-        packaging_type, micro_limits,
-        version, reviewed_at, active,
-        created_at, updated_at,
-        reviewer:reviewed_by ( name ),
-        creator:created_by   ( name )
-      `)
-      .eq('active', true)
-      .order('product_name', { ascending: true })
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    const twelveMonthsAgo = new Date()
-    twelveMonthsAgo.setFullYear(twelveMonthsAgo.getFullYear() - 1)
-
-    const specs = (data ?? []).map(s => ({
-      ...s,
-      review_due: !s.reviewed_at || new Date(s.reviewed_at) < twelveMonthsAgo,
-    }))
-
-    return NextResponse.json({
-      specs,
-      review_due_count: specs.filter(s => s.review_due).length,
-    })
+    const result = await haccpAssessmentsService.getProductSpecs(new Date())
+    return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/product-specs]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -64,44 +41,20 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const {
-      product_name, description, ingredients,
-      allergens, allergen_notes,
-      portion_weight_g, storage_temp_c,
-      shelf_life_chilled_days, shelf_life_frozen_days,
-      packaging_type, micro_limits,
-      version, reviewed_at, reviewed_by,
-    } = body
 
-    if (!product_name?.trim()) {
-      return NextResponse.json({ error: 'Product name is required' }, { status: 400 })
+    const valid = haccpAssessmentsService.validateProductSpec(body)
+    if (!valid.ok) {
+      return NextResponse.json({ error: valid.message }, { status: valid.status })
     }
 
-    const { data, error } = await supabase
-      .from('haccp_product_specs')
-      .insert({
-        product_name:            product_name.trim(),
-        description:             description?.trim()    || null,
-        ingredients:             ingredients?.trim()    || null,
-        allergens:               Array.isArray(allergens) && allergens.length > 0 ? allergens : null,
-        allergen_notes:          allergen_notes?.trim() || null,
-        portion_weight_g:        portion_weight_g       || null,
-        storage_temp_c:          storage_temp_c         || null,
-        shelf_life_chilled_days: shelf_life_chilled_days || null,
-        shelf_life_frozen_days:  shelf_life_frozen_days  || null,
-        packaging_type:          packaging_type?.trim() || null,
-        micro_limits:            micro_limits?.trim()   || null,
-        version:                 version?.trim()        || 'V1.0',
-        reviewed_at:             reviewed_at            || null,
-        reviewed_by:             reviewed_by            || null,
-        created_by:              userId,
-        updated_at:              new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ spec: data }, { status: 201 })
+    const spec = await haccpAssessmentsService.insertProductSpec(
+      haccpAssessmentsService.buildProductSpecPersist({
+        input: body,
+        userId,
+        now: new Date(),
+      }),
+    )
+    return NextResponse.json({ spec }, { status: 201 })
   } catch (err) {
     console.error('[POST /api/haccp/product-specs]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -130,15 +83,8 @@ export async function PATCH(req: NextRequest) {
       updates.allergens = Array.isArray(allergens) && allergens.length > 0 ? allergens : null
     }
 
-    const { data, error } = await supabase
-      .from('haccp_product_specs')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ spec: data })
+    const spec = await haccpAssessmentsService.updateProductSpec(id, updates)
+    return NextResponse.json({ spec })
   } catch (err) {
     console.error('[PATCH /api/haccp/product-specs]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
