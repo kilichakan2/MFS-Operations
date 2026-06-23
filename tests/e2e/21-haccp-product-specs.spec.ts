@@ -35,6 +35,11 @@ test.describe('@critical HACCP product-specs (F-19 PR3 re-point)', () => {
     // The screen title renders as a <p> (not a heading element), so match on text.
     await expect(page.getByText('Product Specifications', { exact: true })).toBeVisible()
 
+    // The unique name lets us target THIS spec's list row deterministically,
+    // rather than `.first()` which is ambiguous when leftover E2E-PS-… rows
+    // exist on the branch.
+    const row = page.getByRole('button', { name: new RegExp(name) })
+
     // ── create ──
     await page.getByRole('button', { name: /\+ Add spec/i }).click()
     await page
@@ -43,23 +48,27 @@ test.describe('@critical HACCP product-specs (F-19 PR3 re-point)', () => {
     await page.getByRole('button', { name: /^Save$/ }).click()
 
     // The new spec appears in the active register.
-    await expect(page.getByText(new RegExp(name)).first()).toBeVisible({
-      timeout: 10_000,
-    })
+    await expect(row).toBeVisible({ timeout: 10_000 })
 
     // ── edit in place ──
-    await page.getByText(new RegExp(name)).first().click()
+    await row.click()
+    // Wait for the detail view before acting on it.
+    await expect(page.getByRole('button', { name: /^Edit$/ })).toBeVisible({
+      timeout: 10_000,
+    })
     await page.getByRole('button', { name: /^Edit$/ }).click()
     await page
       .getByPlaceholder(/e\.g\. Fresh beef burger patty/i)
       .fill('E2E edited description')
     await page.getByRole('button', { name: /^Save$/ }).click()
-    await expect(page.getByText(new RegExp(name)).first()).toBeVisible({
-      timeout: 10_000,
-    })
+    await expect(row).toBeVisible({ timeout: 10_000 })
 
     // ── soft-delete (active:false → disappears from the active register) ──
-    await page.getByText(new RegExp(name)).first().click()
+    await row.click()
+    // The detail view must be ready (Delete visible) before we click it.
+    await expect(page.getByRole('button', { name: /^Delete$/ })).toBeVisible({
+      timeout: 10_000,
+    })
     await page.getByRole('button', { name: /^Delete$/ }).click()
     await page.getByRole('button', { name: /confirm delete/i }).click()
 

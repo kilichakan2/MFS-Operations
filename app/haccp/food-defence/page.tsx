@@ -495,6 +495,7 @@ export default function FoodDefencePage() {
   const [isAdmin,  setIsAdmin]  = useState(false)
   const [selected, setSelected] = useState<Plan | null>(null)
   const [editBase, setEditBase] = useState<Plan | null>(null)
+  const [creating, setCreating] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -513,10 +514,10 @@ export default function FoodDefencePage() {
 
   useEffect(() => { load() }, [load])
 
-  if (editBase !== null) return (
+  if (editBase !== null || creating) return (
     <EditForm base={editBase} users={users}
-      onSaved={async () => { setEditBase(null); setSelected(null); await load() }}
-      onCancel={() => setEditBase(null)} />
+      onSaved={async () => { setEditBase(null); setCreating(false); setSelected(null); await load() }}
+      onCancel={() => { setEditBase(null); setCreating(false) }} />
   )
 
   if (selected) {
@@ -549,7 +550,7 @@ export default function FoodDefencePage() {
           <p className="text-slate-400 text-xs">MFS-FDP-001 · SALSA 4.2.3</p>
         </div>
         {isAdmin && (
-          <button onClick={() => setEditBase(latest)}
+          <button onClick={() => setCreating(true)}
             className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
             + New version
           </button>
