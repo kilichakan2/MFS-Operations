@@ -418,6 +418,7 @@ export default function FoodFraudPage() {
   const [isAdmin,     setIsAdmin]     = useState(false)
   const [selected,    setSelected]    = useState<Assessment | null>(null)
   const [editBase,    setEditBase]    = useState<Assessment | null>(null)
+  const [creating,    setCreating]    = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -436,13 +437,13 @@ export default function FoodFraudPage() {
 
   useEffect(() => { load() }, [load])
 
-  if (editBase !== null) return (
+  if (editBase !== null || creating) return (
     <EditForm
       base={editBase}
       users={users}
       isAdmin={isAdmin}
-      onSaved={async () => { setEditBase(null); setSelected(null); await load() }}
-      onCancel={() => setEditBase(null)}
+      onSaved={async () => { setEditBase(null); setCreating(false); setSelected(null); await load() }}
+      onCancel={() => { setEditBase(null); setCreating(false) }}
     />
   )
 
@@ -481,7 +482,7 @@ export default function FoodFraudPage() {
           <p className="text-slate-400 text-xs">MFS-FFRA-001 · BSD 1.6.4</p>
         </div>
         {isAdmin && (
-          <button onClick={() => setEditBase(latest)}
+          <button onClick={() => setCreating(true)}
             className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
             + New version
           </button>

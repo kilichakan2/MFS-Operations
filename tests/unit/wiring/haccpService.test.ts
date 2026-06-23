@@ -23,6 +23,7 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/adapters/supabase", () => ({
   supabaseHaccpDailyChecksRepository: { __dailyChecksRepoSingleton: true },
   supabaseHaccpCorrectiveActionsRepository: { __caRepoSingleton: true },
+  supabaseHaccpAssessmentsRepository: { __assessmentsRepoSingleton: true },
 }));
 
 const DAILY_CHECKS_METHODS = [
@@ -82,12 +83,13 @@ describe("F-19 haccp wiring (service-role singletons)", () => {
     const mod = (await import("@/lib/wiring/haccp")) as Record<string, unknown>;
     const exportNames = Object.keys(mod);
     expect(exportNames.some((n) => /ForCaller/.test(n))).toBe(false);
-    // Exactly the three intended exports.
+    // Exactly the four intended exports (F-19 PR3 added haccpAssessmentsService).
     expect(new Set(exportNames)).toEqual(
       new Set([
         "haccpDailyChecksService",
         "haccpCorrectiveActionsService",
         "submitHaccpDailyCheck",
+        "haccpAssessmentsService",
       ]),
     );
   });

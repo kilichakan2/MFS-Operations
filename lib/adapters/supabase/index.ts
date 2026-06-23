@@ -72,6 +72,10 @@ export {
   supabaseHaccpCorrectiveActionsRepository,
 } from "./HaccpCorrectiveActionsRepository";
 export {
+  createSupabaseHaccpAssessmentsRepository,
+  supabaseHaccpAssessmentsRepository,
+} from "./HaccpAssessmentsRepository";
+export {
   authenticatedClientForCaller,
   requireServiceRole,
 } from "./authenticatedClient";

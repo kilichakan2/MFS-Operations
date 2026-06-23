@@ -588,7 +588,33 @@ the trail matters.
   food-defence/food-fraud.
 - **Owner unit:** **F-19 Cluster B (PR3)** — rides the allergen/registers re-point. See roadmap
   Days 13–14 F-19 plan.
-- **Status:** open (scheduled into F-19 Cluster B)
+- **PR3 Frame decision (2026-06-23):** Hakan chose **display-only** — NO draft/published state, NO
+  schema change. The version-history UI already exists on `/haccp/allergens` (clickable older
+  assessments + "Update based on this" read-only detail), so the display job is effectively already
+  shipped. Any future draft/publish workflow is its own separate PR if ever wanted.
+- **Status:** done — resolved display-only (no schema change) at F-19 PR3 Frame; PR #70. Draft/publish
+  deferred to its own future PR if requested.
+
+### F-TD-35 — HACCP allergens empty-state create path is dead (same bug F-19 PR3 fixed on food-defence/food-fraud)
+
+- **Deferred:** 2026-06-23 (found during F-19 PR3 ANVIL exhaustive browser-tap E2E)
+- **What:** On `/haccp/allergens` with NO assessment yet, there is no in-UI way to create the first one
+  — the edit form is only reachable via the "Update" button, which only renders once an assessment
+  exists (`app/haccp/allergens/page.tsx:292`). Same class of bug as the food-defence/food-fraud
+  empty-state "+ New version" dead button that F-19 PR3 fixed (PR #70, commit `96a6b33`).
+- **Why NOT fixed in PR3:** Hakan scoped PR3's in-PR bug fix to food-defence + food-fraud only.
+  Allergens' fix is heavier than those two: the food-defence/food-fraud EditForms were already
+  null-safe (`useState(base?.field ?? …)`) so a blank `creating` path dropped in cleanly, but the
+  allergens edit detail reads `editBase.assessed_at` without null-guards, so a create path needs
+  null-safety work first. Spec 18 is green because the E2E seeds the first assessment via the
+  admin-gated POST, so this is not blocking.
+- **Fix shape:** add a `creating` flag + null-safe blank-base path on `/haccp/allergens` (mirror the
+  product-specs `adding` pattern and the F-19 PR3 food-defence/food-fraud fix), then drop the
+  seed-first workaround in `tests/e2e/18-haccp-allergens.spec.ts` for a real empty-create tap.
+- **Priority:** Medium — only bites a brand-new/empty site; once one assessment exists the Update
+  path works. Real for first-run UX.
+- **Owner unit:** unscheduled (small standalone UI PR)
+- **Status:** open
 
 ### F-PROD-02 — KDS line-done undo with confirmation
 

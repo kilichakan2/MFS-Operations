@@ -5,12 +5,14 @@
  *
  * GET  — all versions desc + latest flag + review_due (any HACCP role)
  * POST — insert new version (admin only — never overwrites existing rows)
+ *
+ * F-19 PR3: persistence behind the HaccpAssessments hexagon. This route is
+ * presentation only — the role gate, the wall clock and response assembly stay
+ * here; everything touching a table moved into the service/adapter.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpAssessmentsService } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,26 +21,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
-      .from('haccp_food_fraud_assessments')
-      .select(`
-        id, version, issue_date, next_review_date,
-        risks, supply_chain, mitigation_notes, created_at,
-        preparer:prepared_by ( name ),
-        approver:approved_by ( name ),
-        creator:created_by   ( name )
-      `)
-      .order('created_at', { ascending: false })
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    const assessments = data ?? []
-    const latest      = assessments[0] ?? null
-    const review_due  = latest
-      ? new Date(latest.next_review_date) < new Date()
-      : true
-
-    return NextResponse.json({ assessments, latest, review_due })
+    const result = await haccpAssessmentsService.getFoodFraud(new Date())
+    return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/food-fraud]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -54,35 +38,16 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const {
-      version, issue_date, next_review_date,
-      risks, supply_chain, mitigation_notes,
-      prepared_by, approved_by,
-    } = body
 
-    if (!version?.trim())       return NextResponse.json({ error: 'Version required' },          { status: 400 })
-    if (!issue_date)            return NextResponse.json({ error: 'Issue date required' },        { status: 400 })
-    if (!next_review_date)      return NextResponse.json({ error: 'Review date required' },       { status: 400 })
-    if (!Array.isArray(risks))  return NextResponse.json({ error: 'Risks must be an array' },     { status: 400 })
+    const valid = haccpAssessmentsService.validateFoodFraud(body)
+    if (!valid.ok) {
+      return NextResponse.json({ error: valid.message }, { status: valid.status })
+    }
 
-    const { data, error } = await supabase
-      .from('haccp_food_fraud_assessments')
-      .insert({
-        version:          version.trim(),
-        issue_date,
-        next_review_date,
-        risks,
-        supply_chain:     Array.isArray(supply_chain) ? supply_chain : [],
-        mitigation_notes: mitigation_notes?.trim() || null,
-        prepared_by:      prepared_by || null,
-        approved_by:      approved_by || null,
-        created_by:       userId,
-      })
-      .select()
-      .single()
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ assessment: data }, { status: 201 })
+    const assessment = await haccpAssessmentsService.insertFoodFraudAssessment(
+      haccpAssessmentsService.buildFoodFraudPersist({ input: body, userId }),
+    )
+    return NextResponse.json({ assessment }, { status: 201 })
   } catch (err) {
     console.error('[POST /api/haccp/food-fraud]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })

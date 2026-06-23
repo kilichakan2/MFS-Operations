@@ -63,3 +63,9 @@ export {
   type HaccpCorrectiveActionsService,
   type HaccpCorrectiveActionsServiceDeps,
 } from "./HaccpCorrectiveActionsService";
+export {
+  createHaccpAssessmentsService,
+  type HaccpAssessmentsService,
+  type HaccpAssessmentsServiceDeps,
+  type RunMonthlyReviewResult,
+} from "./HaccpAssessmentsService";
