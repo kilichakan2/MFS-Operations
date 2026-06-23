@@ -238,3 +238,35 @@ export type {
   CreateVisitorInput,
   HealthRecordPersist,
 } from "./HaccpPeople";
+// F-19 PR5 — Cluster D reviews hexagon (weekly + monthly reviews + the
+// corrective-action side-effect). NOTE: `ReviewUserRef` is kept module-local in
+// HaccpReviews.ts (NOT re-exported) to avoid colliding with `HaccpUserRef` /
+// `HealthRecordUserRef` above. The `Review*` prefix avoids the existing
+// `MonthlyReviewRow` / `MonthlyReviewPersist` (the Cluster B allergen monthly
+// review — a DIFFERENT table) in this barrel.
+export type {
+  ReviewWeeklyRow,
+  WeeklyAssessmentItem,
+  CreateReviewWeeklyInput,
+  ReviewWeeklyPersist,
+  ReviewMonthlyRow,
+  MonthlySystemItem,
+  CreateReviewMonthlyInput,
+  ReviewMonthlyPersist,
+  ReviewCorrectiveActionInsert,
+  ReviewsListResult,
+} from "./HaccpReviews";
+// F-19 PR5 — Cluster D annual-review hexagon (haccp_annual_reviews — the SALSA
+// 3.1 draft/lock/sign-off lifecycle). `AnnualReviewUserRef` is kept module-local
+// in HaccpAnnualReview.ts (NOT re-exported) for the same collision reason.
+export type {
+  AnnualReviewJoin,
+  AnnualReviewRow,
+  CreateAnnualReviewInput,
+  AnnualReviewCreatePersist,
+  UpdateAnnualReviewInput,
+  AnnualReviewCurrent,
+  AnnualReviewSignOffPersist,
+  AnnualReviewUpdatePersist,
+  AnnualReviewListResult,
+} from "./HaccpAnnualReview";

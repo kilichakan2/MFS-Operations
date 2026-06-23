@@ -26,6 +26,8 @@ vi.mock("@/lib/adapters/supabase", () => ({
   supabaseHaccpAssessmentsRepository: { __assessmentsRepoSingleton: true },
   supabaseHaccpTrainingRepository: { __trainingRepoSingleton: true },
   supabaseHaccpPeopleRepository: { __peopleRepoSingleton: true },
+  supabaseHaccpReviewsRepository: { __reviewsRepoSingleton: true },
+  supabaseHaccpAnnualReviewRepository: { __annualReviewRepoSingleton: true },
 }));
 
 const DAILY_CHECKS_METHODS = [
@@ -77,6 +79,33 @@ const PEOPLE_METHODS = [
   "buildVisitorHealthRecord",
 ] as const;
 
+// F-19 PR5 — Cluster D reviews + annual-review singletons.
+const REVIEWS_METHODS = [
+  "getReviews",
+  "validateWeekly",
+  "buildWeeklyPersist",
+  "buildWeeklyCorrectiveActions",
+  "insertWeeklyReview",
+  "validateMonthly",
+  "buildMonthlyPersist",
+  "buildMonthlySystemCorrectiveActions",
+  "insertMonthlyReview",
+  "insertCorrectiveActions",
+] as const;
+
+const ANNUAL_REVIEW_METHODS = [
+  "getReviews",
+  "validateCreate",
+  "buildCreatePersist",
+  "createDraft",
+  "validatePatch",
+  "buildSignOffPersist",
+  "buildUpdatePersist",
+  "findCurrent",
+  "signOff",
+  "update",
+] as const;
+
 describe("F-19 haccp wiring (service-role singletons)", () => {
   it("exports the 3 singletons exposing their surfaces", async () => {
     const {
@@ -123,12 +152,35 @@ describe("F-19 haccp wiring (service-role singletons)", () => {
     }
   });
 
+  it("exports the F-19 PR5 Cluster D reviews + annual-review singletons exposing their surfaces", async () => {
+    const { haccpReviewsService, haccpAnnualReviewService } = await import(
+      "@/lib/wiring/haccp"
+    );
+
+    expect(haccpReviewsService).toBeDefined();
+    for (const m of REVIEWS_METHODS) {
+      expect(
+        typeof (haccpReviewsService as unknown as Record<string, unknown>)[m],
+      ).toBe("function");
+    }
+
+    expect(haccpAnnualReviewService).toBeDefined();
+    for (const m of ANNUAL_REVIEW_METHODS) {
+      expect(
+        typeof (
+          haccpAnnualReviewService as unknown as Record<string, unknown>
+        )[m],
+      ).toBe("function");
+    }
+  });
+
   it("exports service-role singletons ONLY — no …ForCaller (that is F-RLS-04h)", async () => {
     const mod = (await import("@/lib/wiring/haccp")) as Record<string, unknown>;
     const exportNames = Object.keys(mod);
     expect(exportNames.some((n) => /ForCaller/.test(n))).toBe(false);
     // Exactly the intended exports (F-19 PR3 added haccpAssessmentsService;
-    // F-19 PR4 added haccpTrainingService + haccpPeopleService).
+    // F-19 PR4 added haccpTrainingService + haccpPeopleService; F-19 PR5 added
+    // haccpReviewsService + haccpAnnualReviewService).
     expect(new Set(exportNames)).toEqual(
       new Set([
         "haccpDailyChecksService",
@@ -137,6 +189,8 @@ describe("F-19 haccp wiring (service-role singletons)", () => {
         "haccpAssessmentsService",
         "haccpTrainingService",
         "haccpPeopleService",
+        "haccpReviewsService",
+        "haccpAnnualReviewService",
       ]),
     );
   });
