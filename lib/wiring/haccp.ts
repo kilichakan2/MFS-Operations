@@ -32,8 +32,10 @@
 import {
   createHaccpDailyChecksService,
   createHaccpCorrectiveActionsService,
+  createHaccpAssessmentsService,
   type HaccpDailyChecksService,
   type HaccpCorrectiveActionsService,
+  type HaccpAssessmentsService,
 } from "@/lib/services";
 import {
   createSubmitHaccpDailyCheck,
@@ -42,6 +44,7 @@ import {
 import {
   supabaseHaccpDailyChecksRepository,
   supabaseHaccpCorrectiveActionsRepository,
+  supabaseHaccpAssessmentsRepository,
 } from "@/lib/adapters/supabase";
 
 export const haccpDailyChecksService: HaccpDailyChecksService =
@@ -57,6 +60,15 @@ export const haccpCorrectiveActionsService: HaccpCorrectiveActionsService =
 export const submitHaccpDailyCheck: SubmitHaccpDailyCheck =
   createSubmitHaccpDailyCheck({
     correctiveActions: haccpCorrectiveActionsService,
+  });
+
+// F-19 PR3 — Cluster B "standing registers" (allergen-assessment, allergen
+// monthly-reviews, food-defence, food-fraud, product-specs). Service-role
+// singleton ONLY — exactly the access the 5 routes have today, so the re-point
+// is byte-identical. NO `…ForCaller` (per-caller RLS deferred to F-RLS-04h).
+export const haccpAssessmentsService: HaccpAssessmentsService =
+  createHaccpAssessmentsService({
+    assessments: supabaseHaccpAssessmentsRepository,
   });
 
 // F-RLS-04h (LATER) will add the per-caller authenticated factories here,

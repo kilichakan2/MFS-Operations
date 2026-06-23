@@ -53,3 +53,4 @@ export type { ComplimentsRepository } from "./ComplimentsRepository";
 export type { VisitsRepository } from "./VisitsRepository";
 export type { HaccpDailyChecksRepository } from "./HaccpDailyChecksRepository";
 export type { HaccpCorrectiveActionsRepository } from "./HaccpCorrectiveActionsRepository";
+export type { HaccpAssessmentsRepository } from "./HaccpAssessmentsRepository";

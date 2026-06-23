@@ -187,3 +187,32 @@ export type {
   CorrectiveActionResolvedRow,
   CorrectiveActionQueue,
 } from "./HaccpCorrectiveAction";
+export type {
+  // allergen-assessment
+  AllergenAssessmentRow,
+  AllergenAssessmentListResult,
+  CreateAllergenAssessmentInput,
+  AllergenAssessmentPersist,
+  // allergen monthly-reviews
+  MonthlyReviewRow,
+  MonthlyReviewDeliveryRow,
+  RunMonthlyReviewInput,
+  MonthlyReviewPersist,
+  MonthlyReviewResult,
+  // food-defence
+  FoodDefenceRow,
+  FoodDefenceListResult,
+  CreateFoodDefenceInput,
+  FoodDefencePersist,
+  // food-fraud
+  FoodFraudRow,
+  FoodFraudListResult,
+  CreateFoodFraudInput,
+  FoodFraudPersist,
+  // product-specs
+  ProductSpecRow,
+  ProductSpecWithReviewDue,
+  ProductSpecListResult,
+  CreateProductSpecInput,
+  ProductSpecPersist,
+} from "./HaccpAssessment";

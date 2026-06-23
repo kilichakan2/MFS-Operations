@@ -95,3 +95,9 @@ export {
   type FakeHaccpCorrectiveActionsRepository,
   type FakeHaccpCASeed,
 } from "./HaccpCorrectiveActionsRepository";
+export {
+  createFakeHaccpAssessmentsRepository,
+  fakeHaccpAssessmentsRepository,
+  type FakeHaccpAssessmentsRepository,
+  type FakeHaccpAssessmentsSeed,
+} from "./HaccpAssessmentsRepository";
