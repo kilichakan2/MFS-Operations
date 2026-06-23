@@ -5,12 +5,14 @@
  * Returns unresolved (management_verification_required=true, verified_at=null)
  * and recently resolved (last 20) in a single call.
  * Admin only.
+ *
+ * F-19 PR2: re-pointed off raw Supabase onto `haccpCorrectiveActionsService`.
+ * The admin-only role gate + response shape stay here; the two joined selects
+ * moved to the service/adapter (PR1, verbatim columns).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpCorrectiveActionsService } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,29 +21,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
 
-    const [unresolved, resolved] = await Promise.all([
-      supabase
-        .from('haccp_corrective_actions')
-        .select('id, submitted_at, ccp_ref, deviation_description, action_taken, product_disposition, recurrence_prevention, source_table, management_verification_required, users!actioned_by(name)')
-        .eq('management_verification_required', true)
-        .is('verified_at', null)
-        .order('submitted_at', { ascending: false }),
-
-      supabase
-        .from('haccp_corrective_actions')
-        .select('id, submitted_at, verified_at, ccp_ref, deviation_description, action_taken, source_table, users!actioned_by(name), verifier:users!verified_by(name)')
-        .eq('management_verification_required', true)
-        .not('verified_at', 'is', null)
-        .order('verified_at', { ascending: false })
-        .limit(20),
-    ])
-
-    if (unresolved.error) return NextResponse.json({ error: unresolved.error.message }, { status: 500 })
-    if (resolved.error)   return NextResponse.json({ error: resolved.error.message   }, { status: 500 })
+    const { unresolved, resolved } = await haccpCorrectiveActionsService.listVerificationQueue()
 
     return NextResponse.json({
-      unresolved: unresolved.data ?? [],
-      resolved:   resolved.data   ?? [],
+      unresolved,
+      resolved,
     })
 
   } catch (err) {
