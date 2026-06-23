@@ -101,3 +101,15 @@ export {
   type FakeHaccpAssessmentsRepository,
   type FakeHaccpAssessmentsSeed,
 } from "./HaccpAssessmentsRepository";
+export {
+  createFakeHaccpTrainingRepository,
+  fakeHaccpTrainingRepository,
+  type FakeHaccpTrainingRepository,
+  type FakeHaccpTrainingSeed,
+} from "./HaccpTrainingRepository";
+export {
+  createFakeHaccpPeopleRepository,
+  fakeHaccpPeopleRepository,
+  type FakeHaccpPeopleRepository,
+  type FakeHaccpPeopleSeed,
+} from "./HaccpPeopleRepository";

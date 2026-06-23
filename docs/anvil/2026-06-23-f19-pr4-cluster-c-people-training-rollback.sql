@@ -1,0 +1,35 @@
+-- ============================================================
+-- ANVIL ROLLBACK NOTE — F-19 PR4 (Cluster C: People & training)
+-- Branch: f19-pr4-cluster-c-people-training   PR: #71
+-- Date:   2026-06-23
+-- ============================================================
+--
+-- NO DATABASE MIGRATION IN THIS PR.
+--
+-- F-19 PR4 is a byte-identical hexagonal re-point: two new owned hexagons
+-- (HaccpTraining, HaccpPeople — domain/port/service/adapters) plus 3 routes
+-- (training, people, visitor) re-pointed onto service-role wiring singletons.
+-- No schema change, no new column, no RLS change, no new dependency.
+--
+-- ROLLBACK = CODE-ONLY (revert-only). There is nothing to undo in the
+-- database. To roll back:
+--
+--   1. Vercel: redeploy/rollback to the prior production deployment
+--      (the F-19 PR3 prod build, dpl_AqTme7w… / commit 825714a), OR
+--   2. Git:   git revert <merge-commit-of-#71>  → Vercel auto-deploys.
+--
+-- The reverted (old) code talks to the SAME tables with the SAME inline
+-- supabaseService calls it used before the re-point — fully compatible with
+-- the unchanged schema. No data migration, no PITR, no data-loss risk.
+--
+-- ------------------------------------------------------------
+-- Seed-only note (NOT a production change):
+-- This PR's ANVIL run added the Visitor Kiosk system user
+-- (190d6c79-6239-4be7-bdbd-0df474895ebc) to supabase/seed.sql so the
+-- data-dependent public-kiosk E2E populates locally / on preview branches.
+-- supabase/seed.sql runs ONLY on `supabase db reset` (local) and on
+-- Supabase preview-branch creation — it NEVER executes against production.
+-- That system user ALREADY EXISTS in production (it is the live kiosk's
+-- submitted_by FK target), so nothing is added to or removed from prod.
+-- Rolling back the code does not require touching the seed.
+-- ============================================================

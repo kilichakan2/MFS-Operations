@@ -6,12 +6,15 @@
  *   training_type, completion_date, confirmation_items,
  *   supervisor_signed_by (uuid — unused), supervisor_signed_at,
  *   document_version, job_role, refresh_date, supervisor_name
+ *
+ * F-19 PR4: persistence moved behind the HaccpTraining hexagon. This route is
+ * presentation only — the cookie role gate + the wall clock stay here; the
+ * service owns validate/build/write. Behaviour is byte-identical to the prior
+ * inline supabaseService calls.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpTrainingService } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
@@ -20,28 +23,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
 
-    const [staff, allergen] = await Promise.all([
-      supabase
-        .from('haccp_staff_training')
-        .select('id, staff_name, job_role, training_type, document_version, completion_date, refresh_date, supervisor_name, confirmation_items, submitted_at')
-        .order('submitted_at', { ascending: false })
-        .limit(100),
-      supabase
-        .from('haccp_allergen_training')
-        .select('id, staff_name, job_role, training_completed, certification_date, refresh_date, reviewed_by, confirmation_items, supervisor_name, document_version, submitted_at')
-        .order('submitted_at', { ascending: false })
-        .limit(100),
-    ])
-
-    if (staff.error) {
-      console.error('[GET /api/haccp/training] staff:', staff.error.message)
-      return NextResponse.json({ error: staff.error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({
-      staff:   staff.data   ?? [],
-      allergen:allergen.data ?? [],
-    })
+    const result = await haccpTrainingService.getTraining()
+    return NextResponse.json(result)
 
   } catch (err) {
     console.error('[GET /api/haccp/training] Unhandled:', err)
@@ -63,36 +46,12 @@ export async function POST(req: NextRequest) {
 
     // ── Butchery & Process Room / Warehouse Operative ────────────────────────
     if (training_type === 'butchery_process_room' || training_type === 'warehouse_operative') {
-      const {
-        staff_name, job_role, document_version,
-        completion_date, refresh_date,
-        supervisor, confirmation_items,
-      } = body
+      const v = haccpTrainingService.validateStaffTraining(body)
+      if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-      if (!staff_name?.trim())       return NextResponse.json({ error: 'Staff name required' },       { status: 400 })
-      if (!job_role?.trim())         return NextResponse.json({ error: 'Job role required' },          { status: 400 })
-      if (!document_version?.trim()) return NextResponse.json({ error: 'Document version required' }, { status: 400 })
-      if (!completion_date)          return NextResponse.json({ error: 'Completion date required' },  { status: 400 })
-      if (!refresh_date)             return NextResponse.json({ error: 'Refresh date required' },     { status: 400 })
-      if (!supervisor?.trim())       return NextResponse.json({ error: 'Supervisor name required' },  { status: 400 })
-
-      const { error } = await supabase.from('haccp_staff_training').insert({
-        logged_by:            userId,
-        staff_name:           staff_name.trim(),
-        job_role:             job_role.trim(),
-        training_type,
-        document_version:     document_version.trim(),
-        completion_date,
-        refresh_date,
-        supervisor_name:      supervisor.trim(),
-        supervisor_signed_at: new Date().toISOString(),
-        confirmation_items:   confirmation_items ?? {},
-      })
-
-      if (error) {
-        console.error('[POST /api/haccp/training] staff insert:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
+      await haccpTrainingService.insertStaffTraining(
+        haccpTrainingService.buildStaffTrainingPersist({ input: body, userId, now: new Date() }),
+      )
 
       return NextResponse.json({ ok: true })
     }
@@ -101,32 +60,12 @@ export async function POST(req: NextRequest) {
     // Uses haccp_allergen_training (different table + different column names)
     // certification_date, training_completed — NOT completion_date, training_type
     if (training_type === 'allergen_awareness') {
-      const {
-        staff_name, job_role, certification_date, refresh_date,
-        supervisor, confirmation_items,
-      } = body
+      const v = haccpTrainingService.validateAllergenTraining(body)
+      if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-      if (!staff_name?.trim())      return NextResponse.json({ error: 'Staff name required' },      { status: 400 })
-      if (!job_role?.trim())        return NextResponse.json({ error: 'Job role required' },         { status: 400 })
-      if (!certification_date)      return NextResponse.json({ error: 'Completion date required' }, { status: 400 })
-      if (!refresh_date)            return NextResponse.json({ error: 'Refresh date required' },    { status: 400 })
-      if (!supervisor?.trim())      return NextResponse.json({ error: 'Supervisor name required' }, { status: 400 })
-
-      const { error } = await supabase.from('haccp_allergen_training').insert({
-        logged_by:          userId,
-        staff_name:         staff_name.trim(),
-        job_role:           job_role.trim(),
-        training_completed: 'allergen_awareness',
-        certification_date,
-        refresh_date,
-        supervisor_name:    supervisor.trim(),
-        confirmation_items: confirmation_items ?? {},
-      })
-
-      if (error) {
-        console.error('[POST /api/haccp/training] allergen insert:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
+      await haccpTrainingService.insertAllergenTraining(
+        haccpTrainingService.buildAllergenTrainingPersist({ input: body, userId }),
+      )
 
       return NextResponse.json({ ok: true })
     }

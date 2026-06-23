@@ -33,9 +33,13 @@ import {
   createHaccpDailyChecksService,
   createHaccpCorrectiveActionsService,
   createHaccpAssessmentsService,
+  createHaccpTrainingService,
+  createHaccpPeopleService,
   type HaccpDailyChecksService,
   type HaccpCorrectiveActionsService,
   type HaccpAssessmentsService,
+  type HaccpTrainingService,
+  type HaccpPeopleService,
 } from "@/lib/services";
 import {
   createSubmitHaccpDailyCheck,
@@ -45,6 +49,8 @@ import {
   supabaseHaccpDailyChecksRepository,
   supabaseHaccpCorrectiveActionsRepository,
   supabaseHaccpAssessmentsRepository,
+  supabaseHaccpTrainingRepository,
+  supabaseHaccpPeopleRepository,
 } from "@/lib/adapters/supabase";
 
 export const haccpDailyChecksService: HaccpDailyChecksService =
@@ -69,6 +75,20 @@ export const submitHaccpDailyCheck: SubmitHaccpDailyCheck =
 export const haccpAssessmentsService: HaccpAssessmentsService =
   createHaccpAssessmentsService({
     assessments: supabaseHaccpAssessmentsRepository,
+  });
+
+// F-19 PR4 — Cluster C "people & training" (staff + allergen training;
+// haccp_health_records people + public visitor kiosk). Service-role singletons
+// ONLY — exactly the access the 3 routes have today, so the re-point is
+// byte-identical. NO `…ForCaller` (per-caller RLS deferred to F-RLS-04h).
+export const haccpTrainingService: HaccpTrainingService =
+  createHaccpTrainingService({
+    training: supabaseHaccpTrainingRepository,
+  });
+
+export const haccpPeopleService: HaccpPeopleService =
+  createHaccpPeopleService({
+    people: supabaseHaccpPeopleRepository,
   });
 
 // F-RLS-04h (LATER) will add the per-caller authenticated factories here,

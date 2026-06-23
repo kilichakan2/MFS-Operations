@@ -39,6 +39,27 @@ VALUES
 -- Set real PINs via Screen 5 → Users → Reset PIN before handing phones to staff.
 
 -- ============================================================
+-- Visitor Kiosk system user (F-19 PR4)
+-- The PUBLIC visitor kiosk (/haccp/visitor) inserts health records with
+-- submitted_by = VISITOR_KIOSK_USER_ID (fixed UUID in the route). That id has
+-- a FK to users.id. In PRODUCTION this system user already exists; the local
+-- seed + preview branches do not carry it, so the kiosk insert FKs out (500)
+-- without this row. Seed it here (local + preview only — this file never runs
+-- against prod) so the data-dependent kiosk E2E populates, exactly mirroring
+-- the prod precondition the integration suite documents.
+-- active=false (never logs in); users_auth_check needs a non-admin pin_hash,
+-- so give it the same ANVIL placeholder hash the non-admin test users use.
+INSERT INTO users (id, name, role, pin_hash, active)
+VALUES (
+  '190d6c79-6239-4be7-bdbd-0df474895ebc',
+  'Visitor Kiosk',
+  'warehouse',
+  '$2a$10$ANVILTESTPLACEHOLDERHASHFORTESTSXXXXXXXXXXXXXXXXX',
+  false
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- ============================================================
 -- TEST FIXTURES (ANVIL-TEST) — MUST NEVER REACH PRODUCTION
 -- This file runs ONLY on local `supabase db reset` and on
 -- Supabase preview-branch creation. It is never executed
