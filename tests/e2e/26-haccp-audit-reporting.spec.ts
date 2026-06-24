@@ -72,6 +72,43 @@ const EXPECTED_TABS = [
   '11b Allergen Training',
 ]
 
+// ── /haccp HOME — enumerated from app/haccp/page.tsx HomeScreen ───────────────
+// Every tile is wired to navigate away (window.location.href). To prove each
+// tile component is MOUNTED + WIRED without leaving the screen (and without
+// mutating anything), every tile carries a help-icon button with the
+// accessible name "Help for <label>" that opens an in-page SOP slideout and a
+// close (X) control. Tapping every help icon is the non-navigating,
+// non-destructive every-button proof for the home grid. Labels mirror the
+// <LargeTile>/<SmallTile> `label=` props exactly. "Audit" is admin-only.
+const HOME_TILE_LABELS = [
+  'Cold Storage',
+  'Process Room',
+  'Delivery',
+  'Mince / Prep',
+  'Product Return',
+  'Cleaning',
+  'Calibration',
+  'Reviews',
+  'People',
+  'Training',
+  'Allergens',
+  'Recall Contacts',
+  'Product Specs',
+  'Food Fraud',
+  'Food Defence',
+  'Audit',
+]
+
+// Header / strip navigation buttons on /haccp home that LEAVE the HACCP screens
+// (window.location.href). We assert each is present + enabled rather than
+// deep-navigating away from every one — except "Sign out", which is
+// intentionally NEVER clicked: it ends the admin session and would break every
+// later test in the file. // non-destructive: Sign out not clicked (ends session)
+const HOME_NAV_BUTTONS = [
+  { name: /Documents/i, href: '/haccp/documents' },
+  { name: /Admin panel/i, href: '/haccp/admin' },
+]
+
 /**
  * Attach console-error + 5xx listeners that collect violations. Returns a
  * getter for the accumulated problems so each test can assert "stayed clean".
@@ -116,6 +153,83 @@ test.describe('@critical HACCP audit + reporting (F-19 PR8 re-point)', () => {
 
     // Give the today-status fetch a beat to settle, then assert clean.
     await page.waitForLoadState('networkidle')
+    expect(getProblems(), getProblems().join('\n')).toEqual([])
+  })
+
+  // ── 1b. /haccp home — tap EVERY tile's help icon (every-button proof) ────────
+  // Each of the 16 tiles is wired to NAVIGATE on tap (window.location.href), so
+  // tapping the tile body would leave the screen. The help icon on every tile
+  // opens an in-page SOP slideout (no navigation, no mutation) and closes it —
+  // proving every tile component mounted and its handler is wired, and that
+  // opening every panel raises no console error / no 5xx.
+
+  test('home dashboard — every tile help icon opens + closes with no console error / no 5xx', async ({
+    page,
+  }) => {
+    const getProblems = watchForErrors(page)
+    await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
+
+    await page.goto('/haccp')
+    await expect(page.getByText(/Cold Storage/i).first()).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState('networkidle')
+
+    for (const label of HOME_TILE_LABELS) {
+      // Help icon accessible name is `Help for ${label}` (aria-label on the
+      // <button> inside Large/SmallTile). Tap it → SOP slideout opens.
+      const helpBtn = page.getByRole('button', { name: `Help for ${label}`, exact: true })
+      await expect(helpBtn).toBeVisible()
+      await helpBtn.click()
+
+      // The SOP slideout mounts inside the `.z-50` overlay (HelpPanel). Several
+      // small tiles intentionally share the same "people" SOP section, so the
+      // panel content may repeat — what matters is the overlay opened and its
+      // single close (X) control works. Wait for the overlay, then close it.
+      const overlay = page.locator('.z-50')
+      await expect(overlay).toBeVisible()
+      // HelpPanel's only <button> is the close X (onClick → setHelp(null)).
+      await overlay.locator('button').first().click()
+      // Overlay must unmount before the next tile's help icon is tapped.
+      await expect(page.locator('.z-50')).toHaveCount(0)
+    }
+
+    expect(getProblems(), getProblems().join('\n')).toEqual([])
+  })
+
+  // ── 1c. /haccp home — navigation buttons present + enabled, reachable ────────
+  // Header "Documents", admin-strip "Admin panel": assert present + enabled,
+  // then deep-navigate each and confirm the destination mounts, returning to
+  // /haccp between. "Sign out" is asserted present but NEVER clicked.
+  // non-destructive: Sign out not clicked (would end the admin session).
+
+  test('home dashboard — nav buttons present + enabled and destinations mount', async ({
+    page,
+  }) => {
+    const getProblems = watchForErrors(page)
+    await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
+
+    await page.goto('/haccp')
+    await expect(page.getByText(/Cold Storage/i).first()).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState('networkidle')
+
+    // Sign out is present + enabled but intentionally not clicked.
+    const signOut = page.getByRole('button', { name: /Sign out/i })
+    await expect(signOut).toBeVisible()
+    await expect(signOut).toBeEnabled()
+
+    for (const nav of HOME_NAV_BUTTONS) {
+      const btn = page.getByRole('button', { name: nav.name })
+      await expect(btn).toBeVisible()
+      await expect(btn).toBeEnabled()
+      // Deep-navigate to confirm the destination mounts, then come back to
+      // /haccp for the next button.
+      await btn.click()
+      await page.waitForURL(new RegExp(nav.href.replace('/', '\\/')), { timeout: 15_000 })
+      // Destination mounted (URL changed + body present). Return home.
+      await page.goto('/haccp')
+      await expect(page.getByText(/Cold Storage/i).first()).toBeVisible({ timeout: 15_000 })
+      await page.waitForLoadState('networkidle')
+    }
+
     expect(getProblems(), getProblems().join('\n')).toEqual([])
   })
 
@@ -204,6 +318,76 @@ test.describe('@critical HACCP audit + reporting (F-19 PR8 re-point)', () => {
     ).toBeVisible({ timeout: 15_000 })
 
     await page.waitForLoadState('networkidle')
+    expect(getProblems(), getProblems().join('\n')).toEqual([])
+  })
+
+  // ── 4b. /haccp/annual-review — tap interactive controls (non-destructive) ────
+  // Enumerated from app/haccp/annual-review/page.tsx AnnualReviewPage (list
+  // view). Interactive controls and how each is exercised WITHOUT writing to
+  // the shared preview DB:
+  //   • "+ New review"   → OPEN modal, assert it rendered (year/period fields +
+  //                        "Start review"), then CANCEL. // non-destructive:
+  //                        "Start review" (POST create) is never clicked.
+  //   • each review row  → openReview() switches to the in-page editing view
+  //                        (no mutation). We open the first row, confirm the
+  //                        editing view mounted, expand one section card
+  //                        (collapsible — no save), then go Back. The OK/NA/
+  //                        Action item buttons, Action Plan status toggles and
+  //                        Sign off all auto-save / mutate, so they are NOT
+  //                        clicked. // non-destructive: editing-view save
+  //                        controls (PATCH) not clicked.
+  //   • Back chevron     → returns to /haccp; asserted reachable.
+
+  test('annual-review — New review modal opens + cancels, a review opens read-only', async ({
+    page,
+  }) => {
+    const getProblems = watchForErrors(page)
+    await loginAsAdmin(page, process.env.E2E_USER_ADMIN!, process.env.E2E_PASSWORD_ADMIN!)
+
+    await page.goto('/haccp/annual-review')
+    const newReviewBtn = page.getByRole('button', { name: /New review/i })
+    await expect(newReviewBtn).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState('networkidle')
+
+    // ── "+ New review" → modal opens → assert rendered → Cancel (no create) ──
+    await newReviewBtn.click()
+    // Modal heading + the create submit confirm it mounted.
+    await expect(page.getByText(/New annual review/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /Start review/i })).toBeVisible()
+    // Cancel closes the modal WITHOUT creating a review. // non-destructive.
+    await page.getByRole('button', { name: /^Cancel$/i }).click()
+    await expect(page.getByText(/New annual review/i)).toHaveCount(0)
+
+    // ── A review row → open read-only, expand a section, go back ─────────────
+    // The seeded preview may or may not have an existing review. If one exists,
+    // open it (no mutation) and confirm the editing view mounted; otherwise the
+    // "no reviews yet" empty state is the expected render.
+    const reviewRows = page.getByRole('button', { name: /Draft|Signed off/i })
+    const rowCount = await reviewRows.count()
+    if (rowCount > 0) {
+      await reviewRows.first().click()
+      // Editing view header shows "<year>  Draft|Signed off" + sections counter.
+      await expect(page.getByText(/\d+\/\d+ sections/i)).toBeVisible({ timeout: 15_000 })
+      await page.waitForLoadState('networkidle')
+
+      // Expand the first collapsible SectionCard header (toggles open state only
+      // — no save fires until an item status is set, which we do NOT do).
+      const sectionHeaders = page.locator('button:has-text("items answered")')
+      if (await sectionHeaders.count() > 0) {
+        await sectionHeaders.first().click()
+        await page.waitForLoadState('networkidle')
+      }
+
+      // Back chevron returns to the list view (setView('list')). It's the first
+      // header button with the chevron-left icon.
+      await page.locator('.bg-white.border-b button').first().click()
+      await expect(page.getByRole('button', { name: /New review/i })).toBeVisible({
+        timeout: 15_000,
+      })
+    } else {
+      await expect(page.getByText(/No annual reviews yet/i)).toBeVisible()
+    }
+
     expect(getProblems(), getProblems().join('\n')).toEqual([])
   })
 })
