@@ -46,9 +46,9 @@ every button clicked on the deployed prod build. Nothing was skipped.
 | Database (pgTAP)            | ✅ n/a — not required | No schema/policy change. No-regression check: 161/161 assertions across 14 RLS/schema files `ok` (the `Result: FAIL` line is the planless shared helper `_helpers.sql`, a pre-existing harness artifact, not a test) |
 | Edge Functions (Deno)       | n/a — not required | No edge functions touched                                                                      |
 | Local full-stack rung       | ✅                 | Supabase CLI adapter (`supabase start` → `db reset` seed → run → `supabase stop`); prod build (`next build`) for E2E |
-| E2E (Playwright)            | ✅ 64/64 @critical | Full `@critical` suite on the **prod-build Vercel preview**; 4 NET-NEW reporting specs (tests/e2e/26-haccp-audit-reporting.spec.ts) |
+| E2E (Playwright)            | ✅ 67/67 @critical (0 flaky, 0 retries) | Full `@critical` suite on the **prod-build Vercel preview**, FINAL run on a freshly-RESET preview branch (clean seed). `tests/e2e/26-haccp-audit-reporting.spec.ts` extended from 4 → **8 @critical** (every-button taps on home + annual-review added). See "Clean-sweep re-run" note below. |
 | Populated UI smoke          | ✅ populated       | Audit screen: all 11 section selectors tapped, heatmap toggle ×2, all 3 date presets, export download exercised against seeded preview data |
-| Breadth crawl               | ✅ scoped tap      | Every interactive element on /haccp, /haccp/audit (11 tabs + heatmap + presets + export), /haccp/annual-review tapped with no console error / no 5xx |
+| Breadth crawl               | ✅ EVERY-BUTTON    | /haccp home: all 16 tiles' help panels open/close + nav buttons (Documents/Admin/Sign-out present+enabled). /haccp/audit: 11 section tabs + heatmap toggle + 3 presets + 14-tab export download. /haccp/annual-review: New-review modal open→cancel (non-destructive) + read-only review open + section expand. All with no console error / no 5xx. |
 
 ## Architecture rung (seam check)
 
@@ -109,6 +109,26 @@ https://mfs-operations-git-feat-f-e33740-hakan-kilics-projects-2c54f03f.vercel.a
 is OFF — BACKLOG F-INFRA-04). New specs additionally validated against a local
 prod build first.
 
+## Clean-sweep re-run (Hakan's call — no-asterisk record)
+
+The every-button extension ran on a SHARED preview branch and surfaced 4 unrelated
+`@critical` specs wobbling (`13-haccp-cold-storage`, `16-haccp-process-room`,
+`25-haccp-reviews`, `04-kds-line-undo`) — all "submit-once-per-period" mutation
+specs colliding with data earlier runs had written, NONE touching the 6 re-pointed
+PR8 routes. To remove the ambiguity, the conductor RESET the PR-75 Supabase preview
+branch (`bb517b47-…`) to a fresh seed and re-ran the FULL `@critical` suite once:
+
+- **67 passed / 0 failed / 0 flaky — single run, no retries.**
+- The 4 previously-wobbling specs all **passed** on the empty slot → the earlier
+  reds were confirmed environmental data contention, not defects.
+- The fail-closed seed-sentinel probe (`a417e57e-…0001`) confirmed the preview was
+  reading the freshly-seeded reset DB before any spec ran.
+
+🗣 In plain English: we wiped the test database and ran every critical journey once
+on the clean slate — all 67 passed first time. The handful that wobbled before were
+just leftover-data noise, now proven so. No footnote on this ship.
+
 ## Verdict
 
-✅ CLEARED FOR PRODUCTION — finalised at Lock gate (no migration → no PITR; all rungs green)
+✅ CLEARED FOR PRODUCTION — finalised at Lock gate (no migration → no PITR; all
+rungs green; final E2E 67/67 @critical on a freshly-reset preview branch, 0 flaky)
