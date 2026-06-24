@@ -1097,4 +1097,323 @@ describe("buildAuditWorkbook", () => {
     expect(row[21]).toBe("dev"); // CA deviation
     expect(row[23]).toBe("destroy"); // CA disposition
   });
+
+  // ── T1 (F-19 PR8): populated-row cell assertions for the non-trivial tabs ──
+  // Pins the verbatim cell shaping of every sheet whose mapping is more than a
+  // straight column echo — so a future refactor can't silently drift a
+  // food-safety value (a wrong "Pass/Fail", a missed 82 °C flag, a mis-counted
+  // ${n}/14). Each test seeds ONE section and parses that tab's data row.
+
+  /** Build a fully-empty AuditExportRawData, overlaying the given fields. */
+  function emptyExport(
+    over: Partial<AuditExportRawData> = {},
+  ): AuditExportRawData {
+    return {
+      deliveries: [],
+      deliveriesCa: {},
+      coldStorage: [],
+      coldStorageCa: {},
+      processTemps: [],
+      processTempsCa: {},
+      diary: [],
+      cleaning: [],
+      cleaningCa: {},
+      calibration: [],
+      calibrationCa: {},
+      mince: [],
+      minceCa: {},
+      returns: [],
+      cas: [],
+      weekly: [],
+      monthly: [],
+      health: [],
+      staffTraining: [],
+      allergenTraining: [],
+      ...over,
+    };
+  }
+
+  /** Parse one sheet's first data row (row index 1, after the header row). */
+  async function dataRow(
+    over: Partial<AuditExportRawData>,
+    tab: string,
+  ): Promise<unknown[]> {
+    const svc = makeService({ auditExport: emptyExport(over) });
+    const buf = await svc.buildAuditWorkbook("2026-06-01", "2026-06-30");
+    const wb = XLSX.read(buf, { type: "buffer" });
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[tab], {
+      header: 1,
+    }) as unknown[][];
+    return aoa[1];
+  }
+
+  it("05 Calibration — certified probe → Overall 'Certified', ice/boiling 'Yes'", async () => {
+    const row = await dataRow(
+      {
+        calibration: [
+          {
+            id: "c1",
+            date: "2026-06-10",
+            time_of_check: "09:30:00",
+            thermometer_id: "T1",
+            calibration_mode: "certified_probe",
+            ice_water_result_c: 0.2,
+            ice_water_pass: true,
+            boiling_water_result_c: 99.8,
+            boiling_water_pass: true,
+            cert_reference: "CERT-99",
+            users: { name: "Ann" },
+          },
+        ],
+      },
+      "05 Calibration",
+    );
+    expect(row[1]).toBe("09:30"); // Time (slice 0,5)
+    expect(row[5]).toBe("Yes"); // Ice pass
+    expect(row[7]).toBe("Yes"); // Boiling pass
+    expect(row[8]).toBe("Certified"); // Overall
+  });
+
+  it("05 Calibration — manual probe failing → Overall 'Fail', boiling 'No'", async () => {
+    const row = await dataRow(
+      {
+        calibration: [
+          {
+            id: "c2",
+            date: "2026-06-11",
+            time_of_check: "10:00:00",
+            thermometer_id: "T2",
+            calibration_mode: "manual",
+            ice_water_result_c: 1,
+            ice_water_pass: true,
+            boiling_water_result_c: 95,
+            boiling_water_pass: false,
+            users: { name: "Ben" },
+          },
+        ],
+      },
+      "05 Calibration",
+    );
+    expect(row[5]).toBe("Yes"); // Ice pass
+    expect(row[7]).toBe("No"); // Boiling pass
+    expect(row[8]).toBe("Fail"); // Overall (manual + a false)
+  });
+
+  it("04 Cleaning — sanitiser >= 82 → 'Yes'; null temp → '' for the pass cell", async () => {
+    const pass = await dataRow(
+      {
+        cleaning: [
+          {
+            id: "cl1",
+            date: "2026-06-12",
+            time_of_clean: "14:00:00",
+            what_was_cleaned: "Block",
+            sanitiser_temp_c: 84,
+            issues: false,
+            users: { name: "Cara" },
+          },
+        ],
+      },
+      "04 Cleaning",
+    );
+    expect(pass[3]).toBe(84); // Sanitiser °C
+    expect(pass[4]).toBe("Yes"); // Sanitiser pass (>= 82)
+
+    const below = await dataRow(
+      {
+        cleaning: [
+          {
+            id: "cl2",
+            date: "2026-06-12",
+            what_was_cleaned: "Bench",
+            sanitiser_temp_c: 70,
+            issues: false,
+            users: { name: "Cara" },
+          },
+        ],
+      },
+      "04 Cleaning",
+    );
+    expect(below[4]).toBe("No"); // 70 < 82
+
+    const nullTemp = await dataRow(
+      {
+        cleaning: [
+          {
+            id: "cl3",
+            date: "2026-06-12",
+            what_was_cleaned: "Floor",
+            sanitiser_temp_c: null,
+            issues: false,
+            users: { name: "Cara" },
+          },
+        ],
+      },
+      "04 Cleaning",
+    );
+    // null temp → '' (the pass cell is blank, not 'Yes'/'No')
+    expect(nullTemp[3]).toBe(""); // Sanitiser °C blank (temp ?? '')
+    expect(nullTemp[4]).toBe(""); // Sanitiser pass blank
+  });
+
+  it("06 Mince & Prep — source_batch_numbers.join(', ') + input/output pass flags", async () => {
+    const row = await dataRow(
+      {
+        mince: [
+          {
+            id: "m1",
+            date: "2026-06-13",
+            time_of_production: "11:15:00",
+            product_species: "beef",
+            batch_code: "BC1",
+            output_mode: "mince",
+            input_temp_c: 2,
+            input_temp_pass: true,
+            output_temp_c: 4,
+            output_temp_pass: false,
+            kill_date: "2026-06-10",
+            days_from_kill: 3,
+            kill_date_within_limit: true,
+            corrective_action: null,
+            source_batch_numbers: ["B100", "B200"],
+            users: { name: "Dan" },
+          },
+        ],
+      },
+      "06 Mince & Prep",
+    );
+    expect(row[6]).toBe("Yes"); // Input pass
+    expect(row[8]).toBe("No"); // Output pass
+    expect(row[11]).toBe("Yes"); // Kill limit pass
+    expect(row[13]).toBe("B100, B200"); // Source batches join
+  });
+
+  it("07 Product Returns — SAFETY code → 'Yes', non-safety → 'No', CODE_LABELS map", async () => {
+    const safety = await dataRow(
+      {
+        returns: [
+          {
+            date: "2026-06-14",
+            time_of_return: "16:00:00",
+            customer: "Cust",
+            product: "Lamb",
+            return_code: "RC04",
+            temperature_c: 8,
+            disposition: "destroy",
+          },
+        ],
+      },
+      "07 Product Returns",
+    );
+    expect(safety[5]).toBe("Contamination"); // CODE_LABELS[RC04]
+    expect(safety[6]).toBe("Yes"); // Safety critical (RC04 in SAFETY)
+
+    const nonSafety = await dataRow(
+      {
+        returns: [
+          {
+            date: "2026-06-14",
+            customer: "Cust",
+            product: "Beef",
+            return_code: "RC06",
+          },
+        ],
+      },
+      "07 Product Returns",
+    );
+    expect(nonSafety[5]).toBe("Quantity"); // CODE_LABELS[RC06]
+    expect(nonSafety[6]).toBe("No"); // RC06 not in SAFETY
+  });
+
+  it("09b Monthly Reviews — invertFail rule counts system-review fails correctly", async () => {
+    const row = await dataRow(
+      {
+        monthly: [
+          {
+            month_year: "2026-06-01",
+            equipment_checks: { fridge: true, slicer: false }, // 1 fail
+            facilities_checks: { drains: true }, // 0 fails
+            haccp_system_review: [
+              { result: "YES", invertFail: false }, // pass (not inverted, YES)
+              { result: "NO", invertFail: false }, // FAIL (not inverted, not YES)
+              { result: "YES", invertFail: true }, // FAIL (inverted, YES)
+              { result: "NO", invertFail: true }, // pass (inverted, not YES)
+            ],
+            users: { name: "Eve" },
+          },
+        ],
+      },
+      "09b Monthly Reviews",
+    );
+    expect(row[0]).toBe("2026-06"); // Month (slice 0,7)
+    expect(row[1]).toBe(1); // Equipment fails
+    expect(row[2]).toBe(0); // Facilities fails
+    expect(row[3]).toBe(2); // System review fails (invertFail-aware)
+  });
+
+  it("11a Staff Training — refresh status Overdue (past) vs Current (far future)", async () => {
+    const overdue = await dataRow(
+      {
+        staffTraining: [
+          {
+            staff_name: "Stu",
+            job_role: "butcher",
+            training_type: "butchery_process_room",
+            document_version: "v1",
+            completion_date: "2020-01-01",
+            refresh_date: "2000-01-01", // far past → Overdue
+            supervisor_name: "Sup",
+          },
+        ],
+      },
+      "11a Staff Training",
+    );
+    expect(overdue[2]).toBe("Butchery & Process Room"); // TYPE_LABELS
+    expect(overdue[6]).toBe("Overdue");
+
+    const current = await dataRow(
+      {
+        staffTraining: [
+          {
+            staff_name: "Stu",
+            training_type: "warehouse_operative",
+            completion_date: "2099-01-01",
+            refresh_date: "2099-01-01", // far future → Current
+          },
+        ],
+      },
+      "11a Staff Training",
+    );
+    expect(current[2]).toBe("Warehouse Operative");
+    expect(current[6]).toBe("Current");
+  });
+
+  it("11b Allergen Training — ${aCount}/14 + ${uCount}/5 confirmation counts", async () => {
+    const row = await dataRow(
+      {
+        allergenTraining: [
+          {
+            staff_name: "Al",
+            job_role: "warehouse",
+            certification_date: "2099-01-01",
+            refresh_date: "2099-01-01",
+            supervisor_name: "Sup",
+            confirmation_items: {
+              a1: true,
+              a2: true,
+              a3: false, // 2 allergens confirmed
+              u1: true,
+              u2: true,
+              u3: true,
+              u4: false, // 3 understanding confirmed
+            },
+          },
+        ],
+      },
+      "11b Allergen Training",
+    );
+    expect(row[4]).toBe("Current"); // Status (far-future refresh)
+    expect(row[6]).toBe("2/14"); // Allergens confirmed
+    expect(row[7]).toBe("3/5"); // Understanding confirmed
+  });
 });
