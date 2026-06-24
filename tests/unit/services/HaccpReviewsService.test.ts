@@ -547,3 +547,70 @@ describe("HaccpReviewsService — insert delegation", () => {
     expect(repo.insertedCorrectiveActions).toEqual(rows);
   });
 });
+
+describe("HaccpReviewsService — R-D2: a FAILED CA write must NOT abort a successful review", () => {
+  // The weekly POST orchestration (reviews/route.ts:79-93) in service terms:
+  // validate → buildPersist → insertWeeklyReview → buildCAs → insertCorrectiveActions.
+  // The CA write is best-effort: the adapter swallows a DB error (logs + returns,
+  // never throws). The fake seeded with failCorrectiveActions reproduces that
+  // swallow, so this proves the route's success reply is unchanged when the CA
+  // write fails — i.e. NO 500 leaks out of a review that itself persisted fine.
+  async function runWeeklyPost(repo: ReturnType<typeof createFakeHaccpReviewsRepository>) {
+    const svc = createHaccpReviewsService({ reviews: repo });
+    const body: CreateReviewWeeklyInput = {
+      week_ending: "2026-06-21",
+      assessments: [
+        { id: "i1", label: "Floors", state: "ok" },
+        { id: "i2", label: "Chiller", state: "problem", action: "fixed" },
+      ],
+    };
+    const valid = svc.validateWeekly(body);
+    expect(valid.ok).toBe(true);
+    const persist = svc.buildWeeklyPersist({ input: body, userId: "u1", today: TODAY });
+    const inserted = await svc.insertWeeklyReview(persist);
+    const caRows = svc.buildWeeklyCorrectiveActions({
+      input: body,
+      userId: "u1",
+      reviewId: inserted.id,
+      weekEnding: body.week_ending!,
+    });
+    // The route's bare `await` on the best-effort write — must NOT throw.
+    if (caRows.length > 0) await svc.insertCorrectiveActions(caRows);
+    return { ok: true as const, problems: caRows.length, reviewId: inserted.id };
+  }
+
+  it("weekly POST still resolves { ok:true, problems:1 } when the CA write fails (swallowed, never thrown)", async () => {
+    const repo = createFakeHaccpReviewsRepository({
+      weeklyInsertId: "ww-ok",
+      failCorrectiveActions: true, // simulate the adapter's swallow on a CA DB error
+    });
+    // The whole orchestration must resolve — a CA failure must not reject.
+    const result = await runWeeklyPost(repo);
+    expect(result).toEqual({ ok: true, problems: 1, reviewId: "ww-ok" });
+    // The review row DID persist…
+    expect(repo.insertedWeekly).toHaveLength(1);
+    // …and the failed CA write recorded nothing (swallowed at the boundary).
+    expect(repo.insertedCorrectiveActions).toEqual([]);
+  });
+
+  it("insertCorrectiveActions itself never rejects when seeded to fail", async () => {
+    const repo = createFakeHaccpReviewsRepository({ failCorrectiveActions: true });
+    const svc = createHaccpReviewsService({ reviews: repo });
+    await expect(
+      svc.insertCorrectiveActions([
+        {
+          actioned_by: "u1",
+          source_table: "haccp_weekly_review",
+          source_id: "rev-1",
+          ccp_ref: "WEEKLY-REVIEW",
+          deviation_description: "Weekly review — Chiller",
+          action_taken: "x",
+          product_disposition: "assess",
+          recurrence_prevention: "Review procedures",
+          management_verification_required: true,
+        },
+      ]),
+    ).resolves.toBeUndefined();
+    expect(repo.insertedCorrectiveActions).toEqual([]);
+  });
+});

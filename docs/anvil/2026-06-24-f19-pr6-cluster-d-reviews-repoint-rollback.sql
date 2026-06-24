@@ -1,0 +1,27 @@
+-- docs/anvil/2026-06-24-f19-pr6-cluster-d-reviews-repoint-rollback.sql
+--
+-- F-19 PR6 — Cluster D reviews route re-point (PR #73, commit 63476b3)
+--
+-- ── NO MIGRATION IN THIS PR ──────────────────────────────────────────────────
+-- PR6 is a CODE-ONLY change: it re-points two HACCP route files onto the PR5
+-- service hexagons (haccpReviewsService / haccpAnnualReviewService) and adds a
+-- new integration test + new unit tests + a new E2E spec. It does NOT touch the
+-- database schema, RLS policies, functions, or any migration file.
+--
+-- ⇒ There is NOTHING to roll back at the DB level. PITR is NOT required.
+--
+-- ── ROLLBACK PATH (code-only) ────────────────────────────────────────────────
+-- If PR6 must be reverted after merge, this is a pure Vercel/code rollback:
+--   1. git revert <squash-merge-sha>   (or Vercel → Promote previous deploy)
+--   2. Vercel auto-deploys the reverted code.
+-- No data recovery, no schema reversal, no Supabase action. Old code and new
+-- code read/write the SAME tables in the SAME shapes (byte-identical behaviour,
+-- except DB-error 500 bodies now say 'Server error' instead of raw Postgres
+-- text — a strictly safer change with no schema dependency).
+--
+-- (This file is intentionally a no-op SQL script — present for the ANVIL Lock
+--  checklist's "rollback script written" box, which a code-only PR satisfies
+--  with this explicit "nothing to undo at the DB layer" record.)
+
+-- no-op
+SELECT 1;
