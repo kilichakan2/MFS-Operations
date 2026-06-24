@@ -32,6 +32,13 @@ export interface FakeHaccpReviewsSeed {
   readonly monthly?: readonly ReviewMonthlyRow[];
   readonly weeklyInsertId?: string;
   readonly monthlyInsertId?: string;
+  /**
+   * Simulate the CA write hitting a DB error (R-D2). When true the fake's
+   * `insertCorrectiveActions` records NOTHING and — exactly like the real
+   * Supabase adapter on a CA-insert error — logs-and-RETURNS without throwing.
+   * Lets a unit test prove a failed CA write never aborts the parent review.
+   */
+  readonly failCorrectiveActions?: boolean;
 }
 
 /** A test-inspectable Fake reviews repository: exposes recorded writes. */
@@ -84,6 +91,9 @@ export function createFakeHaccpReviewsRepository(
     async insertCorrectiveActions(
       rows: readonly ReviewCorrectiveActionInsert[],
     ): Promise<void> {
+      // R-D2: when seeded to fail, mirror the adapter's swallow on a DB error —
+      // record nothing, log-and-return, NEVER throw. Otherwise record the rows.
+      if (seed?.failCorrectiveActions) return;
       // Best-effort parity: record, NEVER throw.
       insertedCorrectiveActions.push(...rows);
     },
