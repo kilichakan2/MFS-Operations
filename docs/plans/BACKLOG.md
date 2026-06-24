@@ -369,6 +369,30 @@ the trail matters.
     this flake. Re-confirm on PR2's actual preview; log a separate unit if it ever reds on
     preview.
 
+### F-TD-37 — 🟡 HACCP "submit-once-per-period" `@critical` E2E specs aren't idempotent on a shared preview branch
+- **Raised:** 2026-06-24 (F-19 PR8 ANVIL). Same CLASS as F-TD-33 (which fixed `04`/`08`
+  only via data-isolation) — this is the HACCP write-flow generalisation, still open.
+- **What:** the every-button extend run on the PR-75 shared Supabase preview branch showed
+  4 `@critical` specs wobbling red↔green across back-to-back runs — `13-haccp-cold-storage`,
+  `16-haccp-process-room`, `25-haccp-reviews` (weekly-review submit), and `04-kds-line-undo`
+  (the F-TD-33 fix didn't fully hold). **None touch the F-19 PR8 routes.** They are
+  "submit-once-per-period" mutation specs: the weekly/period slot is single-occupancy, so a
+  rerun on a branch an earlier run already wrote to fails (slot taken → 409/locked) — a false
+  red, not a regression. Proven environmental: a `reset_branch` + single re-run came back
+  **67/67 @critical, 0 flaky, 0 retries**.
+- **Why it matters:** this has now forced a manual Supabase preview-branch **reset before the
+  clean sweep on PR3, PR4, PR6 AND PR8**. It cries wolf on every HACCP PR's preview smoke and
+  costs a ~2.5-min branch re-provision each time. It will keep recurring for Clusters F & G.
+- **Fix shape (investigate, then pick — NOT retries):** (a) make each period-bound spec
+  self-isolating — assert/act on a UNIQUE per-run period or fixture rather than "the current
+  week", OR upsert-then-act so a second run is a no-op-safe overwrite; (b) a teardown that
+  clears the row it created; (c) failing both, codify the pre-smoke `reset_branch` as an
+  explicit ANVIL step for HACCP so it's deliberate, not a surprise. Mirror F-TD-33's
+  data-isolation approach.
+- **Owner unit:** unscheduled; natural to fold into Cluster F or G ANVIL (HACCP-heavy) so
+  the reset dance stops repeating. Pairs with re-confirming the F-TD-33 `04` fix.
+- **Status:** open.
+
 ---
 
 ## Migration hygiene (F-TD-)
