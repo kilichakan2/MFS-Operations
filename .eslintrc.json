@@ -44,6 +44,10 @@
           {
             "name": "jspdf-autotable",
             "message": "Use the PdfRenderer port via @/lib/wiring/pdf. jspdf-autotable may only be imported inside lib/adapters/jspdf/. See ADR-0002 / F-22."
+          },
+          {
+            "name": "xlsx",
+            "message": "Use the SpreadsheetExporter port via @/lib/wiring/haccp. xlsx may only be imported inside lib/adapters/xlsx/. See ADR-0002 / F-19 PR7."
           }
         ]
       }
@@ -69,6 +73,7 @@
         "lib/adapters/resend/**/*.ts",
         "lib/adapters/leaflet/**/*.{ts,tsx}",
         "lib/adapters/jspdf/**/*.{ts,tsx}",
+        "lib/adapters/xlsx/**/*.ts",
         "tests/**"
       ],
       "rules": {
@@ -122,6 +127,10 @@
               {
                 "name": "jspdf-autotable",
                 "message": "Use the PdfRenderer port via @/lib/wiring/pdf. jspdf-autotable may only be imported inside lib/adapters/jspdf/. See ADR-0002 / F-22."
+              },
+              {
+                "name": "xlsx",
+                "message": "Use the SpreadsheetExporter port via @/lib/wiring/haccp. xlsx may only be imported inside lib/adapters/xlsx/. See ADR-0002 / F-19 PR7."
               }
             ],
             "patterns": [

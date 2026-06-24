@@ -125,3 +125,8 @@ export {
   type FakeHaccpAnnualReviewRepository,
   type FakeHaccpAnnualReviewSeed,
 } from "./HaccpAnnualReviewRepository";
+export {
+  createFakeHaccpReportingRepository,
+  fakeHaccpReportingRepository,
+  type FakeHaccpReportingSeed,
+} from "./HaccpReportingRepository";

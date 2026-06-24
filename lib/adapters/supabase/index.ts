@@ -92,6 +92,10 @@ export {
   supabaseHaccpAnnualReviewRepository,
 } from "./HaccpAnnualReviewRepository";
 export {
+  createSupabaseHaccpReportingRepository,
+  supabaseHaccpReportingRepository,
+} from "./HaccpReportingRepository";
+export {
   authenticatedClientForCaller,
   requireServiceRole,
 } from "./authenticatedClient";
