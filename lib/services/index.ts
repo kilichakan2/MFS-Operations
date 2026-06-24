@@ -89,3 +89,8 @@ export {
   type HaccpAnnualReviewService,
   type HaccpAnnualReviewServiceDeps,
 } from "./HaccpAnnualReviewService";
+export {
+  createHaccpReportingService,
+  type HaccpReportingService,
+  type HaccpReportingServiceDeps,
+} from "./HaccpReportingService";

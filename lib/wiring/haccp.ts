@@ -37,6 +37,7 @@ import {
   createHaccpPeopleService,
   createHaccpReviewsService,
   createHaccpAnnualReviewService,
+  createHaccpReportingService,
   type HaccpDailyChecksService,
   type HaccpCorrectiveActionsService,
   type HaccpAssessmentsService,
@@ -44,6 +45,7 @@ import {
   type HaccpPeopleService,
   type HaccpReviewsService,
   type HaccpAnnualReviewService,
+  type HaccpReportingService,
 } from "@/lib/services";
 import {
   createSubmitHaccpDailyCheck,
@@ -57,7 +59,9 @@ import {
   supabaseHaccpPeopleRepository,
   supabaseHaccpReviewsRepository,
   supabaseHaccpAnnualReviewRepository,
+  supabaseHaccpReportingRepository,
 } from "@/lib/adapters/supabase";
+import { xlsxSpreadsheetExporter } from "@/lib/adapters/xlsx";
 
 export const haccpDailyChecksService: HaccpDailyChecksService =
   createHaccpDailyChecksService({
@@ -108,6 +112,19 @@ export const haccpReviewsService: HaccpReviewsService =
 export const haccpAnnualReviewService: HaccpAnnualReviewService =
   createHaccpAnnualReviewService({
     annualReview: supabaseHaccpAnnualReviewRepository,
+  });
+
+// F-19 PR7 — Cluster E "reporting" (the 6 read-only reporting routes:
+// today-status, overview, annual-review·data, audit·heatmap, audit per-section,
+// audit·export). Depends on TWO ports — the reporting reads (Supabase, service-
+// role) + the generic SpreadsheetExporter (xlsx). Service-role singleton ONLY —
+// exactly the access the 6 routes have today, so the PR8 re-point is byte-
+// identical. NO `…ForCaller` (per-caller RLS deferred to F-RLS-04h, Cluster G).
+// INTRODUCE-ONLY: no caller yet — mirrors PR1/PR3/PR5.
+export const haccpReportingService: HaccpReportingService =
+  createHaccpReportingService({
+    reporting: supabaseHaccpReportingRepository,
+    spreadsheet: xlsxSpreadsheetExporter,
   });
 
 // F-RLS-04h (LATER) will add the per-caller authenticated factories here,

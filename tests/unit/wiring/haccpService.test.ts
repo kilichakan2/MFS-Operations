@@ -28,6 +28,7 @@ vi.mock("@/lib/adapters/supabase", () => ({
   supabaseHaccpPeopleRepository: { __peopleRepoSingleton: true },
   supabaseHaccpReviewsRepository: { __reviewsRepoSingleton: true },
   supabaseHaccpAnnualReviewRepository: { __annualReviewRepoSingleton: true },
+  supabaseHaccpReportingRepository: { __reportingRepoSingleton: true },
 }));
 
 const DAILY_CHECKS_METHODS = [
@@ -106,6 +107,16 @@ const ANNUAL_REVIEW_METHODS = [
   "update",
 ] as const;
 
+// F-19 PR7 — Cluster E reporting singleton (read-only cross-table aggregator).
+const REPORTING_METHODS = [
+  "getTodayStatus",
+  "getOverview",
+  "getAnnualReviewData",
+  "getAuditHeatmap",
+  "getAuditSection",
+  "buildAuditWorkbook",
+] as const;
+
 describe("F-19 haccp wiring (service-role singletons)", () => {
   it("exports the 3 singletons exposing their surfaces", async () => {
     const {
@@ -174,13 +185,25 @@ describe("F-19 haccp wiring (service-role singletons)", () => {
     }
   });
 
+  it("exports the F-19 PR7 Cluster E reporting singleton exposing its surface", async () => {
+    const { haccpReportingService } = await import("@/lib/wiring/haccp");
+
+    expect(haccpReportingService).toBeDefined();
+    for (const m of REPORTING_METHODS) {
+      expect(
+        typeof (haccpReportingService as unknown as Record<string, unknown>)[m],
+      ).toBe("function");
+    }
+  });
+
   it("exports service-role singletons ONLY — no …ForCaller (that is F-RLS-04h)", async () => {
     const mod = (await import("@/lib/wiring/haccp")) as Record<string, unknown>;
     const exportNames = Object.keys(mod);
     expect(exportNames.some((n) => /ForCaller/.test(n))).toBe(false);
     // Exactly the intended exports (F-19 PR3 added haccpAssessmentsService;
     // F-19 PR4 added haccpTrainingService + haccpPeopleService; F-19 PR5 added
-    // haccpReviewsService + haccpAnnualReviewService).
+    // haccpReviewsService + haccpAnnualReviewService; F-19 PR7 added
+    // haccpReportingService).
     expect(new Set(exportNames)).toEqual(
       new Set([
         "haccpDailyChecksService",
@@ -191,6 +214,7 @@ describe("F-19 haccp wiring (service-role singletons)", () => {
         "haccpPeopleService",
         "haccpReviewsService",
         "haccpAnnualReviewService",
+        "haccpReportingService",
       ]),
     );
   });

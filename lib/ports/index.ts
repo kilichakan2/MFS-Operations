@@ -58,3 +58,10 @@ export type { HaccpTrainingRepository } from "./HaccpTrainingRepository";
 export type { HaccpPeopleRepository } from "./HaccpPeopleRepository";
 export type { HaccpReviewsRepository } from "./HaccpReviewsRepository";
 export type { HaccpAnnualReviewRepository } from "./HaccpAnnualReviewRepository";
+// F-19 PR7 — Cluster E reporting hexagon.
+export type { HaccpReportingRepository } from "./HaccpReportingRepository";
+export type {
+  SpreadsheetExporter,
+  SheetSpec,
+  SheetCell,
+} from "./SpreadsheetExporter";
