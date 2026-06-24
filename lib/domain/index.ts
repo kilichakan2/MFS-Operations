@@ -270,3 +270,23 @@ export type {
   AnnualReviewUpdatePersist,
   AnnualReviewListResult,
 } from "./HaccpAnnualReview";
+// F-19 PR7 — Cluster E reporting hexagon (the 6 read-only HACCP reporting routes
+// + their Excel export). Raw row-collection types (the adapter's reads) +
+// `…Response` types (the exact route response shapes the service reproduces).
+export type {
+  DayMark,
+  DayMap,
+  ReportingCaRow,
+  ReportingCaMap,
+  TodayStatusData,
+  TodayStatusResponse,
+  OverviewData,
+  OverviewResponse,
+  AnnualReviewRawData,
+  AnnualReviewResponse,
+  AuditHeatmapRawData,
+  AuditHeatmapResponse,
+  AuditSectionRawData,
+  AuditSectionResponse,
+  AuditExportRawData,
+} from "./HaccpReporting";
