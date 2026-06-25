@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
+import { haccpSuppliersService }     from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   const role = req.cookies.get('mfs_role')?.value
@@ -20,13 +20,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  const { data } = await supabaseService
-    .from('haccp_suppliers')
-    .select('label_code')
-    .ilike('name', name)
-    .limit(1)
-    .maybeSingle()
-
-  const label_code = data?.label_code ?? name.slice(0, 4).toUpperCase()
-  return NextResponse.json({ label_code })
+  const result = await haccpSuppliersService.getLabelCode(name)
+  return NextResponse.json(result)
 }

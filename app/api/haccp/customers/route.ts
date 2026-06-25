@@ -5,9 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpLookupsService }       from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,18 +14,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
-      .from('customers')
-      .select('id, name')
-      .eq('active', true)
-      .order('name', { ascending: true })
-
-    if (error) {
-      console.error('[GET /api/haccp/customers]', error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ customers: data ?? [] })
+    const result = await haccpLookupsService.getCustomers()
+    return NextResponse.json(result)
 
   } catch (err) {
     console.error('[GET /api/haccp/customers] Unhandled:', err)

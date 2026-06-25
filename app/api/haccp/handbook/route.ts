@@ -7,9 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpHandbookService }      from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,31 +19,12 @@ export async function GET(req: NextRequest) {
     const section = req.nextUrl.searchParams.get('section')
     const doc     = req.nextUrl.searchParams.get('doc')
 
-    if (!section && !doc) {
-      return NextResponse.json({ error: 'Missing section or doc parameter' }, { status: 400 })
+    const result = await haccpHandbookService.getHandbook({ section, doc })
+    if ('ok' in result && result.ok === false) {
+      return NextResponse.json({ error: result.message }, { status: result.status })
     }
 
-    let query = supabase
-      .from('haccp_sop_content')
-      .select('sop_ref, title, content_md, version, source_doc')
-      .eq('active', true)
-      .order('sop_ref')
-
-    if (section) {
-      query = query.eq('section_key', section)
-    } else if (doc) {
-      // Match any section that lists this doc as a source (e.g. 'HB-001/CA-001' contains 'HB-001')
-      query = query.ilike('source_doc', `%${doc}%`)
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error('[GET /api/haccp/handbook]', error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ section: section ?? null, doc: doc ?? null, entries: data ?? [] })
+    return NextResponse.json(result)
 
   } catch (err) {
     console.error('[GET /api/haccp/handbook] Unhandled:', err)

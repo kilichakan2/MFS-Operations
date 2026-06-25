@@ -7,9 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpHandbookService }      from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,18 +17,9 @@ export async function GET(req: NextRequest) {
     }
 
     const q = req.nextUrl.searchParams.get('q')?.trim()
-    if (!q || q.length < 2) {
-      return NextResponse.json({ results: [] })
-    }
 
-    const { data, error } = await supabase.rpc('haccp_search', { query: q })
-
-    if (error) {
-      console.error('[GET /api/haccp/search]', error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ results: data ?? [], query: q })
+    const result = await haccpHandbookService.search(q)
+    return NextResponse.json(result)
 
   } catch (err) {
     console.error('[GET /api/haccp/search] Unhandled:', err)

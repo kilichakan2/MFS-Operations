@@ -5,9 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpHandbookService }      from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,18 +14,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const { data, error } = await supabase
-      .from('haccp_documents')
-      .select('doc_ref, title, version, category, register_type, description, purpose, linked_docs, status, updated_at, review_due, owner')
-      .order('category')
-      .order('doc_ref')
-
-    if (error) {
-      console.error('[GET /api/haccp/documents]', error.message)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json(data ?? [])
+    const documents = await haccpHandbookService.getDocuments()
+    return NextResponse.json(documents)
   } catch (err) {
     console.error('[GET /api/haccp/documents] Unhandled:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
