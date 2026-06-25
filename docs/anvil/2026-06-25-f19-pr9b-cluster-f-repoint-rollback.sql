@@ -1,0 +1,16 @@
+-- ANVIL rollback note — F-19 PR9b Cluster F re-point (PR #77)
+-- Branch: feat/f19-pr9b-cluster-f-repoint
+--
+-- NO MIGRATION in this PR. This change is route-only: 8 HACCP docs/lookups
+-- routes were re-pointed off direct `supabaseService.from(...)` onto 3 pre-built
+-- service singletons (haccpHandbookService, haccpSuppliersService,
+-- haccpLookupsService). No schema change, no data change, no RLS change,
+-- no package.json change.
+--
+-- ROLLBACK = code-only. There is nothing to undo in the database.
+--   1. `vercel rollback` (or revert PR #77) restores the prior route code.
+--   2. No `supabase db push` is involved either direction.
+--   3. PITR is NOT applicable — no destructive operation, no data written by deploy.
+--
+-- (File intentionally contains no SQL — recorded for the audit trail so the cert's
+--  "rollback script written" box is satisfiable for a no-migration PR.)
