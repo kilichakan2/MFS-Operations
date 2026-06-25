@@ -11,9 +11,13 @@
  *
  * Pins:
  *   - the 3 singletons are defined and expose their method surface;
- *   - the wiring exports the service-role singletons ONLY — NO `…ForCaller`
- *     per-caller factory (that fires RLS and is F-RLS-04h);
+ *   - the wiring exports the 12 service-role singletons (parachutes) AND, since
+ *     F-RLS-04h PR10a, the 12 INERT `…ForCaller` per-caller factories (added but
+ *     with no caller until PR10b — the per-request authenticated keycards);
  *   - the factories return a distinct object per call (no shared mutable state).
+ *
+ * The per-request / never-memoize behaviour of the `…ForCaller` factories is
+ * pinned separately in `haccpServiceForCaller.test.ts`.
  *
  * The Supabase adapter singletons are mocked so importing the wiring module does
  * not stand up a real Supabase client.
@@ -241,31 +245,50 @@ describe("F-19 haccp wiring (service-role singletons)", () => {
     }
   });
 
-  it("exports service-role singletons ONLY — no …ForCaller (that is F-RLS-04h)", async () => {
+  it("exports the 12 service-role singletons (parachutes) AND the 12 …ForCaller factories (F-RLS-04h PR10a)", async () => {
     const mod = (await import("@/lib/wiring/haccp")) as Record<string, unknown>;
     const exportNames = Object.keys(mod);
-    expect(exportNames.some((n) => /ForCaller/.test(n))).toBe(false);
-    // Exactly the intended exports (F-19 PR3 added haccpAssessmentsService;
-    // F-19 PR4 added haccpTrainingService + haccpPeopleService; F-19 PR5 added
-    // haccpReviewsService + haccpAnnualReviewService; F-19 PR7 added
-    // haccpReportingService; F-19 PR9a added haccpHandbookService +
-    // haccpSuppliersService + haccpLookupsService).
-    expect(new Set(exportNames)).toEqual(
-      new Set([
-        "haccpDailyChecksService",
-        "haccpCorrectiveActionsService",
-        "submitHaccpDailyCheck",
-        "haccpAssessmentsService",
-        "haccpTrainingService",
-        "haccpPeopleService",
-        "haccpReviewsService",
-        "haccpAnnualReviewService",
-        "haccpReportingService",
-        "haccpHandbookService",
-        "haccpSuppliersService",
-        "haccpLookupsService",
-      ]),
-    );
+
+    // F-RLS-04h PR10a flips this guard: the keycard factories now EXIST
+    // (introduce-only, INERT — no caller until PR10b). Pin both halves: the 12
+    // master-key singletons SURVIVE as the rollback parachute, AND the 12 new
+    // per-caller …ForCaller factories are present.
+    const SINGLETONS = [
+      "haccpDailyChecksService",
+      "haccpCorrectiveActionsService",
+      "submitHaccpDailyCheck",
+      "haccpAssessmentsService",
+      "haccpTrainingService",
+      "haccpPeopleService",
+      "haccpReviewsService",
+      "haccpAnnualReviewService",
+      "haccpReportingService",
+      "haccpHandbookService",
+      "haccpSuppliersService",
+      "haccpLookupsService",
+    ];
+    const FOR_CALLER = [
+      "haccpDailyChecksServiceForCaller",
+      "haccpCorrectiveActionsServiceForCaller",
+      "haccpAssessmentsServiceForCaller",
+      "haccpTrainingServiceForCaller",
+      "haccpPeopleServiceForCaller",
+      "haccpReviewsServiceForCaller",
+      "haccpAnnualReviewServiceForCaller",
+      "haccpReportingServiceForCaller",
+      "haccpHandbookServiceForCaller",
+      "haccpSuppliersServiceForCaller",
+      "haccpLookupsServiceForCaller",
+      "submitHaccpDailyCheckForCaller",
+    ];
+
+    // Every singleton STILL exported (parachutes survive).
+    for (const n of SINGLETONS) expect(mod[n]).toBeDefined();
+    // Every …ForCaller factory now exists, and is a function (the keycard machine).
+    for (const n of FOR_CALLER) expect(typeof mod[n]).toBe("function");
+
+    // EXACT export set = the 12 singletons + the 12 new ForCaller factories (24).
+    expect(new Set(exportNames)).toEqual(new Set([...SINGLETONS, ...FOR_CALLER]));
   });
 
   it("the factories return a distinct object per call (no shared state)", async () => {

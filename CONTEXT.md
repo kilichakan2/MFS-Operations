@@ -84,3 +84,18 @@ This rule is enforced at the database via row-level security (the dormant
 baseline `visits` policies — own-row OR `is_admin()` — which `is_admin()`
 scopes to role `admin` only). Notes inherit it: you may read/add notes on a
 visit you can see, and edit a note only if you authored it or you are admin.
+
+**HACCP visibility (who sees which HACCP records).** Unlike visits, HACCP data
+is *org-wide operational*, NOT owner-scoped. The food-safety records (temps,
+cleaning logs, deliveries, suppliers, the handbook, reviews) belong to the
+business, not to the staff member who logged them. So **any real authenticated
+staff member — every role — may read AND write every HACCP record**, regardless
+of who created it. Business reason: someone recording a fridge temp must be able
+to see the previous reading whoever logged it. There is no "see only your own"
+for HACCP. **Visitors are excluded automatically** — the public visitor kiosk
+never creates a user profile, so a visitor has no `app.current_user_id` and
+fails the policy. At the database this is enforced (F-RLS-04h / Cluster G) by a
+single uniform policy family across all 30 `haccp_*` tables: the row is
+visible/writable when `current_setting('app.current_user_id')` resolves to a real
+**active** `users` row. Fine-grained "only admin can edit suppliers" stays at the route
+edge (`requireRole`); the DB policy is the backstop, not the primary gate.
