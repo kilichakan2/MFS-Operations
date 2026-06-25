@@ -130,3 +130,21 @@ export {
   fakeHaccpReportingRepository,
   type FakeHaccpReportingSeed,
 } from "./HaccpReportingRepository";
+// F-19 PR9a — Cluster F "docs & lookups" fakes (handbook, suppliers, lookups).
+// The suppliers fake is test-inspectable (records writes — R-F-B2).
+export {
+  createFakeHaccpHandbookRepository,
+  fakeHaccpHandbookRepository,
+  type FakeHaccpHandbookSeed,
+} from "./HaccpHandbookRepository";
+export {
+  createFakeHaccpSuppliersRepository,
+  fakeHaccpSuppliersRepository,
+  type FakeHaccpSuppliersRepository,
+  type FakeHaccpSuppliersSeed,
+} from "./HaccpSuppliersRepository";
+export {
+  createFakeHaccpLookupsRepository,
+  fakeHaccpLookupsRepository,
+  type FakeHaccpLookupsSeed,
+} from "./HaccpLookupsRepository";
