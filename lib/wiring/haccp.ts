@@ -14,20 +14,29 @@
  * policies (a deny-all trap only service-role opens), so the master key is the
  * only thing that works on them today.
  *
- * NO `…ForCaller(userId)` per-request authenticated factory is added here — that
- * fires RLS and is DEFERRED to F-RLS-04h (Cluster G, PR10, the closing lock),
- * exactly as F-18's `visitsServiceForCaller` was added later by F-RLS-04g and
- * F-16's `cashServiceForCaller` is deferred to F-RLS-04e. The per-table policy
- * set lands with that PR. (Wiring test pins that no `…ForCaller` leaked early.)
+ * F-RLS-04h PR10a: the per-request authenticated `…ForCaller(userId)` factories
+ * are ADDED here (12 of them — one per service + `submitHaccpDailyCheckForCaller`),
+ * exactly as F-18's `visitsServiceForCaller` was added by F-RLS-04g. Each mints a
+ * short-lived DB token, builds a per-caller authenticated client (Postgres
+ * `authenticated` role, so the HACCP RLS policies fire), and binds the relevant
+ * adapter(s) to it. They are INERT in PR10a — NO caller in `app/**` (no route
+ * edited). PR10b throws the switch by sourcing the caller id from the
+ * `x-mfs-user-id` header. The service-role singletons below STAY as the
+ * one-line rollback parachutes (and the public visitor kiosk keeps the
+ * `haccpPeopleService` singleton in PR10b — no logged-in user).
+ *
+ * Per-request — NEVER memoize: the minted token is per-caller, and a memoized
+ * client would leak one caller's identity to another. Each `…ForCaller` call
+ * mints a fresh token and builds a fresh client. Mirrors `visitsServiceForCaller`.
  *
  * Rip-out contract (CLAUDE.md acceptance test): swapping the database vendor for
- * HACCP Cluster A = one new adapter per port
- * (`lib/adapters/<vendor>/HaccpDailyChecksRepository` +
- * `…/HaccpCorrectiveActionsRepository`) + the two wiring lines below.
- * The services, the use-case, `lib/domain/Haccp*`, and the ports are untouched.
+ * HACCP = one new adapter per port (`lib/adapters/<vendor>/Haccp*Repository`) +
+ * the wiring lines below. The services, the use-case, `lib/domain/Haccp*`, and
+ * the ports are untouched.
  *
- * INTRODUCE-ONLY (F-19 PR1): these singletons are constructed but have NO
- * caller — the 9 HACCP routes are untouched. PR2 throws the switch.
+ * INTRODUCE-ONLY (F-19 PR1 + PR10a): the singletons and the new `…ForCaller`
+ * factories are constructed but have NO caller — the HACCP routes are untouched.
+ * PR10b throws the switch.
  */
 import {
   createHaccpDailyChecksService,
@@ -69,8 +78,22 @@ import {
   supabaseHaccpHandbookRepository,
   supabaseHaccpSuppliersRepository,
   supabaseHaccpLookupsRepository,
+  // F-RLS-04h PR10a — per-caller adapter factories (keycard-bound repos).
+  createSupabaseHaccpDailyChecksRepository,
+  createSupabaseHaccpCorrectiveActionsRepository,
+  createSupabaseHaccpAssessmentsRepository,
+  createSupabaseHaccpTrainingRepository,
+  createSupabaseHaccpPeopleRepository,
+  createSupabaseHaccpReviewsRepository,
+  createSupabaseHaccpAnnualReviewRepository,
+  createSupabaseHaccpReportingRepository,
+  createSupabaseHaccpHandbookRepository,
+  createSupabaseHaccpSuppliersRepository,
+  createSupabaseHaccpLookupsRepository,
+  authenticatedClientForCaller,
 } from "@/lib/adapters/supabase";
 import { xlsxSpreadsheetExporter } from "@/lib/adapters/xlsx";
+import { dbTokenMinter } from "@/lib/wiring/dbToken";
 
 export const haccpDailyChecksService: HaccpDailyChecksService =
   createHaccpDailyChecksService({
@@ -152,5 +175,156 @@ export const haccpSuppliersService: HaccpSuppliersService =
 export const haccpLookupsService: HaccpLookupsService =
   createHaccpLookupsService({ lookups: supabaseHaccpLookupsRepository });
 
-// F-RLS-04h (LATER) will add the per-caller authenticated factories here,
-// mirroring visitsServiceForCaller. NOT in PR1 — service-role singletons only.
+// ─────────────────────────────────────────────────────────────────────────
+// F-RLS-04h PR10a — per-request authenticated `…ForCaller(userId)` factories.
+//
+// Each mints a short-lived DB token, builds a per-caller authenticated client
+// (Postgres `authenticated` role → the HACCP RLS policies fire), and binds the
+// relevant adapter(s) to it. INERT: no caller in `app/**` until PR10b. Per-
+// request — NEVER memoize (a memoized client would leak one caller's identity
+// to another). The service-role singletons above STAY as the rollback
+// parachutes. Mirrors `visitsServiceForCaller`.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Daily-checks service bound to ONE caller (single port). */
+export async function haccpDailyChecksServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpDailyChecksService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpDailyChecksService({
+    dailyChecks: createSupabaseHaccpDailyChecksRepository(client),
+  });
+}
+
+/** Corrective-actions service bound to ONE caller (single port). */
+export async function haccpCorrectiveActionsServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpCorrectiveActionsService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpCorrectiveActionsService({
+    correctiveActions: createSupabaseHaccpCorrectiveActionsRepository(client),
+  });
+}
+
+/** Assessments service bound to ONE caller (single port). */
+export async function haccpAssessmentsServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpAssessmentsService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpAssessmentsService({
+    assessments: createSupabaseHaccpAssessmentsRepository(client),
+  });
+}
+
+/** Training service bound to ONE caller (single port). */
+export async function haccpTrainingServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpTrainingService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpTrainingService({
+    training: createSupabaseHaccpTrainingRepository(client),
+  });
+}
+
+/** People service bound to ONE caller (single port). The service-role
+ *  `haccpPeopleService` singleton STAYS — the public visitor kiosk (no
+ *  logged-in user) keeps it in PR10b. */
+export async function haccpPeopleServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpPeopleService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpPeopleService({
+    people: createSupabaseHaccpPeopleRepository(client),
+  });
+}
+
+/** Reviews service bound to ONE caller (single port). */
+export async function haccpReviewsServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpReviewsService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpReviewsService({
+    reviews: createSupabaseHaccpReviewsRepository(client),
+  });
+}
+
+/** Annual-review service bound to ONE caller (single port). */
+export async function haccpAnnualReviewServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpAnnualReviewService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpAnnualReviewService({
+    annualReview: createSupabaseHaccpAnnualReviewRepository(client),
+  });
+}
+
+/** Reporting service bound to ONE caller. TWO ports: the DB `reporting` port is
+ *  per-caller (keycard); the `spreadsheet` (xlsx) exporter is NOT a DB port and
+ *  carries no identity → reuse the SHARED `xlsxSpreadsheetExporter` singleton. */
+export async function haccpReportingServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpReportingService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpReportingService({
+    reporting: createSupabaseHaccpReportingRepository(client),
+    spreadsheet: xlsxSpreadsheetExporter,
+  });
+}
+
+/** Handbook service bound to ONE caller (single port). */
+export async function haccpHandbookServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpHandbookService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpHandbookService({
+    handbook: createSupabaseHaccpHandbookRepository(client),
+  });
+}
+
+/** Suppliers service bound to ONE caller (single port). */
+export async function haccpSuppliersServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpSuppliersService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpSuppliersService({
+    suppliers: createSupabaseHaccpSuppliersRepository(client),
+  });
+}
+
+/** Lookups service bound to ONE caller (single port). */
+export async function haccpLookupsServiceForCaller(
+  callerUserId: string,
+): Promise<HaccpLookupsService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createHaccpLookupsService({
+    lookups: createSupabaseHaccpLookupsRepository(client),
+  });
+}
+
+/** Daily-check submission use-case bound to ONE caller (multi-port via
+ *  composition). Mint+build the client ONCE, build a per-caller
+ *  `HaccpCorrectiveActionsService` from THAT same client, and pass it into the
+ *  use-case — NO second mint. Mirrors `pickingListUsecaseForCaller`. */
+export async function submitHaccpDailyCheckForCaller(
+  callerUserId: string,
+): Promise<SubmitHaccpDailyCheck> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  const callerCorrectiveActions = createHaccpCorrectiveActionsService({
+    correctiveActions: createSupabaseHaccpCorrectiveActionsRepository(client),
+  });
+  return createSubmitHaccpDailyCheck({
+    correctiveActions: callerCorrectiveActions,
+  });
+}

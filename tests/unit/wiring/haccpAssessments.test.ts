@@ -9,8 +9,10 @@
  *
  * Pins:
  *   - the singleton is defined and exposes its full method surface;
- *   - the wiring exports a service-role singleton ONLY — NO `…ForCaller`
- *     per-caller factory (that fires RLS and is F-RLS-04h);
+ *   - the wiring still exports the `haccpAssessmentsService` service-role
+ *     singleton (the rollback parachute) AND, since F-RLS-04h PR10a, the
+ *     matching INERT `haccpAssessmentsServiceForCaller` per-caller factory
+ *     (added but with no caller until PR10b — the per-request keycard);
  *   - the factory returns a distinct object per call (no shared mutable state).
  *
  * The Supabase adapter singletons are mocked so importing the wiring module does
@@ -68,11 +70,14 @@ describe("F-19 PR3 haccp wiring (Cluster B assessments singleton)", () => {
     }
   });
 
-  it("exports a service-role singleton ONLY — no …ForCaller (that is F-RLS-04h)", async () => {
+  it("exports the haccpAssessmentsService singleton AND its INERT …ForCaller factory (F-RLS-04h PR10a)", async () => {
     const mod = (await import("@/lib/wiring/haccp")) as Record<string, unknown>;
     const exportNames = Object.keys(mod);
-    expect(exportNames.some((n) => /ForCaller/.test(n))).toBe(false);
+    // F-RLS-04h PR10a flips this guard: the keycard factories now EXIST
+    // (introduce-only, INERT — no caller until PR10b). The master-key singleton
+    // SURVIVES as the rollback parachute alongside its per-caller factory.
     expect(exportNames).toContain("haccpAssessmentsService");
+    expect(typeof mod.haccpAssessmentsServiceForCaller).toBe("function");
   });
 
   it("the factory returns a distinct object per call (no shared state)", async () => {
