@@ -383,16 +383,20 @@ the trail matters.
 - **Why it matters:** this has now forced a manual Supabase preview-branch **reset before the
   clean sweep on PR3, PR4, PR6, PR8 AND PR9b** (same 4 specs `13`/`16`/`25` + `04`; reset →
   clean 73/73, 0 flaky on PR9b — the predicted recurrence landed). It cries wolf on every
-  HACCP PR's preview smoke and costs a ~2.5-min branch re-provision each time. One HACCP PR
-  left (Cluster G / F-RLS-04h) where it will bite again.
+  HACCP PR's preview smoke and costs a ~2.5-min branch re-provision each time. **PR10a
+  (Cluster G foundation, 2026-06-25) did NOT bite — it is introduce-only/inert and added NO
+  new E2E, so the @critical run was pure regression (clean 73/73, 0 flaky, no reset needed).**
+  **One HACCP PR left where it WILL bite: PR10b (Cluster G route cutover) — it flips live
+  HACCP routes and gets the exhaustive every-screen browser-tap, so plan for a `reset_branch`
+  + single re-run as part of its ANVIL.**
 - **Fix shape (investigate, then pick — NOT retries):** (a) make each period-bound spec
   self-isolating — assert/act on a UNIQUE per-run period or fixture rather than "the current
   week", OR upsert-then-act so a second run is a no-op-safe overwrite; (b) a teardown that
   clears the row it created; (c) failing both, codify the pre-smoke `reset_branch` as an
   explicit ANVIL step for HACCP so it's deliberate, not a surprise. Mirror F-TD-33's
   data-isolation approach.
-- **Owner unit:** unscheduled; natural to fold into Cluster F or G ANVIL (HACCP-heavy) so
-  the reset dance stops repeating. Pairs with re-confirming the F-TD-33 `04` fix.
+- **Owner unit:** unscheduled; LAST natural home = Cluster G PR10b ANVIL (the final HACCP-heavy
+  PR) so the reset dance stops repeating. Pairs with re-confirming the F-TD-33 `04` fix.
 - **Status:** open.
 
 ---
