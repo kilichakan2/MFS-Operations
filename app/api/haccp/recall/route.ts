@@ -9,9 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { haccpSuppliersService }     from '@/lib/wiring/haccp'
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
 
@@ -22,31 +20,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const [configRes, suppliersRes] = await Promise.all([
-      supabase
-        .from('haccp_recall_config')
-        .select('id, internal_team, regulatory, other_contacts, updated_at, updater:updated_by(name)')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single(),
-      supabase
-        .from('haccp_suppliers')
-        .select('id, name, categories, contact_name, contact_phone, contact_email, active')
-        .eq('active', true)
-        .order('name'),
-    ])
-
-    if (configRes.error && configRes.error.code !== 'PGRST116') {
-      return NextResponse.json({ error: configRes.error.message }, { status: 500 })
-    }
-    if (suppliersRes.error) {
-      return NextResponse.json({ error: suppliersRes.error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({
-      config:    configRes.data ?? null,
-      suppliers: suppliersRes.data ?? [],
-    })
+    const result = await haccpSuppliersService.getRecallContactList()
+    return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/recall]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -75,35 +50,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
     }
 
-    const payload = {
-      internal_team,
-      regulatory,
-      other_contacts,
-      updated_by: userId,
-      updated_at: new Date().toISOString(),
-    }
-
-    let result
-    if (id) {
-      result = await supabase
-        .from('haccp_recall_config')
-        .update(payload)
-        .eq('id', id)
-        .select()
-        .single()
-    } else {
-      result = await supabase
-        .from('haccp_recall_config')
-        .insert(payload)
-        .select()
-        .single()
-    }
-
-    if (result.error) {
-      return NextResponse.json({ error: result.error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ config: result.data })
+    const nowIso = new Date().toISOString()
+    const result = await haccpSuppliersService.saveRecallConfig(
+      { id, internal_team, regulatory, other_contacts },
+      userId,
+      nowIso,
+    )
+    return NextResponse.json(result)
   } catch (err) {
     console.error('[POST /api/haccp/recall]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
@@ -131,22 +84,10 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Supplier ID required' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
-      .from('haccp_suppliers')
-      .update({
-        contact_name:  contact_name?.trim()  || null,
-        contact_phone: contact_phone?.trim() || null,
-        contact_email: contact_email?.trim() || null,
-      })
-      .eq('id', id)
-      .select('id, name, contact_name, contact_phone, contact_email')
-      .single()
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ supplier: data })
+    const result = await haccpSuppliersService.updateRecallSupplierContact({
+      id, contact_name, contact_phone, contact_email,
+    })
+    return NextResponse.json(result)
   } catch (err) {
     console.error('[PATCH /api/haccp/recall]', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
