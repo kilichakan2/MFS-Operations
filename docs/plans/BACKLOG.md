@@ -395,6 +395,35 @@ the trail matters.
 
 ---
 
+### F-TD-38 — 🔵 HACCP domain types keep raw snake_case + `as unknown as` casts instead of mapping to owned camelCase
+- **Raised:** 2026-06-25 (F-19 PR9a Guard — code-critic 🔵 ×2). Deliberate, **pre-existing
+  pattern across every HACCP cluster** (`HaccpAssessment.ts`, `HaccpAnnualReview.ts`,
+  `HaccpReporting.ts`, and now the PR9a `HaccpHandbook`/`HaccpSuppliers`/`HaccpLookups`).
+  Not a PR9a defect — logged so the accumulated debt is tracked in one place.
+- **What:** the HACCP `lib/domain/Haccp*.ts` types carry the database's raw column names
+  (`contact_name`, `created_at`, the nested `updater:{name}` join shape) rather than the
+  app's own tidy camelCase, and the Supabase adapters `return (data ?? []) as unknown as T[]`
+  (double-cast) instead of explicit snake→camel field mapping. This **technically diverges**
+  from CLAUDE.md's "map vendor snake_case to owned camelCase INSIDE the adapter."
+- **Why it's deliberate (don't fix mid-migration):** the raw-shape pass-through is precisely
+  the **byte-identity mechanism** that lets each F-19 re-point PR (PR9b included) flip routes
+  onto the hexagon with ZERO wire-shape change. Mapping now would break parity and force every
+  re-point to also restructure JSON — exactly what the two-step rhythm avoids.
+- **Why it matters (the cost):** (1) the `as unknown as` double-cast **bypasses `tsc` at the
+  adapter boundary** — a future column rename wouldn't be caught here at compile time; (2) the
+  HACCP domain reads differently from the rest of the app (Orders/Cash use owned camelCase),
+  so it's a cohesion wart for anyone learning the codebase.
+- **Fix shape:** AFTER F-19 is fully shipped (all clusters re-pointed, byte-identity constraint
+  relaxed), do ONE "deepen the HACCP domain" pass: introduce owned camelCase domain types +
+  explicit field-mapping in each Supabase adapter, drop the `as unknown as` casts, and add a
+  lightweight **runtime row-validator** at the adapter boundary so a column drift fails loudly.
+  Touch the UI shapes in the same pass (they currently consume the raw keys).
+- **Owner unit:** unscheduled — **gate on F-19 completion** (Cluster G / F-RLS-04h is the last
+  F-19 step); a whole-HACCP cleanup, not a per-cluster fix.
+- **Status:** open.
+
+---
+
 ## Migration hygiene (F-TD-)
 
 ### F-TD-15 — Migration filename convention collides for same-day migrations
