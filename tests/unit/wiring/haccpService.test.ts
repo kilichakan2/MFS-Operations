@@ -12,8 +12,9 @@
  * Pins:
  *   - the 3 singletons are defined and expose their method surface;
  *   - the wiring exports the 12 service-role singletons (parachutes) AND, since
- *     F-RLS-04h PR10a, the 12 INERT `…ForCaller` per-caller factories (added but
- *     with no caller until PR10b — the per-request authenticated keycards);
+ *     F-RLS-04h PR10a, the 12 `…ForCaller` per-caller factories (the per-request
+ *     authenticated keycards — LIVE as of PR10b: the 32 routes now call them; the
+ *     singletons survive purely as rollback parachutes + the public visitor kiosk);
  *   - the factories return a distinct object per call (no shared mutable state).
  *
  * The per-request / never-memoize behaviour of the `…ForCaller` factories is
@@ -249,10 +250,10 @@ describe("F-19 haccp wiring (service-role singletons)", () => {
     const mod = (await import("@/lib/wiring/haccp")) as Record<string, unknown>;
     const exportNames = Object.keys(mod);
 
-    // F-RLS-04h PR10a flips this guard: the keycard factories now EXIST
-    // (introduce-only, INERT — no caller until PR10b). Pin both halves: the 12
-    // master-key singletons SURVIVE as the rollback parachute, AND the 12 new
-    // per-caller …ForCaller factories are present.
+    // F-RLS-04h PR10a added the keycard factories; PR10b made them LIVE (the 32
+    // routes call them). Pin both halves: the 12 master-key singletons SURVIVE as
+    // the rollback parachute (+ public visitor kiosk), AND the 12 per-caller
+    // …ForCaller factories are present.
     const SINGLETONS = [
       "haccpDailyChecksService",
       "haccpCorrectiveActionsService",
