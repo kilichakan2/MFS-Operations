@@ -53,9 +53,7 @@ describe("HaccpHandbookService — getHandbook", () => {
 
     const res = await svc.getHandbook({ section: "cold_storage", doc: null });
     expect(Object.keys(res)).toEqual(["section", "doc", "entries"]);
-    expect(res.section).toBe("cold_storage");
-    expect(res.doc).toBeNull();
-    expect(res.entries).toEqual(entries);
+    expect(res).toEqual({ section: "cold_storage", doc: null, entries });
   });
 
   it("doc set → { section:null, doc, entries }", async () => {
@@ -64,9 +62,7 @@ describe("HaccpHandbookService — getHandbook", () => {
     const svc = createHaccpHandbookService({ handbook: repo });
 
     const res = await svc.getHandbook({ section: null, doc: "HB-001" });
-    expect(res.section).toBeNull();
-    expect(res.doc).toBe("HB-001");
-    expect(res.entries).toEqual(entries);
+    expect(res).toEqual({ section: null, doc: "HB-001", entries });
   });
 
   it("neither section nor doc → the 400-equivalent reject (no repo call)", async () => {
@@ -107,8 +103,7 @@ describe("HaccpHandbookService — search", () => {
 
     const res = await svc.search("  steriliser  ");
     expect(Object.keys(res)).toEqual(["results", "query"]);
-    expect(res.results).toEqual(results);
-    expect(res.query).toBe("steriliser");
+    expect(res).toEqual({ results, query: "steriliser" });
   });
 });
 

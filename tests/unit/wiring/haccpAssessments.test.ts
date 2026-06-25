@@ -27,6 +27,10 @@ vi.mock("@/lib/adapters/supabase", () => ({
   supabaseHaccpReviewsRepository: { __reviewsRepoSingleton: true },
   supabaseHaccpAnnualReviewRepository: { __annualReviewRepoSingleton: true },
   supabaseHaccpReportingRepository: { __reportingRepoSingleton: true },
+  // F-19 PR9a — Cluster F docs & lookups repos (so the wiring import resolves).
+  supabaseHaccpHandbookRepository: { __handbookRepoSingleton: true },
+  supabaseHaccpSuppliersRepository: { __suppliersRepoSingleton: true },
+  supabaseHaccpLookupsRepository: { __lookupsRepoSingleton: true },
 }));
 
 const ASSESSMENTS_METHODS = [

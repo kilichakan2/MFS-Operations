@@ -38,6 +38,9 @@ import {
   createHaccpReviewsService,
   createHaccpAnnualReviewService,
   createHaccpReportingService,
+  createHaccpHandbookService,
+  createHaccpSuppliersService,
+  createHaccpLookupsService,
   type HaccpDailyChecksService,
   type HaccpCorrectiveActionsService,
   type HaccpAssessmentsService,
@@ -46,6 +49,9 @@ import {
   type HaccpReviewsService,
   type HaccpAnnualReviewService,
   type HaccpReportingService,
+  type HaccpHandbookService,
+  type HaccpSuppliersService,
+  type HaccpLookupsService,
 } from "@/lib/services";
 import {
   createSubmitHaccpDailyCheck,
@@ -60,6 +66,9 @@ import {
   supabaseHaccpReviewsRepository,
   supabaseHaccpAnnualReviewRepository,
   supabaseHaccpReportingRepository,
+  supabaseHaccpHandbookRepository,
+  supabaseHaccpSuppliersRepository,
+  supabaseHaccpLookupsRepository,
 } from "@/lib/adapters/supabase";
 import { xlsxSpreadsheetExporter } from "@/lib/adapters/xlsx";
 
@@ -126,6 +135,22 @@ export const haccpReportingService: HaccpReportingService =
     reporting: supabaseHaccpReportingRepository,
     spreadsheet: xlsxSpreadsheetExporter,
   });
+
+// F-19 PR9a — Cluster F "docs & lookups" (the 8 HACCP admin/lookup surfaces:
+// handbook, search, documents, users, customers, supplier-code, recall,
+// admin/suppliers). THREE service-role singletons grouped by owned data — the
+// SOP library, the supplier book, and the two form selectors. Service-role
+// singletons ONLY — exactly the access the 8 routes have today, so the PR9b
+// re-point is byte-identical. NO `…ForCaller` (per-caller RLS deferred to
+// F-RLS-04h, Cluster G). INTRODUCE-ONLY: no caller yet — mirrors PR1/PR3/PR5/PR7.
+export const haccpHandbookService: HaccpHandbookService =
+  createHaccpHandbookService({ handbook: supabaseHaccpHandbookRepository });
+
+export const haccpSuppliersService: HaccpSuppliersService =
+  createHaccpSuppliersService({ suppliers: supabaseHaccpSuppliersRepository });
+
+export const haccpLookupsService: HaccpLookupsService =
+  createHaccpLookupsService({ lookups: supabaseHaccpLookupsRepository });
 
 // F-RLS-04h (LATER) will add the per-caller authenticated factories here,
 // mirroring visitsServiceForCaller. NOT in PR1 — service-role singletons only.
