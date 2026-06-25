@@ -95,6 +95,21 @@ export {
   createSupabaseHaccpReportingRepository,
   supabaseHaccpReportingRepository,
 } from "./HaccpReportingRepository";
+// F-19 PR9a — Cluster F "docs & lookups" Supabase adapters (handbook, suppliers,
+// lookups). Each: factory + service-role singleton. The ONLY files importing
+// `@supabase/supabase-js` for these surfaces.
+export {
+  createSupabaseHaccpHandbookRepository,
+  supabaseHaccpHandbookRepository,
+} from "./HaccpHandbookRepository";
+export {
+  createSupabaseHaccpSuppliersRepository,
+  supabaseHaccpSuppliersRepository,
+} from "./HaccpSuppliersRepository";
+export {
+  createSupabaseHaccpLookupsRepository,
+  supabaseHaccpLookupsRepository,
+} from "./HaccpLookupsRepository";
 export {
   authenticatedClientForCaller,
   requireServiceRole,

@@ -94,3 +94,22 @@ export {
   type HaccpReportingService,
   type HaccpReportingServiceDeps,
 } from "./HaccpReportingService";
+// F-19 PR9a — Cluster F "docs & lookups" service factories (handbook, suppliers,
+// lookups). Factories only — singletons live in lib/wiring/haccp.ts.
+export {
+  createHaccpHandbookService,
+  type HaccpHandbookService,
+  type HaccpHandbookServiceDeps,
+  type HandbookReject,
+} from "./HaccpHandbookService";
+export {
+  createHaccpSuppliersService,
+  type HaccpSuppliersService,
+  type HaccpSuppliersServiceDeps,
+  type SuppliersReject,
+} from "./HaccpSuppliersService";
+export {
+  createHaccpLookupsService,
+  type HaccpLookupsService,
+  type HaccpLookupsServiceDeps,
+} from "./HaccpLookupsService";
