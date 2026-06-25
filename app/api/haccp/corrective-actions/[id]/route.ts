@@ -12,15 +12,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpCorrectiveActionsService } from '@/lib/wiring/haccp'
+import { haccpCorrectiveActionsServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
 
     if (role !== 'admin' || !userId) {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
@@ -29,7 +29,8 @@ export async function PATCH(
     const { id } = await params
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
-    await haccpCorrectiveActionsService.signOff(id, userId)
+    const svc = await haccpCorrectiveActionsServiceForCaller(userId)
+    await svc.signOff(id, userId)
 
     return NextResponse.json({ ok: true })
 

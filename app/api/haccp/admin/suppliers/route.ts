@@ -9,10 +9,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpSuppliersService }     from '@/lib/wiring/haccp'
+import { haccpSuppliersServiceForCaller } from '@/lib/wiring/haccp'
 
 function isAdmin(req: NextRequest) {
-  return req.cookies.get('mfs_role')?.value === 'admin'
+  return req.headers.get('x-mfs-user-role') === 'admin'
 }
 
 // ─── GET ──────────────────────────────────────────────────────────────────────
@@ -21,7 +21,11 @@ export async function GET(req: NextRequest) {
   try {
     if (!isAdmin(req)) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-    const result = await haccpSuppliersService.listSuppliers()
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+    const svc = await haccpSuppliersServiceForCaller(userId)
+    const result = await svc.listSuppliers()
     return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/admin/suppliers]', err)
@@ -35,9 +39,14 @@ export async function POST(req: NextRequest) {
   try {
     if (!isAdmin(req)) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+    const svc = await haccpSuppliersServiceForCaller(userId)
+
     const body = await req.json()
 
-    const result = await haccpSuppliersService.createSupplier(body)
+    const result = await svc.createSupplier(body)
     if ('ok' in result && result.ok === false) {
       return NextResponse.json({ error: result.message }, { status: result.status })
     }
@@ -54,9 +63,14 @@ export async function PATCH(req: NextRequest) {
   try {
     if (!isAdmin(req)) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+    const svc = await haccpSuppliersServiceForCaller(userId)
+
     const body = await req.json()
 
-    const result = await haccpSuppliersService.updateSupplier(body)
+    const result = await svc.updateSupplier(body)
     if ('ok' in result && result.ok === false) {
       return NextResponse.json({ error: result.message }, { status: result.status })
     }

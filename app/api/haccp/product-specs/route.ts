@@ -15,16 +15,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpAssessmentsService } from '@/lib/wiring/haccp'
+import { haccpAssessmentsServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const result = await haccpAssessmentsService.getProductSpecs(new Date())
+    const svc = await haccpAssessmentsServiceForCaller(userId)
+    const result = await svc.getProductSpecs(new Date())
     return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/product-specs]', err)
@@ -34,21 +36,23 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (role !== 'admin' || !userId) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 })
     }
 
+    const svc = await haccpAssessmentsServiceForCaller(userId)
+
     const body = await req.json()
 
-    const valid = haccpAssessmentsService.validateProductSpec(body)
+    const valid = svc.validateProductSpec(body)
     if (!valid.ok) {
       return NextResponse.json({ error: valid.message }, { status: valid.status })
     }
 
-    const spec = await haccpAssessmentsService.insertProductSpec(
-      haccpAssessmentsService.buildProductSpecPersist({
+    const spec = await svc.insertProductSpec(
+      svc.buildProductSpecPersist({
         input: body,
         userId,
         now: new Date(),
@@ -63,11 +67,13 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (role !== 'admin' || !userId) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 })
     }
+
+    const svc = await haccpAssessmentsServiceForCaller(userId)
 
     const body = await req.json()
     const { id, allergens, ...rest } = body
@@ -83,7 +89,7 @@ export async function PATCH(req: NextRequest) {
       updates.allergens = Array.isArray(allergens) && allergens.length > 0 ? allergens : null
     }
 
-    const spec = await haccpAssessmentsService.updateProductSpec(id, updates)
+    const spec = await svc.updateProductSpec(id, updates)
     return NextResponse.json({ spec })
   } catch (err) {
     console.error('[PATCH /api/haccp/product-specs]', err)

@@ -5,16 +5,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpHandbookService }      from '@/lib/wiring/haccp'
+import { haccpHandbookServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const documents = await haccpHandbookService.getDocuments()
+    const svc = await haccpHandbookServiceForCaller(userId)
+
+    const documents = await svc.getDocuments()
     return NextResponse.json(documents)
   } catch (err) {
     console.error('[GET /api/haccp/documents] Unhandled:', err)

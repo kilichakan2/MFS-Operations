@@ -16,6 +16,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+// F-RLS-04h PR10b: intentionally stays on the service-role singleton — public
+// kiosk, no logged-in user, no `x-mfs-user-id` header exists for this route.
 import { haccpPeopleService } from '@/lib/wiring/haccp'
 
 // System user UUID for public visitor submissions — never logs in

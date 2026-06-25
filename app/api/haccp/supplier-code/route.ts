@@ -7,11 +7,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpSuppliersService }     from '@/lib/wiring/haccp'
+import { haccpSuppliersServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
-  const role = req.cookies.get('mfs_role')?.value
-  if (!role || !['warehouse', 'butcher', 'admin', 'driver'].includes(role)) {
+  const role   = req.headers.get('x-mfs-user-role')
+  const userId = req.headers.get('x-mfs-user-id')
+  if (!role || !userId || !['warehouse', 'butcher', 'admin', 'driver'].includes(role)) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  const result = await haccpSuppliersService.getLabelCode(name)
+  const svc = await haccpSuppliersServiceForCaller(userId)
+  const result = await svc.getLabelCode(name)
   return NextResponse.json(result)
 }

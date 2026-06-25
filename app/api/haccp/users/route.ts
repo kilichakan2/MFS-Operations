@@ -7,16 +7,19 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpLookupsService }       from '@/lib/wiring/haccp'
+import { haccpLookupsServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const result = await haccpLookupsService.getUsers()
+    const svc = await haccpLookupsServiceForCaller(userId)
+
+    const result = await svc.getUsers()
     return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/users]', err)

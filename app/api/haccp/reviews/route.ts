@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpReviewsService }       from '@/lib/wiring/haccp'
+import { haccpReviewsServiceForCaller } from '@/lib/wiring/haccp'
 
 function todayUK(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
@@ -47,16 +47,19 @@ function thisMonthRange(): { from: string; to: string } {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
+
+    const svc = await haccpReviewsServiceForCaller(userId)
 
     const monday  = thisWeekMonday()
     const sunday  = thisWeekSunday()
     const { from: mFrom, to: mTo } = thisMonthRange()
 
-    const result = await haccpReviewsService.getReviews({ monday, sunday, mFrom, mTo })
+    const result = await svc.getReviews({ monday, sunday, mFrom, mTo })
     return NextResponse.json(result)
 
   } catch (err) {
@@ -67,43 +70,45 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (!role || !userId || role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
+
+    const svc = await haccpReviewsServiceForCaller(userId)
 
     const body = await req.json()
     const { type } = body
 
     if (type === 'weekly') {
-      const valid = haccpReviewsService.validateWeekly(body)
+      const valid = svc.validateWeekly(body)
       if (!valid.ok) return NextResponse.json({ error: valid.message }, { status: valid.status })
 
-      const persist  = haccpReviewsService.buildWeeklyPersist({ input: body, userId, today: todayUK() })
-      const inserted = await haccpReviewsService.insertWeeklyReview(persist)
+      const persist  = svc.buildWeeklyPersist({ input: body, userId, today: todayUK() })
+      const inserted = await svc.insertWeeklyReview(persist)
 
       // Write CA rows for every problem item (best-effort — never throws)
-      const caRows = haccpReviewsService.buildWeeklyCorrectiveActions({
+      const caRows = svc.buildWeeklyCorrectiveActions({
         input: body, userId, reviewId: inserted.id, weekEnding: body.week_ending,
       })
-      if (caRows.length > 0) await haccpReviewsService.insertCorrectiveActions(caRows)
+      if (caRows.length > 0) await svc.insertCorrectiveActions(caRows)
 
       return NextResponse.json({ ok: true, problems: caRows.length })
     }
 
     if (type === 'monthly') {
-      const valid = haccpReviewsService.validateMonthly(body)
+      const valid = svc.validateMonthly(body)
       if (!valid.ok) return NextResponse.json({ error: valid.message }, { status: valid.status })
 
-      const persist  = haccpReviewsService.buildMonthlyPersist({ input: body, userId, today: todayUK() })
-      const inserted = await haccpReviewsService.insertMonthlyReview(persist)
+      const persist  = svc.buildMonthlyPersist({ input: body, userId, today: todayUK() })
+      const inserted = await svc.insertMonthlyReview(persist)
 
       // Write CA rows for problematic system review items (best-effort — never throws)
-      const caRows = haccpReviewsService.buildMonthlySystemCorrectiveActions({
+      const caRows = svc.buildMonthlySystemCorrectiveActions({
         input: body, userId, reviewId: inserted.id, monthYear: body.month_year,
       })
-      if (caRows.length > 0) await haccpReviewsService.insertCorrectiveActions(caRows)
+      if (caRows.length > 0) await svc.insertCorrectiveActions(caRows)
 
       return NextResponse.json({ ok: true, problems: caRows.length })
     }

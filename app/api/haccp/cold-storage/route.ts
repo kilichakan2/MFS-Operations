@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpDailyChecksService, submitHaccpDailyCheck } from '@/lib/wiring/haccp'
+import { haccpDailyChecksServiceForCaller, submitHaccpDailyCheckForCaller } from '@/lib/wiring/haccp'
 import { ConflictError } from '@/lib/errors'
 import type { CreateColdStorageReadingsInput } from '@/lib/domain'
 
@@ -22,17 +22,20 @@ function todayUK(): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const svc = await haccpDailyChecksServiceForCaller(userId)
 
     // Accept ?date= param for historical date viewing, default to today
     const requestedDate = req.nextUrl.searchParams.get('date')
     const today         = todayUK()
     const queryDate     = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : today
 
-    const { units, readings, date } = await haccpDailyChecksService.listColdStorage(queryDate)
+    const { units, readings, date } = await svc.listColdStorage(queryDate)
 
     return NextResponse.json({
       units,
@@ -47,11 +50,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const dc     = await haccpDailyChecksServiceForCaller(userId)
+    const submit = await submitHaccpDailyCheckForCaller(userId)
 
     const body  = await req.json()
     const input = body as CreateColdStorageReadingsInput
@@ -69,7 +75,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Derive unit set + thresholds from DB, not from client (A3 + A6).
-    const units = await haccpDailyChecksService.listActiveColdStorageUnits()
+    const units = await dc.listActiveColdStorageUnits()
     if (units.length === 0) {
       return NextResponse.json({ error: 'Could not load active units' }, { status: 500 })
     }
@@ -81,17 +87,17 @@ export async function POST(req: NextRequest) {
     const unitIds = new Set(units.map((u) => u.id))
     const allUnitsKnown = input.readings.every((r) => unitIds.has(r.unit_id))
     const hasDeviation = allUnitsKnown
-      ? haccpDailyChecksService.buildColdStorage({ input, userId, units }).hasDeviation
+      ? dc.buildColdStorage({ input, userId, units }).hasDeviation
       : false
 
-    const v = haccpDailyChecksService.validateColdStorage({ input, today, units, hasDeviation })
+    const v = dc.validateColdStorage({ input, today, units, hasDeviation })
     if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-    const built = haccpDailyChecksService.buildColdStorage({ input, userId, units })
+    const built = dc.buildColdStorage({ input, userId, units })
 
     let inserted
     try {
-      inserted = await haccpDailyChecksService.insertColdStorageReadings(built.rows)
+      inserted = await dc.insertColdStorageReadings(built.rows)
     } catch (e) {
       if (e instanceof ConflictError) {
         return NextResponse.json({ error: e.message }, { status: e.httpStatus })
@@ -99,8 +105,8 @@ export async function POST(req: NextRequest) {
       throw e
     }
 
-    const caRows = haccpDailyChecksService.buildColdStorageCorrectiveActions({ input, userId, inserted, units })
-    const { ca_write_failed } = await submitHaccpDailyCheck.fileCorrectiveActions(caRows, 'cold-storage')
+    const caRows = dc.buildColdStorageCorrectiveActions({ input, userId, inserted, units })
+    const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'cold-storage')
 
     return NextResponse.json({
       ok:              true,

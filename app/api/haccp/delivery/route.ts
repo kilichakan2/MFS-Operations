@@ -20,7 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpDailyChecksService, submitHaccpDailyCheck } from '@/lib/wiring/haccp'
+import { haccpDailyChecksServiceForCaller, submitHaccpDailyCheckForCaller } from '@/lib/wiring/haccp'
 import { ConflictError } from '@/lib/errors'
 import type { CreateDeliveryInput, DeliveryRange } from '@/lib/domain'
 
@@ -39,14 +39,17 @@ function nowTimeUK(): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
+    const svc = await haccpDailyChecksServiceForCaller(userId)
+
     const range = (req.nextUrl.searchParams.get('range') ?? 'today') as DeliveryRange
 
-    const result = await haccpDailyChecksService.listDeliveries(range)
+    const result = await svc.listDeliveries(range)
 
     return NextResponse.json(result)
 
@@ -60,11 +63,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const dc     = await haccpDailyChecksServiceForCaller(userId)
+    const submit = await submitHaccpDailyCheckForCaller(userId)
 
     const body  = await req.json()
     const input = body as CreateDeliveryInput
@@ -72,20 +78,20 @@ export async function POST(req: NextRequest) {
 
     // Supplier resolution (C2): look up the active supplier when an id is given.
     const supplier = input.supplier_id
-      ? await haccpDailyChecksService.findSupplierForDelivery(input.supplier_id)
+      ? await dc.findSupplierForDelivery(input.supplier_id)
       : null
 
-    const tempStatus = haccpDailyChecksService.deliveryTempStatus(input.temperature_c, input.product_category)
+    const tempStatus = dc.deliveryTempStatus(input.temperature_c, input.product_category)
 
-    const v = haccpDailyChecksService.validateDelivery({ input, supplier, tempStatus })
+    const v = dc.validateDelivery({ input, supplier, tempStatus })
     if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
     const resolvedSupplierId   = supplier ? supplier.id : null
     const resolvedSupplierName = supplier ? supplier.name : input.supplier_name!.trim()
 
-    const deliveryNumber = (await haccpDailyChecksService.countDeliveriesOn(today)) + 1
+    const deliveryNumber = (await dc.countDeliveriesOn(today)) + 1
 
-    const built = haccpDailyChecksService.buildDelivery({
+    const built = dc.buildDelivery({
       input,
       userId,
       today,
@@ -97,7 +103,7 @@ export async function POST(req: NextRequest) {
 
     let id: string
     try {
-      ;({ id } = await haccpDailyChecksService.insertDelivery(built.persist))
+      ;({ id } = await dc.insertDelivery(built.persist))
     } catch (e) {
       if (e instanceof ConflictError) {
         return NextResponse.json({ error: e.message }, { status: e.httpStatus })
@@ -107,13 +113,13 @@ export async function POST(req: NextRequest) {
 
     // W2: the allergen-only gate lives INSIDE buildDeliveryCorrectiveActions —
     // this route adds NO allergen-CA logic of its own.
-    const caRows = haccpDailyChecksService.buildDeliveryCorrectiveActions({
+    const caRows = dc.buildDeliveryCorrectiveActions({
       input,
       userId,
       sourceId: id,
       tempStatus: built.tempStatus,
     })
-    const { ca_write_failed } = await submitHaccpDailyCheck.fileCorrectiveActions(caRows, 'delivery')
+    const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'delivery')
 
     return NextResponse.json({
       ok:                         true,

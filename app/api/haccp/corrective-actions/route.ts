@@ -12,16 +12,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpCorrectiveActionsService } from '@/lib/wiring/haccp'
+import { haccpCorrectiveActionsServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (role !== 'admin') {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId || role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
 
-    const { unresolved, resolved } = await haccpCorrectiveActionsService.listVerificationQueue()
+    const svc = await haccpCorrectiveActionsServiceForCaller(userId)
+    const { unresolved, resolved } = await svc.listVerificationQueue()
 
     return NextResponse.json({
       unresolved,

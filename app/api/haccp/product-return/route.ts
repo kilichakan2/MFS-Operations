@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpDailyChecksService, submitHaccpDailyCheck } from '@/lib/wiring/haccp'
+import { haccpDailyChecksServiceForCaller, submitHaccpDailyCheckForCaller } from '@/lib/wiring/haccp'
 import type { CreateReturnInput } from '@/lib/domain'
 
 function todayUK(): string {
@@ -29,13 +29,16 @@ function nowTimeUK(): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
+    const svc = await haccpDailyChecksServiceForCaller(userId)
+
     const today = todayUK()
-    const returns = await haccpDailyChecksService.listReturns()
+    const returns = await svc.listReturns()
 
     return NextResponse.json({ date: today, returns })
 
@@ -47,25 +50,28 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
+    const dc     = await haccpDailyChecksServiceForCaller(userId)
+    const submit = await submitHaccpDailyCheckForCaller(userId)
+
     const body = await req.json()
     const input = body as CreateReturnInput
 
-    const v = haccpDailyChecksService.validateReturn(input)
+    const v = dc.validateReturn(input)
     if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-    const { id } = await haccpDailyChecksService.insertReturn(
-      haccpDailyChecksService.buildReturn({ input, userId, today: todayUK(), nowTime: nowTimeUK() }),
+    const { id } = await dc.insertReturn(
+      dc.buildReturn({ input, userId, today: todayUK(), nowTime: nowTimeUK() }),
     )
 
     // SOP 12: a CA row on EVERY return (audit trail), not just deviations.
-    const caRows = haccpDailyChecksService.buildReturnCorrectiveActions({ input, userId, sourceId: id })
-    const { ca_write_failed } = await submitHaccpDailyCheck.fileCorrectiveActions(caRows, 'product-return')
+    const caRows = dc.buildReturnCorrectiveActions({ input, userId, sourceId: id })
+    const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'product-return')
 
     return NextResponse.json({ ok: true, ca_write_failed })
 

@@ -14,7 +14,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpDailyChecksService, submitHaccpDailyCheck } from '@/lib/wiring/haccp'
+import { haccpDailyChecksServiceForCaller, submitHaccpDailyCheckForCaller } from '@/lib/wiring/haccp'
 import type {
   CreateCalibrationCertifiedInput,
   CreateCalibrationManualInput,
@@ -41,14 +41,17 @@ function thisMonthUK(): { from: string; to: string } {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
+    const svc = await haccpDailyChecksServiceForCaller(userId)
+
     const { from, to } = thisMonthUK()
 
-    const records = await haccpDailyChecksService.listCalibration()
+    const records = await svc.listCalibration()
 
     const thisMonthRec  = records.filter((r) => r.date >= from && r.date <= to)
     const doneThisMonth = thisMonthRec.length > 0
@@ -67,35 +70,38 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const dc     = await haccpDailyChecksServiceForCaller(userId)
+    const submit = await submitHaccpDailyCheckForCaller(userId)
 
     const body = await req.json()
     const { calibration_mode } = body
 
     if (calibration_mode === 'certified_probe') {
       const input = body as CreateCalibrationCertifiedInput
-      const v = haccpDailyChecksService.validateCalibrationCertified(input)
+      const v = dc.validateCalibrationCertified(input)
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-      await haccpDailyChecksService.insertCalibrationCertified(
-        haccpDailyChecksService.buildCalibrationCertified({ input, userId, today: todayUK(), nowTime: nowTimeUK() }),
+      await dc.insertCalibrationCertified(
+        dc.buildCalibrationCertified({ input, userId, today: todayUK(), nowTime: nowTimeUK() }),
       )
       return NextResponse.json({ ok: true })
     }
 
     const input = body as CreateCalibrationManualInput
-    const v = haccpDailyChecksService.validateCalibrationManual(input)
+    const v = dc.validateCalibrationManual(input)
     if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-    const built = haccpDailyChecksService.buildCalibrationManual({ input, userId, today: todayUK(), nowTime: nowTimeUK() })
-    const { id } = await haccpDailyChecksService.insertCalibrationManual(built)
+    const built = dc.buildCalibrationManual({ input, userId, today: todayUK(), nowTime: nowTimeUK() })
+    const { id } = await dc.insertCalibrationManual(built)
 
-    const caRows = haccpDailyChecksService.buildCalibrationCorrectiveActions({ input, userId, sourceId: id })
-    const { ca_write_failed } = await submitHaccpDailyCheck.fileCorrectiveActions(caRows, 'calibration')
+    const caRows = dc.buildCalibrationCorrectiveActions({ input, userId, sourceId: id })
+    const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'calibration')
 
     return NextResponse.json({
       ok:              true,

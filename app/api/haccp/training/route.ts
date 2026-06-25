@@ -14,16 +14,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpTrainingService } from '@/lib/wiring/haccp'
+import { haccpTrainingServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (role !== 'admin') {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId || role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
 
-    const result = await haccpTrainingService.getTraining()
+    const svc = await haccpTrainingServiceForCaller(userId)
+    const result = await svc.getTraining()
     return NextResponse.json(result)
 
   } catch (err) {
@@ -34,23 +36,25 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
 
     if (role !== 'admin' || !userId) {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
+
+    const svc = await haccpTrainingServiceForCaller(userId)
 
     const body = await req.json()
     const { training_type } = body
 
     // ── Butchery & Process Room / Warehouse Operative ────────────────────────
     if (training_type === 'butchery_process_room' || training_type === 'warehouse_operative') {
-      const v = haccpTrainingService.validateStaffTraining(body)
+      const v = svc.validateStaffTraining(body)
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-      await haccpTrainingService.insertStaffTraining(
-        haccpTrainingService.buildStaffTrainingPersist({ input: body, userId, now: new Date() }),
+      await svc.insertStaffTraining(
+        svc.buildStaffTrainingPersist({ input: body, userId, now: new Date() }),
       )
 
       return NextResponse.json({ ok: true })
@@ -60,11 +64,11 @@ export async function POST(req: NextRequest) {
     // Uses haccp_allergen_training (different table + different column names)
     // certification_date, training_completed — NOT completion_date, training_type
     if (training_type === 'allergen_awareness') {
-      const v = haccpTrainingService.validateAllergenTraining(body)
+      const v = svc.validateAllergenTraining(body)
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-      await haccpTrainingService.insertAllergenTraining(
-        haccpTrainingService.buildAllergenTrainingPersist({ input: body, userId }),
+      await svc.insertAllergenTraining(
+        svc.buildAllergenTrainingPersist({ input: body, userId }),
       )
 
       return NextResponse.json({ ok: true })

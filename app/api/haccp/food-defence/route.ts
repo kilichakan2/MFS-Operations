@@ -10,16 +10,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpAssessmentsService } from '@/lib/wiring/haccp'
+import { haccpAssessmentsServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const result = await haccpAssessmentsService.getFoodDefence(new Date())
+    const svc = await haccpAssessmentsServiceForCaller(userId)
+    const result = await svc.getFoodDefence(new Date())
     return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/food-defence]', err)
@@ -29,21 +31,23 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (role !== 'admin' || !userId) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 })
     }
 
+    const svc = await haccpAssessmentsServiceForCaller(userId)
+
     const body = await req.json()
 
-    const valid = haccpAssessmentsService.validateFoodDefence(body)
+    const valid = svc.validateFoodDefence(body)
     if (!valid.ok) {
       return NextResponse.json({ error: valid.message }, { status: valid.status })
     }
 
-    const plan = await haccpAssessmentsService.insertFoodDefencePlan(
-      haccpAssessmentsService.buildFoodDefencePersist({ input: body, userId }),
+    const plan = await svc.insertFoodDefencePlan(
+      svc.buildFoodDefencePersist({ input: body, userId }),
     )
     return NextResponse.json({ plan }, { status: 201 })
   } catch (err) {
