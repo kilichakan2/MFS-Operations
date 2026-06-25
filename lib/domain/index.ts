@@ -290,3 +290,42 @@ export type {
   AuditSectionResponse,
   AuditExportRawData,
 } from "./HaccpReporting";
+// F-19 PR9a — Cluster F "docs & lookups" hexagons (handbook + suppliers +
+// lookups). Row types mirror each route's verbatim `.select` columns; `…Response`
+// types pin the EXACT route response objects (incl. the BARE-ARRAY documents
+// shape — there is deliberately NO DocumentsResponse wrapper, R-F-B1). The
+// `Haccp…Option` selector names avoid the existing `HaccpUserRef` in this barrel.
+export type {
+  SopContentEntry,
+  HandbookResponse,
+  SearchResult,
+  SearchResponse,
+  HaccpDocument,
+} from "./HaccpHandbook";
+export type {
+  LabelCodeResponse,
+  SupplierContact,
+  RecallConfigUpdater,
+  RecallConfig,
+  RecallGetResponse,
+  SaveRecallConfigInput,
+  SaveRecallConfigPersist,
+  RecallSaveResponse,
+  UpdateSupplierContactsInput,
+  UpdateSupplierContactsPersist,
+  SupplierContactReply,
+  RecallContactUpdateResponse,
+  Supplier,
+  SuppliersListResponse,
+  CreateSupplierInput,
+  CreateSupplierPersist,
+  UpdateSupplierInput,
+  UpdateSupplierFields,
+  SupplierWriteResponse,
+} from "./HaccpSuppliers";
+export type {
+  HaccpUserOption,
+  HaccpUsersResponse,
+  HaccpCustomerOption,
+  HaccpCustomersResponse,
+} from "./HaccpLookups";
