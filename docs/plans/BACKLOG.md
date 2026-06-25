@@ -381,8 +381,10 @@ the trail matters.
   red, not a regression. Proven environmental: a `reset_branch` + single re-run came back
   **67/67 @critical, 0 flaky, 0 retries**.
 - **Why it matters:** this has now forced a manual Supabase preview-branch **reset before the
-  clean sweep on PR3, PR4, PR6 AND PR8**. It cries wolf on every HACCP PR's preview smoke and
-  costs a ~2.5-min branch re-provision each time. It will keep recurring for Clusters F & G.
+  clean sweep on PR3, PR4, PR6, PR8 AND PR9b** (same 4 specs `13`/`16`/`25` + `04`; reset →
+  clean 73/73, 0 flaky on PR9b — the predicted recurrence landed). It cries wolf on every
+  HACCP PR's preview smoke and costs a ~2.5-min branch re-provision each time. One HACCP PR
+  left (Cluster G / F-RLS-04h) where it will bite again.
 - **Fix shape (investigate, then pick — NOT retries):** (a) make each period-bound spec
   self-isolating — assert/act on a UNIQUE per-run period or fixture rather than "the current
   week", OR upsert-then-act so a second run is a no-op-safe overwrite; (b) a teardown that

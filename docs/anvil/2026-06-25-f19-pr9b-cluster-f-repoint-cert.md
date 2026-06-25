@@ -87,18 +87,20 @@ PITR confirmed: N/A — no migration, no destructive operation, nothing written 
 
 ## Manual smoke at merge
 
-**Still advised — one narrow gap named:** the depth specs + clean breadth across all HACCP
-screens mean a full hand-click is NOT needed for correctness. The single unproven slice is the
-**populated write-row path on the recall/supplier forms** (the preview branch had 0 seeded
-suppliers and no recall config, so inline-edit-of-a-real-row was exercised structurally, not
-against live rows). If desired, a 30-second post-merge check on prod (which DOES have real
-suppliers + recall config) opening one supplier's Edit and Cancelling closes that gap. No write
-is required to close it.
+**✅ CLOSED post-merge 2026-06-25 — the one named gap is now proven against live data.** Hakan
+manually edited a real prod supplier ("Adams Food Service") through the re-pointed
+`admin/suppliers` PATCH route and set `address = "TEST"`; a read-only prod DB query confirmed the
+write landed (`haccp_suppliers` id `8c4664ad-7c2b-415c-b626-d0dd074b5638`, `address: "TEST"`). The
+previously-unproven **populated write-row path on the supplier form** is therefore now verified
+end-to-end against the production database — not just structurally. **No outstanding caveat.**
 
-🗣 In plain English: everything that matters was proven on the real preview, with one honest
-caveat — the preview's database was empty of suppliers, so "edit an existing supplier and cancel"
-was tested as far as an empty list allows. Production has real suppliers, so one quick open-and-cancel
-there (no saving) fully closes it.
+(For the record, the gap as it stood at Lock: the preview branch had 0 seeded suppliers and no
+recall config, so inline-edit-of-a-real-row was exercised structurally, not against live rows. A
+real prod edit has now closed it.)
+
+🗣 In plain English: the one honest gap — the preview database had no suppliers, so "edit an existing
+supplier" could only be tested on an empty list — is now closed for real. Hakan edited a live supplier
+on production, the change saved correctly, and we confirmed it in the database. Nothing left open.
 
 ## Verdict
 
