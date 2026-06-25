@@ -65,3 +65,7 @@ export type {
   SheetSpec,
   SheetCell,
 } from "./SpreadsheetExporter";
+// F-19 PR9a — Cluster F "docs & lookups" ports (handbook + suppliers + lookups).
+export type { HaccpHandbookRepository } from "./HaccpHandbookRepository";
+export type { HaccpSuppliersRepository } from "./HaccpSuppliersRepository";
+export type { HaccpLookupsRepository } from "./HaccpLookupsRepository";
