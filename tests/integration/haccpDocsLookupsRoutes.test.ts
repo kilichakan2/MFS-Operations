@@ -99,33 +99,37 @@ describe("/api/haccp/* docs & lookups — F-19 PR9b byte-identical doorman re-po
 
     // SOP content fixture (handbook + search). section_key + source_doc carry the
     // fixture markers so handbook?section= and ?doc= both resolve our row.
-    await supa
-      .from("haccp_sop_content")
-      .upsert(
-        {
-          sop_ref: FIX_SOP_REF,
-          title: "Cluster F fixture SOP about steriliser cleaning",
-          content_md: "Steriliser must reach 82C. Cluster F fixture content.",
-          version: "V4.1",
-          active: true,
-          section_key: FIX_SECTION,
-          source_doc: FIX_DOC,
-        },
-        { onConflict: "sop_ref" },
-      );
+    // No unique constraint on sop_ref, so delete-then-insert for idempotency.
+    await supa.from("haccp_sop_content").delete().eq("sop_ref", FIX_SOP_REF);
+    {
+      const { error } = await supa.from("haccp_sop_content").insert({
+        sop_ref: FIX_SOP_REF,
+        title: "Cluster F fixture SOP about steriliser cleaning",
+        content_md: "Steriliser must reach 82C. Cluster F fixture content.",
+        version: "V4.1",
+        active: true,
+        section_key: FIX_SECTION,
+        source_doc: FIX_DOC,
+      });
+      if (error) throw new Error(`seed sop_content: ${error.message}`);
+    }
 
-    // Document register fixture (documents bare-array route).
-    await supa.from("haccp_documents").upsert(
-      {
+    // Document register fixture (documents bare-array route). category is a
+    // CHECK-enum and updated_at/review_due are NOT NULL — supply valid values.
+    await supa.from("haccp_documents").delete().eq("doc_ref", FIX_DOCUMENT_REF);
+    {
+      const { error } = await supa.from("haccp_documents").insert({
         doc_ref: FIX_DOCUMENT_REF,
         title: "Cluster F fixture document",
         version: "1.0",
-        category: "ZZ-fixture",
+        category: "salsa",
         description: "fixture",
         purpose: "fixture",
-      },
-      { onConflict: "doc_ref" },
-    );
+        updated_at: "2026-01-01",
+        review_due: "2027-01-01",
+      });
+      if (error) throw new Error(`seed document: ${error.message}`);
+    }
   }, 30_000);
 
   afterAll(async () => {
