@@ -35,6 +35,7 @@ vi.mock("@/lib/wiring/geocoder", () => ({
 
 import { GET } from "@/app/api/admin/customers/route";
 import { PATCH } from "@/app/api/admin/customers/[id]/route";
+import { GeocoderError } from "@/lib/ports";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -201,6 +202,49 @@ describe("PATCH /api/admin/customers/[id] — guard + branches + shape", () => {
         is_approximate_location: false,
       }),
     );
+  });
+
+  it("postcode branch (geocoder OUTAGE — GeocoderError): saves postcode with null coords, 200 + _warning", async () => {
+    // A postcodes.io transport failure must NOT lose the admin's edit: the route
+    // treats a thrown GeocoderError the same as a clean not-found (coords = null),
+    // so the save-with-null-coords + 200 + _warning path runs unchanged.
+    geocode.mockRejectedValueOnce(new GeocoderError("postcodes.io request failed"));
+    setPostcodeAndCoords.mockResolvedValueOnce({
+      id: "c1",
+      name: "Alpha",
+      postcode: "S3 8DG",
+      lat: null,
+      lng: null,
+      active: true,
+      created_at: "2026-01-01T00:00:00.000Z",
+    });
+    const res = await PATCH(patchReq(ADMIN, { postcode: "S3 8DG" }), { params });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body._geocoded).toBe(false);
+    expect(body._approximate).toBe(false);
+    expect(body._warning).toBe(
+      "Postcode saved but could not be geocoded — will retry on next sync",
+    );
+    // the postcode IS saved, with null coords + null geocoded_at
+    expect(setPostcodeAndCoords).toHaveBeenCalledWith(
+      "c1",
+      expect.objectContaining({
+        postcode: "S3 8DG",
+        lat: null,
+        lng: null,
+        geocoded_at: null,
+        is_approximate_location: false,
+      }),
+    );
+  });
+
+  it("postcode branch: a NON-GeocoderError keeps bubbling to the generic 500 (real bugs not swallowed)", async () => {
+    geocode.mockRejectedValueOnce(new TypeError("boom — unexpected bug"));
+    const res = await PATCH(patchReq(ADMIN, { postcode: "S3 8DG" }), { params });
+    expect(res.status).toBe(500);
+    // the postcode is NOT saved when an unexpected error escapes
+    expect(setPostcodeAndCoords).not.toHaveBeenCalled();
   });
 
   it("postcode branch: 400 when postcode is empty", async () => {

@@ -21,6 +21,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { customersService }          from '@/lib/wiring/customers'
 import { geocoder }                  from '@/lib/wiring/geocoder'
+import { GeocoderError }             from '@/lib/ports'
 import type { CustomerAdminView }    from '@/lib/domain'
 
 const UK_POSTCODE_RE = /^[A-Z]{1,2}[0-9][0-9A-Z]?\s*[0-9][A-Z]{2}$/i
@@ -76,7 +77,17 @@ export async function PATCH(
       }
 
       const now    = new Date().toISOString()
-      const coords = await geocoder.geocode(postcode)
+      // A postcodes.io transport/vendor outage must NOT lose the admin's edit:
+      // treat a GeocoderError the same as a clean not-found (coords = null) so the
+      // save-with-null-coords + 200 + _warning path below runs unchanged. Any other
+      // unexpected error keeps bubbling to the generic 500 (don't swallow real bugs).
+      let coords: Awaited<ReturnType<typeof geocoder.geocode>>
+      try {
+        coords = await geocoder.geocode(postcode)
+      } catch (err) {
+        if (!(err instanceof GeocoderError)) throw err
+        coords = null
+      }
 
       const updated = await customersService.setPostcodeAndCoords(id, {
         postcode,
