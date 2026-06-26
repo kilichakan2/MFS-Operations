@@ -4,38 +4,38 @@
  * PATCH — update a customer from the admin panel.
  *   { active: boolean }              — toggle active status
  *   { postcode: string }             — update postcode + geocode inline
+ *
+ * F-20 PR1: re-pointed onto customersService (writes) + geocoder (postcode
+ * lookup). No raw supabaseService query and no inline postcodes.io fetch in app
+ * code any more — the DB write goes through the CustomersRepository port and the
+ * geocode goes through the Geocoder port. The x-mfs-user-role admin guard is
+ * PRESERVED byte-identical; the postcode regex/validation branch, the
+ * fire-and-forget road-time trigger, and the response shape
+ * ({...row, _geocoded, _approximate, _warning}) are all preserved byte-identical.
+ *
+ * The service returns the richer CustomerAdminView; this route maps it back to
+ * the exact 7-field presentation row before spreading the underscore flags onto
+ * it, so the response keys are byte-identical to today.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { customersService }          from '@/lib/wiring/customers'
+import { geocoder }                  from '@/lib/wiring/geocoder'
+import type { CustomerAdminView }    from '@/lib/domain'
 
 const UK_POSTCODE_RE = /^[A-Z]{1,2}[0-9][0-9A-Z]?\s*[0-9][A-Z]{2}$/i
 
-function extractOutcode(postcode: string): string {
-  return postcode.trim().toUpperCase().split(' ')[0]
-}
-
-async function geocodePostcode(postcode: string): Promise<{ lat: number; lng: number; approximate: boolean } | null> {
-  try {
-    const res  = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`)
-    const data = await res.json() as { status: number; result?: { latitude: number; longitude: number } }
-    if (data.status === 200 && data.result) {
-      return { lat: data.result.latitude, lng: data.result.longitude, approximate: false }
-    }
-  } catch { /* fall through */ }
-
-  try {
-    const outcode = extractOutcode(postcode)
-    const res     = await fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(outcode)}`)
-    const data    = await res.json() as { status: number; result?: { latitude: number; longitude: number } }
-    if (data.status === 200 && data.result) {
-      return { lat: data.result.latitude, lng: data.result.longitude, approximate: true }
-    }
-  } catch { /* both failed */ }
-
-  return null
+/** Project the admin view back to today's exact 7-field customer-row shape. */
+function toRow(c: CustomerAdminView) {
+  return {
+    id:         c.id,
+    name:       c.name,
+    postcode:   c.postcode,
+    lat:        c.lat,
+    lng:        c.lng,
+    active:     c.active,
+    created_at: c.created_at,
+  }
 }
 
 export async function PATCH(
@@ -54,15 +54,11 @@ export async function PATCH(
 
     // ── Active toggle ────────────────────────────────────────────────────────
     if (body.active !== undefined) {
-      const { data, error } = await supabase
-        .from('customers')
-        .update({ active: body.active })
-        .eq('id', id)
-        .select('id, name, postcode, lat, lng, active, created_at')
-        .single()
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-      return NextResponse.json(data)
+      const updated = await customersService.setActive(id, body.active)
+      if (updated === null) {
+        return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+      }
+      return NextResponse.json(toRow(updated))
     }
 
     // ── Postcode update ──────────────────────────────────────────────────────
@@ -80,22 +76,20 @@ export async function PATCH(
       }
 
       const now    = new Date().toISOString()
-      const coords = await geocodePostcode(postcode)
+      const coords = await geocoder.geocode(postcode)
 
-      const { data, error } = await supabase
-        .from('customers')
-        .update({
-          postcode,
-          lat:                    coords?.lat    ?? null,
-          lng:                    coords?.lng    ?? null,
-          geocoded_at:            coords ? now   : null,
-          is_approximate_location: coords?.approximate ?? false,
-        })
-        .eq('id', id)
-        .select('id, name, postcode, lat, lng, active, created_at')
-        .single()
+      const updated = await customersService.setPostcodeAndCoords(id, {
+        postcode,
+        lat:                     coords?.lat    ?? null,
+        lng:                     coords?.lng    ?? null,
+        geocoded_at:             coords ? now   : null,
+        is_approximate_location: coords?.approximate ?? false,
+      })
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (updated === null) {
+        return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
+      }
+      const data = toRow(updated)
 
       console.log(
         `[admin/customers/:id] ${data.name} postcode → ${postcode}`,
