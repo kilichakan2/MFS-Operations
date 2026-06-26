@@ -113,7 +113,12 @@ export function toTodayVisitWireDto(v: Visit): TodayVisitDto {
     created_at: v.createdAt,
     visit_type: v.visitType,
     outcome: v.outcome,
-    pipeline_status: v.pipelineStatus,
+    // `Visit.pipelineStatus` is `string | null` since F-20 PR2 (the prospects
+    // read keeps raw null). This today path always comes through `toVisit`'s
+    // `?? 'Logged'`, so it is never actually null here — the `?? 'Logged'`
+    // keeps the field a non-null string for the DTO type and preserves today's
+    // exact wire value byte-for-byte.
+    pipeline_status: v.pipelineStatus ?? "Logged",
     commitment_made: v.commitmentMade,
     commitment_detail: v.commitmentDetail,
     notes: v.notes,
@@ -177,7 +182,11 @@ export function toVisitDetailWireDto(d: VisitDetail): VisitDetailDto {
     prospectName: d.prospectName,
     prospectPostcode: d.prospectPostcode,
     loggedBy: d.loggedByName ?? "Unknown",
-    pipelineStatus: d.pipelineStatus,
+    // `Visit.pipelineStatus` is `string | null` since F-20 PR2; the detail read
+    // comes through `toVisit`'s `?? 'Logged'`, so it is never null here. The
+    // `?? 'Logged'` keeps the DTO field a non-null string and preserves today's
+    // exact wire value.
+    pipelineStatus: d.pipelineStatus ?? "Logged",
   };
 }
 

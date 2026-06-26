@@ -93,4 +93,35 @@ export interface VisitsRepository {
   /** All visits in a date range with optional rep/type/outcome filters,
    *  newest first, limited to 200. → GET /api/admin/visits. */
   listAllWithFilters(filter: AdminVisitFilter): Promise<readonly Visit[]>;
+
+  // ── F-20 PR2 — admin insights reads ──────────────────────────────────────
+
+  /** Prospects-this-week list: visits with a non-null prospect_name in
+   *  [from,to], newest first, rep join resolved. → GET /api/admin/prospects.
+   *  Selects: id, created_at, prospect_name, prospect_postcode, outcome,
+   *  visit_type, pipeline_status, users!visits_user_id_fkey(name).
+   *
+   *  RISK R1: this read preserves the RAW null `pipeline_status` (it does NOT
+   *  apply `toVisit`'s `?? 'Logged'` default), so the route's
+   *  `pipelineStatus ? … : null` reproduces today's `stage` exactly. */
+  listProspects(window: { from: string; to: string }): Promise<readonly Visit[]>;
+
+  /** At-risk list: visits with outcome IN (at_risk, lost) in [from,to], newest
+   *  first, customer + rep joins resolved. → GET /api/admin/at-risk.
+   *  Selects: id, created_at, outcome, customer_id, prospect_name, user_id,
+   *  customers(name), users!visits_user_id_fkey(name). */
+  listAtRisk(window: { from: string; to: string }): Promise<readonly Visit[]>;
+
+  /** Unreviewed-commitments list: visits with commitment_made=true and
+   *  created_at < to (optional >= from), OLDEST first, joins resolved.
+   *  → GET /api/admin/commitments.
+   *  Selects: id, created_at, commitment_detail, customer_id, prospect_name,
+   *  user_id, customers(name), users!visits_user_id_fkey(name).
+   *
+   *  Window contract (byte-identity critical): `lt('created_at', to)` (NOT lte)
+   *  and `gte('created_at', from)` ONLY when `from` is non-null. ASC order. */
+  listCommitments(window: {
+    from: string | null;
+    to: string;
+  }): Promise<readonly Visit[]>;
 }
