@@ -1,0 +1,25 @@
+-- docs/anvil/2026-06-26-f20-pr2-products-insights-rollback.sql
+--
+-- F-20 PR2 — Products + Insights hexagonal re-point.
+--
+-- ───────────────────────────────────────────────────────────────────────────
+-- THERE IS NO DATABASE ROLLBACK FOR THIS PR.
+-- ───────────────────────────────────────────────────────────────────────────
+--
+-- This PR contains NO migration, NO schema change, NO RLS/policy change. It is a
+-- pure CODE re-point: five admin API routes were moved off raw `supabaseService`
+-- queries onto the owned ProductsService / VisitsService over their ports
+-- (ProductsRepository / VisitsRepository). The DB is untouched.
+--
+-- ROLLBACK = a CODE revert only (Vercel handles it; no data recovery, no PITR):
+--
+--   git revert <merge-commit-sha>        # or roll the Vercel deployment back
+--
+-- The five reverted routes return to issuing their raw supabaseService queries.
+-- The only behaviour that changes back on revert is the ONE sanctioned change:
+-- PATCH /api/admin/products/<missing-id> reverts from 404 { error:'Product not
+-- found' } to today's 500 (the pre-PR `.single()`-on-no-match PostgREST error).
+-- No data is affected by a revert in either direction.
+--
+-- (No SQL is run by this file — it is intentionally inert, kept for the audit
+-- trail so the cert's "rollback script written" box is honestly ticked.)

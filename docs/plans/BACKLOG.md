@@ -589,6 +589,16 @@ the trail matters.
   - **⚠️ Residual → F-RLS-04a (NOT solved here):** the Supabase **Management API does NOT return `SUPABASE_JWT_SECRET`** for a branch (asymmetric-key migration), so F-RLS-04a's preview-JWT need must be sourced another way (mechanism undecided). The 3-key path + loud warning is the defined fallback.
   - **🔵 follow-up:** confirm the `closed`-event cleanup fully deletes the branch-scoped Preview vars (run #41 showed `created:0, updated:3` → the #39-close cleanup left vars that #41 overwrote; benign, idempotent).
 
+### F-INFRA-06 — `test:e2e:preview` fails closed on missing bypass secret even though protection is OFF
+
+- **Surfaced:** 2026-06-26 (F-20 PR2 Gate-4 ship)
+- **What:** `npm run test:e2e:preview -- <preview-url>` (`scripts/e2e-preview.mjs`) aborts immediately with `bypass secret missing — set VERCEL_AUTOMATION_BYPASS_SECRET in .env.e2e.local; the smoke fails closed without it` and **exits 0** (silent skip — no `@critical` spec runs). But Deployment Protection has been OFF since F-INFRA-02 (see [[F-INFRA-04]]), so the preview is publicly URL-reachable with no secret needed — the `--unprotected` mode the runbook documents (`docs/runbooks/preview-smoke.md` "Two modes") is NOT wired into the npm script, so the Gate-4 scripted smoke cannot run locally until either the secret is set (F-INFRA-04) or `--unprotected` is plumbed through.
+- **Two distinct bugs:** (1) the script doesn't honour the `--unprotected` path when protection is off; (2) it exits **0** on the fail-closed branch — a false green that looks like a pass in CI/automation (should exit non-zero, or run unprotected).
+- **Stopgap used on F-20 PR2:** conductor substituted a direct curl reachability+guard smoke on the public preview URL (`/login` 200, the 5 changed routes 307 = healthy auth redirect, no 5xx); ANVIL had already proven the authenticated 200 paths + the 404 + byte-identical shapes against a real local DB (integration 14/14). Acceptable for a backend-only no-UI re-point; NOT a substitute for the full `@critical` browser suite on UI/RLS PRs.
+- **Fix shape:** plumb `--unprotected` into `test:e2e:preview` (skip the bypass-secret requirement when protection is off), OR set `VERCEL_AUTOMATION_BYPASS_SECRET` per F-INFRA-04; and make the fail-closed branch exit non-zero so it can never read as a pass. Interacts with [[F-INFRA-03]] (CI smoke) and [[F-INFRA-04]] (re-enable protection + bypass).
+- **Owner unit:** F-INFRA-06 (unscheduled — bites every FORGE Gate-4 preview smoke until fixed)
+- **Status:** open
+
 ---
 
 ## RLS track follow-ups (F-RLS-)
