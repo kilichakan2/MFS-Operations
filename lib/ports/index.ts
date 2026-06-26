@@ -15,6 +15,14 @@ export type {
 export type { CustomersRepository } from "./CustomersRepository";
 export type { AuditLogRepository } from "./AuditLogRepository";
 export type { InsertOneResult } from "./InsertOneResult";
+// F-20 PR3 — re-export the two Map View presentation types through the ports
+// barrel. They physically live in lib/services/mapScene.ts (the route's locked
+// re-export line is preserved); the ports already type-import them at the
+// boundary. Re-exporting here lets lib/services/MapDataService.ts depend on the
+// PORT for these types instead of importing another service file directly (the
+// F-TD-05 services-fence forbids a service→service import; "depend on the other
+// domain's PORT" is exactly what the lint rule instructs). Type-only, no runtime.
+export type { MapCustomer, MapVisit } from "@/lib/services/mapScene";
 export type { Geocoder } from "./Geocoder";
 // GeocoderError is a runtime value (a class), not a type — value export.
 export { GeocoderError } from "./Geocoder";

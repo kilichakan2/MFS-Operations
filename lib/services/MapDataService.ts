@@ -20,8 +20,16 @@
  *     only, never the adapters folder (lint-enforced).
  */
 
-import type { MapCustomer, MapVisit } from "@/lib/services/mapScene";
-import type { CustomersRepository, VisitsRepository } from "@/lib/ports";
+// MapCustomer/MapVisit are re-exported from the ports barrel (they physically
+// live in lib/services/mapScene.ts). A service may NOT import another service
+// file directly (F-TD-05); depending on the PORT for these types is exactly what
+// that rule instructs, and keeps the locked route re-export line intact.
+import type {
+  CustomersRepository,
+  VisitsRepository,
+  MapCustomer,
+  MapVisit,
+} from "@/lib/ports";
 
 export interface MapDataServiceDeps {
   readonly customers: CustomersRepository;
