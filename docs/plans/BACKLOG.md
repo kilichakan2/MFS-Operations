@@ -391,6 +391,14 @@ the trail matters.
   run, 0 flaky, no `reset_branch` needed.** The fresh per-PR preview branch happened to be clean
   enough this run. So the flake never recurred on its final HACCP trigger — but the underlying
   non-idempotency is STILL unfixed (latent), and any FUTURE HACCP-heavy E2E PR could re-trip it.
+  **CORRECTION (2026-06-26, F-20 Admin PR1 ANVIL):** it DID re-trip — on a NON-HACCP PR.
+  F-20 PR1 (Geocoder + Customers, touches ZERO HACCP code) hit it on `17-haccp-mince-prep`
+  during its `@critical` run; recovered as always via `reset_branch` + a single re-run → clean
+  73/73. **Key correction to the "dormant" claim: F-TD-37 is NOT HACCP-PR-bound.** The shared
+  preview runs the WHOLE `@critical` suite (which includes the HACCP submit-once specs) on EVERY
+  PR regardless of what it touches — so ANY PR whose ANVIL runs `@critical` is exposed, not just
+  HACCP-heavy ones. The trigger is "a reused/dirty preview branch + the period slot already
+  written", independent of the PR's own diff.
 - **Fix shape (investigate, then pick — NOT retries):** (a) make each period-bound spec
   self-isolating — assert/act on a UNIQUE per-run period or fixture rather than "the current
   week", OR upsert-then-act so a second run is a no-op-safe overwrite; (b) a teardown that
@@ -401,7 +409,10 @@ the trail matters.
   recurrence, so the reset dance did NOT repeat — but the structural fix (self-isolating
   period-bound specs per fix-shape (a)/(b)) was never done. Re-home onto the next HACCP-heavy
   E2E PR if one arises, or fold into a test-hardening sweep. Pairs with re-confirming F-TD-33 `04`.
-- **Status:** open (latent — dormant since no HACCP-heavy E2E PR remains imminent post-F-19).
+- **Status:** open (latent — NOT dormant; recurs on ANY PR whose ANVIL runs the `@critical`
+  suite, incl. non-HACCP PRs, because the shared preview runs the full suite. Recovery is the
+  standard `reset_branch` + single re-run. Real fix = self-isolating period-bound specs per
+  fix-shape (a)/(b); still unscheduled — fold into a test-hardening sweep).
 
 ---
 
