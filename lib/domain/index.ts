@@ -97,6 +97,7 @@ export type {
   ComplaintNote,
   Complaint,
   ComplaintDetail,
+  ComplaintWeekRollupRow,
   CreateComplaintInput,
   CreatedComplaint,
   ResolveComplaintInput,
@@ -104,6 +105,13 @@ export type {
   CreateNoteInput,
   CreatedNote,
 } from "./Complaint";
+// F-21 — Discrepancy domain types (dashboard Zone 2/3 + detail/discrepancy).
+export type {
+  DiscrepancyStatus,
+  DiscrepancyToday,
+  DiscrepancyWeekRollupRow,
+  DiscrepancyDetail,
+} from "./Discrepancy";
 export type {
   Compliment,
   ComplimentRecipient,

@@ -63,6 +63,19 @@ export interface ComplaintDetail extends Complaint {
   readonly customerName: string;
 }
 
+/**
+ * F-21 — the trimmed complaint shape for the admin dashboard's week rollup
+ * (Zone 3): `category` + `status` + `createdAt` + `resolvedAt` ONLY (no joins).
+ * Feeds the category-rollup, open/total counts, and avg-resolution-time tally.
+ * `category` carries the RAW enum (the route/service does the `.replace`).
+ */
+export interface ComplaintWeekRollupRow {
+  readonly category: ComplaintCategory; // RAW
+  readonly status: ComplaintStatus;
+  readonly createdAt: string;
+  readonly resolvedAt: string | null;
+}
+
 // ── Inputs / contexts ──
 
 export interface CreateComplaintInput {
