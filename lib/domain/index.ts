@@ -19,7 +19,7 @@ export type {
 } from "./Order";
 export type { Customer, CustomerAdminView } from "./Customer";
 export type { GeocodeResult } from "./Geocode";
-export type { Product } from "./Product";
+export type { Product, ProductAdminView } from "./Product";
 export type {
   Route,
   RouteStop,

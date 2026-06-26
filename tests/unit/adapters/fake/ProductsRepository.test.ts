@@ -13,9 +13,12 @@ productsRepositoryContract(async () => {
   const repo = createFakeProductsRepository([
     {
       id: KNOWN_ID,
-      code: "BC-001",
       name: "Fake Product",
+      category: "Burgers",
+      code: "BC-001",
       boxSize: "10 kg",
+      active: true,
+      created_at: "2026-01-01T00:00:00.000Z",
     },
   ]);
   return {

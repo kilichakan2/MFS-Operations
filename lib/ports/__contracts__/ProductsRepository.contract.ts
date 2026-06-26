@@ -79,5 +79,55 @@ export function productsRepositoryContract(
       expect(result.length).toBe(1);
       expect(result[0]!.id).toBe(ctx.knownProductId);
     });
+
+    // ── F-20 PR2 — the admin surface (listAll + setActive) ───────────────────
+
+    it("listAll returns rows ordered by name asc with the full ProductAdminView shape", async () => {
+      const rows = await ctx.repo.listAll();
+      expect(rows.length).toBeGreaterThan(0);
+      // The known product is present in the list.
+      const known = rows.find((r) => r.id === ctx.knownProductId);
+      expect(known).toBeDefined();
+      // Full admin-view shape: name + active + created_at always populated;
+      // category/code/boxSize are `string | null`.
+      expect(typeof known!.name).toBe("string");
+      expect(known!.name.length).toBeGreaterThan(0);
+      expect(typeof known!.active).toBe("boolean");
+      expect(typeof known!.created_at).toBe("string");
+      expect(["string", "object"]).toContain(typeof known!.category);
+      expect(["string", "object"]).toContain(typeof known!.code);
+      expect(["string", "object"]).toContain(typeof known!.boxSize);
+      // name ASC ordering (each row's name >= the previous one).
+      for (let i = 1; i < rows.length; i++) {
+        expect(rows[i]!.name >= rows[i - 1]!.name).toBe(true);
+      }
+    });
+
+    it("setActive flips active and returns the updated row", async () => {
+      // Read current state, flip it, assert the returned row reflects the flip,
+      // then restore so the suite leaves the row as it found it.
+      const before = (await ctx.repo.listAll()).find(
+        (r) => r.id === ctx.knownProductId,
+      )!;
+      const flipped = await ctx.repo.setActive(
+        ctx.knownProductId,
+        !before.active,
+      );
+      expect(flipped).not.toBeNull();
+      expect(flipped!.id).toBe(ctx.knownProductId);
+      expect(flipped!.active).toBe(!before.active);
+      // Restore.
+      const restored = await ctx.repo.setActive(
+        ctx.knownProductId,
+        before.active,
+      );
+      expect(restored!.active).toBe(before.active);
+    });
+
+    it("setActive on an unknown id returns null (the 404 anchor — never throws)", async () => {
+      const unknownId = "00000000-0000-0000-0000-0000000000fe";
+      const result = await ctx.repo.setActive(unknownId, false);
+      expect(result).toBeNull();
+    });
   });
 }
