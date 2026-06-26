@@ -386,18 +386,22 @@ the trail matters.
   HACCP PR's preview smoke and costs a ~2.5-min branch re-provision each time. **PR10a
   (Cluster G foundation, 2026-06-25) did NOT bite — it is introduce-only/inert and added NO
   new E2E, so the @critical run was pure regression (clean 73/73, 0 flaky, no reset needed).**
-  **One HACCP PR left where it WILL bite: PR10b (Cluster G route cutover) — it flips live
-  HACCP routes and gets the exhaustive every-screen browser-tap, so plan for a `reset_branch`
-  + single re-run as part of its ANVIL.**
+  **PR10b (Cluster G route cutover, 2026-06-26 — the predicted last natural home, HACCP-heavy
+  exhaustive every-screen browser-tap) did NOT bite either: clean 73/73 @critical on the FIRST
+  run, 0 flaky, no `reset_branch` needed.** The fresh per-PR preview branch happened to be clean
+  enough this run. So the flake never recurred on its final HACCP trigger — but the underlying
+  non-idempotency is STILL unfixed (latent), and any FUTURE HACCP-heavy E2E PR could re-trip it.
 - **Fix shape (investigate, then pick — NOT retries):** (a) make each period-bound spec
   self-isolating — assert/act on a UNIQUE per-run period or fixture rather than "the current
   week", OR upsert-then-act so a second run is a no-op-safe overwrite; (b) a teardown that
   clears the row it created; (c) failing both, codify the pre-smoke `reset_branch` as an
   explicit ANVIL step for HACCP so it's deliberate, not a surprise. Mirror F-TD-33's
   data-isolation approach.
-- **Owner unit:** unscheduled; LAST natural home = Cluster G PR10b ANVIL (the final HACCP-heavy
-  PR) so the reset dance stops repeating. Pairs with re-confirming the F-TD-33 `04` fix.
-- **Status:** open.
+- **Owner unit:** unscheduled. Its named last home (Cluster G PR10b) shipped clean without
+  recurrence, so the reset dance did NOT repeat — but the structural fix (self-isolating
+  period-bound specs per fix-shape (a)/(b)) was never done. Re-home onto the next HACCP-heavy
+  E2E PR if one arises, or fold into a test-hardening sweep. Pairs with re-confirming F-TD-33 `04`.
+- **Status:** open (latent — dormant since no HACCP-heavy E2E PR remains imminent post-F-19).
 
 ---
 
@@ -424,9 +428,12 @@ the trail matters.
   explicit field-mapping in each Supabase adapter, drop the `as unknown as` casts, and add a
   lightweight **runtime row-validator** at the adapter boundary so a column drift fails loudly.
   Touch the UI shapes in the same pass (they currently consume the raw keys).
-- **Owner unit:** unscheduled — **gate on F-19 completion** (Cluster G / F-RLS-04h is the last
-  F-19 step); a whole-HACCP cleanup, not a per-cluster fix.
-- **Status:** open.
+- **Owner unit:** unscheduled — **gate NOW LIFTED: F-19 completed 2026-06-26 (Cluster G / F-RLS-04h
+  PR10b shipped, all 10 PRs done).** The byte-identity constraint that kept this deliberate is
+  relaxed; this whole-HACCP "deepen the domain" pass (owned camelCase + explicit field-mapping +
+  drop the `as unknown as` casts + runtime row-validator + UI shape touch) is now schedulable as
+  its own unit. Not per-cluster — one sweep across all HACCP domain types/adapters/UI.
+- **Status:** open — **unblocked** (F-19 done; ready to schedule).
 
 ---
 
