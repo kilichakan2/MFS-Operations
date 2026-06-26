@@ -77,6 +77,7 @@ export {
   createFakeComplaintsRepository,
   fakeComplaintsRepository,
   type FakeComplaintsSeed,
+  type FakeComplaintSeed,
   type FakeComplaintsPersonRef,
   type FakeComplaintsCustomerRef,
 } from "./ComplaintsRepository";

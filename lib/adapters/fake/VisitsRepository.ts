@@ -428,6 +428,41 @@ export function createFakeVisitsRepository(
         .map(toVisit);
     },
 
+    // ── F-21 — admin dashboard reads (mirror the Supabase semantics) ─────────
+
+    async listTodayForDashboard(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      // [from,to] inclusive; newest first; capped at 50.
+      return [...visits.values()]
+        .filter((v) => v.createdAt >= window.from && v.createdAt <= window.to)
+        .sort(byNewestThenId)
+        .slice(0, 50)
+        .map(toVisit);
+    },
+
+    async listWeekForDashboard(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      // [from,to] inclusive; no limit.
+      return [...visits.values()]
+        .filter((v) => v.createdAt >= window.from && v.createdAt <= window.to)
+        .sort(byNewestThenId)
+        .map(toVisit);
+    },
+
+    async listAtRiskSince(from: string): Promise<readonly Visit[]> {
+      // R1: outcome IN (at_risk, lost); created_at >= from; NO upper bound;
+      // newest first.
+      return [...visits.values()]
+        .filter((v) => v.outcome === "at_risk" || v.outcome === "lost")
+        .filter((v) => v.createdAt >= from)
+        .sort(byNewestThenId)
+        .map(toVisit);
+    },
+
     // ── F-20 PR3 — Map View read (mirrors the Supabase semantics) ────────────
 
     async listForMap(window: {

@@ -31,6 +31,7 @@
 import type {
   Complaint,
   ComplaintDetail,
+  ComplaintWeekRollupRow,
   ComplaintEmailContext,
   CreateComplaintInput,
   CreatedComplaint,
@@ -69,4 +70,33 @@ export interface ComplaintsRepository {
   /** Insert an internal note; returns the new id + created_at. The caller has
    *  verified the complaint exists (via findEmailContext). → POST /api/screen2/note. */
   createNote(input: CreateNoteInput): Promise<CreatedNote>;
+
+  // ── F-21 — admin dashboard reads ──────────────────────────────────────────
+
+  /** OPEN complaints with created_at < before, customers(name)+users(name)
+   *  resolved, ASC (oldest first). → dashboard Zone 1 (open>48h).
+   *  Selects: id, created_at, category, description, user_id, customers(name),
+   *  users!complaints_user_id_fkey(name). The returned `Complaint` carries the
+   *  selected columns; un-selected fields default (status defaults to 'open' —
+   *  these are all open by the filter). @throws ServiceError on DB failure. */
+  listOpenOlderThan(before: string): Promise<readonly Complaint[]>;
+
+  /** Complaints in [from,to], customers(name)+users(name) resolved, DESC
+   *  (newest first), limit 50. → dashboard Zone 2 (complaints today).
+   *  Selects: id, created_at, category, status, description, resolution_note,
+   *  customers(name), users!complaints_user_id_fkey(name).
+   *  @throws ServiceError on DB failure. */
+  listTodayWithNames(window: {
+    from: string;
+    to: string;
+  }): Promise<readonly Complaint[]>;
+
+  /** Complaints in [from,to], category+status+created_at+resolved_at ONLY (no
+   *  joins) — the category-rollup + open/total counts + avg-resolution feed.
+   *  → dashboard Zone 3. RAW category carried (route/service does the .replace).
+   *  @throws ServiceError on DB failure. */
+  listWeekRollup(window: {
+    from: string;
+    to: string;
+  }): Promise<readonly ComplaintWeekRollupRow[]>;
 }

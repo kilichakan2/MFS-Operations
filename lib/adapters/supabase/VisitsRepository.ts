@@ -107,6 +107,15 @@ const AT_RISK_COLS =
 const COMMITMENTS_COLS =
   "id, created_at, commitment_detail, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)";
 
+// ── F-21 admin dashboard selects — copied VERBATIM from app/api/dashboard ────
+// Zone 2: visits today (route line 105). Same column set as ADMIN_COLS — kept
+// as its own named constant so the dashboard read's verbatim origin is explicit.
+const DASHBOARD_TODAY_COLS =
+  "id, created_at, outcome, visit_type, notes, pipeline_status, customer_id, prospect_name, customers(name), users!visits_user_id_fkey(name)";
+// Zone 3: visits this week (route line 128).
+const DASHBOARD_WEEK_COLS =
+  "visit_type, outcome, user_id, customer_id, prospect_name, users!visits_user_id_fkey(name)";
+
 // ── F-20 PR3 Map View selects — copied VERBATIM from app/api/map/data ────────
 // Existing-customer visits: join lat/lng from the customers table.
 const MAP_CUST_VISIT_COLS =
@@ -554,6 +563,68 @@ export function createSupabaseVisitsRepository(
       const { data, error } = await query;
       if (error) {
         log.error("VisitsRepository.listCommitments DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as VisitRow[];
+      return rows.map(toVisit);
+    },
+
+    // ── F-21 — admin dashboard reads ──────────────────────────────────────────
+
+    async listTodayForDashboard(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      const { data, error } = await client
+        .from("visits")
+        .select(DASHBOARD_TODAY_COLS)
+        .gte("created_at", window.from)
+        .lte("created_at", window.to)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) {
+        log.error("VisitsRepository.listTodayForDashboard DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as VisitRow[];
+      return rows.map(toVisit);
+    },
+
+    async listWeekForDashboard(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      const { data, error } = await client
+        .from("visits")
+        .select(DASHBOARD_WEEK_COLS)
+        .gte("created_at", window.from)
+        .lte("created_at", window.to);
+      if (error) {
+        log.error("VisitsRepository.listWeekForDashboard DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as VisitRow[];
+      return rows.map(toVisit);
+    },
+
+    async listAtRiskSince(from: string): Promise<readonly Visit[]> {
+      // R1 (byte-identity critical): gte-only, NO upper bound — the dashboard
+      // at-risk query filters `created_at >= ago7d` with no `lte`, so this method
+      // must NOT add one (unlike `listAtRisk({from,to})`).
+      const { data, error } = await client
+        .from("visits")
+        .select(AT_RISK_COLS)
+        .in("outcome", ["at_risk", "lost"])
+        .gte("created_at", from)
+        .order("created_at", { ascending: false });
+      if (error) {
+        log.error("VisitsRepository.listAtRiskSince DB error", {
           error: error.message,
         });
         throw new ServiceError("Database error", { cause: error });
