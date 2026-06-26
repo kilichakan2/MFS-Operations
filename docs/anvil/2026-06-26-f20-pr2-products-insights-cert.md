@@ -120,3 +120,22 @@ against a real database. The only thing left is the routine post-deploy smoke.
 ## Verdict
 
 ✅ CLEARED FOR PRODUCTION
+
+## Addendum — 2026-06-26 (post-ship): `@critical` preview smoke retroactively run
+
+At ship time the scripted `@critical` Playwright preview smoke did NOT run — it
+failed closed on the missing `VERCEL_AUTOMATION_BYPASS_SECRET` and the conductor
+substituted a curl reachability+guard smoke (the documented `--unprotected` fix
+was not applied; logged as BACKLOG F-INFRA-06). To close that skipped gate, a
+throwaway verification branch/PR (`verify/f20-pr2-smoke`, PR #82 — never merged,
+identical to shipped `main` HEAD `1bb447d`) regenerated an isolated Vercel preview
++ Supabase preview branch (`nlmgcbgdbnxonspsyemz`), and the full suite was run with
+`npm run test:e2e:preview -- <url> --unprotected`:
+
+**@critical preview smoke: 75/75 PASSED (4.9m, 0 flaky, no F-TD-37 recurrence).**
+
+The branch/PR/Supabase preview branch were torn down after. The post-ship gate is
+now closed against the exact shipped code; production was never used as a test
+target.
+🗣 The browser gate we skipped at ship has now been run properly on a throwaway
+copy of the exact shipped code — all 75 critical paths green. Nothing outstanding.
