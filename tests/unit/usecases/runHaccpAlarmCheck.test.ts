@@ -25,7 +25,12 @@ import {
   createFakePushSubscriptionsRepository,
   createFakeAlarmSessionsRepository,
 } from "@/lib/adapters/fake";
+import type {
+  PushSubscriptionsRepository,
+  AlarmSessionsRepository,
+} from "@/lib/ports";
 import type { HaccpReportingService } from "@/lib/services";
+import { ServiceError } from "@/lib/errors/ServiceError";
 
 type OverdueStatus = Awaited<
   ReturnType<HaccpReportingService["getAlarmOverdueStatus"]>
@@ -255,5 +260,122 @@ describe("runHaccpAlarmCheck — log line (R4, moved into the usecase)", () => {
     await usecase.run(NOW);
     // 2 items × 2 subs = 4 sent; total = 2 subscriptions.
     expect(logSpy).toHaveBeenCalledWith("[haccp-alarm] Overdue: 2, Sent: 4/2");
+  });
+});
+
+/**
+ * F-25 🟡-1 (Guard accepted-hardening, decision LOCKED by Hakan).
+ *
+ * The OLD route swallowed any repo failure and still returned 200. The re-point
+ * deliberately changed that: when a subscription/alarm-session repo operation
+ * THROWS a ServiceError, the usecase must PROPAGATE the throw (so the route's
+ * outer catch returns 500) — NOT swallow-and-continue, NOT return { ok:true }.
+ *
+ * Each test wraps the real in-memory fake and overrides exactly ONE method to
+ * reject with a ServiceError, then asserts `run(now)` rejects with that same
+ * error — behaviour-based, through the public interface only. The reporting read
+ * is already pinned by the reporting-service test; this suite pins the four
+ * repo seams the cron loop touches: listAll, findActiveBySubscriptionAndKey,
+ * insert, updateCount, and resolveAllActive.
+ */
+describe("runHaccpAlarmCheck — repo throw propagates (🟡-1, no silent 200-swallow)", () => {
+  const ONE_SUB = [
+    { id: "s1", userId: "u1", endpoint: "e1", p256dh: "p", auth: "a" },
+  ];
+
+  function rejectingSubscriptions(
+    over: Partial<PushSubscriptionsRepository>,
+    seedRows = ONE_SUB,
+  ): PushSubscriptionsRepository {
+    return {
+      ...createFakePushSubscriptionsRepository({ rows: seedRows }),
+      ...over,
+    };
+  }
+
+  function rejectingAlarmSessions(
+    over: Partial<AlarmSessionsRepository>,
+  ): AlarmSessionsRepository {
+    return { ...createFakeAlarmSessionsRepository(), ...over };
+  }
+
+  it("propagates when subscriptions.listAll throws", async () => {
+    const boom = new ServiceError("listAll failed");
+    const usecase = createRunHaccpAlarmCheck({
+      reporting: reportingStub(TWO_OVERDUE),
+      subscriptions: rejectingSubscriptions({
+        async listAll() {
+          throw boom;
+        },
+      }),
+      alarmSessions: createFakeAlarmSessionsRepository(),
+      pushSender: createFakePushSender({ publicKey: "k" }),
+    });
+
+    await expect(usecase.run(NOW)).rejects.toBe(boom);
+  });
+
+  it("propagates when alarmSessions.findActiveBySubscriptionAndKey throws", async () => {
+    const boom = new ServiceError("find failed");
+    const usecase = createRunHaccpAlarmCheck({
+      reporting: reportingStub(TWO_OVERDUE),
+      subscriptions: createFakePushSubscriptionsRepository({ rows: ONE_SUB }),
+      alarmSessions: rejectingAlarmSessions({
+        async findActiveBySubscriptionAndKey() {
+          throw boom;
+        },
+      }),
+      pushSender: createFakePushSender({ publicKey: "k" }),
+    });
+
+    await expect(usecase.run(NOW)).rejects.toBe(boom);
+  });
+
+  it("propagates when alarmSessions.insert throws (new-session path)", async () => {
+    const boom = new ServiceError("insert failed");
+    const usecase = createRunHaccpAlarmCheck({
+      reporting: reportingStub(TWO_OVERDUE),
+      subscriptions: createFakePushSubscriptionsRepository({ rows: ONE_SUB }),
+      alarmSessions: rejectingAlarmSessions({
+        async insert() {
+          throw boom;
+        },
+      }),
+      pushSender: createFakePushSender({ publicKey: "k" }),
+    });
+
+    await expect(usecase.run(NOW)).rejects.toBe(boom);
+  });
+
+  it("propagates when alarmSessions.updateCount throws (after a successful send)", async () => {
+    const boom = new ServiceError("updateCount failed");
+    const usecase = createRunHaccpAlarmCheck({
+      reporting: reportingStub(ONE_OVERDUE),
+      subscriptions: createFakePushSubscriptionsRepository({ rows: ONE_SUB }),
+      alarmSessions: rejectingAlarmSessions({
+        async updateCount() {
+          throw boom;
+        },
+      }),
+      pushSender: createFakePushSender({ publicKey: "k" }), // sends succeed
+    });
+
+    await expect(usecase.run(NOW)).rejects.toBe(boom);
+  });
+
+  it("propagates when alarmSessions.resolveAllActive throws (nothing-overdue path)", async () => {
+    const boom = new ServiceError("resolveAllActive failed");
+    const usecase = createRunHaccpAlarmCheck({
+      reporting: reportingStub(NOTHING_OVERDUE),
+      subscriptions: createFakePushSubscriptionsRepository({ rows: ONE_SUB }),
+      alarmSessions: rejectingAlarmSessions({
+        async resolveAllActive() {
+          throw boom;
+        },
+      }),
+      pushSender: createFakePushSender({ publicKey: "k" }),
+    });
+
+    await expect(usecase.run(NOW)).rejects.toBe(boom);
   });
 });
