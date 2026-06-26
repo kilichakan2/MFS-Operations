@@ -55,6 +55,9 @@ function makeClient(result: CannedResult) {
     "eq",
     "gte",
     "lte",
+    "lt",
+    "in",
+    "not",
     "order",
     "limit",
   ]) {
@@ -603,5 +606,196 @@ describe("Supabase VisitsRepository.updateProspectLocation", () => {
       prospect_lng: -0.1,
       is_approximate_location: true,
     });
+  });
+});
+
+// ── F-20 PR2 admin insights reads ──────────────────────────────
+
+describe("Supabase VisitsRepository.listProspects", () => {
+  const VERBATIM_PROSPECTS =
+    "id, created_at, prospect_name, prospect_postcode, outcome, visit_type, pipeline_status, users!visits_user_id_fkey(name)";
+
+  it("uses the verbatim prospects select + not-null filter + range + newest-first order", async () => {
+    const h = makeClient({
+      data: [
+        {
+          id: "v1",
+          created_at: "2026-06-20T10:00:00.000Z",
+          prospect_name: "New Cafe",
+          prospect_postcode: "SW1A 1AA",
+          outcome: "positive",
+          visit_type: "new_pitch",
+          pipeline_status: "In Talks",
+          users: { name: "Hakan" },
+        },
+      ],
+      error: null,
+    });
+    const repo = createSupabaseVisitsRepository(h.client);
+    const out = await repo.listProspects({ from: "a", to: "b" });
+    expect(h.selectArg()).toBe(VERBATIM_PROSPECTS);
+    expect(
+      h.calls.some(
+        (c) => c.method === "not" && c.args[0] === "prospect_name" && c.args[1] === "is",
+      ),
+    ).toBe(true);
+    expect(h.calls.some((c) => c.method === "gte" && c.args[0] === "created_at")).toBe(true);
+    expect(h.calls.some((c) => c.method === "lte" && c.args[0] === "created_at")).toBe(true);
+    expect(
+      h.calls.some(
+        (c) => c.method === "order" && c.args[0] === "created_at" && (c.args[1] as { ascending: boolean }).ascending === false,
+      ),
+    ).toBe(true);
+    expect(out[0]).toMatchObject({
+      id: "v1",
+      prospectName: "New Cafe",
+      prospectPostcode: "SW1A 1AA",
+      visitType: "new_pitch",
+      outcome: "positive",
+      pipelineStatus: "In Talks",
+      loggedByName: "Hakan",
+    });
+  });
+
+  it("R1: preserves a RAW null pipeline_status (does NOT flip it to 'Logged')", async () => {
+    const h = makeClient({
+      data: [
+        {
+          id: "v2",
+          created_at: "2026-06-20T10:00:00.000Z",
+          prospect_name: "Blank Stage Cafe",
+          prospect_postcode: null,
+          outcome: "neutral",
+          visit_type: "routine",
+          pipeline_status: null,
+          users: { name: "Mert" },
+        },
+      ],
+      error: null,
+    });
+    const repo = createSupabaseVisitsRepository(h.client);
+    const out = await repo.listProspects({ from: "a", to: "b" });
+    // The byte-identity anchor: a null DB pipeline_status stays null on the
+    // domain field, so the route's `pipelineStatus ? … : null` yields null.
+    expect(out[0]!.pipelineStatus).toBeNull();
+  });
+
+  it("throws ServiceError on a DB error", async () => {
+    const h = makeClient({ data: null, error: { message: "boom" } });
+    await expect(
+      createSupabaseVisitsRepository(h.client).listProspects({ from: "a", to: "b" }),
+    ).rejects.toBeInstanceOf(ServiceError);
+  });
+});
+
+describe("Supabase VisitsRepository.listAtRisk", () => {
+  const VERBATIM_AT_RISK =
+    "id, created_at, outcome, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)";
+
+  it("uses the verbatim at-risk select + outcome IN filter + range + newest-first order", async () => {
+    const h = makeClient({
+      data: [
+        {
+          id: "v1",
+          created_at: "2026-06-20T10:00:00.000Z",
+          outcome: "at_risk",
+          customer_id: "c1",
+          prospect_name: null,
+          user_id: "u1",
+          customers: { name: "Acme Ltd" },
+          users: { name: "Hakan" },
+        },
+      ],
+      error: null,
+    });
+    const repo = createSupabaseVisitsRepository(h.client);
+    const out = await repo.listAtRisk({ from: "a", to: "b" });
+    expect(h.selectArg()).toBe(VERBATIM_AT_RISK);
+    expect(
+      h.calls.some(
+        (c) =>
+          c.method === "in" &&
+          c.args[0] === "outcome" &&
+          JSON.stringify(c.args[1]) === JSON.stringify(["at_risk", "lost"]),
+      ),
+    ).toBe(true);
+    expect(h.calls.some((c) => c.method === "gte" && c.args[0] === "created_at")).toBe(true);
+    expect(h.calls.some((c) => c.method === "lte" && c.args[0] === "created_at")).toBe(true);
+    expect(out[0]).toMatchObject({
+      id: "v1",
+      outcome: "at_risk", // RAW enum, no replace
+      customerName: "Acme Ltd",
+      loggedByName: "Hakan",
+    });
+  });
+
+  it("throws ServiceError on a DB error", async () => {
+    const h = makeClient({ data: null, error: { message: "boom" } });
+    await expect(
+      createSupabaseVisitsRepository(h.client).listAtRisk({ from: "a", to: "b" }),
+    ).rejects.toBeInstanceOf(ServiceError);
+  });
+});
+
+describe("Supabase VisitsRepository.listCommitments", () => {
+  const VERBATIM_COMMITMENTS =
+    "id, created_at, commitment_detail, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)";
+
+  it("R2: uses lt (NOT lte) on `to`, ASC order, and applies `from` only when present", async () => {
+    const h = makeClient({
+      data: [
+        {
+          id: "v1",
+          created_at: "2026-06-20T10:00:00.000Z",
+          commitment_detail: "send samples",
+          customer_id: "c1",
+          prospect_name: null,
+          user_id: "u1",
+          customers: { name: "Acme Ltd" },
+          users: { name: "Hakan" },
+        },
+      ],
+      error: null,
+    });
+    const repo = createSupabaseVisitsRepository(h.client);
+    const out = await repo.listCommitments({ from: "2026-06-01", to: "2026-06-30" });
+    expect(h.selectArg()).toBe(VERBATIM_COMMITMENTS);
+    expect(
+      h.calls.some((c) => c.method === "eq" && c.args[0] === "commitment_made" && c.args[1] === true),
+    ).toBe(true);
+    // STRICT lt on `to` — NOT lte (R2 byte-identity).
+    expect(h.calls.some((c) => c.method === "lt" && c.args[0] === "created_at" && c.args[1] === "2026-06-30")).toBe(true);
+    expect(h.calls.some((c) => c.method === "lte")).toBe(false);
+    // ASC order (oldest first).
+    expect(
+      h.calls.some(
+        (c) => c.method === "order" && c.args[0] === "created_at" && (c.args[1] as { ascending: boolean }).ascending === true,
+      ),
+    ).toBe(true);
+    // `from` applied (>=) because it was non-null.
+    expect(h.calls.some((c) => c.method === "gte" && c.args[0] === "created_at" && c.args[1] === "2026-06-01")).toBe(true);
+    expect(out[0]).toMatchObject({
+      id: "v1",
+      commitmentDetail: "send samples",
+      customerName: "Acme Ltd",
+      loggedByName: "Hakan",
+    });
+  });
+
+  it("R2: does NOT apply the `from` filter when `from` is null", async () => {
+    const h = makeClient({ data: [], error: null });
+    await createSupabaseVisitsRepository(h.client).listCommitments({
+      from: null,
+      to: "2026-06-30",
+    });
+    expect(h.calls.some((c) => c.method === "gte")).toBe(false);
+    expect(h.calls.some((c) => c.method === "lt" && c.args[0] === "created_at")).toBe(true);
+  });
+
+  it("throws ServiceError on a DB error", async () => {
+    const h = makeClient({ data: null, error: { message: "boom" } });
+    await expect(
+      createSupabaseVisitsRepository(h.client).listCommitments({ from: null, to: "b" }),
+    ).rejects.toBeInstanceOf(ServiceError);
   });
 });
