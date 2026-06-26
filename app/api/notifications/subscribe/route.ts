@@ -6,13 +6,18 @@
  *
  * Body: { endpoint, keys: { p256dh, auth }, deviceLabel? }
  * Auth: x-mfs-user-role header (any authenticated role)
+ *
+ * F-25 (R7) — re-pointed onto the PushSubscriptionsRepository port
+ * (lib/wiring/pushSubscriptions). The route imports ZERO adapters and ZERO
+ * vendor SDKs (the old dead `@/lib/webpush` import + the raw `supabaseService`
+ * upsert are both gone). The validation, the 401/400/500/200 shapes and the
+ * upsert payload are byte-identical; `last_used` is computed here as
+ * `new Date().toISOString()` and passed into the port (the adapter never calls
+ * `new Date()`).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-import { getVapidPublicKey }         from '@/lib/webpush'
-
-const supabase = supabaseService
+import { pushSubscriptions } from '@/lib/wiring/pushSubscriptions'
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,22 +40,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Upsert subscription — update last_used if endpoint already exists
-    const { error } = await supabase
-      .from('push_subscriptions')
-      .upsert(
-        {
-          user_id:      userId,
-          endpoint,
-          p256dh:       keys.p256dh,
-          auth:         keys.auth,
-          device_label: deviceLabel ?? null,
-          last_used:    new Date().toISOString(),
-        },
-        { onConflict: 'user_id,endpoint' }
-      )
-
-    if (error) {
-      console.error('[subscribe]', error.message)
+    try {
+      await pushSubscriptions.upsert({
+        userId,
+        endpoint,
+        p256dh:      keys.p256dh,
+        auth:        keys.auth,
+        deviceLabel: deviceLabel ?? null,
+        lastUsedIso: new Date().toISOString(),
+      })
+    } catch (err) {
+      console.error('[subscribe]', (err as Error).message)
       return NextResponse.json({ error: 'Failed to save subscription' }, { status: 500 })
     }
 

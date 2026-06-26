@@ -87,3 +87,19 @@ export type {
 export type { HaccpHandbookRepository } from "./HaccpHandbookRepository";
 export type { HaccpSuppliersRepository } from "./HaccpSuppliersRepository";
 export type { HaccpLookupsRepository } from "./HaccpLookupsRepository";
+// F-25 — HACCP overdue-alarm cron hexagon: the push-sender + the two table
+// sockets (push_subscriptions + alarm_sessions). Pure interfaces; their owned
+// types travel with them.
+export type {
+  PushSender,
+  PushPayload,
+  PushSubscription,
+} from "./PushSender";
+export type {
+  PushSubscriptionsRepository,
+  PushSubscriptionRow,
+} from "./PushSubscriptionsRepository";
+export type {
+  AlarmSessionsRepository,
+  ActiveAlarmSession,
+} from "./AlarmSessionsRepository";

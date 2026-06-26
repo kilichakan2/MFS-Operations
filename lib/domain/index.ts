@@ -339,3 +339,6 @@ export type {
   HaccpCustomerOption,
   HaccpCustomersResponse,
 } from "./HaccpLookups";
+// F-25 — HACCP overdue-alarm cron hexagon: the raw 4-read input shape the
+// reporting adapter returns + the service maps to the overdue status.
+export type { AlarmOverdueInputs } from "./HaccpAlarm";

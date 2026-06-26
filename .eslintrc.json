@@ -48,6 +48,10 @@
           {
             "name": "xlsx",
             "message": "Use the SpreadsheetExporter port via @/lib/wiring/haccp. xlsx may only be imported inside lib/adapters/xlsx/. See ADR-0002 / F-19."
+          },
+          {
+            "name": "web-push",
+            "message": "Use the PushSender port via @/lib/wiring/pushSender. web-push may only be imported inside lib/adapters/web-push/. See ADR-0002 / F-25."
           }
         ]
       }
@@ -74,6 +78,7 @@
         "lib/adapters/leaflet/**/*.{ts,tsx}",
         "lib/adapters/jspdf/**/*.{ts,tsx}",
         "lib/adapters/xlsx/**/*.ts",
+        "lib/adapters/web-push/**/*.ts",
         "tests/**"
       ],
       "rules": {
@@ -131,6 +136,10 @@
               {
                 "name": "xlsx",
                 "message": "Use the SpreadsheetExporter port via @/lib/wiring/haccp. xlsx may only be imported inside lib/adapters/xlsx/. See ADR-0002 / F-19."
+              },
+              {
+                "name": "web-push",
+                "message": "Use the PushSender port via @/lib/wiring/pushSender. web-push may only be imported inside lib/adapters/web-push/. See ADR-0002 / F-25."
               }
             ],
             "patterns": [

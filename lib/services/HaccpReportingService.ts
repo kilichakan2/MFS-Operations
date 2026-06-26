@@ -60,6 +60,20 @@ export interface HaccpReportingService {
    * the filename — that stays in the route (PR8).
    */
   buildAuditWorkbook(from: string, to: string): Promise<Buffer>;
+  /**
+   * F-25 — today's overdue status for the HACCP alarm cron. `now` is INJECTED
+   * (no `new Date()`): derives `today = todayUKFrom(now)` + `nowHour =
+   * now.getHours()`, reads via `reporting.fetchAlarmOverdueInputs(today)`, and
+   * applies the EXACT thresholds the cron route used (cold/room AM≥10 PM≥14;
+   * diary opening≥10 closing≥17). Returns the SAME shape `getOverdueItems`
+   * consumes. @throws ServiceError (propagated from the read).
+   */
+  getAlarmOverdueStatus(now: Date): Promise<{
+    cold_storage: { am_overdue: boolean; pm_overdue: boolean };
+    processing_room: { am_overdue: boolean; pm_overdue: boolean };
+    daily_diary: { opening_overdue: boolean; closing_overdue: boolean };
+    unresolved_cas: number;
+  }>;
 }
 
 // ─── clock helpers (derive everything from the injected `now`) ───────────────
@@ -1195,6 +1209,40 @@ export function createHaccpReportingService(
         ),
       ];
       return spreadsheet.toXlsxBuffer(sheets);
+    },
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 7) alarm overdue status — F-25 (cron route's getOverdueStatus, lifted)
+    // ═══════════════════════════════════════════════════════════════════════
+    // `now` INJECTED (no `new Date()`): today + nowHour both derive from the
+    // single clock so the overdue read + the thresholds agree. Thresholds are
+    // VERBATIM from app/api/cron/haccp-alarm/route.ts:46-60 (cold/room AM≥10
+    // PM≥14; diary opening≥10 closing≥17). Returns the exact shape
+    // getOverdueItems consumes.
+    async getAlarmOverdueStatus(now: Date) {
+      const today = todayUKFrom(now);
+      const nowHour = now.getHours();
+
+      const inputs = await reporting.fetchAlarmOverdueInputs(today);
+      const coldSessions = inputs.coldSessions;
+      const roomSessions = inputs.roomSessions;
+      const phases = inputs.diaryPhases;
+
+      return {
+        cold_storage: {
+          am_overdue: !coldSessions.includes("AM") && nowHour >= 10,
+          pm_overdue: !coldSessions.includes("PM") && nowHour >= 14,
+        },
+        processing_room: {
+          am_overdue: !roomSessions.includes("AM") && nowHour >= 10,
+          pm_overdue: !roomSessions.includes("PM") && nowHour >= 14,
+        },
+        daily_diary: {
+          opening_overdue: !phases.includes("opening") && nowHour >= 10,
+          closing_overdue: !phases.includes("closing") && nowHour >= 17,
+        },
+        unresolved_cas: inputs.unresolvedCas,
+      };
     },
   };
 }

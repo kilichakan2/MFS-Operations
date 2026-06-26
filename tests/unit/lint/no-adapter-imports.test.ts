@@ -129,6 +129,16 @@ const JSPDF_AUTOTABLE_DYNAMIC_MESSAGE =
   "Dynamic import('jspdf-autotable') is banned outside lib/adapters/jspdf/. " +
   "Use the PdfRenderer port via @/lib/wiring/pdf. See ADR-0002 / F-22.";
 
+// F-25 — the `web-push` forbidden message. Drift-catcher pin: asserted verbatim
+// against the SHIPPED .eslintrc.json (loaded from disk), so a typo in the
+// config's message fails this test. Restated in BOTH the top-level paths block
+// and the services/usecases override (legacy overrides REPLACE rule options —
+// they do not merge), so both must carry it.
+const WEB_PUSH_MESSAGE =
+  "Use the PushSender port via @/lib/wiring/pushSender. " +
+  "web-push may only be imported inside lib/adapters/web-push/. " +
+  "See ADR-0002 / F-25.";
+
 /**
  * Load the SHIPPED config from disk so the pin fails if the guard is
  * weakened or deleted in `.eslintrc.json` itself. `extends` is removed
@@ -684,5 +694,54 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
       "async function f(){ const { default: autoTable } = await import('jspdf-autotable') }\n",
     );
     expect(autotable).toEqual([]);
+  });
+
+  // ── (50) F-25 ──────────────────────────────────────────────────
+  it("bans web-push inside app/api routes (the cron/notification surfaces this PR fixes)", async () => {
+    const messages = await lint(
+      "app/api/cron/haccp-alarm/route.ts",
+      "import webpush from 'web-push'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (51) F-25 ──────────────────────────────────────────────────
+  it("bans web-push inside lib/services (services override RESTATES the path)", async () => {
+    const messages = await lint(
+      "lib/services/Foo.ts",
+      "import webpush from 'web-push'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (52) F-25 ──────────────────────────────────────────────────
+  it("bans web-push inside lib/usecases", async () => {
+    const messages = await lint(
+      "lib/usecases/runHaccpAlarmCheck.ts",
+      "import webpush from 'web-push'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (53) F-25 ──────────────────────────────────────────────────
+  it("allows web-push inside lib/adapters/web-push (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/web-push/PushSender.ts",
+      "import webpush from 'web-push'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (54) F-25 ──────────────────────────────────────────────────
+  it("reports the shipped web-push message text verbatim", async () => {
+    const messages = await lint(
+      "app/api/cron/haccp-alarm/route.ts",
+      "import webpush from 'web-push'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(WEB_PUSH_MESSAGE);
   });
 });
