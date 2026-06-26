@@ -67,6 +67,12 @@ export {
   createSupabaseVisitsRepository,
   supabaseVisitsRepository,
 } from "./VisitsRepository";
+// F-21 — Discrepancies adapter (dashboard Zone 2/3 + detail/discrepancy). The
+// ONLY file importing `@supabase/supabase-js` for the discrepancies table.
+export {
+  createSupabaseDiscrepanciesRepository,
+  supabaseDiscrepanciesRepository,
+} from "./DiscrepanciesRepository";
 export {
   createSupabaseHaccpDailyChecksRepository,
   supabaseHaccpDailyChecksRepository,
