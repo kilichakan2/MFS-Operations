@@ -18,6 +18,7 @@ export type {
   CreateOrderLineInput,
 } from "./Order";
 export type { Customer } from "./Customer";
+export type { GeocodeResult } from "./Geocode";
 export type { Product } from "./Product";
 export type {
   Route,
