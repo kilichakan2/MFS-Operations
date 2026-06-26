@@ -21,7 +21,7 @@
  */
 
 import type { Product, ProductAdminView } from "@/lib/domain";
-import type { ProductsRepository } from "@/lib/ports";
+import type { ProductsRepository, InsertOneResult } from "@/lib/ports";
 
 /**
  * Ports accepted by `createProductsService`, passed as a named object so the
@@ -41,6 +41,29 @@ export interface ProductsService {
 
   /** Flip a product's active flag. Null if no row matched (the 404 branch). */
   setActive(id: string, active: boolean): Promise<ProductAdminView | null>;
+
+  // ── Import surface (F-20 PR3) ──────────────────────────────────────────────
+
+  /** Bulk insert products (import/confirm, all-or-nothing). */
+  insertMany(
+    rows: readonly {
+      name: string;
+      category: string | null;
+      code: string | null;
+      box_size: string | null;
+      created_by: string;
+    }[],
+  ): Promise<readonly { id: string }[]>;
+
+  /** Insert ONE product (import/manual per-row). Typed result, never throws on
+   *  23505. */
+  insertOne(row: {
+    name: string;
+    code: string | null;
+    category: string | null;
+    box_size: string | null;
+    created_by: string;
+  }): Promise<InsertOneResult>;
 }
 
 export function createProductsService(
@@ -56,6 +79,12 @@ export function createProductsService(
     },
     setActive(id: string, active: boolean) {
       return products.setActive(id, active);
+    },
+    insertMany(rows) {
+      return products.insertMany(rows);
+    },
+    insertOne(row) {
+      return products.insertOne(row);
     },
   };
 }

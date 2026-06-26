@@ -97,4 +97,26 @@ describe("CustomersService", () => {
     const remaining = await svc.listUngeocoded(500);
     expect(remaining.map((r) => r.id)).not.toContain(A.id);
   });
+
+  // ── Import surface (F-20 PR3) ──────────────────────────────────────────────
+
+  it("insertMany delegates and returns the created id + postcode rows", async () => {
+    const svc = makeService([]);
+    const created = await svc.insertMany([
+      { name: "New Co", postcode: "S1 2AB", created_by: "u-1" },
+      { name: "No Postcode Co", postcode: null, created_by: "u-1" },
+    ]);
+    expect(created.length).toBe(2);
+    expect(created.map((c) => c.postcode).sort()).toEqual([null, "S1 2AB"].sort());
+  });
+
+  it("insertOne returns inserted on a fresh name, duplicate on a repeat", async () => {
+    const svc = makeService([]);
+    expect(await svc.insertOne({ name: "Dup Co", created_by: "u-1" })).toEqual({
+      outcome: "inserted",
+    });
+    expect(await svc.insertOne({ name: "Dup Co", created_by: "u-1" })).toEqual({
+      outcome: "duplicate",
+    });
+  });
 });

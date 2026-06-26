@@ -23,7 +23,7 @@
  */
 
 import type { CustomerAdminView } from "@/lib/domain";
-import type { CustomersRepository } from "@/lib/ports";
+import type { CustomersRepository, InsertOneResult } from "@/lib/ports";
 
 /**
  * Ports accepted by `createCustomersService`, passed as a named object so the
@@ -69,6 +69,25 @@ export interface CustomersService {
       is_approximate_location: boolean;
     },
   ): Promise<void>;
+
+  // ── Import surface (F-20 PR3) ──────────────────────────────────────────────
+
+  /** Bulk insert customers (import/confirm, all-or-nothing). */
+  insertMany(
+    rows: readonly {
+      name: string;
+      postcode: string | null;
+      created_by: string;
+    }[],
+  ): Promise<readonly { id: string; postcode: string | null }[]>;
+
+  /** Insert ONE customer (import/manual per-row). Typed result, never throws on
+   *  23505. NOTE: do NOT add listGeocodedForMap here — the map route goes through
+   *  MapDataService, keeping this service's surface minimal. */
+  insertOne(row: {
+    name: string;
+    created_by: string;
+  }): Promise<InsertOneResult>;
 }
 
 export function createCustomersService(
@@ -90,6 +109,12 @@ export function createCustomersService(
     },
     setCoords(id, fields) {
       return customers.setCoords(id, fields);
+    },
+    insertMany(rows) {
+      return customers.insertMany(rows);
+    },
+    insertOne(row) {
+      return customers.insertOne(row);
     },
   };
 }
