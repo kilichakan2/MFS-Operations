@@ -1,0 +1,41 @@
+-- ANVIL rollback — F-20 Admin PR1 (Geocoder seam + Customers re-point)
+-- Branch: feat/f20-pr1-geocoder-customers  ·  PR #80  ·  commit 07dfcc8
+-- Date: 2026-06-26
+--
+-- ───────────────────────────────────────────────────────────────────────────
+-- THERE IS NO DATABASE ROLLBACK FOR THIS PR.
+-- ───────────────────────────────────────────────────────────────────────────
+-- This PR is CODE-ONLY. It contains:
+--   • NO migration            (no new supabase/migrations/*.sql file)
+--   • NO schema change         (lat, lng, geocoded_at, is_approximate_location,
+--                               created_at, active, postcode, name, id already
+--                               existed and were already read/written by the
+--                               pre-PR routes)
+--   • NO RLS / policy change   (service-role singleton retained as-is; per-user
+--                               RLS deferred to F-RLS-04i)
+--   • NO data migration        (Risk R6 in the plan = NONE)
+--
+-- 🗣 In plain English: nothing in the database structure or data was touched, so
+-- there is nothing in the database to undo. The only thing that changed is app
+-- code (three admin routes now talk through owned sockets instead of the DB /
+-- postcodes.io directly, plus the geocode-all guard upgrade). To undo it you undo
+-- the CODE, not the database.
+--
+-- ───────────────────────────────────────────────────────────────────────────
+-- CODE ROLLBACK (the actual parachute):
+-- ───────────────────────────────────────────────────────────────────────────
+-- Vercel auto-deploys on merge to main, so a code rollback is either:
+--
+--   (a) Vercel: promote the previous production deployment
+--       (dpl_A4HsAjMm9nRMJBq9MuPkJYd6UgdC — commit 135a3da — is the current
+--        production rollback candidate), OR
+--
+--   (b) git: revert the PR's squash-merge commit on main and let Vercel redeploy
+--       git revert -m 1 <squash-merge-sha>
+--       git push origin main
+--
+-- Because the geocode-all guard swap (?secret=geocode2024 → requireRole admin) is
+-- the one behaviour change, a revert restores the old ?secret guard along with
+-- everything else — no separate step, no data implications.
+--
+-- No PITR is required or applicable (no destructive op, no data loss vector).
