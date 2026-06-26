@@ -28,6 +28,17 @@ specs are a relay — 01 creates the order 02 prints and 03 works).
 > first (its runbook has a troubleshooting table).
 
 - The PR is open and its Vercel preview deployment is green.
+- **The cred-synced redeploy has landed (readiness gate — do not skip).** F-INFRA-05
+  writes the Preview creds then triggers a SECOND Vercel deploy; the FIRST preview
+  deploy goes green WITHOUT working DB creds. **Poll the probe endpoint, not `/login`:**
+
+  ```
+  curl -s -o /dev/null -w "%{http_code}" https://<preview-url>/api/auth/team
+  ```
+
+  Wait until it returns **200**. `/login` returns 200 even on the pre-cred-sync
+  deploy, so a green `/login` is NOT proof the DB is wired — running then makes the
+  DB-identity probe (check 2) 500. (Lesson logged F-20 PR2, 2026-06-26.)
 - The Supabase preview branch for the PR exists and is healthy:
 
   ```
@@ -88,8 +99,9 @@ npm run test:e2e:preview -- https://<preview-url> --unprotected
 
 Expected: a one-line `--unprotected` warning (current state only), then
 the DB identity probe passes (4 checks: gate, seeded users, hash
-identity, seed sentinel), then the three `@critical` specs run
-(8 tests) and pass.
+identity, seed sentinel), then the full `@critical` suite runs (75 specs
+as of F-20 PR2 — the original 3 order-pipeline flows plus the F-13/F-18/F-19/
+F-20 re-point taps) and passes.
 
 ## 4. Interpret the result
 
@@ -126,6 +138,8 @@ database credential.
 | Symptom                                 | Likely cause + fix                                                                                                                           |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Probe check 1: 401 at /login            | Bypass secret wrong/rotated — update `.env.e2e.local`.                                                                                       |
+| Probe check 2: **HTTP 500 at /api/auth/team** | Ran against the pre-cred-sync deploy (the FIRST preview deploy, before F-INFRA-05 wired the creds). NOT a code bug — poll `/api/auth/team` until 200 (see §1 readiness gate), then re-run. (F-20 PR2, 2026-06-26.)              |
+| `bypass secret missing` / exits 0, no specs run | You forgot `--unprotected` (protection is OFF — F-INFRA-02). Re-run WITH the flag. The exit-0 false-green is BACKLOG F-INFRA-06.       |
 | Probe check 2: ANVIL-TEST-sales missing | Branch wasn't seeded (seed.sql failed on branch creation) or deployment points at the wrong database.                                        |
 | Probe check 3/4: PIN-hash drift         | An `E2E_PIN_*` value in `.env.e2e.local` was rotated without regenerating the matching hash in `supabase/seed.sql` — fix both in one change. |
 | Probe check 4: sentinel missing         | The deployment may be reading PRODUCTION or an unseeded database — stop, audit Vercel Preview-scope env vars before anything else.           |
