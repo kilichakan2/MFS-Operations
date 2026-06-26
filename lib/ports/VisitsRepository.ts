@@ -40,6 +40,10 @@ import type {
   UpdateVisitNoteInput,
   AdminVisitFilter,
 } from "@/lib/domain";
+// MapVisit is a pure presentation type (no vendor/framework import) declared in
+// lib/services/mapScene.ts; the map/data route RE-EXPORTS it (a locked
+// invariant). Same type-only boundary note as CustomersRepository's MapCustomer.
+import type { MapVisit } from "@/lib/services/mapScene";
 
 export interface VisitsRepository {
   /** Insert OR upsert (on_conflict=id) a visit; returns the new id.
@@ -124,4 +128,18 @@ export interface VisitsRepository {
     from: string | null;
     to: string;
   }): Promise<readonly Visit[]>;
+
+  // ── F-20 PR3 — Map View read ───────────────────────────────────────────────
+
+  /** Visits for the Map View (map/data). Returns BOTH existing-customer visits
+   *  (joining customers.lat/lng) AND prospect visits (prospect_lat/lng), mapped
+   *  to the flat MapVisit shape, newest first, each side capped at 500. Rows
+   *  whose resolved lat/lng is null are skipped (customer side). The two sides
+   *  are combined customer-visits FIRST then prospect-visits (order matters for
+   *  byte-identity). Optional date window filters created_at (gte from / lte to,
+   *  each applied only when present). @throws ServiceError on DB failure. */
+  listForMap(window: {
+    from: string | null;
+    to: string | null;
+  }): Promise<readonly MapVisit[]>;
 }

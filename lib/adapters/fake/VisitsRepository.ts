@@ -44,16 +44,21 @@ import type {
   AdminVisitFilter,
 } from "@/lib/domain";
 import type { VisitsRepository } from "@/lib/ports";
+import type { MapVisit } from "@/lib/services/mapScene";
 
 /** A trimmed person reference the rep / note-author joins resolve against. */
 export interface FakeVisitsPersonRef {
   readonly id: string;
   readonly name: string;
 }
-/** A trimmed customer reference the customer join resolves against. */
+/** A trimmed customer reference the customer join resolves against. F-20 PR3
+ *  adds optional lat/lng so the Map View read (listForMap) can resolve a
+ *  customer visit's coords; absent coords = the row is skipped (customer side). */
 export interface FakeVisitsCustomerRef {
   readonly id: string;
   readonly name: string;
+  readonly lat?: number | null;
+  readonly lng?: number | null;
 }
 
 /** A pre-seeded visit row (F-20 PR2 — lets the admin-insight reads' parity tests
@@ -74,6 +79,10 @@ export interface FakeVisitSeed {
   readonly commitmentMade?: boolean;
   readonly commitmentDetail?: string | null;
   readonly notes?: string | null;
+  // F-20 PR3 — prospect coords for the Map View read (listForMap).
+  readonly prospectLat?: number | null;
+  readonly prospectLng?: number | null;
+  readonly isApproximateLocation?: boolean | null;
 }
 
 /** Optional join directories + seed rows so reads return populated joins/data. */
@@ -157,6 +166,9 @@ export function createFakeVisitsRepository(
       commitmentMade: v.commitmentMade ?? false,
       commitmentDetail: v.commitmentDetail ?? null,
       notes: v.notes ?? null,
+      prospectLat: v.prospectLat ?? null,
+      prospectLng: v.prospectLng ?? null,
+      isApproximateLocation: v.isApproximateLocation ?? null,
     });
   }
 
@@ -414,6 +426,67 @@ export function createFakeVisitsRepository(
         .filter((v) => window.from === null || v.createdAt >= window.from)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
         .map(toVisit);
+    },
+
+    // ── F-20 PR3 — Map View read (mirrors the Supabase semantics) ────────────
+
+    async listForMap(window: {
+      from: string | null;
+      to: string | null;
+    }): Promise<readonly MapVisit[]> {
+      const inWindow = (createdAt: string): boolean =>
+        (window.from === null || createdAt >= window.from) &&
+        (window.to === null || createdAt <= window.to);
+
+      const all = [...visits.values()].filter((v) => inWindow(v.createdAt));
+
+      // Customer-side first (skip rows whose customer coords are null), then
+      // prospect-side — the same order the Supabase adapter appends them. Each
+      // side newest-first, capped at 500.
+      const custVisits = all
+        .filter((v) => v.customerId !== null)
+        .sort(byNewestThenId)
+        .slice(0, 500);
+      const out: MapVisit[] = [];
+      for (const v of custVisits) {
+        const cust = v.customerId ? customers[v.customerId] : undefined;
+        const lat = cust?.lat;
+        const lng = cust?.lng;
+        if (lat == null || lng == null) continue;
+        out.push({
+          id: v.id,
+          lat,
+          lng,
+          visit_type: v.visitType,
+          outcome: v.outcome,
+          rep: nameOf(v.userId) ?? "Unknown",
+          customer_name: cust?.name ?? "Unknown",
+          created_at: v.createdAt,
+          is_prospect: false,
+          is_approximate: false,
+        });
+      }
+
+      const prospectVisits = all
+        .filter((v) => v.customerId === null && v.prospectLat != null)
+        .sort(byNewestThenId)
+        .slice(0, 500);
+      for (const v of prospectVisits) {
+        out.push({
+          id: v.id,
+          lat: v.prospectLat as number,
+          lng: v.prospectLng as number,
+          visit_type: v.visitType,
+          outcome: v.outcome,
+          rep: nameOf(v.userId) ?? "Unknown",
+          customer_name: v.prospectName ?? "Prospect",
+          created_at: v.createdAt,
+          is_prospect: true,
+          is_approximate: v.isApproximateLocation ?? false,
+        });
+      }
+
+      return out;
     },
   };
 }

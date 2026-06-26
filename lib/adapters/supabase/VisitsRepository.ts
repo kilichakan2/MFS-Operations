@@ -51,6 +51,7 @@ import type {
   AdminVisitFilter,
 } from "@/lib/domain";
 import type { VisitsRepository } from "@/lib/ports";
+import type { MapVisit } from "@/lib/services/mapScene";
 
 // Select field lists copied VERBATIM from the routes the PR2 re-point will
 // replace, so the wire output stays byte-identical. The route files remain the
@@ -105,6 +106,14 @@ const AT_RISK_COLS =
 // GET /api/admin/commitments select.
 const COMMITMENTS_COLS =
   "id, created_at, commitment_detail, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)";
+
+// ── F-20 PR3 Map View selects — copied VERBATIM from app/api/map/data ────────
+// Existing-customer visits: join lat/lng from the customers table.
+const MAP_CUST_VISIT_COLS =
+  "id,visit_type,outcome,created_at,users!visits_user_id_fkey(name),customers!visits_customer_id_fkey(name,lat,lng)";
+// Prospect visits: use prospect_lat/lng stored on the visit row.
+const MAP_PROSPECT_VISIT_COLS =
+  "id,visit_type,outcome,created_at,prospect_name,prospect_lat,prospect_lng,is_approximate_location,users!visits_user_id_fkey(name)";
 
 // GET/POST /api/screen3/visit/notes select — verbatim multiline template.
 const NOTE_COLS = `
@@ -551,6 +560,114 @@ export function createSupabaseVisitsRepository(
       }
       const rows = (data ?? []) as unknown as VisitRow[];
       return rows.map(toVisit);
+    },
+
+    // ── F-20 PR3 — Map View read ──────────────────────────────────────────────
+
+    async listForMap(window: {
+      from: string | null;
+      to: string | null;
+    }): Promise<readonly MapVisit[]> {
+      const out: MapVisit[] = [];
+
+      // Query 1 — existing-customer visits (join customers.lat/lng).
+      let custQuery = client
+        .from("visits")
+        .select(MAP_CUST_VISIT_COLS)
+        .not("customer_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (window.from) custQuery = custQuery.gte("created_at", window.from);
+      if (window.to) custQuery = custQuery.lte("created_at", window.to);
+
+      const { data: custData, error: custError } = await custQuery;
+      if (custError) {
+        log.error("VisitsRepository.listForMap (customers) DB error", {
+          error: custError.message,
+        });
+        throw new ServiceError("Map visits read failed", { cause: custError });
+      }
+      const custRows = (custData ?? []) as unknown as {
+        id: string;
+        visit_type: string;
+        outcome: string;
+        created_at: string;
+        users: NameJoinRow | NameJoinRow[] | null;
+        customers:
+          | { name: string; lat: number | null; lng: number | null }
+          | { name: string; lat: number | null; lng: number | null }[]
+          | null;
+      }[];
+      for (const r of custRows) {
+        const customer = one(r.customers ?? null);
+        const lat = customer?.lat;
+        const lng = customer?.lng;
+        if (lat == null || lng == null) continue;
+        const rep = one(r.users ?? null);
+        out.push({
+          id: r.id,
+          lat,
+          lng,
+          visit_type: r.visit_type,
+          outcome: r.outcome,
+          rep: rep?.name ?? "Unknown",
+          customer_name: customer?.name ?? "Unknown",
+          created_at: r.created_at,
+          is_prospect: false,
+          // customer visits inherit customer coords — already verified.
+          is_approximate: false,
+        });
+      }
+
+      // Query 2 — prospect visits (use prospect_lat/lng on the visit row).
+      let prospectQuery = client
+        .from("visits")
+        .select(MAP_PROSPECT_VISIT_COLS)
+        .is("customer_id", null)
+        .not("prospect_lat", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (window.from)
+        prospectQuery = prospectQuery.gte("created_at", window.from);
+      if (window.to) prospectQuery = prospectQuery.lte("created_at", window.to);
+
+      const { data: prospectData, error: prospectError } = await prospectQuery;
+      if (prospectError) {
+        log.error("VisitsRepository.listForMap (prospects) DB error", {
+          error: prospectError.message,
+        });
+        throw new ServiceError("Map visits read failed", {
+          cause: prospectError,
+        });
+      }
+      const prospectRows = (prospectData ?? []) as unknown as {
+        id: string;
+        visit_type: string;
+        outcome: string;
+        created_at: string;
+        prospect_name: string | null;
+        prospect_lat: number;
+        prospect_lng: number;
+        is_approximate_location: boolean;
+        users: NameJoinRow | NameJoinRow[] | null;
+      }[];
+      for (const r of prospectRows) {
+        const rep = one(r.users ?? null);
+        out.push({
+          id: r.id,
+          lat: r.prospect_lat,
+          lng: r.prospect_lng,
+          visit_type: r.visit_type,
+          outcome: r.outcome,
+          rep: rep?.name ?? "Unknown",
+          customer_name: r.prospect_name ?? "Prospect",
+          created_at: r.created_at,
+          is_prospect: true,
+          is_approximate: r.is_approximate_location,
+        });
+      }
+
+      return out;
     },
   };
 }
