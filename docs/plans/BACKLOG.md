@@ -741,6 +741,15 @@ the trail matters.
 - **Owner unit:** Day 7 (sprint roadmap)
 - **Status:** ✅ SHIPPED 2026-06-17 (PR #49, squash `1a2ca3f`). Product session reversed the old "No undo on a completed order" lean — Hakan chose the **cascade**: undo IS allowed on a `completed` order and reverts it `completed→printed` atomically. Built hexagonal (`markLineUndone` port + `kds_undo_line` RPC), two additive migrations, prod smoke 0×5xx. The `line_undone` audit row carries **NULL user** (KDS service-role) — real attribution tracked in **F-RLS-04a-kds** (below), which now also covers the undo event. Cert `docs/anvil/2026-06-17-f-prod-02-kds-line-undo-cert.md`.
 
+### F-PROD-03 — `/api/cron/haccp-alarm` is NOT registered in `vercel.json` (HACCP overdue alarm may never fire in prod)
+
+- **Deferred:** 2026-06-26 (during F-25 Frame/Order — surfaced as risk R8).
+- **What:** The HACCP overdue-alarm cron route (`app/api/cron/haccp-alarm/route.ts`) carries a header comment claiming an every-5-min schedule ("every-5-mins 8-16 every-day"), but `vercel.json` `crons` contains only `compute-road-times` + `purge-idempotency-keys`. The alarm job is **not scheduled** — so the push notifications that nag staff about overdue cold-storage / processing / diary / corrective-action checks likely never fire in production.
+- **Why deferred:** OUTSIDE F-25's behaviour-preserving scope — F-25 re-points the route behind ports byte-identically and explicitly does NOT change whether the cron fires. Registering it is a real behaviour change (alarms would START firing to staff devices) needing its own verification + a Hakan confirm of intended live behaviour.
+- **Decision needed:** confirm whether the HACCP alarm is *meant* to fire in prod. If yes → add the cron to `vercel.json` (one-line) + verify the VAPID env vars are set in prod + smoke that a real overdue state pushes. If no/deprecated → delete the route + its comment. Also note R8's sibling: `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` must be present in prod env for any of this to work.
+- **Priority:** Medium — a silent food-safety-nag gap if alarms are supposed to fire; harmless if the feature was shelved. Worth a quick confirm.
+- **Owner unit:** unscheduled (F-PROD-03).
+
 ---
 
 ## F-08 hard prerequisites (carried forward from memory)
