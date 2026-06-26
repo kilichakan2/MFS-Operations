@@ -1,9 +1,26 @@
 export const dynamic = 'force-dynamic'
 
-import { NextRequest, NextResponse } from 'next/server'
+/**
+ * GET /api/detail/discrepancy
+ *
+ * F-21: re-pointed off the raw PostgREST fetch onto the owned
+ * DiscrepanciesRepository port (service-role singleton in
+ * lib/wiring/discrepancies.ts). The route is now thin: guard → id → repo →
+ * null→404 → field mapping. It imports ZERO adapters and ZERO vendor SDKs.
+ *
+ * Byte-identity: the response is the same 12-key object as before. The
+ * presentation transforms STAY HERE (reason underscore→space; the
+ * `?? 'Unknown'` / `?? ''` / `?? null` fallbacks). The ONE accepted deviation
+ * (R4): on a DB-read failure the body is now `{ error: 'Server error' }`
+ * instead of the old raw-fetch `{ error: 'DB error' }` — status stays 500, and
+ * no client reads the 500 body. This matches every other re-pointed route's 500.
+ *
+ * Auth: middleware enforces admin role via the /api/detail prefix; the handler
+ * verifies x-mfs-user-id is present (preserved verbatim).
+ */
 
-const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
-const SUPA_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+import { NextRequest, NextResponse } from 'next/server'
+import { discrepanciesRepository } from '@/lib/wiring/discrepancies'
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,39 +30,22 @@ export async function GET(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-    const params = new URLSearchParams({
-      select: [
-        'id', 'created_at', 'status', 'reason',
-        'ordered_qty', 'sent_qty', 'unit', 'note',
-        'customers(id,name)',
-        'products(id,name,category)',
-        'users!discrepancies_user_id_fkey(name)',
-      ].join(','),
-      id: `eq.${id}`,
-    })
+    const d = await discrepanciesRepository.findDetailById(id)
+    if (d === null) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const res = await fetch(`${SUPA_URL}/rest/v1/discrepancies?${params}`, {
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` },
-    })
-
-    if (!res.ok) return NextResponse.json({ error: 'DB error' }, { status: 500 })
-    const rows = await res.json()
-    if (!rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    const r = rows[0]
     return NextResponse.json({
-      id:         r.id,
-      createdAt:  r.created_at,
-      status:     r.status,
-      reason:     String(r.reason ?? '').replace(/_/g, ' '),
-      orderedQty: r.ordered_qty != null ? Number(r.ordered_qty) : null,
-      sentQty:    r.sent_qty    != null ? Number(r.sent_qty)    : null,
-      unit:       r.unit ?? '',
-      note:       r.note ?? null,
-      customer:   r.customers?.name ?? 'Unknown',
-      product:    r.products?.name  ?? 'Unknown',
-      category:   r.products?.category ?? null,
-      loggedBy:   r.users?.name ?? 'Unknown',
+      id:         d.id,
+      createdAt:  d.createdAt,
+      status:     d.status,
+      reason:     String(d.reason ?? '').replace(/_/g, ' '),
+      orderedQty: d.orderedQty,
+      sentQty:    d.sentQty,
+      unit:       d.unit ?? '',
+      note:       d.note ?? null,
+      customer:   d.customerName ?? 'Unknown',
+      product:    d.productName  ?? 'Unknown',
+      category:   d.productCategory ?? null,
+      loggedBy:   d.loggedByName ?? 'Unknown',
     })
   } catch (err) {
     console.error('[detail/discrepancy]', err)
