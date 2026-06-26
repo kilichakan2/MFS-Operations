@@ -16,9 +16,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { customersService }          from '@/lib/wiring/customers'
+import { productsService }           from '@/lib/wiring/products'
+import { auditLog }                  from '@/lib/wiring/auditLog'
 
 /** Trim a cell value; return null if blank */
 function cell(v: string | undefined): string | null {
@@ -60,57 +60,48 @@ export async function POST(req: NextRequest) {
     let skipped  = 0
 
     // ── Insert rows individually so one failure never aborts the batch ─────────
+    // The per-row insertOne returns a typed InsertOneResult and NEVER throws on a
+    // 23505 (duplicates are defined out of existence inside the adapter), so one
+    // bad row never aborts the batch — byte-identical to today's inline handling.
     for (const row of rows) {
       const name = cell(row[mapping.name])
       if (!name) { skipped++; continue }   // blank name — skip silently
 
-      if (type === 'customers') {
-        const { error } = await supabase
-          .from('customers')
-          .insert({ name, active: true, created_by: userId })
+      const result = type === 'customers'
+        ? await customersService.insertOne({ name, created_by: userId })
+        : await productsService.insertOne({
+            name,
+            code:     mapping.code     != null ? cell(row[mapping.code])     : null,
+            category: mapping.category != null ? cell(row[mapping.category]) : null,
+            box_size: mapping.box_size  != null ? cell(row[mapping.box_size])  : null,
+            created_by: userId,
+          })
 
-        if (error) {
-          // 23505 = unique_violation — duplicate name, skip it
-          if (error.code === '23505') { skipped++; continue }
-          console.error('[import/manual] customer insert error:', error.message, '| row:', name)
-          skipped++
-        } else {
-          inserted++
-        }
-
+      if (result.outcome === 'inserted') {
+        inserted++
+      } else if (result.outcome === 'duplicate') {
+        skipped++   // duplicate name — skip it silently
       } else {
-        const record = {
-          name,
-          code:       mapping.code     != null ? cell(row[mapping.code])     : null,
-          category:   mapping.category != null ? cell(row[mapping.category]) : null,
-          box_size:   mapping.box_size  != null ? cell(row[mapping.box_size])  : null,
-          active:     true,
-          created_by: userId,
-        }
-
-        const { error } = await supabase
-          .from('products')
-          .insert(record)
-
-        if (error) {
-          if (error.code === '23505') { skipped++; continue }
-          console.error('[import/manual] product insert error:', error.message, '| row:', name)
-          skipped++
-        } else {
-          inserted++
-        }
+        // Any other DB error — the adapter already logged it; reproduce today's
+        // console.error + skip with the message string (no vendor object leaks).
+        console.error(`[import/manual] ${type === 'customers' ? 'customer' : 'product'} insert error:`, result.message, '| row:', name)
+        skipped++
       }
     }
 
     // ── Audit log ─────────────────────────────────────────────────────────────
+    // Best-effort (R-AUDIT): today the inline insert's `{ error }` is IGNORED —
+    // an audit-write failure never fails an already-succeeded import. The .catch
+    // preserves that: auditLog.record throws ServiceError on a DB failure, so we
+    // swallow+log it here rather than let it bubble to the 500 catch.
     const label = type === 'customers' ? 'customer' : 'product'
-    await supabase.from('audit_log').insert({
+    await auditLog.record({
       user_id:   userId,
       screen:    'screen5',
       action:    'imported',
       record_id: null,
       summary:   `${inserted} ${label}${inserted === 1 ? '' : 's'} imported via manual column mapper by ${userName}${skipped > 0 ? ` (${skipped} skipped — blank or duplicate)` : ''}`,
-    })
+    }).catch(e => console.error('[import/manual] audit write failed (non-fatal):', e))
 
     return NextResponse.json({ inserted, skipped }, { status: 201 })
 

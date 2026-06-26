@@ -14,6 +14,9 @@ const KNOWN_ID = "00000000-0000-0000-0000-000000000c01";
 // cases (listUngeocoded / setActive / setPostcode / setCoords). Name "AAA…"
 // keeps it first so the listAllCustomers name-ordering case stays trivially true.
 const UNGEOCODED_ID = "00000000-0000-0000-0000-000000000c02";
+// F-20 PR3 — a GEOCODED row (lat/lng set) for listGeocodedForMap. Name "ZZZ…"
+// keeps the listAllCustomers name-ordering trivially true.
+const GEOCODED_ID = "00000000-0000-0000-0000-000000000c03";
 
 customersRepositoryContract(async () => {
   // Fresh repo per case (beforeEach) — mutations never bleed across cases.
@@ -30,11 +33,23 @@ customersRepositoryContract(async () => {
       postcode: "XX1 1XX",
       active: true,
     },
+    {
+      id: GEOCODED_ID,
+      name: "ZZZ Geocoded Customer",
+      postcode: "S1 2AB",
+      active: true,
+      lat: 53.38,
+      lng: -1.47,
+      is_approximate_location: false,
+    },
   ]);
   return {
     repo,
     knownCustomerId: KNOWN_ID,
     ungeocodedCustomerId: UNGEOCODED_ID,
+    geocodedCustomerId: GEOCODED_ID,
+    insertNamePrefix: "FAKE-INS-",
+    createdBy: "u-1",
     cleanup: async () => {},
   };
 });

@@ -20,9 +20,19 @@
  */
 import { customersRepositoryContract } from "@/lib/ports/__contracts__/CustomersRepository.contract";
 import { createSupabaseCustomersRepository } from "@/lib/adapters/supabase";
-import { getServiceClient, setupTestCustomer, TEST_PREFIX } from "../../_setup";
+import {
+  getServiceClient,
+  setupTestCustomer,
+  setupTestUsers,
+  TEST_PREFIX,
+} from "../../_setup";
 
 const UNGEOCODED_NAME = `${TEST_PREFIX}ungeocoded-customer`;
+const GEOCODED_NAME = `${TEST_PREFIX}geocoded-customer`;
+// F-20 PR3 — a prefix unique to the import cases so insertMany/insertOne create
+// fresh rows; cleanup removes them by this prefix so names never collide on
+// re-run (the insertOne 23505 case relies on a clean first insert).
+const INSERT_PREFIX = `${TEST_PREFIX}import-`;
 
 /** Create-or-reset a customer to a known ungeocoded + active state. */
 async function setupUngeocodedCustomer(): Promise<string> {
@@ -64,15 +74,62 @@ async function setupUngeocodedCustomer(): Promise<string> {
   return data.id;
 }
 
+/** Create-or-reset a customer to a known GEOCODED + active state (lat/lng set). */
+async function setupGeocodedCustomer(): Promise<string> {
+  const supa = getServiceClient();
+  const { data: existing } = await supa
+    .from("customers")
+    .select("id")
+    .eq("name", GEOCODED_NAME)
+    .maybeSingle();
+
+  const fields = {
+    postcode: "S1 2AB",
+    lat: 53.38,
+    lng: -1.47,
+    geocoded_at: "2026-06-26T00:00:00.000Z",
+    is_approximate_location: false,
+    active: true,
+  };
+  if (existing) {
+    await supa.from("customers").update(fields).eq("id", existing.id);
+    return existing.id;
+  }
+  const { data, error } = await supa
+    .from("customers")
+    .insert({ name: GEOCODED_NAME, ...fields })
+    .select("id")
+    .single();
+  if (error)
+    throw new Error(`Failed to create geocoded test customer: ${error.message}`);
+  return data.id;
+}
+
 customersRepositoryContract(async () => {
   const client = getServiceClient();
   const repo = createSupabaseCustomersRepository(client);
   const cust = await setupTestCustomer();
   const ungeocodedId = await setupUngeocodedCustomer();
+  const geocodedId = await setupGeocodedCustomer();
+  const users = await setupTestUsers();
+  // Clear any leftover import rows from a previous case/run so the insertOne
+  // duplicate case starts from a clean first insert.
+  await getServiceClient()
+    .from("customers")
+    .delete()
+    .like("name", `${INSERT_PREFIX}%`);
   return {
     repo,
     knownCustomerId: cust.id,
     ungeocodedCustomerId: ungeocodedId,
-    cleanup: async () => {},
+    geocodedCustomerId: geocodedId,
+    insertNamePrefix: INSERT_PREFIX,
+    createdBy: users.admin.id,
+    cleanup: async () => {
+      await getServiceClient()
+        .from("customers")
+        .delete()
+        .like("name", `${INSERT_PREFIX}%`);
+    },
   };
 });

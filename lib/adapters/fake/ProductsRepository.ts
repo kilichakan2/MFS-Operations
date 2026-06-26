@@ -20,7 +20,7 @@
  */
 
 import type { Product, ProductAdminView } from "@/lib/domain";
-import type { ProductsRepository } from "@/lib/ports";
+import type { ProductsRepository, InsertOneResult } from "@/lib/ports";
 
 /**
  * The fake accepts a seed of either the slim Orders-view `Product` (the shape
@@ -44,11 +44,25 @@ function toAdminView(p: FakeProductSeed): ProductAdminView {
   };
 }
 
+let fakeProductIdCounter = 0;
+function nextProductId(): string {
+  fakeProductIdCounter += 1;
+  const suffix = String(fakeProductIdCounter).padStart(12, "0");
+  return `00000000-0000-0000-0000-d${suffix.slice(1)}`;
+}
+
 export function createFakeProductsRepository(
   seed?: readonly FakeProductSeed[],
 ): ProductsRepository {
   const store = new Map<string, ProductAdminView>();
   for (const p of seed ?? []) store.set(p.id, toAdminView(p));
+
+  /** Names present in the store — drives the insertOne 23505 duplicate path. */
+  function nameExists(name: string): boolean {
+    for (const p of store.values()) if (p.name === name) return true;
+    return false;
+  }
+
   return {
     async findProductsByIds(
       ids: readonly string[],
@@ -76,6 +90,56 @@ export function createFakeProductsRepository(
       const updated: ProductAdminView = { ...p, active };
       store.set(id, updated);
       return updated;
+    },
+
+    // ── Import surface (F-20 PR3) ─────────────────────────────────────────────
+
+    async insertMany(
+      rows: readonly {
+        name: string;
+        category: string | null;
+        code: string | null;
+        box_size: string | null;
+        created_by: string;
+      }[],
+    ): Promise<readonly { id: string }[]> {
+      const created: { id: string }[] = [];
+      for (const r of rows) {
+        const id = nextProductId();
+        store.set(id, {
+          id,
+          name: r.name,
+          category: r.category,
+          code: r.code,
+          boxSize: r.box_size,
+          active: true,
+          created_at: "2026-01-01T00:00:00.000Z",
+        });
+        created.push({ id });
+      }
+      return created;
+    },
+
+    async insertOne(row: {
+      name: string;
+      code: string | null;
+      category: string | null;
+      box_size: string | null;
+      created_by: string;
+    }): Promise<InsertOneResult> {
+      // Mirror the Supabase 23505 path: a duplicate name → duplicate, no throw.
+      if (nameExists(row.name)) return { outcome: "duplicate" };
+      const id = nextProductId();
+      store.set(id, {
+        id,
+        name: row.name,
+        category: row.category,
+        code: row.code,
+        boxSize: row.box_size,
+        active: true,
+        created_at: "2026-01-01T00:00:00.000Z",
+      });
+      return { outcome: "inserted" };
     },
   };
 }

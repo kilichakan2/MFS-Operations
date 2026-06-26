@@ -18,6 +18,7 @@ export type {
   CreateOrderLineInput,
 } from "./Order";
 export type { Customer, CustomerAdminView } from "./Customer";
+export type { AuditLogEntry } from "./AuditLogEntry";
 export type { GeocodeResult } from "./Geocode";
 export type { Product, ProductAdminView } from "./Product";
 export type {

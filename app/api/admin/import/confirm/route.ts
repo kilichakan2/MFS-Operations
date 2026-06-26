@@ -13,82 +13,38 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService }           from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { customersService }          from '@/lib/wiring/customers'
+import { productsService }           from '@/lib/wiring/products'
+import { geocoder }                  from '@/lib/wiring/geocoder'
+import { auditLog }                  from '@/lib/wiring/auditLog'
 
 interface CustomerRow { name: string; postcode?: string }
 interface ProductRow  { name: string; category?: string | null; code?: string | null; box_size?: string | null }
 
-// ── Geocoding helper — fire-and-forget ────────────────────────────────────────
-// Called after new customers are inserted. Looks up postcodes via postcodes.io
-// and writes lat/lng back. Errors are logged but never thrown — a failed
-// geocode is non-blocking; the map simply omits that pin until next run.
-/** Extract outcode from a UK postcode (e.g. "S70 1KW" → "S70") */
-function extractOutcode(postcode: string): string {
-  return postcode.trim().toUpperCase().split(' ')[0]
-}
-
-async function geocodeNewCustomers(customers: { id: string; postcode: string }[]) {
-  const withPostcode = customers.filter(c => c.postcode?.trim())
+// ── Geocoding helper — fire-and-forget (W1) ───────────────────────────────────
+// Called after new customers are inserted. Resolves postcodes through the
+// Geocoder port (one geocodeMany round-trip; the exact→outcode fallback + the
+// `approximate` flag now live INSIDE the postcodes adapter) and writes lat/lng
+// back via customersService.setCoords. Errors are SWALLOWED — a failed geocode
+// is non-blocking; the map simply omits that pin until next run. The call site
+// also wraps this in `.catch(() => {})` so a thrown GeocoderError OR a setCoords
+// ServiceError can NEVER turn the already-returned 201 into an error (W1).
+async function geocodeNewCustomers(rows: { id: string; postcode: string }[]) {
+  const withPostcode = rows.filter(r => r.postcode?.trim())
   if (withPostcode.length === 0) return
 
-  try {
-    const now = new Date().toISOString()
-
-    // Pass 1 — exact postcode bulk lookup
-    const geoRes = await fetch('https://api.postcodes.io/postcodes', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ postcodes: withPostcode.map(c => c.postcode.trim()) }),
+  const now = new Date().toISOString()
+  // geocodeMany keys results by the postcode normalised trim()+upper-case.
+  const geoMap = await geocoder.geocodeMany(withPostcode.map(r => r.postcode.trim()))
+  for (const r of withPostcode) {
+    const coords = geoMap.get(r.postcode.trim().toUpperCase())
+    if (!coords) continue
+    await customersService.setCoords(r.id, {
+      lat: coords.lat,
+      lng: coords.lng,
+      geocoded_at: now,
+      is_approximate_location: coords.approximate,
     })
-    const geoData = await geoRes.json()
-    if (geoData.status !== 200) {
-      console.error('[import/confirm] postcodes.io returned status', geoData.status)
-      return
-    }
-
-    const needFallback: { id: string; postcode: string }[] = []
-    for (const r of geoData.result) {
-      const customer = withPostcode.find(
-        c => c.postcode.trim().toUpperCase() === r.query.toUpperCase()
-      )
-      if (!customer) continue
-      if (r.result) {
-        await supabase.from('customers').update({
-          lat: r.result.latitude, lng: r.result.longitude,
-          geocoded_at: now, is_approximate_location: false,
-        }).eq('id', customer.id)
-      } else {
-        needFallback.push(customer)
-      }
-    }
-
-    // Pass 2 — outcode fallback for failures
-    if (needFallback.length > 0) {
-      const outcodes = [...new Set(needFallback.map(c => extractOutcode(c.postcode)))]
-      const fbRes  = await fetch('https://api.postcodes.io/outcodes', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body:   JSON.stringify({ outcodes }),
-      })
-      const fbData = await fbRes.json()
-      if (fbData.status === 200) {
-        const fbMap: Record<string, { latitude: number; longitude: number }> = {}
-        for (const r of fbData.result) { fbMap[r.outcode.toUpperCase()] = { latitude: r.latitude, longitude: r.longitude } }
-        for (const c of needFallback) {
-          const coords = fbMap[extractOutcode(c.postcode)]
-          if (coords) {
-            await supabase.from('customers').update({
-              lat: coords.latitude, lng: coords.longitude,
-              geocoded_at: now, is_approximate_location: true,
-            }).eq('id', c.id)
-          }
-        }
-      }
-    }
-    console.log(`[import/confirm] geocoded ${withPostcode.length} new customers`)
-  } catch (err) {
-    console.error('[import/confirm] geocoding failed (non-fatal):', err)
   }
 }
 
@@ -139,38 +95,35 @@ export async function POST(req: NextRequest) {
     let skipped  = 0
 
     if (type === 'customers') {
+      // The adapter sets active:true; the route maps only name/postcode/created_by.
       const payload = validRows.map((r) => ({
         name:       (r as CustomerRow).name.trim(),
         postcode:   (r as CustomerRow).postcode?.trim() || null,
-        active:     true,
         created_by: userId,
       }))
 
-      const { data, error } = await supabase
-        .from('customers')
-        .insert(payload)
-        .select('id, postcode')
+      // Bulk insert is all-or-nothing: a batch error throws ServiceError inside
+      // the adapter → bubbles to the catch below → 500 'Server error'. DEVIATION
+      // (Locked item 5): today this returned the raw PostgREST error.message; the
+      // re-point returns a GENERIC 'Server error' (no raw vendor leak) — within
+      // the PR1/PR2 accepted-deviation envelope, a net security improvement.
+      const created = await customersService.insertMany(payload)
 
-      if (error) {
-        console.error('[import/confirm] Customer insert error:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-
-      inserted = data?.length ?? 0
+      inserted = created.length
       skipped  = validRows.length - inserted
 
       // Fire-and-forget geocoding for newly inserted customers that have postcodes
-      if (data && data.length > 0) {
-        const toGeocode = data
-          .filter((d: { id: string; postcode: string | null }) => d.postcode)
-          .map((d: { id: string; postcode: string | null }) => ({ id: d.id, postcode: d.postcode! }))
-        geocodeNewCustomers(toGeocode).catch(() => {/* swallow — already logged inside */})
+      if (created.length > 0) {
+        const toGeocode = created
+          .filter(d => d.postcode)
+          .map(d => ({ id: d.id, postcode: d.postcode! }))
+        geocodeNewCustomers(toGeocode).catch(() => {/* swallow — W1, already logged inside */})
 
         // After geocoding completes (async), trigger road-time computation for all new customers.
         // We use a delayed fire-and-forget — geocoding must finish first so lat/lng exist.
         // Each new customer's pairs are computed individually via the compute-road-times route.
         setTimeout(() => {
-          for (const d of data) {
+          for (const d of created) {
             fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? ''}/api/routes/compute-road-times`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'x-mfs-user-role': 'admin' },
@@ -186,38 +139,37 @@ export async function POST(req: NextRequest) {
         return v.trim()
       }
 
+      // The sentinel 'none'→null cleaning stays in the ROUTE (it is row-cleaning,
+      // applied BEFORE the repo call); the adapter receives already-cleaned
+      // category/code/box_size and sets active:true itself.
       const payload = validRows.map((r) => ({
         name:       (r as ProductRow).name.trim(),
         category:   sentinel((r as ProductRow).category),
         code:       sentinel((r as ProductRow).code),
         box_size:   sentinel((r as ProductRow).box_size),
-        active:     true,
         created_by: userId,
       }))
 
-      const { data, error } = await supabase
-        .from('products')
-        .insert(payload)
-        .select('id')
+      // All-or-nothing bulk insert (same deviation as customers: a batch error
+      // throws → 500 'Server error', no raw vendor message).
+      const created = await productsService.insertMany(payload)
 
-      if (error) {
-        console.error('[import/confirm] Product insert error:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-
-      inserted = data?.length ?? 0
+      inserted = created.length
       skipped  = validRows.length - inserted
     }
 
     // ── Write audit log ───────────────────────────────────────────────────────
+    // Best-effort (R-AUDIT): today the inline insert's `{ error }` is IGNORED —
+    // an audit-write failure never fails an already-succeeded import. The .catch
+    // preserves that.
     const entityLabel = type === 'customers' ? 'customer' : 'product'
-    await supabase.from('audit_log').insert({
+    await auditLog.record({
       user_id:   userId,
       screen:    'screen5',
       action:    'imported',
       record_id: null,
       summary:   `${inserted} ${entityLabel}${inserted === 1 ? '' : 's'} imported via AI import by ${userName}${skipped > 0 ? ` (${skipped} skipped — already exist)` : ''}`,
-    })
+    }).catch(e => console.error('[import/confirm] audit write failed (non-fatal):', e))
 
     return NextResponse.json({ inserted, skipped }, { status: 201 })
 

@@ -38,6 +38,16 @@ export interface CustomersContractSetup {
    * long as the wrapper guarantees it starts ungeocoded for each case.
    */
   ungeocodedCustomerId: string;
+  /**
+   * F-20 PR3 — a customer id known to be GEOCODED at setup (non-null lat AND
+   * lng), so it appears in listGeocodedForMap() and the ungeocoded one does not.
+   */
+  geocodedCustomerId: string;
+  /** F-20 PR3 — a name prefix unique to this run so insertMany/insertOne create
+   *  fresh rows that never collide with other rows/runs. */
+  insertNamePrefix: string;
+  /** F-20 PR3 — a valid users.id for the insert `created_by` FK. */
+  createdBy: string;
   cleanup: () => Promise<void>;
 }
 
@@ -161,6 +171,75 @@ export function customersRepositoryContract(
           is_approximate_location: true,
         }),
       ).resolves.toBeUndefined();
+    });
+
+    // ── F-20 PR3 — import insert + map read ───────────────────────────────────
+
+    it("insertMany inserts rows and returns id + postcode for each", async () => {
+      const rows = [
+        {
+          name: `${ctx.insertNamePrefix}A`,
+          postcode: "S1 2AB",
+          created_by: ctx.createdBy,
+        },
+        {
+          name: `${ctx.insertNamePrefix}B`,
+          postcode: null,
+          created_by: ctx.createdBy,
+        },
+      ];
+      const created = await ctx.repo.insertMany(rows);
+      expect(created.length).toBe(2);
+      for (const c of created) {
+        expect(typeof c.id).toBe("string");
+        expect(c.id.length).toBeGreaterThan(0);
+        // postcode is `string | null` and echoes what we inserted.
+        expect(["string", "object"]).toContain(typeof c.postcode);
+      }
+      const postcodes = created.map((c) => c.postcode).sort();
+      expect(postcodes).toEqual([null, "S1 2AB"].sort());
+    });
+
+    it("insertOne returns { outcome: 'inserted' } on a fresh name", async () => {
+      const result = await ctx.repo.insertOne({
+        name: `${ctx.insertNamePrefix}fresh`,
+        created_by: ctx.createdBy,
+      });
+      expect(result).toEqual({ outcome: "inserted" });
+    });
+
+    it("insertOne returns { outcome: 'duplicate' } on a 23505 (never throws)", async () => {
+      const name = `${ctx.insertNamePrefix}dup`;
+      const first = await ctx.repo.insertOne({ name, created_by: ctx.createdBy });
+      expect(first).toEqual({ outcome: "inserted" });
+      const second = await ctx.repo.insertOne({
+        name,
+        created_by: ctx.createdBy,
+      });
+      expect(second).toEqual({ outcome: "duplicate" });
+    });
+
+    it("listGeocodedForMap returns only lat/lng-set rows, name asc, MapCustomer shape", async () => {
+      const rows = await ctx.repo.listGeocodedForMap();
+      expect(Array.isArray(rows)).toBe(true);
+      // Our seeded geocoded customer must be present; the ungeocoded one absent.
+      const found = rows.find((r) => r.id === ctx.geocodedCustomerId);
+      expect(found).toBeDefined();
+      expect(rows.find((r) => r.id === ctx.ungeocodedCustomerId)).toBeUndefined();
+      for (const r of rows) {
+        // Only geocoded rows: lat AND lng are real numbers.
+        expect(typeof r.lat).toBe("number");
+        expect(typeof r.lng).toBe("number");
+        // MapCustomer shape: code = external_system_id (string | null),
+        // is_approximate = is_approximate_location (boolean).
+        expect(["string", "object"]).toContain(typeof r.code);
+        expect(typeof r.is_approximate).toBe("boolean");
+        expect(typeof r.active).toBe("boolean");
+      }
+      // name ASC ordering.
+      const names = rows.map((r) => r.name);
+      const sorted = [...names].sort((a, b) => a.localeCompare(b));
+      expect(names).toEqual(sorted);
     });
   });
 }

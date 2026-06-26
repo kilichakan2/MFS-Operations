@@ -23,6 +23,11 @@ export interface ProductsContractSetup {
   repo: ProductsRepository;
   /** A product id the adapter is known to return on findProductsByIds. */
   knownProductId: string;
+  /** F-20 PR3 — a name prefix unique to this run so insertMany/insertOne create
+   *  fresh product rows that never collide with other rows/runs. */
+  insertNamePrefix: string;
+  /** F-20 PR3 — a valid users.id for the insert `created_by` FK. */
+  createdBy: string;
   cleanup: () => Promise<void>;
 }
 
@@ -128,6 +133,58 @@ export function productsRepositoryContract(
       const unknownId = "00000000-0000-0000-0000-0000000000fe";
       const result = await ctx.repo.setActive(unknownId, false);
       expect(result).toBeNull();
+    });
+
+    // ── F-20 PR3 — import insert ──────────────────────────────────────────────
+
+    it("insertMany inserts rows and returns an id for each", async () => {
+      const rows = [
+        {
+          name: `${ctx.insertNamePrefix}A`,
+          category: "Lamb",
+          code: "P-A",
+          box_size: "10 kg",
+          created_by: ctx.createdBy,
+        },
+        {
+          name: `${ctx.insertNamePrefix}B`,
+          category: null,
+          code: null,
+          box_size: null,
+          created_by: ctx.createdBy,
+        },
+      ];
+      const created = await ctx.repo.insertMany(rows);
+      expect(created.length).toBe(2);
+      for (const c of created) {
+        expect(typeof c.id).toBe("string");
+        expect(c.id.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("insertOne returns { outcome: 'inserted' } on a fresh name", async () => {
+      const result = await ctx.repo.insertOne({
+        name: `${ctx.insertNamePrefix}fresh`,
+        category: null,
+        code: null,
+        box_size: null,
+        created_by: ctx.createdBy,
+      });
+      expect(result).toEqual({ outcome: "inserted" });
+    });
+
+    it("insertOne returns { outcome: 'duplicate' } on a 23505 (never throws)", async () => {
+      const row = {
+        name: `${ctx.insertNamePrefix}dup`,
+        category: null,
+        code: null,
+        box_size: null,
+        created_by: ctx.createdBy,
+      };
+      const first = await ctx.repo.insertOne(row);
+      expect(first).toEqual({ outcome: "inserted" });
+      const second = await ctx.repo.insertOne(row);
+      expect(second).toEqual({ outcome: "duplicate" });
     });
   });
 }

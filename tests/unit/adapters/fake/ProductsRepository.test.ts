@@ -24,6 +24,8 @@ productsRepositoryContract(async () => {
   return {
     repo,
     knownProductId: KNOWN_ID,
+    insertNamePrefix: "FAKE-PINS-",
+    createdBy: "u-1",
     cleanup: async () => {},
   };
 });

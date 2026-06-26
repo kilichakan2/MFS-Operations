@@ -161,3 +161,110 @@ describe("Fake VisitsRepository.listCommitments (parity)", () => {
     expect(noFrom.map((v) => v.id)).toEqual(["v-positive-commit", "v-lost-commit"]);
   });
 });
+
+// ── F-20 PR3 — listForMap parity ──────────────────────────────────────────────
+const MAP_SEED: FakeVisitsSeed = {
+  people: { u1: { id: "u1", name: "Hakan" } },
+  customers: {
+    cGeo: { id: "cGeo", name: "Geo Customer", lat: 53.38, lng: -1.47 },
+    cNoCoords: { id: "cNoCoords", name: "No Coords Customer" }, // lat/lng absent
+  },
+  visits: [
+    // Customer visit with resolvable coords → included (customer-side).
+    {
+      id: "v-cust-geo",
+      createdAt: "2026-06-20T10:00:00.000Z",
+      userId: "u1",
+      customerId: "cGeo",
+      outcome: "positive",
+      visitType: "routine",
+    },
+    // Customer visit whose customer has NO coords → skipped.
+    {
+      id: "v-cust-nocoords",
+      createdAt: "2026-06-19T10:00:00.000Z",
+      userId: "u1",
+      customerId: "cNoCoords",
+      outcome: "neutral",
+      visitType: "routine",
+    },
+    // Prospect visit with prospect coords → included (prospect-side).
+    {
+      id: "v-prospect-geo",
+      createdAt: "2026-06-18T10:00:00.000Z",
+      userId: "u1",
+      prospectName: "Prospect Cafe",
+      outcome: "positive",
+      visitType: "new_pitch",
+      prospectLat: 51.5,
+      prospectLng: -0.12,
+      isApproximateLocation: true,
+    },
+    // Prospect visit WITHOUT coords → skipped (prospect-side).
+    {
+      id: "v-prospect-nocoords",
+      createdAt: "2026-06-17T10:00:00.000Z",
+      userId: "u1",
+      prospectName: "Blank Prospect",
+      outcome: "neutral",
+      visitType: "routine",
+    },
+    // Out-of-window customer visit → filtered out by the date window.
+    {
+      id: "v-out-of-window",
+      createdAt: "2026-05-01T10:00:00.000Z",
+      userId: "u1",
+      customerId: "cGeo",
+      outcome: "positive",
+      visitType: "routine",
+    },
+  ],
+};
+
+describe("Fake VisitsRepository.listForMap (parity)", () => {
+  function mapRepo() {
+    return createFakeVisitsRepository(MAP_SEED);
+  }
+
+  it("returns customer-side visits first (newest-first), then prospect-side; skips null-coord rows", async () => {
+    const out = await mapRepo().listForMap({ from: null, to: null });
+    // Customer-side newest-first: v-cust-geo (06-20) then v-out-of-window
+    // (05-01); v-cust-nocoords skipped. Then prospect-side: v-prospect-geo;
+    // v-prospect-nocoords skipped.
+    expect(out.map((v) => v.id)).toEqual([
+      "v-cust-geo",
+      "v-out-of-window",
+      "v-prospect-geo",
+    ]);
+  });
+
+  it("maps the customer visit shape (coords from customer, is_prospect false)", async () => {
+    const out = await mapRepo().listForMap({ from: null, to: null });
+    const cust = out.find((v) => v.id === "v-cust-geo")!;
+    expect(cust.lat).toBe(53.38);
+    expect(cust.lng).toBe(-1.47);
+    expect(cust.customer_name).toBe("Geo Customer");
+    expect(cust.rep).toBe("Hakan");
+    expect(cust.is_prospect).toBe(false);
+    expect(cust.is_approximate).toBe(false);
+  });
+
+  it("maps the prospect visit shape (prospect coords, approximate flag preserved)", async () => {
+    const out = await mapRepo().listForMap({ from: null, to: null });
+    const pros = out.find((v) => v.id === "v-prospect-geo")!;
+    expect(pros.lat).toBe(51.5);
+    expect(pros.lng).toBe(-0.12);
+    expect(pros.customer_name).toBe("Prospect Cafe");
+    expect(pros.is_prospect).toBe(true);
+    expect(pros.is_approximate).toBe(true);
+  });
+
+  it("applies the date window to both sides", async () => {
+    const out = await mapRepo().listForMap({
+      from: "2026-06-19T00:00:00.000Z",
+      to: "2026-06-21T00:00:00.000Z",
+    });
+    // v-cust-geo (06-20) in; v-prospect-geo (06-18) out; v-out-of-window out.
+    expect(out.map((v) => v.id)).toEqual(["v-cust-geo"]);
+  });
+});

@@ -30,6 +30,11 @@ export {
   type ProductsServiceDeps,
 } from "./ProductsService";
 export {
+  createMapDataService,
+  type MapDataService,
+  type MapDataServiceDeps,
+} from "./MapDataService";
+export {
   createRoutesService,
   type RoutesService,
   type RoutesServiceDeps,

@@ -27,7 +27,8 @@ import type {
   Customer,
   CustomerAdminView,
 } from "@/lib/domain";
-import type { CustomersRepository } from "@/lib/ports";
+import type { CustomersRepository, InsertOneResult } from "@/lib/ports";
+import type { MapCustomer } from "@/lib/services/mapScene";
 
 /** Either shape may be seeded; the slim Customer is widened to the admin view. */
 type SeedCustomer = Customer | CustomerAdminView;
@@ -47,11 +48,24 @@ function toStored(c: SeedCustomer): CustomerAdminView {
   };
 }
 
+let fakeCustomerIdCounter = 0;
+function nextCustomerId(): string {
+  fakeCustomerIdCounter += 1;
+  const suffix = String(fakeCustomerIdCounter).padStart(12, "0");
+  return `00000000-0000-0000-0000-c${suffix.slice(1)}`;
+}
+
 export function createFakeCustomersRepository(
   seed?: readonly SeedCustomer[],
 ): CustomersRepository {
   const store = new Map<string, CustomerAdminView>();
   for (const c of seed ?? []) store.set(c.id, toStored(c));
+
+  /** Names present in the store — drives the insertOne 23505 duplicate path. */
+  function nameExists(name: string): boolean {
+    for (const c of store.values()) if (c.name === name) return true;
+    return false;
+  }
 
   return {
     async findCustomerById(id: string): Promise<Customer | null> {
@@ -133,6 +147,73 @@ export function createFakeCustomersRepository(
         geocoded_at: fields.geocoded_at,
         is_approximate_location: fields.is_approximate_location,
       });
+    },
+
+    // ── Import surface (F-20 PR3) ─────────────────────────────────────────────
+
+    async insertMany(
+      rows: readonly {
+        name: string;
+        postcode: string | null;
+        created_by: string;
+      }[],
+    ): Promise<readonly { id: string; postcode: string | null }[]> {
+      const created: { id: string; postcode: string | null }[] = [];
+      for (const r of rows) {
+        const id = nextCustomerId();
+        store.set(id, {
+          id,
+          name: r.name,
+          postcode: r.postcode,
+          lat: null,
+          lng: null,
+          active: true,
+          created_at: "2026-01-01T00:00:00.000Z",
+          geocoded_at: null,
+          is_approximate_location: false,
+        });
+        created.push({ id, postcode: r.postcode });
+      }
+      return created;
+    },
+
+    async insertOne(row: {
+      name: string;
+      created_by: string;
+    }): Promise<InsertOneResult> {
+      // Mirror the Supabase 23505 path: a duplicate name → duplicate, no throw.
+      if (nameExists(row.name)) return { outcome: "duplicate" };
+      const id = nextCustomerId();
+      store.set(id, {
+        id,
+        name: row.name,
+        postcode: null,
+        lat: null,
+        lng: null,
+        active: true,
+        created_at: "2026-01-01T00:00:00.000Z",
+        geocoded_at: null,
+        is_approximate_location: false,
+      });
+      return { outcome: "inserted" };
+    },
+
+    async listGeocodedForMap(): Promise<readonly MapCustomer[]> {
+      return [...store.values()]
+        .filter((c) => c.lat !== null && c.lng !== null)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          postcode: c.postcode ?? "",
+          // The fake store doesn't carry external_system_id; the real adapter's
+          // code = external_system_id mapping is proven by the integration test.
+          code: null,
+          active: c.active,
+          lat: c.lat as number,
+          lng: c.lng as number,
+          is_approximate: c.is_approximate_location ?? false,
+        }));
     },
   };
 }
