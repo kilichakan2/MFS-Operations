@@ -51,3 +51,33 @@ export interface Customer {
   readonly postcode: string | null;
   readonly active: boolean;
 }
+
+/**
+ * The richer ADMIN view of a Customer (F-20 PR1).
+ *
+ * Why a SECOND named type rather than bloating `Customer`: the slim `Customer`
+ * above is the *Orders-view* and its JSDoc forbids growing it (APOSD §
+ * "general-purpose by accident"). The admin routes (`customers` GET,
+ * `customers/[id]` PATCH, `geocode-all`) read/write a wider field set:
+ * coordinates, the geocode timestamp, the approximate-location flag and the
+ * creation date. Keeping the two as distinct labelled domain types preserves
+ * both contracts — Orders keeps its slim card, Admin gets the full card.
+ *
+ * The `customers` list/update routes return a SIX-field projection
+ * (`id, name, postcode, lat, lng, active, created_at`) in snake_case; that exact
+ * shape is reproduced by hand in each route (the toAppUser projection pattern)
+ * so nothing on screen shifts. The geocode-WRITE fields (`geocoded_at`,
+ * `is_approximate_location`) are owned by this shape but are not returned by the
+ * list route — they are optional here because not every read populates them.
+ */
+export interface CustomerAdminView {
+  readonly id: string;
+  readonly name: string;
+  readonly postcode: string | null;
+  readonly lat: number | null;
+  readonly lng: number | null;
+  readonly active: boolean;
+  readonly created_at: string;
+  readonly geocoded_at?: string | null;
+  readonly is_approximate_location?: boolean;
+}

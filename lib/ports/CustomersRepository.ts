@@ -19,7 +19,7 @@
  * vendor-types-never-cross, define-errors-out-of-existence on reads).
  */
 
-import type { Customer } from "@/lib/domain";
+import type { Customer, CustomerAdminView } from "@/lib/domain";
 
 export interface CustomersRepository {
   /**
@@ -44,4 +44,65 @@ export interface CustomersRepository {
    * @throws  ServiceError on DB failure.
    */
   findCustomerById(id: string): Promise<Customer | null>;
+
+  // ── Admin surface (F-20 PR1) ───────────────────────────────────────────────
+  // These power the three admin routes (customers GET, customers/[id] PATCH,
+  // geocode-all). They return the richer CustomerAdminView. Vendor row shapes
+  // stay inside the adapter; the column projection is hidden from callers.
+
+  /**
+   * List ALL customers, ordered by name ascending (the `customers` GET shape).
+   * @returns the full list as CustomerAdminView rows. Empty array, never null.
+   * @throws ServiceError on DB failure.
+   */
+  listAllCustomers(): Promise<readonly CustomerAdminView[]>;
+
+  /**
+   * List up to `limit` customers that have a postcode but no coordinates yet —
+   * the geocode-all backfill candidates (postcode not null AND lat is null).
+   * @throws ServiceError on DB failure.
+   */
+  listUngeocoded(limit: number): Promise<readonly CustomerAdminView[]>;
+
+  /**
+   * Flip a customer's `active` flag (the `customers/[id]` PATCH active branch).
+   * @returns the updated CustomerAdminView; `null` if no row matched the id.
+   * @throws ServiceError on DB failure.
+   */
+  setActive(id: string, active: boolean): Promise<CustomerAdminView | null>;
+
+  /**
+   * Write a customer's postcode and its geocode fields together (the
+   * `customers/[id]` PATCH postcode branch). The caller has already validated +
+   * normalised the postcode and resolved the coordinates (via the Geocoder
+   * port) before calling — the repository just persists.
+   * @returns the updated CustomerAdminView; `null` if no row matched the id.
+   * @throws ServiceError on DB failure.
+   */
+  setPostcodeAndCoords(
+    id: string,
+    fields: {
+      postcode: string;
+      lat: number | null;
+      lng: number | null;
+      geocoded_at: string | null;
+      is_approximate_location: boolean;
+    },
+  ): Promise<CustomerAdminView | null>;
+
+  /**
+   * Stamp coordinates onto ONE customer (the geocode-all bulk-write, applied
+   * per-row in a loop exactly as the route does today). Fire-and-persist: no
+   * return value — geocode-all tallies its own counts.
+   * @throws ServiceError on DB failure.
+   */
+  setCoords(
+    id: string,
+    fields: {
+      lat: number;
+      lng: number;
+      geocoded_at: string;
+      is_approximate_location: boolean;
+    },
+  ): Promise<void>;
 }
