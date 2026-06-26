@@ -35,6 +35,7 @@ import type {
   AuditSectionRawData,
   AuditExportRawData,
   ReportingCaMap,
+  AlarmOverdueInputs,
 } from "@/lib/domain";
 
 type Rows = Record<string, unknown>[];
@@ -591,6 +592,27 @@ export function createSupabaseHaccpReportingRepository(
         health: (healthRes.data ?? []) as Rows,
         staffTraining: (staffRes.data ?? []) as Rows,
         allergenTraining: (allergenRes.data ?? []) as Rows,
+      };
+    },
+
+    // ── F-25 alarm overdue inputs ───────────────────────────────────────────
+    // The 4 raw reads the HACCP overdue-alarm cron does today (cron route's
+    // `getOverdueStatus`). VERBATIM selects; the route used `.data ?? []` and
+    // did NOT inspect `.error`, so we preserve that exact no-throw behaviour —
+    // a read miss yields the empty array/0, byte-identical to today.
+    async fetchAlarmOverdueInputs(today: string): Promise<AlarmOverdueInputs> {
+      const [cold, room, diary, ccas] = await Promise.all([
+        client.from("haccp_cold_storage_temps").select("session").eq("date", today),
+        client.from("haccp_processing_temps").select("session").eq("date", today),
+        client.from("haccp_daily_diary").select("phase").eq("date", today),
+        client.from("haccp_corrective_actions").select("id").eq("resolved", false),
+      ]);
+
+      return {
+        coldSessions: (cold.data ?? []).map((r) => r.session as string),
+        roomSessions: (room.data ?? []).map((r) => r.session as string),
+        diaryPhases: (diary.data ?? []).map((r) => r.phase as string),
+        unresolvedCas: (ccas.data ?? []).length,
       };
     },
   };

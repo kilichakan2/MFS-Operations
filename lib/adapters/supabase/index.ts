@@ -124,3 +124,14 @@ export {
   authenticatedClientForCaller,
   requireServiceRole,
 } from "./authenticatedClient";
+// F-25 — HACCP overdue-alarm cron: the two table sockets (push_subscriptions +
+// alarm_sessions). The ONLY files importing `@supabase/supabase-js` for these
+// tables. Factory + service-role singleton each.
+export {
+  createSupabasePushSubscriptionsRepository,
+  supabasePushSubscriptionsRepository,
+} from "./PushSubscriptionsRepository";
+export {
+  createSupabaseAlarmSessionsRepository,
+  supabaseAlarmSessionsRepository,
+} from "./AlarmSessionsRepository";

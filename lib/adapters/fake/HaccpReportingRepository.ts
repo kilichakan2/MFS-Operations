@@ -28,6 +28,7 @@ import type {
   AuditHeatmapRawData,
   AuditSectionRawData,
   AuditExportRawData,
+  AlarmOverdueInputs,
 } from "@/lib/domain";
 
 /** Per-method read fixtures. The fake hands each back verbatim. */
@@ -45,6 +46,8 @@ export interface FakeHaccpReportingSeed {
   /** Keyed by section name → that section's raw read. */
   readonly auditSections?: Record<string, AuditSectionRawData>;
   readonly auditExport?: AuditExportRawData;
+  /** F-25 — the alarm-overdue raw reads (cold/room sessions, diary phases, CA count). */
+  readonly alarmOverdueInputs?: AlarmOverdueInputs;
 }
 
 const EMPTY_TODAY: TodayStatusData = {
@@ -102,6 +105,13 @@ const EMPTY_HEATMAP: AuditHeatmapRawData = {
   cleaningLog: [],
   minceLog: [],
   calibrationLog: [],
+};
+
+const EMPTY_ALARM_INPUTS: AlarmOverdueInputs = {
+  coldSessions: [],
+  roomSessions: [],
+  diaryPhases: [],
+  unresolvedCas: 0,
 };
 
 const EMPTY_EXPORT: AuditExportRawData = {
@@ -173,6 +183,10 @@ export function createFakeHaccpReportingRepository(
 
     async fetchAuditExportData(): Promise<AuditExportRawData> {
       return seed?.auditExport ?? EMPTY_EXPORT;
+    },
+
+    async fetchAlarmOverdueInputs(): Promise<AlarmOverdueInputs> {
+      return seed?.alarmOverdueInputs ?? EMPTY_ALARM_INPUTS;
     },
   };
 }
