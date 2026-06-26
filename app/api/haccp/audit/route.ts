@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpReportingService }     from '@/lib/wiring/haccp'
+import { haccpReportingServiceForCaller } from '@/lib/wiring/haccp'
 
 function todayUK(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
@@ -29,10 +29,13 @@ function daysAgo(n: number): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (role !== 'admin') {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId || role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
+
+    const svc = await haccpReportingServiceForCaller(userId)
 
     const { searchParams } = req.nextUrl
     const section = searchParams.get('section')
@@ -43,7 +46,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'section param required' }, { status: 400 })
     }
 
-    const result = await haccpReportingService.getAuditSection(section, from, to)
+    const result = await svc.getAuditSection(section, from, to)
 
     // Unknown section → the service returns `{ error: 'Unknown section: …' }`;
     // preserve the route's historical HTTP 400 for that case (byte-identical).

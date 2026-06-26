@@ -14,20 +14,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpReportingService }     from '@/lib/wiring/haccp'
+import { haccpReportingServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const svc = await haccpReportingServiceForCaller(userId)
 
     const { searchParams } = new URL(req.url)
     const from = searchParams.get('from')  // ISO date e.g. 2025-05-01
     const to   = searchParams.get('to')    // ISO date e.g. 2026-05-01
 
-    const result = await haccpReportingService.getAnnualReviewData(from, to)
+    const result = await svc.getAnnualReviewData(from, to)
     return NextResponse.json(result)
 
   } catch (err) {

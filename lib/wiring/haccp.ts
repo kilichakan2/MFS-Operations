@@ -19,11 +19,15 @@
  * exactly as F-18's `visitsServiceForCaller` was added by F-RLS-04g. Each mints a
  * short-lived DB token, builds a per-caller authenticated client (Postgres
  * `authenticated` role, so the HACCP RLS policies fire), and binds the relevant
- * adapter(s) to it. They are INERT in PR10a — NO caller in `app/**` (no route
- * edited). PR10b throws the switch by sourcing the caller id from the
- * `x-mfs-user-id` header. The service-role singletons below STAY as the
- * one-line rollback parachutes (and the public visitor kiosk keeps the
- * `haccpPeopleService` singleton in PR10b — no logged-in user).
+ * adapter(s) to it.
+ *
+ * F-RLS-04h PR10b: the switch is THROWN. All 32 authenticated HACCP routes now
+ * call these `…ForCaller(userId)` factories, sourcing the caller id from the
+ * tamper-proof `x-mfs-user-id` header (middleware, HMAC-signed session). HACCP DB
+ * traffic runs as the `authenticated` role and the PR10a RLS policies fire. The
+ * service-role singletons below STAY as the one-line rollback parachutes (and the
+ * public visitor kiosk keeps the `haccpPeopleService` singleton — no logged-in
+ * user, no `x-mfs-user-id` header for it).
  *
  * Per-request — NEVER memoize: the minted token is per-caller, and a memoized
  * client would leak one caller's identity to another. Each `…ForCaller` call
@@ -34,9 +38,9 @@
  * the wiring lines below. The services, the use-case, `lib/domain/Haccp*`, and
  * the ports are untouched.
  *
- * INTRODUCE-ONLY (F-19 PR1 + PR10a): the singletons and the new `…ForCaller`
- * factories are constructed but have NO caller — the HACCP routes are untouched.
- * PR10b throws the switch.
+ * As of PR10b the `…ForCaller` factories are LIVE (the 32 routes call them); the
+ * service-role singletons are retained purely as rollback parachutes + the public
+ * visitor kiosk.
  */
 import {
   createHaccpDailyChecksService,
@@ -176,14 +180,15 @@ export const haccpLookupsService: HaccpLookupsService =
   createHaccpLookupsService({ lookups: supabaseHaccpLookupsRepository });
 
 // ─────────────────────────────────────────────────────────────────────────
-// F-RLS-04h PR10a — per-request authenticated `…ForCaller(userId)` factories.
+// F-RLS-04h PR10a/PR10b — per-request authenticated `…ForCaller(userId)` factories.
 //
 // Each mints a short-lived DB token, builds a per-caller authenticated client
 // (Postgres `authenticated` role → the HACCP RLS policies fire), and binds the
-// relevant adapter(s) to it. INERT: no caller in `app/**` until PR10b. Per-
-// request — NEVER memoize (a memoized client would leak one caller's identity
-// to another). The service-role singletons above STAY as the rollback
-// parachutes. Mirrors `visitsServiceForCaller`.
+// relevant adapter(s) to it. LIVE as of PR10b: the 32 authenticated HACCP routes
+// call these (caller id from the `x-mfs-user-id` header). Per-request — NEVER
+// memoize (a memoized client would leak one caller's identity to another). The
+// service-role singletons above STAY as the rollback parachutes. Mirrors
+// `visitsServiceForCaller`.
 // ─────────────────────────────────────────────────────────────────────────
 
 /** Daily-checks service bound to ONE caller (single port). */

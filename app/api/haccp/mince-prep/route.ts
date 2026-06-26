@@ -18,7 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpDailyChecksService, submitHaccpDailyCheck } from '@/lib/wiring/haccp'
+import { haccpDailyChecksServiceForCaller, submitHaccpDailyCheckForCaller } from '@/lib/wiring/haccp'
 import { ConflictError } from '@/lib/errors'
 import type {
   CreateMinceInput,
@@ -41,14 +41,17 @@ function nowTimeUK(): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
+    const svc = await haccpDailyChecksServiceForCaller(userId)
+
     const range = (req.nextUrl.searchParams.get('range') ?? 'today') as 'today' | 'week' | 'last_week'
 
-    const result = await haccpDailyChecksService.listMincePrep(range)
+    const result = await svc.listMincePrep(range)
 
     return NextResponse.json(result)
 
@@ -62,11 +65,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const dc     = await haccpDailyChecksServiceForCaller(userId)
+    const submit = await submitHaccpDailyCheckForCaller(userId)
 
     const body  = await req.json()
     const { form } = body
@@ -89,10 +95,10 @@ export async function POST(req: NextRequest) {
       const todayObj     = new Date(today + 'T00:00:00')
       const daysFromKill = Math.floor((todayObj.getTime() - killDateObj.getTime()) / 86400000)
 
-      const v = haccpDailyChecksService.validateMince({ input, daysFromKill })
+      const v = dc.validateMince({ input, daysFromKill })
       if (!v.ok) {
         // The kill-date hard-fail 400 carries two extra keys (route-edge detail).
-        if (haccpDailyChecksService.killDateHardFail(input.product_species, daysFromKill)) {
+        if (dc.killDateHardFail(input.product_species, daysFromKill)) {
           return NextResponse.json({
             error:               v.message,
             kill_date_hard_fail: true,
@@ -102,12 +108,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: v.message }, { status: v.status })
       }
 
-      const runNum = (await haccpDailyChecksService.countMinceRuns('haccp_mince_log', today)) + 1
-      const built  = haccpDailyChecksService.buildMince({ input, userId, today, nowTime, daysFromKill, runNum })
+      const runNum = (await dc.countMinceRuns('haccp_mince_log', today)) + 1
+      const built  = dc.buildMince({ input, userId, today, nowTime, daysFromKill, runNum })
 
       let id: string
       try {
-        ;({ id } = await haccpDailyChecksService.insertMince(built))
+        ;({ id } = await dc.insertMince(built))
       } catch (e) {
         if (e instanceof ConflictError) {
           return NextResponse.json({ error: e.message }, { status: e.httpStatus })
@@ -115,8 +121,8 @@ export async function POST(req: NextRequest) {
         throw e
       }
 
-      const caRows = haccpDailyChecksService.buildMinceCorrectiveActions({ input, userId, sourceId: id })
-      const { ca_write_failed } = await submitHaccpDailyCheck.fileCorrectiveActions(caRows, 'mince')
+      const caRows = dc.buildMinceCorrectiveActions({ input, userId, sourceId: id })
+      const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'mince')
 
       return NextResponse.json({
         ok:             true,
@@ -132,7 +138,7 @@ export async function POST(req: NextRequest) {
     if (form === 'meatprep') {
       const input = body as CreateMeatPrepInput
 
-      const v = haccpDailyChecksService.validateMeatPrep(input)
+      const v = dc.validateMeatPrep(input)
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
       let daysFromKill: number | null = null
@@ -142,12 +148,12 @@ export async function POST(req: NextRequest) {
         daysFromKill = Math.floor((td.getTime() - kd.getTime()) / 86400000)
       }
 
-      const runNum = (await haccpDailyChecksService.countMinceRuns('haccp_meatprep_log', today)) + 1
-      const built  = haccpDailyChecksService.buildMeatPrep({ input, userId, today, nowTime, daysFromKill, runNum })
+      const runNum = (await dc.countMinceRuns('haccp_meatprep_log', today)) + 1
+      const built  = dc.buildMeatPrep({ input, userId, today, nowTime, daysFromKill, runNum })
 
       let id: string
       try {
-        ;({ id } = await haccpDailyChecksService.insertMeatPrep(built))
+        ;({ id } = await dc.insertMeatPrep(built))
       } catch (e) {
         if (e instanceof ConflictError) {
           return NextResponse.json({ error: e.message }, { status: e.httpStatus })
@@ -156,8 +162,8 @@ export async function POST(req: NextRequest) {
       }
 
       // CA write gates on temperature only (NOT the allergen-label issue).
-      const caRows = haccpDailyChecksService.buildMeatPrepCorrectiveActions({ input, userId, sourceId: id })
-      const { ca_write_failed } = await submitHaccpDailyCheck.fileCorrectiveActions(caRows, 'meatprep')
+      const caRows = dc.buildMeatPrepCorrectiveActions({ input, userId, sourceId: id })
+      const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'meatprep')
 
       // The response flag INCLUDES the allergen-label issue (broader than the CA gate).
       const allergenLabelIssue = (input.allergens_present?.length ?? 0) > 0 && !input.label_check_completed
@@ -176,12 +182,12 @@ export async function POST(req: NextRequest) {
     if (form === 'timesep') {
       const input = body as CreateTimeSeparationInput
 
-      const v = haccpDailyChecksService.validateTimeSeparation(input)
+      const v = dc.validateTimeSeparation(input)
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
       // timesep writes NO CA row — there is no time-separation CA builder.
-      await haccpDailyChecksService.insertTimeSeparation(
-        haccpDailyChecksService.buildTimeSeparation({ input, userId, today, nowTime }),
+      await dc.insertTimeSeparation(
+        dc.buildTimeSeparation({ input, userId, today, nowTime }),
       )
 
       return NextResponse.json({ ok: true })

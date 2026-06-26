@@ -11,14 +11,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpReportingService }     from '@/lib/wiring/haccp'
+import { haccpReportingServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || role !== 'admin') {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorised — admin only' }, { status: 401 })
     }
+
+    const svc = await haccpReportingServiceForCaller(userId)
 
     const { searchParams } = new URL(req.url)
     const from = searchParams.get('from')
@@ -28,7 +31,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'from and to date parameters required' }, { status: 400 })
     }
 
-    const result = await haccpReportingService.getOverview(from, to)
+    const result = await svc.getOverview(from, to)
     return NextResponse.json(result)
 
   } catch (err) {

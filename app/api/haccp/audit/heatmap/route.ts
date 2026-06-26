@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpReportingService }     from '@/lib/wiring/haccp'
+import { haccpReportingServiceForCaller } from '@/lib/wiring/haccp'
 
 function daysAgo(n: number): string {
   const d = new Date()
@@ -29,16 +29,19 @@ function todayUK(): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (role !== 'admin') {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId || role !== 'admin') {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const svc = await haccpReportingServiceForCaller(userId)
 
     const { searchParams } = req.nextUrl
     const from = searchParams.get('from') ?? daysAgo(30)
     const to   = searchParams.get('to')   ?? todayUK()
 
-    const result = await haccpReportingService.getAuditHeatmap(from, to)
+    const result = await svc.getAuditHeatmap(from, to)
     return NextResponse.json(result)
 
   } catch (err) {

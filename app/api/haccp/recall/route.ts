@@ -9,18 +9,20 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpSuppliersService }     from '@/lib/wiring/haccp'
+import { haccpSuppliersServiceForCaller } from '@/lib/wiring/haccp'
 
 // ─── GET ─────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const result = await haccpSuppliersService.getRecallContactList()
+    const svc = await haccpSuppliersServiceForCaller(userId)
+    const result = await svc.getRecallContactList()
     return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/recall]', err)
@@ -32,11 +34,13 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (role !== 'admin' || !userId) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 })
     }
+
+    const svc = await haccpSuppliersServiceForCaller(userId)
 
     const body = await req.json()
     const { id, internal_team, regulatory, other_contacts } = body as {
@@ -51,7 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     const nowIso = new Date().toISOString()
-    const result = await haccpSuppliersService.saveRecallConfig(
+    const result = await svc.saveRecallConfig(
       { id, internal_team, regulatory, other_contacts },
       userId,
       nowIso,
@@ -67,10 +71,13 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (role !== 'admin') {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!userId || role !== 'admin') {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 })
     }
+
+    const svc = await haccpSuppliersServiceForCaller(userId)
 
     const body = await req.json()
     const { id, contact_name, contact_phone, contact_email } = body as {
@@ -84,7 +91,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Supplier ID required' }, { status: 400 })
     }
 
-    const result = await haccpSuppliersService.updateRecallSupplierContact({
+    const result = await svc.updateRecallSupplierContact({
       id, contact_name, contact_phone, contact_email,
     })
     return NextResponse.json(result)

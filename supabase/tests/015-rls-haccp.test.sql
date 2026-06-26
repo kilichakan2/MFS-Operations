@@ -44,7 +44,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON haccp_sop_content        TO authenticate
 GRANT SELECT, INSERT, UPDATE, DELETE ON haccp_corrective_actions TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON haccp_documents          TO authenticated;
 
-SELECT plan(55);
+SELECT plan(58);
 
 \ir _helpers.sql
 
@@ -329,6 +329,42 @@ SELECT isnt_empty(format($$SELECT * FROM haccp_corrective_actions WHERE id = %L$
 SELECT isnt_empty(format($$SELECT * FROM haccp_documents WHERE id = %L$$,
   current_setting('test.doc')),
   'master-key role reads haccp_documents regardless of empty GUC');
+
+-- ════════════════════════════════════════════════════════════
+-- 6) PR10b ROUTE PATH — "the path a route now exercises" (3 assertions)
+--    F-RLS-04h PR10b flips the routes onto the per-caller authenticated client.
+--    Frame these two scenarios as the round-trip a daily-check write+read-back
+--    now performs as the `authenticated` role on haccp_deliveries:
+--      (a) GUC = active user → INSERT then SELECT round-trips the new row
+--          (the happy path the cutover routes drive end-to-end);
+--      (b) GUC cleared → the SAME INSERT raises 42501 (an absent identity is
+--          refused — the lock the cutover finally engages).
+-- ════════════════════════════════════════════════════════════
+SET LOCAL ROLE authenticated;
+SELECT set_config('app.current_user_id', current_setting('test.user'), true);
+
+-- (a) active-user round-trip: write a row, then read it back as the SAME caller.
+SELECT lives_ok(format($$
+    INSERT INTO haccp_deliveries
+      (submitted_by, supplier, product, product_category, temp_status, covered_contaminated)
+    VALUES (%L, 'pr10b-roundtrip', 'rt-product', 'beef', 'pass', 'no');
+  $$, current_setting('test.user')),
+  'PR10b route path: active user INSERTs haccp_deliveries (write)');
+SELECT isnt_empty(
+  $$SELECT * FROM haccp_deliveries WHERE supplier = 'pr10b-roundtrip'$$,
+  'PR10b route path: active user reads back the row it just wrote (read-back)');
+
+-- (b) absent identity: the same INSERT is refused with 42501 (clean fail-closed).
+SELECT set_config('app.current_user_id', '', true);
+SELECT throws_ok(format($$
+    INSERT INTO haccp_deliveries
+      (submitted_by, supplier, product, product_category, temp_status, covered_contaminated)
+    VALUES (%L, 'pr10b-noid', 'rt-product', 'beef', 'pass', 'no');
+  $$, current_setting('test.user')),
+  '42501', NULL,
+  'PR10b route path: absent identity (no GUC) is refused INSERT haccp_deliveries (42501)');
+
+RESET ROLE;
 
 SELECT * FROM finish();
 ROLLBACK;

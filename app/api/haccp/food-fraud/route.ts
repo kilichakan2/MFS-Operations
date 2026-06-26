@@ -12,16 +12,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpAssessmentsService } from '@/lib/wiring/haccp'
+import { haccpAssessmentsServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
 
-    const result = await haccpAssessmentsService.getFoodFraud(new Date())
+    const svc = await haccpAssessmentsServiceForCaller(userId)
+    const result = await svc.getFoodFraud(new Date())
     return NextResponse.json(result)
   } catch (err) {
     console.error('[GET /api/haccp/food-fraud]', err)
@@ -31,21 +33,23 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (role !== 'admin' || !userId) {
       return NextResponse.json({ error: 'Admin only' }, { status: 403 })
     }
 
+    const svc = await haccpAssessmentsServiceForCaller(userId)
+
     const body = await req.json()
 
-    const valid = haccpAssessmentsService.validateFoodFraud(body)
+    const valid = svc.validateFoodFraud(body)
     if (!valid.ok) {
       return NextResponse.json({ error: valid.message }, { status: valid.status })
     }
 
-    const assessment = await haccpAssessmentsService.insertFoodFraudAssessment(
-      haccpAssessmentsService.buildFoodFraudPersist({ input: body, userId }),
+    const assessment = await svc.insertFoodFraudAssessment(
+      svc.buildFoodFraudPersist({ input: body, userId }),
     )
     return NextResponse.json({ assessment }, { status: 201 })
   } catch (err) {

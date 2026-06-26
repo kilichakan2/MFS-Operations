@@ -12,7 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpDailyChecksService, submitHaccpDailyCheck } from '@/lib/wiring/haccp'
+import { haccpDailyChecksServiceForCaller, submitHaccpDailyCheckForCaller } from '@/lib/wiring/haccp'
 import { ConflictError } from '@/lib/errors'
 import type {
   CreateProcessingTempInput,
@@ -25,16 +25,19 @@ function todayUK(): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const svc = await haccpDailyChecksServiceForCaller(userId)
 
     const today       = todayUK()
     const requested   = req.nextUrl.searchParams.get('date')
     const queryDate   = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today
 
-    const { date, temps, diary } = await haccpDailyChecksService.listProcessRoom(queryDate)
+    const { date, temps, diary } = await svc.listProcessRoom(queryDate)
 
     return NextResponse.json({
       date,
@@ -50,11 +53,14 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const role   = req.cookies.get('mfs_role')?.value
-    const userId = req.cookies.get('mfs_user_id')?.value
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
     if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const dc     = await haccpDailyChecksServiceForCaller(userId)
+    const submit = await submitHaccpDailyCheckForCaller(userId)
 
     const body = await req.json()
     const { type } = body as { type: 'temps' | 'diary' }
@@ -63,14 +69,14 @@ export async function POST(req: NextRequest) {
     if (type === 'temps') {
       const input = body as CreateProcessingTempInput
 
-      const v = haccpDailyChecksService.validateProcessingTemp({ input, today })
+      const v = dc.validateProcessingTemp({ input, today })
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-      const built = haccpDailyChecksService.buildProcessingTemp({ input, userId })
+      const built = dc.buildProcessingTemp({ input, userId })
 
       let id: string
       try {
-        ;({ id } = await haccpDailyChecksService.insertProcessingTemp(built))
+        ;({ id } = await dc.insertProcessingTemp(built))
       } catch (e) {
         if (e instanceof ConflictError) {
           return NextResponse.json({ error: e.message }, { status: e.httpStatus })
@@ -78,8 +84,8 @@ export async function POST(req: NextRequest) {
         throw e
       }
 
-      const caRows = haccpDailyChecksService.buildProcessingTempCorrectiveActions({ input, userId, sourceId: id })
-      const { ca_write_failed } = await submitHaccpDailyCheck.fileCorrectiveActions(caRows, 'process-room-temps')
+      const caRows = dc.buildProcessingTempCorrectiveActions({ input, userId, sourceId: id })
+      const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'process-room-temps')
 
       return NextResponse.json({
         ok:              true,
@@ -91,13 +97,13 @@ export async function POST(req: NextRequest) {
     if (type === 'diary') {
       const input = body as CreateDailyDiaryInput
 
-      const v = haccpDailyChecksService.validateDailyDiary({ input, today })
+      const v = dc.validateDailyDiary({ input, today })
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
       let id: string
       try {
-        ;({ id } = await haccpDailyChecksService.insertDailyDiary(
-          haccpDailyChecksService.buildDailyDiary({ input, userId }),
+        ;({ id } = await dc.insertDailyDiary(
+          dc.buildDailyDiary({ input, userId }),
         ))
       } catch (e) {
         if (e instanceof ConflictError) {
@@ -106,8 +112,8 @@ export async function POST(req: NextRequest) {
         throw e
       }
 
-      const caRows = haccpDailyChecksService.buildDailyDiaryCorrectiveActions({ input, userId, sourceId: id })
-      const { ca_write_failed } = await submitHaccpDailyCheck.fileCorrectiveActions(caRows, 'process-room-diary')
+      const caRows = dc.buildDailyDiaryCorrectiveActions({ input, userId, sourceId: id })
+      const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'process-room-diary')
 
       return NextResponse.json({ ok: true, ca_write_failed })
     }

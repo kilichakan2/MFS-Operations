@@ -7,19 +7,22 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { haccpHandbookService }      from '@/lib/wiring/haccp'
+import { haccpHandbookServiceForCaller } from '@/lib/wiring/haccp'
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.cookies.get('mfs_role')?.value
-    if (!role || !['warehouse', 'butcher', 'admin'].includes(role)) {
+    const role   = req.headers.get('x-mfs-user-role')
+    const userId = req.headers.get('x-mfs-user-id')
+    if (!role || !userId || !['warehouse', 'butcher', 'admin'].includes(role)) {
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+
+    const svc = await haccpHandbookServiceForCaller(userId)
 
     const section = req.nextUrl.searchParams.get('section')
     const doc     = req.nextUrl.searchParams.get('doc')
 
-    const result = await haccpHandbookService.getHandbook({ section, doc })
+    const result = await svc.getHandbook({ section, doc })
     if ('ok' in result && result.ok === false) {
       return NextResponse.json({ error: result.message }, { status: result.status })
     }
