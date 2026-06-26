@@ -27,6 +27,7 @@ import type {
   AuditHeatmapRawData,
   AuditSectionRawData,
   AuditExportRawData,
+  AlarmOverdueInputs,
 } from "@/lib/domain";
 
 export interface HaccpReportingRepository {
@@ -82,4 +83,12 @@ export interface HaccpReportingRepository {
    * collections + their CA maps; service assembles the 14 SheetSpec arrays.
    */
   fetchAuditExportData(from: string, to: string): Promise<AuditExportRawData>;
+
+  /**
+   * F-25 — the 4 raw reads the HACCP overdue-alarm cron does today (cold
+   * sessions, room sessions, diary phases for `today`, + the unresolved-CA
+   * count). The adapter runs the Promise.all and returns the raw arrays/count;
+   * ALL nowHour-threshold logic stays in the SERVICE (pure). @throws ServiceError.
+   */
+  fetchAlarmOverdueInputs(today: string): Promise<AlarmOverdueInputs>;
 }
