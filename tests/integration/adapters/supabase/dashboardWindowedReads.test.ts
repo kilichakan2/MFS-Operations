@@ -160,9 +160,18 @@ describe("VisitsRepository — F-21 dashboard reads (live)", () => {
     expect(rows.find((r) => r.id === visitIds[0])).toBeDefined();
   });
 
-  it("listWeekForDashboard returns in-window visits (no limit)", async () => {
+  it("listWeekForDashboard returns in-window visits (no limit) — week-rollup cols, NO id", async () => {
     const repo = createSupabaseVisitsRepository(getServiceClient());
     const rows = await repo.listWeekForDashboard({ from: FROM, to: TO });
-    expect(rows.find((r) => r.id === visitIds[0])).toBeDefined();
+    // Byte-identity: the original route's Zone-3 week query selected
+    // `visit_type, outcome, user_id, customer_id, prospect_name, users(name)`
+    // with NO `id` (the week rollup only groups by rep/type/customer/prospect,
+    // never the visit id). So assert presence by the seeded customerId, NOT id.
+    const found = rows.find((r) => r.customerId === customerId);
+    expect(found).toBeDefined();
+    expect(["at_risk", "lost", "positive", "neutral"]).toContain(found?.outcome);
+    expect(typeof found?.visitType).toBe("string");
+    // The seeded at-risk visit is a customer visit → loggedByName resolved.
+    expect(found?.loggedByName).toBeDefined();
   });
 });
