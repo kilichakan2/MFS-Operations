@@ -65,6 +65,14 @@ export {
   type VisitsService,
   type VisitsServiceDeps,
 } from "./VisitsService";
+// F-21 — the admin dashboard desk (composes 5 repos + owns all aggregation).
+export {
+  createDashboardService,
+  type DashboardService,
+  type DashboardServiceDeps,
+  type DashboardWindow,
+  type DashboardPayload,
+} from "./DashboardService";
 export {
   createHaccpDailyChecksService,
   DISPOSITION_MAP,
