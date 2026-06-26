@@ -152,6 +152,19 @@ describe("POST /api/admin/import/confirm — customers success path", () => {
     expect(await res.json()).toEqual({ error: "Server error" });
     errSpy.mockRestore();
   });
+
+  it("an audit record() rejection does NOT change the 201 (R-AUDIT)", async () => {
+    customersInsertMany.mockResolvedValue([{ id: "c1", postcode: null }]);
+    auditRecord.mockRejectedValueOnce(new Error("audit down"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await POST(
+      makeReq({ type: "customers", rows: [{ name: "Acme" }] }),
+    );
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ inserted: 1, skipped: 0 });
+    await flushMicrotasks();
+    errSpy.mockRestore();
+  });
 });
 
 describe("POST /api/admin/import/confirm — products success path", () => {
