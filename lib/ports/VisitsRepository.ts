@@ -129,6 +129,37 @@ export interface VisitsRepository {
     to: string;
   }): Promise<readonly Visit[]>;
 
+  // ── F-21 — admin dashboard reads ───────────────────────────────────────────
+
+  /** Visits in [from,to], DESC (newest first), limit 50, with outcome,
+   *  visit_type, notes, pipeline_status, customer_id, prospect_name,
+   *  customers(name), users(name). → dashboard Zone 2 (visits-today, grouped by
+   *  rep with drill-down).
+   *  Selects: id, created_at, outcome, visit_type, notes, pipeline_status,
+   *  customer_id, prospect_name, customers(name), users!visits_user_id_fkey(name).
+   *  Maps via `toVisit` (RAW enums; un-selected fields default). @throws ServiceError. */
+  listTodayForDashboard(window: {
+    from: string;
+    to: string;
+  }): Promise<readonly Visit[]>;
+
+  /** Visits in [from,to] (no limit), with visit_type, outcome, user_id,
+   *  customer_id, prospect_name, users(name). → dashboard Zone 3 (week rep
+   *  grouping + hunter/farmer).
+   *  Selects: visit_type, outcome, user_id, customer_id, prospect_name,
+   *  users!visits_user_id_fkey(name). @throws ServiceError. */
+  listWeekForDashboard(window: {
+    from: string;
+    to: string;
+  }): Promise<readonly Visit[]>;
+
+  /** At-risk list for the dashboard: visits with outcome IN (at_risk, lost) and
+   *  created_at >= from (NO upper bound — RISK R1: the dashboard query is gte-only,
+   *  so this method MUST NOT apply an `lte`, unlike `listAtRisk({from,to})`),
+   *  newest first, customer + rep joins resolved. → dashboard Zone 1 (at-risk).
+   *  Selects: AT_RISK_COLS (same as listAtRisk). @throws ServiceError. */
+  listAtRiskSince(from: string): Promise<readonly Visit[]>;
+
   // ── F-20 PR3 — Map View read ───────────────────────────────────────────────
 
   /** Visits for the Map View (map/data). Returns BOTH existing-customer visits

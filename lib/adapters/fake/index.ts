@@ -77,6 +77,7 @@ export {
   createFakeComplaintsRepository,
   fakeComplaintsRepository,
   type FakeComplaintsSeed,
+  type FakeComplaintSeed,
   type FakeComplaintsPersonRef,
   type FakeComplaintsCustomerRef,
 } from "./ComplaintsRepository";
@@ -93,6 +94,16 @@ export {
   type FakeVisitsPersonRef,
   type FakeVisitsCustomerRef,
 } from "./VisitsRepository";
+// F-21 — Discrepancies fake (dashboard Zone 2/3 + detail/discrepancy).
+export {
+  createFakeDiscrepanciesRepository,
+  fakeDiscrepanciesRepository,
+  type FakeDiscrepanciesSeed,
+  type FakeDiscrepancySeed,
+  type FakeDiscrepanciesPersonRef,
+  type FakeDiscrepanciesCustomerRef,
+  type FakeDiscrepanciesProductRef,
+} from "./DiscrepanciesRepository";
 export {
   createFakeHaccpDailyChecksRepository,
   fakeHaccpDailyChecksRepository,

@@ -64,6 +64,11 @@ export type { AttachmentStorage } from "./AttachmentStorage";
 export type { ComplaintsRepository } from "./ComplaintsRepository";
 export type { ComplimentsRepository } from "./ComplimentsRepository";
 export type { VisitsRepository } from "./VisitsRepository";
+// F-21 — Discrepancies port (dashboard Zone 2/3 + detail/discrepancy).
+export type {
+  DiscrepanciesRepository,
+  DiscrepancyWindow,
+} from "./DiscrepanciesRepository";
 export type { HaccpDailyChecksRepository } from "./HaccpDailyChecksRepository";
 export type { HaccpCorrectiveActionsRepository } from "./HaccpCorrectiveActionsRepository";
 export type { HaccpAssessmentsRepository } from "./HaccpAssessmentsRepository";

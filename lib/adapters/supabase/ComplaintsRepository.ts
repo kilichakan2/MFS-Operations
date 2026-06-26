@@ -40,6 +40,7 @@ import type {
   ComplaintCategory,
   ComplaintReceivedVia,
   ComplaintStatus,
+  ComplaintWeekRollupRow,
   ComplaintEmailContext,
   CreateComplaintInput,
   CreatedComplaint,
@@ -85,6 +86,16 @@ const DETAIL_COLS = [
 
 // resolve + note email/context select.
 const EMAIL_CTX_COLS = "id,category,description,status,customers(name)";
+
+// ── F-21 admin dashboard selects — copied VERBATIM from app/api/dashboard ────
+// Zone 1: open complaints > 48h (route line 63).
+const OPEN_OLDER_COLS =
+  "id, created_at, category, description, user_id, customers(name), users!complaints_user_id_fkey(name)";
+// Zone 2: complaints today (route line 96).
+const TODAY_NAMES_COLS =
+  "id, created_at, category, status, description, resolution_note, customers(name), users!complaints_user_id_fkey(name)";
+// Zone 3: complaints this week — the trimmed rollup feed (route line 121).
+const WEEK_ROLLUP_COLS = "category, status, created_at, resolved_at";
 
 // ─── coercion helpers ────────────────────────────────────────────────
 
@@ -397,6 +408,71 @@ export function createSupabaseComplaintsRepository(
       }
       const row = data as { id: string; created_at: string };
       return { id: row.id, body: input.body.trim(), createdAt: row.created_at };
+    },
+
+    // ── F-21 — admin dashboard reads ────────────────────────────────────────
+
+    async listOpenOlderThan(before: string): Promise<readonly Complaint[]> {
+      const { data, error } = await client
+        .from("complaints")
+        .select(OPEN_OLDER_COLS)
+        .eq("status", "open")
+        .lt("created_at", before)
+        .order("created_at", { ascending: true });
+      if (error) {
+        log.error("ComplaintsRepository.listOpenOlderThan DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as ComplaintRow[];
+      // No status column selected; all rows are open by the filter.
+      return rows.map((r) => toComplaint({ ...r, status: "open" }, []));
+    },
+
+    async listTodayWithNames(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Complaint[]> {
+      const { data, error } = await client
+        .from("complaints")
+        .select(TODAY_NAMES_COLS)
+        .gte("created_at", window.from)
+        .lte("created_at", window.to)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) {
+        log.error("ComplaintsRepository.listTodayWithNames DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as ComplaintRow[];
+      return rows.map((r) => toComplaint(r, []));
+    },
+
+    async listWeekRollup(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly ComplaintWeekRollupRow[]> {
+      const { data, error } = await client
+        .from("complaints")
+        .select(WEEK_ROLLUP_COLS)
+        .gte("created_at", window.from)
+        .lte("created_at", window.to);
+      if (error) {
+        log.error("ComplaintsRepository.listWeekRollup DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as ComplaintRow[];
+      return rows.map((r) => ({
+        category: r.category as ComplaintCategory, // RAW
+        status: r.status as ComplaintStatus,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at ?? null,
+      }));
     },
   };
 }

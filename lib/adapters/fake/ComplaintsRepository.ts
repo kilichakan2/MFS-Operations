@@ -33,6 +33,7 @@ import type {
   ComplaintCategory,
   ComplaintReceivedVia,
   ComplaintStatus,
+  ComplaintWeekRollupRow,
   ComplaintEmailContext,
   CreateComplaintInput,
   CreatedComplaint,
@@ -54,12 +55,31 @@ export interface FakeComplaintsCustomerRef {
   readonly name: string;
 }
 
+/** A pre-seeded complaint row (F-21 — lets the admin dashboard reads' tests
+ *  plant rows the fake then filters/orders, mirroring the Supabase reads).
+ *  Only the fields the dashboard reads touch are required; the rest default. */
+export interface FakeComplaintSeed {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly customerId?: string | null;
+  readonly userId?: string | null; // logger
+  readonly category: ComplaintCategory;
+  readonly description?: string;
+  readonly receivedVia?: ComplaintReceivedVia;
+  readonly status: ComplaintStatus;
+  readonly resolutionNote?: string | null;
+  readonly resolvedBy?: string | null;
+  readonly resolvedAt?: string | null;
+}
+
 /** Optional join directories so reads return populated joins. */
 export interface FakeComplaintsSeed {
   /** user id → person (logger / resolver / note author). */
   readonly people?: Readonly<Record<string, FakeComplaintsPersonRef>>;
   /** customer id → customer (complaint customer join). */
   readonly customers?: Readonly<Record<string, FakeComplaintsCustomerRef>>;
+  /** Pre-planted complaint rows (F-21 — admin dashboard read parity). */
+  readonly complaints?: readonly FakeComplaintSeed[];
 }
 
 interface StoredComplaint {
@@ -109,6 +129,23 @@ export function createFakeComplaintsRepository(
   const notes = new Map<string, StoredNote>();
   const people = seed?.people ?? {};
   const customers = seed?.customers ?? {};
+
+  // F-21: plant any seeded complaint rows so the admin dashboard reads have data.
+  for (const c of seed?.complaints ?? []) {
+    complaints.set(c.id, {
+      id: c.id,
+      createdAt: c.createdAt,
+      customerId: c.customerId ?? "",
+      category: c.category,
+      description: c.description ?? "",
+      receivedVia: c.receivedVia ?? "phone",
+      userId: c.userId ?? "",
+      status: c.status,
+      resolutionNote: c.resolutionNote ?? null,
+      resolvedBy: c.resolvedBy ?? null,
+      resolvedAt: c.resolvedAt ?? null,
+    });
+  }
 
   function nameOf(userId: string | null): string | undefined {
     return userId ? people[userId]?.name : undefined;
@@ -284,6 +321,47 @@ export function createFakeComplaintsRepository(
       };
       notes.set(id, row);
       return { id, body, createdAt };
+    },
+
+    // ── F-21 — admin dashboard reads (mirror the Supabase semantics) ─────────
+
+    async listOpenOlderThan(before: string): Promise<readonly Complaint[]> {
+      // status=open AND created_at < before (STRICT lt); oldest first (ASC).
+      return [...complaints.values()]
+        .filter((c) => c.status === "open" && c.createdAt < before)
+        .sort(
+          (a, b) =>
+            a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id),
+        )
+        .map((c) => toComplaint(c, []));
+    },
+
+    async listTodayWithNames(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Complaint[]> {
+      // [from,to] inclusive; newest first; capped at 50.
+      return [...complaints.values()]
+        .filter((c) => c.createdAt >= window.from && c.createdAt <= window.to)
+        .sort(byNewestThenId)
+        .slice(0, 50)
+        .map((c) => toComplaint(c, []));
+    },
+
+    async listWeekRollup(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly ComplaintWeekRollupRow[]> {
+      // [from,to] inclusive; trimmed { category, status, createdAt, resolvedAt }.
+      return [...complaints.values()]
+        .filter((c) => c.createdAt >= window.from && c.createdAt <= window.to)
+        .sort(byNewestThenId)
+        .map((c) => ({
+          category: c.category, // RAW
+          status: c.status,
+          createdAt: c.createdAt,
+          resolvedAt: c.resolvedAt,
+        }));
     },
   };
 }
