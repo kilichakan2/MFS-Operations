@@ -68,7 +68,13 @@ export interface Visit {
   readonly customerName: string | null; // customers.name ?? null
   readonly visitType: VisitType; // RAW enum (no replace)
   readonly outcome: VisitOutcome; // RAW enum (no replace)
-  readonly pipelineStatus: string; // ?? 'Logged'
+  // Almost every read defaults a null DB pipeline_status to 'Logged' (the
+  // adapter's `toVisit` mapper). The admin `prospects` read is the ONE
+  // exception (F-20 PR2, risk R1): it preserves the RAW null so the prospects
+  // wire `stage` stays null instead of flipping to 'Logged'. Hence the field is
+  // `string | null` — readers that need the 'Logged' default get it from
+  // `toVisit`; the prospects path bypasses `toVisit` to keep null.
+  readonly pipelineStatus: string | null;
   readonly commitmentMade: boolean;
   readonly commitmentDetail: string | null;
   readonly notes: string | null;

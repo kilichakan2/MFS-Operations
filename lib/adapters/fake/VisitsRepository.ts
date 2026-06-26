@@ -56,12 +56,34 @@ export interface FakeVisitsCustomerRef {
   readonly name: string;
 }
 
-/** Optional join directories so reads return populated joins. */
+/** A pre-seeded visit row (F-20 PR2 — lets the admin-insight reads' parity tests
+ *  plant rows the fake then filters/orders, mirroring the Supabase reads). Only
+ *  the fields the insight reads touch are required; the rest default sensibly.
+ *  `pipelineStatus` is `string | null` so the R1 null-stage parity case can plant
+ *  a null. */
+export interface FakeVisitSeed {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly userId: string;
+  readonly customerId?: string | null;
+  readonly prospectName?: string | null;
+  readonly prospectPostcode?: string | null;
+  readonly visitType?: VisitType;
+  readonly outcome: VisitOutcome;
+  readonly pipelineStatus?: string | null;
+  readonly commitmentMade?: boolean;
+  readonly commitmentDetail?: string | null;
+  readonly notes?: string | null;
+}
+
+/** Optional join directories + seed rows so reads return populated joins/data. */
 export interface FakeVisitsSeed {
   /** user id → person (rep / note author). */
   readonly people?: Readonly<Record<string, FakeVisitsPersonRef>>;
   /** customer id → customer (visit customer join). */
   readonly customers?: Readonly<Record<string, FakeVisitsCustomerRef>>;
+  /** Pre-planted visit rows (F-20 PR2 — admin-insight read parity). */
+  readonly visits?: readonly FakeVisitSeed[];
 }
 
 interface StoredVisit {
@@ -73,7 +95,10 @@ interface StoredVisit {
   prospectPostcode: string | null;
   visitType: VisitType;
   outcome: VisitOutcome;
-  pipelineStatus: string;
+  // `string | null` since F-20 PR2: the admin `prospects` read preserves a raw
+  // null pipeline_status (R1); every other read defaults a null to 'Logged' via
+  // `toVisit`. A seeded row may carry null.
+  pipelineStatus: string | null;
   commitmentMade: boolean;
   commitmentDetail: string | null;
   notes: string | null;
@@ -117,6 +142,24 @@ export function createFakeVisitsRepository(
   const people = seed?.people ?? {};
   const customers = seed?.customers ?? {};
 
+  // F-20 PR2: plant any seeded visit rows so the admin-insight reads have data.
+  for (const v of seed?.visits ?? []) {
+    visits.set(v.id, {
+      id: v.id,
+      createdAt: v.createdAt,
+      userId: v.userId,
+      customerId: v.customerId ?? null,
+      prospectName: v.prospectName ?? null,
+      prospectPostcode: v.prospectPostcode ?? null,
+      visitType: v.visitType ?? "routine",
+      outcome: v.outcome,
+      pipelineStatus: v.pipelineStatus ?? null,
+      commitmentMade: v.commitmentMade ?? false,
+      commitmentDetail: v.commitmentDetail ?? null,
+      notes: v.notes ?? null,
+    });
+  }
+
   function nameOf(userId: string | null): string | undefined {
     return userId ? people[userId]?.name : undefined;
   }
@@ -137,13 +180,23 @@ export function createFakeVisitsRepository(
       customerName: customerNameOf(v.customerId),
       visitType: v.visitType,
       outcome: v.outcome,
-      pipelineStatus: v.pipelineStatus,
+      // Mirror the Supabase `toVisit`'s `?? 'Logged'` default so both adapters
+      // answer identically. The admin `prospects` read is the ONE exception — it
+      // uses `toProspectVisit` below to keep a raw null (F-20 PR2, R1).
+      pipelineStatus: v.pipelineStatus ?? "Logged",
       commitmentMade: v.commitmentMade,
       commitmentDetail: v.commitmentDetail,
       notes: v.notes,
       prospectName: v.prospectName,
       prospectPostcode: v.prospectPostcode,
     };
+  }
+
+  /** Prospects-read mapper (F-20 PR2, R1) — IDENTICAL to `toVisit` EXCEPT it
+   *  preserves a RAW null `pipeline_status` instead of coercing it to 'Logged',
+   *  mirroring the Supabase adapter's `toProspectVisit`. */
+  function toProspectVisit(v: StoredVisit): Visit {
+    return { ...toVisit(v), pipelineStatus: v.pipelineStatus ?? null };
   }
 
   function toNote(n: StoredNote): VisitNote {
@@ -319,6 +372,47 @@ export function createFakeVisitsRepository(
         .filter((v) => !filter.outcome || v.outcome === filter.outcome)
         .sort(byNewestThenId)
         .slice(0, 200)
+        .map(toVisit);
+    },
+
+    // ── F-20 PR2 — admin insights reads (mirror the Supabase semantics) ──────
+
+    async listProspects(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      // prospect_name NOT NULL; [from,to] inclusive; newest first. R1:
+      // toProspectVisit keeps a raw null pipeline_status.
+      return [...visits.values()]
+        .filter((v) => v.prospectName !== null)
+        .filter((v) => v.createdAt >= window.from && v.createdAt <= window.to)
+        .sort(byNewestThenId)
+        .map(toProspectVisit);
+    },
+
+    async listAtRisk(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      // outcome IN (at_risk, lost); [from,to] inclusive; newest first.
+      return [...visits.values()]
+        .filter((v) => v.outcome === "at_risk" || v.outcome === "lost")
+        .filter((v) => v.createdAt >= window.from && v.createdAt <= window.to)
+        .sort(byNewestThenId)
+        .map(toVisit);
+    },
+
+    async listCommitments(window: {
+      from: string | null;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      // R2: commitment_made=true; created_at < to (STRICT lt); from applied ONLY
+      // when present (>=); OLDEST first (ASC).
+      return [...visits.values()]
+        .filter((v) => v.commitmentMade === true)
+        .filter((v) => v.createdAt < window.to)
+        .filter((v) => window.from === null || v.createdAt >= window.from)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
         .map(toVisit);
     },
   };

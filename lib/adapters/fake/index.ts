@@ -32,6 +32,7 @@ export {
 export {
   createFakeProductsRepository,
   fakeProductsRepository,
+  type FakeProductSeed,
 } from "./ProductsRepository";
 export {
   createFakeUsersRepository,

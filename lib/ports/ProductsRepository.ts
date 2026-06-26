@@ -16,7 +16,7 @@
  * ADR-0002 contract honoured: same as OrdersRepository.
  */
 
-import type { Product } from "@/lib/domain";
+import type { Product, ProductAdminView } from "@/lib/domain";
 
 export interface ProductsRepository {
   /**
@@ -54,4 +54,29 @@ export interface ProductsRepository {
    * @throws  ServiceError on DB failure.
    */
   findProductsByIds(ids: readonly string[]): Promise<readonly Product[]>;
+
+  /**
+   * Every product, ordered by name asc. The admin `products` GET list
+   * (F-20 PR2). Returns the full ProductAdminView (the seven-field catalogue
+   * shape: id, name, category, code, boxSize, active, created_at).
+   *
+   * @returns All products, name ASC. Empty array if the table is empty.
+   * @throws  ServiceError on DB failure.
+   */
+  listAll(): Promise<readonly ProductAdminView[]>;
+
+  /**
+   * Flip a product's active flag (F-20 PR2). Returns the updated row, or null
+   * if no row matched the id — the 404 branch. Uses `maybeSingle`, so a
+   * no-match returns null rather than throwing (the PR1 typed-null→404
+   * convention; the route maps null → 404). The returned view carries only the
+   * five PATCH-projection fields (id, name, category, active, created_at);
+   * `code`/`boxSize` are null because the PATCH read does not select them (the
+   * route never reads them).
+   *
+   * @returns The updated row, or null on no-match.
+   * @throws  ServiceError on a genuine DB error (the error branch fires BEFORE
+   *   the null check, so a real failure is never silently treated as not-found).
+   */
+  setActive(id: string, active: boolean): Promise<ProductAdminView | null>;
 }

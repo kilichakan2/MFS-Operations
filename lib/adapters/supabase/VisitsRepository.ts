@@ -93,6 +93,19 @@ const DETAIL_COLS = [
 const ADMIN_COLS =
   "id, created_at, outcome, visit_type, notes, pipeline_status, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)";
 
+// ── F-20 PR2 admin insights selects — copied VERBATIM from the routes ────────
+// GET /api/admin/prospects select.
+const PROSPECTS_COLS =
+  "id, created_at, prospect_name, prospect_postcode, outcome, visit_type, pipeline_status, users!visits_user_id_fkey(name)";
+
+// GET /api/admin/at-risk select.
+const AT_RISK_COLS =
+  "id, created_at, outcome, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)";
+
+// GET /api/admin/commitments select.
+const COMMITMENTS_COLS =
+  "id, created_at, commitment_detail, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)";
+
 // GET/POST /api/screen3/visit/notes select — verbatim multiline template.
 const NOTE_COLS = `
       id, visit_id, body, created_at, updated_at,
@@ -175,6 +188,18 @@ function toVisit(row: VisitRow): Visit {
     notes: row.notes ?? null,
     prospectName: row.prospect_name ?? null,
     prospectPostcode: row.prospect_postcode ?? null,
+  };
+}
+
+/** Prospects-read mapper (F-20 PR2, risk R1). IDENTICAL to `toVisit` EXCEPT it
+ *  preserves a RAW null `pipeline_status` instead of coercing it to 'Logged'.
+ *  The admin `prospects` route emits `stage: pipeline_status ? … : null`, so a
+ *  null DB value must stay null on the wire — `toVisit`'s `?? 'Logged'` would
+ *  silently flip it. This mapper is the documented deviation. */
+function toProspectVisit(row: VisitRow): Visit {
+  return {
+    ...toVisit(row),
+    pipelineStatus: row.pipeline_status ?? null,
   };
 }
 
@@ -451,6 +476,75 @@ export function createSupabaseVisitsRepository(
       const { data, error } = await query;
       if (error) {
         log.error("VisitsRepository.listAllWithFilters DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as VisitRow[];
+      return rows.map(toVisit);
+    },
+
+    // ── F-20 PR2 — admin insights reads ──────────────────────────────────
+
+    async listProspects(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      const { data, error } = await client
+        .from("visits")
+        .select(PROSPECTS_COLS)
+        .not("prospect_name", "is", null)
+        .gte("created_at", window.from)
+        .lte("created_at", window.to)
+        .order("created_at", { ascending: false });
+      if (error) {
+        log.error("VisitsRepository.listProspects DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as VisitRow[];
+      // R1: toProspectVisit (NOT toVisit) — preserves raw null pipeline_status.
+      return rows.map(toProspectVisit);
+    },
+
+    async listAtRisk(window: {
+      from: string;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      const { data, error } = await client
+        .from("visits")
+        .select(AT_RISK_COLS)
+        .in("outcome", ["at_risk", "lost"])
+        .gte("created_at", window.from)
+        .lte("created_at", window.to)
+        .order("created_at", { ascending: false });
+      if (error) {
+        log.error("VisitsRepository.listAtRisk DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Database error", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as VisitRow[];
+      return rows.map(toVisit);
+    },
+
+    async listCommitments(window: {
+      from: string | null;
+      to: string;
+    }): Promise<readonly Visit[]> {
+      // R2: `lt` (NOT lte) on `to`; ASC order; `from` applied ONLY when present.
+      let query = client
+        .from("visits")
+        .select(COMMITMENTS_COLS)
+        .eq("commitment_made", true)
+        .lt("created_at", window.to)
+        .order("created_at", { ascending: true });
+      if (window.from) query = query.gte("created_at", window.from);
+
+      const { data, error } = await query;
+      if (error) {
+        log.error("VisitsRepository.listCommitments DB error", {
           error: error.message,
         });
         throw new ServiceError("Database error", { cause: error });

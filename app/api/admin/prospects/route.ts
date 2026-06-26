@@ -20,9 +20,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService } from '@/lib/adapters/supabase/client'
-
-const supabase = supabaseService
+import { visitsService } from '@/lib/wiring/visits'
 
 export async function GET(req: NextRequest) {
   try {
@@ -37,31 +35,21 @@ export async function GET(req: NextRequest) {
     const from = params.get('from') ?? defaultFrom
     const to   = params.get('to')   ?? now.toISOString()
 
-    const res = await supabase
-      .from('visits')
-      .select('id, created_at, prospect_name, prospect_postcode, outcome, visit_type, pipeline_status, users!visits_user_id_fkey(name)')
-      .not('prospect_name', 'is', null)
-      .gte('created_at', from)
-      .lte('created_at', to)
-      .order('created_at', { ascending: false })
+    // F-20 PR2: read through the owned VisitsService over the VisitsRepository
+    // port — no raw supabaseService in app code. The window-default + projection
+    // stay here (presentation). `listProspects` preserves a raw null
+    // pipeline_status (R1) so `stage` reproduces today's `… ? String(…) : null`.
+    const visits = await visitsService.listProspects({ from, to })
 
-    if (res.error) {
-      console.error('[admin/prospects] DB error:', res.error.code, res.error.message)
-      return NextResponse.json({ error: 'Database error' }, { status: 500 })
-    }
-
-    const rows = (res.data ?? []).map((v: Record<string, unknown>) => {
-      const usr = (v['users'] as { name: string } | null)
-      return {
-        id:        v.id,
-        name:      String(v.prospect_name ?? ''),
-        postcode:  String(v.prospect_postcode ?? ''),
-        outcome:   String(v.outcome ?? '').replace(/_/g, ' '),
-        visitType: String(v.visit_type ?? '').replace(/_/g, ' '),
-        rep:       usr?.name ?? 'Unknown',
-        stage:     v.pipeline_status ? String(v.pipeline_status) : null,
-      }
-    })
+    const rows = visits.map((v) => ({
+      id:        v.id,
+      name:      String(v.prospectName ?? ''),
+      postcode:  String(v.prospectPostcode ?? ''),
+      outcome:   String(v.outcome ?? '').replace(/_/g, ' '),
+      visitType: String(v.visitType ?? '').replace(/_/g, ' '),
+      rep:       v.loggedByName ?? 'Unknown',
+      stage:     v.pipelineStatus ? String(v.pipelineStatus) : null,
+    }))
 
     return NextResponse.json({ rows })
   } catch (err) {

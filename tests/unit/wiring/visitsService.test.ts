@@ -40,6 +40,9 @@ const VISITS_SERVICE_METHODS = [
   "updateNote",
   "findDetailById",
   "listAllWithFilters",
+  "listProspects",
+  "listAtRisk",
+  "listCommitments",
 ] as const;
 
 describe("F-18 visitsService wiring (service-role singleton)", () => {

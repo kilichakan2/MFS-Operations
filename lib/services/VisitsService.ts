@@ -95,6 +95,18 @@ export interface VisitsService {
   updateNote(input: UpdateVisitNoteInput): Promise<VisitNote | null>;
   findDetailById(id: string): Promise<VisitDetail | null>;
   listAllWithFilters(filter: AdminVisitFilter): Promise<readonly Visit[]>;
+
+  // ── F-20 PR2 — admin insights reads (thin pass-throughs) ─────────────────
+  /** Prospects-this-week list. → GET /api/admin/prospects. Preserves a raw null
+   *  pipeline_status (R1) so the route's `stage` stays null. */
+  listProspects(window: { from: string; to: string }): Promise<readonly Visit[]>;
+  /** At-risk list (outcome IN at_risk/lost). → GET /api/admin/at-risk. */
+  listAtRisk(window: { from: string; to: string }): Promise<readonly Visit[]>;
+  /** Unreviewed-commitments list. → GET /api/admin/commitments. */
+  listCommitments(window: {
+    from: string | null;
+    to: string;
+  }): Promise<readonly Visit[]>;
 }
 
 // ─── The factory ────────────────────────────────────────────
@@ -183,5 +195,8 @@ export function createVisitsService(deps: VisitsServiceDeps): VisitsService {
     updateNote: (input) => visits.updateNote(input),
     findDetailById: (id) => visits.findDetailById(id),
     listAllWithFilters: (filter) => visits.listAllWithFilters(filter),
+    listProspects: (window) => visits.listProspects(window),
+    listAtRisk: (window) => visits.listAtRisk(window),
+    listCommitments: (window) => visits.listCommitments(window),
   };
 }
