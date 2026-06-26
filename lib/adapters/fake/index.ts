@@ -25,6 +25,11 @@ export {
   fakeCustomersRepository,
 } from "./CustomersRepository";
 export {
+  createFakeAuditLogRepository,
+  fakeAuditLogRepository,
+  type FakeAuditLogRepository,
+} from "./AuditLogRepository";
+export {
   createFakeGeocoder,
   fakeGeocoder,
   type FakeGeocoderSeed,

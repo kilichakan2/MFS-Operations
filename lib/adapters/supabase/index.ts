@@ -28,6 +28,10 @@ export {
   supabaseCustomersRepository,
 } from "./CustomersRepository";
 export {
+  createSupabaseAuditLogRepository,
+  supabaseAuditLogRepository,
+} from "./AuditLogRepository";
+export {
   createSupabaseProductsRepository,
   supabaseProductsRepository,
 } from "./ProductsRepository";

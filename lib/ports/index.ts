@@ -13,6 +13,8 @@ export type {
   KdsFlashEvent,
 } from "./OrdersRepository";
 export type { CustomersRepository } from "./CustomersRepository";
+export type { AuditLogRepository } from "./AuditLogRepository";
+export type { InsertOneResult } from "./InsertOneResult";
 export type { Geocoder } from "./Geocoder";
 // GeocoderError is a runtime value (a class), not a type — value export.
 export { GeocoderError } from "./Geocoder";
