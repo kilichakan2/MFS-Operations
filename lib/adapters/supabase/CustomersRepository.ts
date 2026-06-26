@@ -27,8 +27,43 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseService } from "@/lib/adapters/supabase/client";
 import { ServiceError } from "@/lib/errors";
 import { log } from "@/lib/observability/log";
-import type { Customer } from "@/lib/domain";
+import type { Customer, CustomerAdminView } from "@/lib/domain";
 import type { CustomersRepository } from "@/lib/ports";
+
+/**
+ * The exact column projection the admin routes read/return. Kept here (inside
+ * the adapter) so the SELECT/`.select(...)` string is defined once. The
+ * `customers` GET + `[id]` PATCH return the SIX presentation fields; the two
+ * geocode-write fields are carried so setPostcodeAndCoords/setCoords callers can
+ * read them back if they need to.
+ */
+const ADMIN_COLS =
+  "id, name, postcode, lat, lng, active, created_at, geocoded_at, is_approximate_location";
+
+/** Map one PostgREST row to the owned CustomerAdminView. Vendor shape stops here. */
+function toAdminView(row: {
+  id: string;
+  name: string;
+  postcode: string | null;
+  lat: number | null;
+  lng: number | null;
+  active: boolean;
+  created_at: string;
+  geocoded_at?: string | null;
+  is_approximate_location?: boolean | null;
+}): CustomerAdminView {
+  return {
+    id: row.id,
+    name: row.name,
+    postcode: row.postcode,
+    lat: row.lat,
+    lng: row.lng,
+    active: row.active,
+    created_at: row.created_at,
+    geocoded_at: row.geocoded_at ?? null,
+    is_approximate_location: row.is_approximate_location ?? false,
+  };
+}
 
 export function createSupabaseCustomersRepository(
   client: SupabaseClient,
@@ -54,6 +89,125 @@ export function createSupabaseCustomersRepository(
         postcode: data.postcode,
         active: data.active,
       };
+    },
+
+    // ── Admin surface (F-20 PR1) ──────────────────────────────────────────────
+
+    async listAllCustomers(): Promise<readonly CustomerAdminView[]> {
+      const { data, error } = await client
+        .from("customers")
+        .select(ADMIN_COLS)
+        .order("name", { ascending: true });
+      if (error) {
+        log.error("CustomersRepository.listAllCustomers DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Customer list failed", { cause: error });
+      }
+      return (data ?? []).map(toAdminView);
+    },
+
+    async listUngeocoded(
+      limit: number,
+    ): Promise<readonly CustomerAdminView[]> {
+      const { data, error } = await client
+        .from("customers")
+        .select(ADMIN_COLS)
+        .not("postcode", "is", null)
+        .is("lat", null)
+        .limit(limit);
+      if (error) {
+        log.error("CustomersRepository.listUngeocoded DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Ungeocoded customer list failed", {
+          cause: error,
+        });
+      }
+      return (data ?? []).map(toAdminView);
+    },
+
+    async setActive(
+      id: string,
+      active: boolean,
+    ): Promise<CustomerAdminView | null> {
+      const { data, error } = await client
+        .from("customers")
+        .update({ active })
+        .eq("id", id)
+        .select(ADMIN_COLS)
+        .maybeSingle();
+      if (error) {
+        log.error("CustomersRepository.setActive DB error", {
+          id,
+          error: error.message,
+        });
+        throw new ServiceError("Customer update failed", { cause: error });
+      }
+      return data === null ? null : toAdminView(data);
+    },
+
+    async setPostcodeAndCoords(
+      id: string,
+      fields: {
+        postcode: string;
+        lat: number | null;
+        lng: number | null;
+        geocoded_at: string | null;
+        is_approximate_location: boolean;
+      },
+    ): Promise<CustomerAdminView | null> {
+      const { data, error } = await client
+        .from("customers")
+        .update({
+          postcode: fields.postcode,
+          lat: fields.lat,
+          lng: fields.lng,
+          geocoded_at: fields.geocoded_at,
+          is_approximate_location: fields.is_approximate_location,
+        })
+        .eq("id", id)
+        .select(ADMIN_COLS)
+        .maybeSingle();
+      if (error) {
+        log.error("CustomersRepository.setPostcodeAndCoords DB error", {
+          id,
+          error: error.message,
+        });
+        throw new ServiceError("Customer postcode update failed", {
+          cause: error,
+        });
+      }
+      return data === null ? null : toAdminView(data);
+    },
+
+    async setCoords(
+      id: string,
+      fields: {
+        lat: number;
+        lng: number;
+        geocoded_at: string;
+        is_approximate_location: boolean;
+      },
+    ): Promise<void> {
+      const { error } = await client
+        .from("customers")
+        .update({
+          lat: fields.lat,
+          lng: fields.lng,
+          geocoded_at: fields.geocoded_at,
+          is_approximate_location: fields.is_approximate_location,
+        })
+        .eq("id", id);
+      if (error) {
+        log.error("CustomersRepository.setCoords DB error", {
+          id,
+          error: error.message,
+        });
+        throw new ServiceError("Customer coords update failed", {
+          cause: error,
+        });
+      }
     },
   };
 }

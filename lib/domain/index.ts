@@ -17,7 +17,8 @@ export type {
   CreateOrderInput,
   CreateOrderLineInput,
 } from "./Order";
-export type { Customer } from "./Customer";
+export type { Customer, CustomerAdminView } from "./Customer";
+export type { GeocodeResult } from "./Geocode";
 export type { Product } from "./Product";
 export type {
   Route,

@@ -40,6 +40,16 @@ mapped customer or product rows." The AI vendor (currently Anthropic) plugs
 in behind it via an adapter; the import screen and route never see the
 vendor. Swapping the AI = one new adapter + one wiring line.
 
+**Geocoder** — the app's own socket for "turn a UK postcode into map
+coordinates (lat/lng)." The lookup vendor (currently postcodes.io, a free
+public API hit via `fetch`) plugs in behind it via an adapter; the admin
+routes that need coordinates never see the vendor. Swapping the lookup =
+one new adapter + one wiring line. **Approximate location** — when a full
+postcode won't resolve, the lookup falls back to the *outcode* (the first
+half, e.g. `"S70 1KW"` → `"S70"`), giving the centre of that postcode
+district and flagging the row `is_approximate_location = true` so the map
+can show it's a rough pin, not an exact one.
+
 **Authenticated DB client** — a database connection stamped with *who is
 asking*. Built per request from the logged-in user's identity, so the
 database's own row-level-security rules decide what that user may see. The

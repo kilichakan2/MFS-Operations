@@ -30,6 +30,14 @@ export interface CustomersContractSetup {
   repo: CustomersRepository;
   /** A customer id the adapter is known to return on findCustomerById. */
   knownCustomerId: string;
+  /**
+   * F-20 PR1 — a customer id that is known to be UNGEOCODED at setup time:
+   * has a non-null postcode but null lat/lng, so it appears in
+   * listUngeocoded() and can have setCoords() / setPostcodeAndCoords() /
+   * setActive() applied to it. May be the same row as `knownCustomerId` as
+   * long as the wrapper guarantees it starts ungeocoded for each case.
+   */
+  ungeocodedCustomerId: string;
   cleanup: () => Promise<void>;
 }
 
@@ -76,6 +84,83 @@ export function customersRepositoryContract(
       expect(customer).not.toBeNull();
       if (customer === null) throw new Error("customer was null after expect");
       expect(typeof customer.active).toBe("boolean");
+    });
+
+    // ── F-20 PR1 admin surface ────────────────────────────────────────────────
+
+    it("listAllCustomers returns CustomerAdminView rows ordered by name asc", async () => {
+      const rows = await ctx.repo.listAllCustomers();
+      expect(Array.isArray(rows)).toBe(true);
+      expect(rows.length).toBeGreaterThan(0);
+      // Shape: every row carries the admin-view fields.
+      for (const r of rows) {
+        expect(typeof r.id).toBe("string");
+        expect(typeof r.name).toBe("string");
+        expect(["string", "object"]).toContain(typeof r.postcode); // string | null
+        expect(typeof r.active).toBe("boolean");
+        expect(typeof r.created_at).toBe("string");
+      }
+      // Ordering: names are non-decreasing.
+      const names = rows.map((r) => r.name);
+      const sorted = [...names].sort((a, b) => a.localeCompare(b));
+      expect(names).toEqual(sorted);
+    });
+
+    it("listUngeocoded returns rows with a postcode but null coords", async () => {
+      const rows = await ctx.repo.listUngeocoded(500);
+      expect(Array.isArray(rows)).toBe(true);
+      // Our seeded ungeocoded customer must be among them.
+      const found = rows.find((r) => r.id === ctx.ungeocodedCustomerId);
+      expect(found).toBeDefined();
+      for (const r of rows) {
+        expect(r.postcode).not.toBeNull();
+        expect(r.lat).toBeNull();
+        expect(r.lng).toBeNull();
+      }
+    });
+
+    it("setActive flips the flag and returns the updated row", async () => {
+      const updated = await ctx.repo.setActive(ctx.ungeocodedCustomerId, false);
+      expect(updated).not.toBeNull();
+      if (updated === null) throw new Error("row was null after setActive");
+      expect(updated.id).toBe(ctx.ungeocodedCustomerId);
+      expect(updated.active).toBe(false);
+    });
+
+    it("setActive returns null when no row matches the id", async () => {
+      const missingId = "00000000-0000-0000-0000-0000000000fe";
+      const updated = await ctx.repo.setActive(missingId, true);
+      expect(updated).toBeNull();
+    });
+
+    it("setPostcodeAndCoords persists postcode + coords and returns the row", async () => {
+      const updated = await ctx.repo.setPostcodeAndCoords(
+        ctx.ungeocodedCustomerId,
+        {
+          postcode: "S3 8DG",
+          lat: 53.38,
+          lng: -1.47,
+          geocoded_at: "2026-06-26T00:00:00.000Z",
+          is_approximate_location: false,
+        },
+      );
+      expect(updated).not.toBeNull();
+      if (updated === null) throw new Error("row was null after update");
+      expect(updated.id).toBe(ctx.ungeocodedCustomerId);
+      expect(updated.postcode).toBe("S3 8DG");
+      expect(updated.lat).toBe(53.38);
+      expect(updated.lng).toBe(-1.47);
+    });
+
+    it("setCoords stamps coordinates onto one customer (void)", async () => {
+      await expect(
+        ctx.repo.setCoords(ctx.ungeocodedCustomerId, {
+          lat: 51.5,
+          lng: -0.12,
+          geocoded_at: "2026-06-26T00:00:00.000Z",
+          is_approximate_location: true,
+        }),
+      ).resolves.toBeUndefined();
     });
   });
 }
