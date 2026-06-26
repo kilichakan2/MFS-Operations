@@ -21,10 +21,8 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService } from '@/lib/adapters/supabase/client'
+import { visitsService } from '@/lib/wiring/visits'
 import { deriveCommitmentStatus } from '@/lib/adminDerivations'
-
-const supabase = supabaseService
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,31 +37,19 @@ export async function GET(req: NextRequest) {
     const from = params.get('from')
     const to   = params.get('to') ?? defaultTo
 
-    let query = supabase
-      .from('visits')
-      .select('id, created_at, commitment_detail, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)')
-      .eq('commitment_made', true)
-      .lt('created_at', to)
-      .order('created_at', { ascending: true })
+    // F-20 PR2: read through the owned VisitsService over the VisitsRepository
+    // port — no raw supabaseService in app code. `now`/window-default + the
+    // hoursAgo projection + deriveCommitmentStatus stay here (presentation).
+    // R2: the repo uses lt('created_at', to) and applies `from` only when present.
+    const visits = await visitsService.listCommitments({ from, to })
 
-    if (from) query = query.gte('created_at', from)
-
-    const res = await query
-
-    if (res.error) {
-      console.error('[admin/commitments] DB error:', res.error.code, res.error.message)
-      return NextResponse.json({ error: 'Database error' }, { status: 500 })
-    }
-
-    const rows = (res.data ?? []).map((v: Record<string, unknown>) => {
-      const cust = v.customers as { name: string } | null
-      const usr  = (v['users'] as { name: string } | null)
-      const hoursAgo = Math.round((now.getTime() - new Date(v.created_at as string).getTime()) / 3_600_000)
+    const rows = visits.map((v) => {
+      const hoursAgo = Math.round((now.getTime() - new Date(v.createdAt).getTime()) / 3_600_000)
       return {
         id:       v.id,
-        customer: cust?.name ?? (v.prospect_name as string) ?? 'Unknown',
-        detail:   v.commitment_detail as string ?? '',
-        rep:      usr?.name ?? 'Unknown',
+        customer: v.customerName ?? v.prospectName ?? 'Unknown',
+        detail:   v.commitmentDetail ?? '',
+        rep:      v.loggedByName ?? 'Unknown',
         hoursAgo,
         status:   deriveCommitmentStatus(hoursAgo),
       }

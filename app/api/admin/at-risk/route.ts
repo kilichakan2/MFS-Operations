@@ -21,10 +21,8 @@ export const dynamic = 'force-dynamic'
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseService } from '@/lib/adapters/supabase/client'
+import { visitsService } from '@/lib/wiring/visits'
 import { deriveAtRiskReason } from '@/lib/adminDerivations'
-
-const supabase = supabaseService
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,29 +37,19 @@ export async function GET(req: NextRequest) {
     const from = params.get('from') ?? defaultFrom
     const to   = params.get('to')   ?? now.toISOString()
 
-    const res = await supabase
-      .from('visits')
-      .select('id, created_at, outcome, customer_id, prospect_name, user_id, customers(name), users!visits_user_id_fkey(name)')
-      .in('outcome', ['at_risk', 'lost'])
-      .gte('created_at', from)
-      .lte('created_at', to)
-      .order('created_at', { ascending: false })
+    // F-20 PR2: read through the owned VisitsService over the VisitsRepository
+    // port — no raw supabaseService in app code. `now`/window-default + the
+    // hoursAgo projection + deriveAtRiskReason stay here (presentation).
+    const visits = await visitsService.listAtRisk({ from, to })
 
-    if (res.error) {
-      console.error('[admin/at-risk] DB error:', res.error.code, res.error.message)
-      return NextResponse.json({ error: 'Database error' }, { status: 500 })
-    }
-
-    const rows = (res.data ?? []).map((v: Record<string, unknown>) => {
-      const cust = v.customers as { name: string } | null
-      const usr  = (v['users'] as { name: string } | null)
+    const rows = visits.map((v) => {
       const outcome = v.outcome as 'at_risk' | 'lost'
-      const hoursAgo = Math.round((now.getTime() - new Date(v.created_at as string).getTime()) / 3_600_000)
+      const hoursAgo = Math.round((now.getTime() - new Date(v.createdAt).getTime()) / 3_600_000)
       return {
         id:       v.id,
-        customer: cust?.name ?? (v.prospect_name as string) ?? 'Unknown',
+        customer: v.customerName ?? v.prospectName ?? 'Unknown',
         outcome,
-        rep:      usr?.name ?? 'Unknown',
+        rep:      v.loggedByName ?? 'Unknown',
         hoursAgo,
         reason:   deriveAtRiskReason(outcome, hoursAgo),
       }
