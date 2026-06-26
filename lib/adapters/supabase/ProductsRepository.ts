@@ -20,7 +20,7 @@ import { supabaseService } from "@/lib/adapters/supabase/client";
 import { ServiceError } from "@/lib/errors";
 import { log } from "@/lib/observability/log";
 import type { Product, ProductAdminView } from "@/lib/domain";
-import type { ProductsRepository } from "@/lib/ports";
+import type { ProductsRepository, InsertOneResult } from "@/lib/ports";
 
 // The verbatim admin column lists, copied from the two products routes the
 // F-20 PR2 re-point replaces so the wire output stays byte-identical:
@@ -123,6 +123,65 @@ export function createSupabaseProductsRepository(
       return data === null
         ? null
         : toAdminView(data as unknown as Parameters<typeof toAdminView>[0]);
+    },
+
+    // ── Import surface (F-20 PR3) ─────────────────────────────────────────────
+
+    async insertMany(
+      rows: readonly {
+        name: string;
+        category: string | null;
+        code: string | null;
+        box_size: string | null;
+        created_by: string;
+      }[],
+    ): Promise<readonly { id: string }[]> {
+      const payload = rows.map((r) => ({
+        name: r.name,
+        category: r.category,
+        code: r.code,
+        box_size: r.box_size,
+        active: true,
+        created_by: r.created_by,
+      }));
+      const { data, error } = await client
+        .from("products")
+        .insert(payload)
+        .select("id");
+      if (error) {
+        log.error("ProductsRepository.insertMany DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Product bulk insert failed", { cause: error });
+      }
+      return (data ?? []).map((r) => ({ id: r.id }));
+    },
+
+    async insertOne(row: {
+      name: string;
+      code: string | null;
+      category: string | null;
+      box_size: string | null;
+      created_by: string;
+    }): Promise<InsertOneResult> {
+      const { error } = await client.from("products").insert({
+        name: row.name,
+        code: row.code,
+        category: row.category,
+        box_size: row.box_size,
+        active: true,
+        created_by: row.created_by,
+      });
+      if (error) {
+        // 23505 = unique_violation — a duplicate. NOT an error: define it out of
+        // existence so one bad row never aborts the import batch.
+        if (error.code === "23505") return { outcome: "duplicate" };
+        log.error("ProductsRepository.insertOne DB error", {
+          error: error.message,
+        });
+        return { outcome: "error", message: error.message };
+      }
+      return { outcome: "inserted" };
     },
   };
 }

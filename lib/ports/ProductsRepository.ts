@@ -17,6 +17,7 @@
  */
 
 import type { Product, ProductAdminView } from "@/lib/domain";
+import type { InsertOneResult } from "@/lib/ports/InsertOneResult";
 
 export interface ProductsRepository {
   /**
@@ -79,4 +80,38 @@ export interface ProductsRepository {
    *   the null check, so a real failure is never silently treated as not-found).
    */
   setActive(id: string, active: boolean): Promise<ProductAdminView | null>;
+
+  // ── Import surface (F-20 PR3) ──────────────────────────────────────────────
+
+  /**
+   * Bulk insert products (import/confirm, all-or-nothing). Returns the new rows'
+   * ids (the route only needs the count, but id keeps parity with customers). A
+   * batch failure throws ServiceError — preserves today's all-or-nothing 500.
+   * The route applies its sentinel `'none'`→null cleaning BEFORE calling, so the
+   * repo receives already-cleaned category/code/box_size.
+   * @throws ServiceError on DB failure.
+   */
+  insertMany(
+    rows: readonly {
+      name: string;
+      category: string | null;
+      code: string | null;
+      box_size: string | null;
+      created_by: string;
+    }[],
+  ): Promise<readonly { id: string }[]>;
+
+  /**
+   * Insert ONE product (import/manual per-row). Typed InsertOneResult, never
+   * throws on 23505 — same contract as CustomersRepository.insertOne (the route
+   * counts duplicate→skipped, error→console.error+skip). `active: true` is set
+   * inside the adapter.
+   */
+  insertOne(row: {
+    name: string;
+    code: string | null;
+    category: string | null;
+    box_size: string | null;
+    created_by: string;
+  }): Promise<InsertOneResult>;
 }
