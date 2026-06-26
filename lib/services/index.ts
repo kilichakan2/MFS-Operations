@@ -20,6 +20,11 @@ export {
   type UsersServiceDeps,
 } from "./UsersService";
 export {
+  createCustomersService,
+  type CustomersService,
+  type CustomersServiceDeps,
+} from "./CustomersService";
+export {
   createRoutesService,
   type RoutesService,
   type RoutesServiceDeps,
