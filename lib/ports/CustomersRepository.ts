@@ -20,6 +20,13 @@
  */
 
 import type { Customer, CustomerAdminView } from "@/lib/domain";
+import type { InsertOneResult } from "@/lib/ports/InsertOneResult";
+// MapCustomer is a pure presentation type (no vendor/framework import) declared
+// in lib/services/mapScene.ts; the map/data route RE-EXPORTS it (a locked
+// invariant). A port type-importing from lib/services is unusual but is the
+// lowest-churn choice — relocating the type would break the preserved re-export
+// line and 3 import sites. Type-only import keeps the boundary clean.
+import type { MapCustomer } from "@/lib/services/mapScene";
 
 export interface CustomersRepository {
   /**
@@ -105,4 +112,45 @@ export interface CustomersRepository {
       is_approximate_location: boolean;
     },
   ): Promise<void>;
+
+  // ── Import surface (F-20 PR3) ──────────────────────────────────────────────
+
+  /**
+   * Bulk insert customers (import/confirm, all-or-nothing). Returns the new
+   * rows' id + postcode (the geocoding write-back path needs both). A batch
+   * failure (incl. a duplicate-name 23505 anywhere in the batch) throws
+   * ServiceError — preserves today's all-or-nothing 500.
+   * @throws ServiceError on DB failure.
+   */
+  insertMany(
+    rows: readonly {
+      name: string;
+      postcode: string | null;
+      created_by: string;
+    }[],
+  ): Promise<readonly { id: string; postcode: string | null }[]>;
+
+  /**
+   * Insert ONE customer (import/manual, per-row so one bad row never aborts the
+   * batch). Returns a typed InsertOneResult distinguishing inserted / duplicate
+   * / error — NEVER throws on a 23505 (defines the duplicate error out of
+   * existence). On any OTHER DB error it returns { outcome: 'error', message }
+   * after logging, so the route reproduces today's `console.error + skip`
+   * WITHOUT the vendor error object leaking past this boundary.
+   *
+   * Only `name` is mapped from the row; `active: true` is set inside the
+   * adapter (matching today's `{ name, active: true, created_by }`).
+   */
+  insertOne(row: {
+    name: string;
+    created_by: string;
+  }): Promise<InsertOneResult>;
+
+  /**
+   * Geocoded customers for the Map View (map/data). Only rows with non-null lat
+   * AND lng, ordered by name asc, mapped to the flat MapCustomer shape
+   * (external_system_id → code, is_approximate_location → is_approximate).
+   * @throws ServiceError on DB failure.
+   */
+  listGeocodedForMap(): Promise<readonly MapCustomer[]>;
 }

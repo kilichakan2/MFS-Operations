@@ -28,7 +28,13 @@ import { supabaseService } from "@/lib/adapters/supabase/client";
 import { ServiceError } from "@/lib/errors";
 import { log } from "@/lib/observability/log";
 import type { Customer, CustomerAdminView } from "@/lib/domain";
-import type { CustomersRepository } from "@/lib/ports";
+import type { CustomersRepository, InsertOneResult } from "@/lib/ports";
+import type { MapCustomer } from "@/lib/services/mapScene";
+
+// The verbatim SELECT for the Map View read, copied from app/api/map/data
+// (the customers query) so the wire output stays byte-identical.
+const MAP_COLS =
+  "id, name, postcode, external_system_id, active, lat, lng, is_approximate_location";
 
 /**
  * The exact column projection the admin routes read/return. Kept here (inside
@@ -208,6 +214,88 @@ export function createSupabaseCustomersRepository(
           cause: error,
         });
       }
+    },
+
+    // ── Import surface (F-20 PR3) ─────────────────────────────────────────────
+
+    async insertMany(
+      rows: readonly {
+        name: string;
+        postcode: string | null;
+        created_by: string;
+      }[],
+    ): Promise<readonly { id: string; postcode: string | null }[]> {
+      const payload = rows.map((r) => ({
+        name: r.name,
+        postcode: r.postcode,
+        active: true,
+        created_by: r.created_by,
+      }));
+      const { data, error } = await client
+        .from("customers")
+        .insert(payload)
+        .select("id, postcode");
+      if (error) {
+        log.error("CustomersRepository.insertMany DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Customer bulk insert failed", { cause: error });
+      }
+      return (data ?? []).map((r) => ({ id: r.id, postcode: r.postcode }));
+    },
+
+    async insertOne(row: {
+      name: string;
+      created_by: string;
+    }): Promise<InsertOneResult> {
+      const { error } = await client
+        .from("customers")
+        .insert({ name: row.name, active: true, created_by: row.created_by });
+      if (error) {
+        // 23505 = unique_violation — a duplicate name. NOT an error: define it
+        // out of existence so one bad row never aborts the import batch.
+        if (error.code === "23505") return { outcome: "duplicate" };
+        log.error("CustomersRepository.insertOne DB error", {
+          error: error.message,
+        });
+        return { outcome: "error", message: error.message };
+      }
+      return { outcome: "inserted" };
+    },
+
+    async listGeocodedForMap(): Promise<readonly MapCustomer[]> {
+      const { data, error } = await client
+        .from("customers")
+        .select(MAP_COLS)
+        .not("lat", "is", null)
+        .not("lng", "is", null)
+        .order("name", { ascending: true });
+      if (error) {
+        log.error("CustomersRepository.listGeocodedForMap DB error", {
+          error: error.message,
+        });
+        throw new ServiceError("Map customers read failed", { cause: error });
+      }
+      const rows = (data ?? []) as unknown as {
+        id: string;
+        name: string;
+        postcode: string;
+        external_system_id: string | null;
+        active: boolean;
+        lat: number;
+        lng: number;
+        is_approximate_location: boolean;
+      }[];
+      return rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        postcode: r.postcode,
+        code: r.external_system_id,
+        active: r.active,
+        lat: r.lat,
+        lng: r.lng,
+        is_approximate: r.is_approximate_location,
+      }));
     },
   };
 }
