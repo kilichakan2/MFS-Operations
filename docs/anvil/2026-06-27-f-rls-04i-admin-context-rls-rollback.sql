@@ -1,0 +1,32 @@
+-- ============================================================
+-- ROLLBACK — F-RLS-04i Admin-context RLS (PR #87)
+-- ============================================================
+-- This PR contains NO database migration. The RLS policies on
+-- customers / products / audit_log / visits PRE-EXISTED; F-RLS-04i only
+-- changed which Postgres ROLE the 15 admin routes connect as (service-role
+-- bypass → per-request `authenticated`, so the existing GUC policies fire).
+--
+-- There is therefore NOTHING to roll back at the database layer.
+--
+-- ── Rollback path = CODE-ONLY (revert the merge) ──
+--
+--   git revert -m 1 <merge-commit-sha>      # revert PR #87 on main
+--   → Vercel auto-deploys the reverted code on merge of the revert.
+--
+-- The implementer kept the service-role singletons in every wiring file as the
+-- one-line parachute (see lib/wiring/{customers,products,auditLog,mapData}.ts —
+-- the `customersService` / `productsService` / `auditLog` / `mapDataService`
+-- singletons STAY alongside the new `…ForCaller(userId)` factories). A surgical
+-- per-route rollback (without reverting the whole PR) is:
+--   swap `await customersServiceForCaller(caller.userId!)` → `customersService`
+--   swap `await productsServiceForCaller(caller.userId!)`  → `productsService`
+--   swap `await mapDataServiceForCaller(caller.userId!)`   → `mapDataService`
+--   swap `await auditLogForCaller(userId)`                 → `auditLog`
+-- in the affected route handler, leaving the rest of the PR in place.
+--
+-- ⚠️ No data is at risk from this change. No PITR needed (additive policy
+--    enforcement only; no DROP/TRUNCATE/ALTER TYPE/DROP NOT NULL anywhere).
+-- ============================================================
+
+-- (intentionally no SQL — nothing to undo at the DB layer)
+SELECT 'F-RLS-04i is code-only; rollback = revert the merge. No DB change to undo.' AS rollback_note;
