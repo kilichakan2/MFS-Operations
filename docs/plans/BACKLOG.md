@@ -238,6 +238,28 @@ the trail matters.
 
 ---
 
+### ARCH-FU-09 — Make the legitimate service-role routes use the explicit `requireServiceRole()` (🔵)
+
+- **Deferred:** 2026-06-27 (F-RLS-final — "Default to ZERO route edits" scope).
+- **What:** the routes that legitimately hold the master key reach it via a wiring singleton (`ordersService`, `visitsService`, `cashService`) or a raw `process.env.SUPABASE_SERVICE_ROLE_KEY` read, NOT via the ADR-0004-blessed `requireServiceRole()` (which exists at `lib/adapters/supabase/authenticatedClient.ts:54` but has zero callers). They are correctly allow-listed by the F-RLS-final guard, but the master-key intent is implicit, not grep-obvious at the call site.
+- **Why it matters:** a behaviour-neutral refactor would make every deliberate master-key use read `requireServiceRole()` — self-documenting + a single grep-able audit surface. Pure clarity, no functional change.
+- **Fix shape:** swap the singleton/raw-key usage in the allow-listed routes for `requireServiceRole()` where the route genuinely needs raw master-key access (NOT where it should be cut to `…ForCaller` — those are the F-RLS-04a-create / F-RLS-04g / cash-storage follow-ons). Update the guard's Rule-A/C allow-lists accordingly.
+- **Priority:** Low (clarity, not security — the F-RLS-final guard already seals the posture).
+- **Owner unit:** unscheduled.
+
+---
+
+### ARCH-FU-10 — F-RLS-final Rule B over-flags non-DB wiring ports (🔵)
+
+- **Deferred:** 2026-06-27 (F-RLS-final — Guard 🔵 note, disclosed in ADR-0008).
+- **What:** the F-RLS-final guard's Rule B presumes ANY non-`…ForCaller` symbol imported from `lib/wiring/**` carries the service-role master key, so non-DB ports (`geocoder`, `pushSender` — no master key behind them) sit in the security allow-list of 31. This is the deliberate security-correct bias (require a written reason for any non-badge-checked wiring import), not a defect — but it means the allow-list mixes "real master-key" with "harmless non-DB" entries.
+- **Why it matters:** a future per-route tightening could narrow Rule B to only the wiring exports that actually wire a service-role client, shrinking the allow-list to the genuine master-key surface and making the register sharper.
+- **Fix shape:** classify wiring exports (service-role-backed vs not) and have Rule B flag only the former; drop the non-DB ports from the allow-list. Needs a robust, non-brittle way to detect "service-role-backed" (the reason it was deferred — the convention rule was chosen to avoid a hand-maintained singleton list).
+- **Priority:** Low (the guard is correct and complete as-is; this is precision, not coverage). The broader `F-RLS-wiring-guard` idea is CLOSED — Rule B + Rule C already cover both real vectors.
+- **Owner unit:** unscheduled.
+
+---
+
 ### F-TD-23 — Map View E2E click→modal proof relies on `role="dialog"` the DetailModal lacks
 
 - **Deferred:** 2026-06-18 (F-24 PR2 — surfaced during the post-ship local populated-data verification)
