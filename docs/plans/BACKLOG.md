@@ -600,7 +600,7 @@ the trail matters.
 - **Precise change when this lands (post F-INFRA-03):** drop `--unprotected` from the single run line in `.github/workflows/preview-smoke.yml` (the "Run @critical preview smoke" step) AND provision the `VERCEL_AUTOMATION_BYPASS_SECRET` repo secret + add it to that step's `env:` block. Also drop `--unprotected` from the manual command in `docs/runbooks/preview-smoke.md`. Note: `tests/unit/ci/preview-smoke-workflow.test.ts` asserts `--unprotected` is PRESENT, so that test must be updated in the same change.
 - **Detail:** `docs/runbooks/preview-smoke.md` "Two modes" + ADR-0006 addendum
 - **Owner unit:** unscheduled (post-migration ops)
-- **Status:** open
+- **Status:** **DEFERRED by Hakan 2026-06-27 at sprint close** — protection STAYS OFF until he resumes coding (~late July 2026, ~1 month out). No change this sprint: `--unprotected` remains everywhere, the `tests/unit/ci/preview-smoke-workflow.test.ts` assertion stays asserting PRESENT, and the standing "[[project_vercel_protection_disabled]]" reminder persists. Re-open and execute the precise change above when coding resumes / if previews ever carry sensitive data.
 
 ### F-INFRA-05 — Supabase→Vercel preview-branch credential sync  ✅ SHIPPED (2026-06-15, PR #41 / `472d3f5`)
 
