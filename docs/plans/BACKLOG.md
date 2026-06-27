@@ -786,6 +786,24 @@ Owner unit for F-INFRA-02 itself: separate infra ticket, pre-F-08.
   suite is honestly green. Do NOT add blanket retries.
 - **Owner unit:** unassigned (pick up alongside the next routes/planner or chrome-layout work).
 
+### F-27-bare-disable-hardening — 🔵 `no-disable-arch-rules` guard doesn't cover a bare `/* eslint-disable */`
+- **Raised:** 2026-06-27 (F-27 Guard, PR #88).
+- **What:** `tests/unit/lint/no-disable-arch-rules.test.ts` fails the build only on
+  `eslint-disable*` directives that NAME `no-restricted-imports`/`no-restricted-syntax`. A bare
+  `/* eslint-disable */` block (or bare `// eslint-disable-line`) with NO rule named silences
+  EVERYTHING in that file/line, including the architecture rules — and is out of this guard's
+  scope by design. The test's header docstring states this explicitly. One such bare line exists
+  today and is unrelated to the arch rules: `app/cash/page.tsx:732`.
+- **Why it matters (low):** the residual gap in the "the Lego rule can't be silently disabled"
+  claim. To bypass the fence via a bare disable you'd still have to ADD the offending vendor
+  import in the same file. Theoretical; no live occurrence.
+- **Fix shape (pick one):** (a) extend the guard to also flag bare `eslint-disable`/
+  `eslint-disable-line`/`eslint-disable-next-line` with no rule list inside `lib/**` source (would
+  require grandfathering or removing the `cash/page.tsx:732` bare line first); (b) add an ESLint
+  plugin (`eslint-comments/no-unlimited-disable`) that bans bare disables natively; (c) leave as
+  documented residual gap. Pairs with the F-27 disable-guard.
+- **Owner unit:** unassigned (pick up alongside any future lint-hardening work).
+
 ### F-18 PR2 — SHIPPED 2026-06-22 (PR #66, squash `66ed279`)
 Re-pointed the 6 Visits routes onto `visitsService` + new pure `lib/api/visits/dto.ts`
 wire-translator (5 fns, key-order tripwires). W1 fix: note-edit on missing id → 404 (was 500).
