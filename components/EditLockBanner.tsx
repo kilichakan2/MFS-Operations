@@ -11,7 +11,7 @@
  * Plan: docs/plans/2026-05-30-order-pipeline-kds-implementation.md (SB2)
  */
 
-import type { OrderState } from '@/lib/orders/types'
+import type { OrderState } from '@/lib/domain/Order'
 
 interface EditLockBannerProps {
   state: OrderState

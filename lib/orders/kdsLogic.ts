@@ -13,7 +13,7 @@
  * Plan: docs/plans/2026-05-30-order-pipeline-kds-implementation.md (SB5)
  */
 
-import type { OrderState } from './types'
+import type { OrderState } from '@/lib/domain/Order'
 
 // ─── Constants ──────────────────────────────────────────────
 

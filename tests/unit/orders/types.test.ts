@@ -3,8 +3,8 @@
  *
  * Unit tests for the order pipeline type helpers.
  *
- * Covers the pure logic in lib/orders/types.ts — reference format
- * parsing/formatting and state transition validation. Database
+ * Covers the pure logic in lib/domain/orderReference.ts — reference
+ * format parsing/formatting and state transition validation. Database
  * behaviour (CHECK constraints, RLS, triggers) is verified directly
  * against Supabase during the migration; not retested here.
  *
@@ -17,8 +17,8 @@ import {
   formatOrderReference,
   isValidStateTransition,
   ORDER_REFERENCE_REGEX,
-  type OrderState,
-} from '../../../lib/orders/types'
+} from '../../../lib/domain/orderReference'
+import type { OrderState } from '../../../lib/domain/Order'
 
 describe('ORDER_REFERENCE_REGEX', () => {
   it('matches the canonical format', () => {

@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState, useRef } from "react";
 
-import type { OrderState, OrderUom } from "@/lib/orders/types";
+import type { OrderState, OrderUom } from "@/lib/domain/Order";
 import { useProductsWithDetail } from "@/hooks/useReferenceData";
 import { isOrderPipelineEnabled } from "@/lib/orders/featureFlag";
 import {

@@ -19,17 +19,9 @@
  * depend on these types. The mapping cascades inward; the vendor
  * stops at the adapter.
  *
- * Forward-looking deprecation notes:
- *   - `lib/orders/types.ts` (the existing OrderRow / OrderLineRow /
- *     OrderState / OrderUom file) is retained today because the 5
- *     Orders routes still import from it. F-08 will retire those
- *     imports route by route. When the last route stops importing
- *     from `lib/orders/types.ts`, that file's `OrderRow` /
- *     `OrderLineRow` definitions can be deleted (the `OrderState` /
- *     `OrderUom` literal-set declarations are duplicated below — same
- *     string values, just owned by the domain layer instead of the
- *     route layer). Until then, two definitions co-exist; the domain
- *     definition below is canonical.
+ * `OrderState` and `OrderUom` are the single canonical declaration of
+ * these literal sets (the legacy orders wire-types module was retired in
+ * F-TD-12).
  */
 
 // ─── State machine ────────────────────────────────────────────
@@ -48,10 +40,6 @@
  *      scope — predates the migration).
  *   2. `OrdersRepository.recordPrint` / `markOrderCompleted` apply
  *      optimistic-lock guards (see those methods' JSDoc).
- *
- * Mirrors `lib/orders/types.ts:15`. Re-declared rather than re-exported
- * because importing from `lib/orders/types.ts` from this file would
- * create a reverse dependency F-08 would have to unwind.
  */
 export type OrderState = "placed" | "printed" | "completed";
 
@@ -61,9 +49,7 @@ export type OrderState = "placed" | "printed" | "completed";
  * the unit the *quantity* on the line is denominated in.
  *
  * Two literal values today: 'kg' for weighed items, 'unit' for whole
- * pieces. Mirrors `lib/orders/types.ts:18` verbatim — re-declared (not
- * re-exported) to keep the domain layer independent of the
- * soon-to-be-retired `lib/orders/types.ts`.
+ * pieces.
  */
 export type OrderUom = "kg" | "unit";
 

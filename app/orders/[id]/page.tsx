@@ -26,7 +26,7 @@ import RoleNav from "@/components/RoleNav";
 import OrderPipelinePausedNotice from "@/components/OrderPipelinePausedNotice";
 import { useProductsWithDetail } from "@/hooks/useReferenceData";
 
-import type { OrderState, OrderUom } from "@/lib/orders/types";
+import type { OrderState, OrderUom } from "@/lib/domain/Order";
 import { isOrderPipelineEnabled } from "@/lib/orders/featureFlag";
 
 interface LineRow {

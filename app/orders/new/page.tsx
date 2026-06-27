@@ -26,7 +26,7 @@ import BottomSheetSelector from "@/components/BottomSheetSelector";
 import OrderPipelinePausedNotice from "@/components/OrderPipelinePausedNotice";
 import { useCustomers, useProductsWithDetail } from "@/hooks/useReferenceData";
 import type { SelectableItem } from "@/components/BottomSheetSelector";
-import type { OrderUom } from "@/lib/orders/types";
+import type { OrderUom } from "@/lib/domain/Order";
 import { isOrderPipelineEnabled } from "@/lib/orders/featureFlag";
 import { createIdempotencyKeySource } from "@/lib/orders/idempotencyKey";
 
