@@ -130,8 +130,8 @@ the trail matters.
 - **What:** `lib/orders/types.ts` (legacy DB-mirror wire shapes — app-owned, no SDK content, NOT a Lego violation) is still imported by all 5 Orders/KDS UI pages + `components/EditLockBanner.tsx`. Routes no longer import it; `lib/domain/Order.ts:25-27` records the intent to retire it once nothing does.
 - **Fix shape:** move the UI pages to DTO-derived types, then delete `lib/orders/types.ts`.
 - **Detail:** `docs/anvil/2026-06-11-f-09-rip-out-audit.md` (item 7 notes)
-- **Owner unit:** unscheduled — low priority, fold into the UI phase
-- **Status:** open
+- **Owner unit:** Day-16 sealing unit 3/6
+- **Status:** done (PR #90 / squash `2c6ee1f`, ship-record `4b59a64`, 2026-06-27 — FULL retirement: 4 pure helpers + `ORDER_REFERENCE_REGEX` relocated verbatim into NEW `lib/domain/orderReference.ts`; 9 imports re-pointed to `@/lib/domain/Order` (5 UI pages + `EditLockBanner` + 3 `lib/orders/*` modules `dashboardFilters`/`kdsLogic`/`pickingList`); `tests/unit/orders/types.test.ts` re-pointed (assertions unchanged = byte-equivalence oracle); `OrderState`/`OrderUom` now declared exactly ONCE; `lib/orders/types.ts` DELETED. Pure type-rename + dead-file deletion, byte-identical runtime bundle. Guard SHIP 0 blockers; ANVIL tsc 0 · unit 2733 · @critical 75/75; prod smoke non-5xx. Cert `docs/anvil/2026-06-27-f-td-12-retire-legacy-orders-types-cert.md`.)
 
 ### F-TD-13 — `annualReview.test.ts` date-boundary flake (00:00–01:00 local)
 
