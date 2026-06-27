@@ -5,9 +5,10 @@
 - **Deciders:** Hakan Kilic, FORGE F-RLS-final
 
 > The single EXECUTABLE source of truth for the allowed service-role routes is the
-> two in-file allow-lists (`RULE_A_ALLOWLIST` + `RULE_B_ALLOWLIST`) in
-> `tests/unit/lint/no-service-role-in-user-routes.test.ts`. The prose register
-> below is the human-readable copy — **keep it in sync when you edit the test.**
+> three in-file allow-lists (`RULE_A_ALLOWLIST` + `RULE_B_ALLOWLIST` +
+> `RULE_C_ALLOWLIST`) in `tests/unit/lint/no-service-role-in-user-routes.test.ts`.
+> The prose register below is the human-readable copy — **keep it in sync when you
+> edit the test.**
 
 ## Context
 
@@ -56,12 +57,17 @@ fail-closed property ADR-0007 documents is pinned by
 
 ## Decision
 
-**Both doors into the master-key vault are watched.** The guard test enforces TWO
-rules; a route is an offender on either rule unless it is on that rule's
+**ALL THREE doors into the master-key vault are watched.** The guard test enforces
+THREE rules; a route is an offender on any rule unless it is on that rule's
 allow-list:
 
 - **Rule A — direct import.** A route importing `supabaseService` /
-  `getSupabaseService` directly from the Supabase client adapter.
+  `getSupabaseService` from the Supabase client adapter, OR `requireServiceRole`
+  from the authenticated-client adapter (`authenticatedClient.ts`) — the
+  ADR-0004-blessed master-key entry point. No route imports `requireServiceRole`
+  today (so no allow-list entry and no false-red), but the guard must not be
+  silent on the OFFICIAL door, or a future author could use the "blessed" path
+  and dodge the alarm.
 - **Rule B — wiring singleton.** A route importing, from `@/lib/wiring/**`, a
   symbol whose name does NOT end in `…ForCaller`. The `…ForCaller` factories are
   the safe per-user (RLS-enforcing) path and are always allowed; any other wiring
@@ -70,11 +76,17 @@ allow-list:
   is the `…ForCaller`-suffix convention, NOT a hand-maintained list of singleton
   export names (which would drift) — this errs toward requiring a written reason,
   the correct bias for a security seal.
+- **Rule C — raw-env master key.** A route referencing
+  `SUPABASE_SERVICE_ROLE_KEY` via a `process.env.…` access — the hand-rolled
+  raw-REST path where a route copies the master key's VALUE into a fetch header
+  rather than importing a client. It names neither `supabaseService` nor a wiring
+  singleton, so Rules A and B are both blind to it; Rule C catches it. The matcher
+  anchors on the `process.env.` access form, so a comment mention does not trip it.
 
-Both allow-lists were regenerated from a live grep at implementation time
+All three allow-lists were regenerated from a live grep at implementation time
 (`grep -rn "import.*supabaseService" app/api/` for Rule A;
 `grep -rn "from '@/lib/wiring" app/api/`, keeping only non-`ForCaller` symbol
-importers, for Rule B).
+importers, for Rule B; `grep -rn "SUPABASE_SERVICE_ROLE_KEY" app/api/` for Rule C).
 
 ### Master-key register — Rule A (direct service-role import)
 
@@ -142,19 +154,46 @@ factories are the safe path and are not listed.)
 > security-correct bias. Tightening individual entries onto `…ForCaller` (or
 > proving they are master-key-free) is the per-route follow-on work above.
 
-### Both doors are watched (closes F-RLS-wiring-guard)
+### Master-key register — Rule C (raw-env master key)
+
+These routes read `process.env.SUPABASE_SERVICE_ROLE_KEY` directly and paste it
+into hand-rolled raw-REST fetch headers — they import neither `supabaseService`
+nor a wiring singleton. They are the `RULE_C_ALLOWLIST` set in the guard test.
+All five are the audit-log / cross-cutting raw-REST writers tracked under
+**F-TD-31**; cutting each over onto an owned service-role port retires the raw key.
+
+| Route | Category | Reason | Follow-on ticket |
+|---|---|---|---|
+| `app/api/screen2/note/route.ts` | raw-REST audit/discrepancy writer | Raw key in a hand-rolled REST write; owned-port cutover pending. | F-TD-31 |
+| `app/api/screen2/resolve/route.ts` | raw-REST audit/discrepancy writer | As above (resolve path). | F-TD-31 |
+| `app/api/screen2/sync/route.ts` | raw-REST audit/discrepancy writer | As above (sync path). | F-TD-31 |
+| `app/api/screen3/sync/route.ts` | raw-REST audit cross-cut | Raw key for audit cross-cut (ALSO Rule-B allow-listed for `visitsService`). | F-TD-31 |
+| `app/api/routes/optimise/route.ts` | route optimiser | Raw key for road-time compute (ALSO Rule-A allow-listed for its `supabaseService` import). | F-TD-31 |
+
+> A route can appear on more than one rule's register (e.g. `routes/optimise` is
+> on both Rule A and Rule C; `screen3/sync` is on both Rule B and Rule C) — each
+> rule watches a different door, so an exception must be recorded on every door it
+> uses.
+
+### All three doors are watched (closes F-RLS-wiring-guard)
 
 The wiring-singleton vector (Rule B) is enforced by THIS guard, not merely
 documented. The follow-on ticket **F-RLS-wiring-guard is therefore CLOSED** —
-there is no separate "watch the back office later" work item; both doors are
-covered now.
+there is no separate "watch the back office later" work item; all three doors —
+direct import (Rule A, incl. the blessed `requireServiceRole`), wiring singleton
+(Rule B), and the raw-env key (Rule C) — are covered now.
 
-The single remaining documented edge is a **three-hop** path: a route that
-imports a *service* (not a wiring singleton) which itself internally wires a
-service-role singleton. The route-level scan cannot see a master key three hops
-away. This is low-priority and recorded here as the one residual edge; if it ever
-becomes load-bearing, the mitigation is a wiring-graph-aware check, not a
-route-level scan.
+**Documented residual edges (both low-priority, neither enforced this unit):**
+
+1. **Three-hop path.** A route that imports a *service* (not a wiring singleton)
+   which itself internally wires a service-role singleton. The route-level scan
+   cannot see a master key three hops away. If it ever becomes load-bearing, the
+   mitigation is a wiring-graph-aware check, not a route-level scan.
+2. **Multi-line-split evasion.** All three matchers are single-line — they test
+   each physical line in isolation (mirroring `no-disable-arch-rules.test.ts`). A
+   formatter that split an import brace body or a `process.env.…` access across
+   multiple physical lines could evade detection. No such case exists in the tree
+   today; if one appears, the matchers need a multi-line / AST pass.
 
 ### What this unit did NOT do
 
@@ -169,20 +208,22 @@ route-level scan.
 
 ## Consequences
 
-**Easier.** A NEW service-role route — on either door — is now a RED unit test
-with a precise message naming the offending route and pointing the author at the
-safe `…ForCaller` path or at this register. It was previously invisible. Every
-master key in the system is auditable in one place (this register + the two
+**Easier.** A NEW service-role route — on ANY of the three doors (direct import,
+wiring singleton, or raw-env key) — is now a RED unit test with a precise message
+naming the offending route and pointing the author at the safe `…ForCaller` path
+or at this register. It was previously invisible. Every
+master key in the system is auditable in one place (this register + the three
 allow-lists). The empty-GUC fail-closed property is pinned, so a future change
 that would flip a deny into a leak (e.g. wrapping `is_admin()` in `nullif`) breaks
 a test instead of shipping silently.
 
 **Harder.** The prose register above must be kept in sync by hand when the
 allow-lists in the test change (the test is authoritative; this is the copy). The
-allow-lists are larger than a "handful" — Rule B in particular lists 31 routes —
-which honestly reflects how much of the system still reaches a singleton; the
-per-route follow-on tickets above are the path to shrinking it. The three-hop edge
-remains uncaught (documented above).
+allow-lists are larger than a "handful" — Rule B in particular lists 31 routes,
+and Rule C adds 5 raw-env routes — which honestly reflects how much of the system
+still reaches a master key; the per-route follow-on tickets above (Rule C's are
+all F-TD-31) are the path to shrinking it. The two residual edges (three-hop and
+multi-line-split) remain uncaught (documented above).
 
 ## References
 
@@ -195,7 +236,7 @@ remains uncaught (documented above).
 - ADR-0007 — App-minted token and GUC bridge for RLS (the empty-string GUC
   fail-closed value this unit pins).
 - `tests/unit/lint/no-service-role-in-user-routes.test.ts` — the executable
-  source of truth for both allow-lists (the guard).
+  source of truth for all three allow-lists (the guard).
 - `supabase/tests/017-empty-guc-fails-closed.test.sql` — the empty-GUC
   fail-closed pin.
 - `lib/adapters/supabase/authenticatedClient.ts` — `requireServiceRole()` (the

@@ -21,13 +21,22 @@
 --     An empty-string GUC fails the `<> ''` test, so the policy denies by
 --     returning an EMPTY result set — NO error (is_empty).
 --
---   • Cast / is_admin() tables (users / visits, and is_admin() itself) — the
---     `_select` policy is `… OR public.is_admin()`, and is_admin() (baseline.sql
---     L181-187) does a BARE `current_setting('app.current_user_id', true)::uuid`
---     with no nullif. `''::uuid` raises 22P02 ("invalid input syntax for type
---     uuid"). So an empty GUC on these tables THROWS 22P02 — which still DENIES
---     (the query errors out; no rows leak), but by jamming the lock, not by
---     quietly returning nothing (throws_ok '22P02').
+--   • Cast / is_admin() tables (users / visits, and is_admin() itself) — these
+--     THROW 22P02 ("invalid input syntax for type uuid") on an empty GUC. There
+--     are TWO independent co-causes, either of which suffices:
+--       (a) The policy's OWN left-operand cast. users_select is
+--           `(id = (current_setting('app.current_user_id', true))::uuid) OR is_admin()`
+--           (visits_select is the same with `user_id`). Postgres evaluates that
+--           bare `''::uuid` cast on the empty GUC and raises 22P02 BEFORE the
+--           `OR is_admin()` short-circuit can help.
+--       (b) is_admin() itself (baseline.sql L181-187) ALSO does a bare
+--           `current_setting('app.current_user_id', true)::uuid` with no nullif,
+--           so it would throw on its own too.
+--     The earlier framing credited is_admin() alone; in fact the policy's own
+--     `= ''::uuid` left-operand cast is an equal (indeed first-evaluated)
+--     co-cause. Either way it THROWS — which still DENIES (the query errors out;
+--     no rows leak), by jamming the lock rather than quietly returning nothing
+--     (throws_ok '22P02').
 --
 -- Both outcomes satisfy the invariant: empty GUC => no foreign row. Asserting
 -- the per-table mechanism means a future change that, e.g., wraps is_admin() in
@@ -92,22 +101,26 @@ SELECT is_empty(
 );
 
 -- ── Cast / is_admin() tables: empty GUC => THROWS 22P02 (still a deny) ───
--- #3: users — `… OR is_admin()`; is_admin()'s bare ''::uuid cast throws 22P02.
+-- #3: users — policy is `(id = (current_setting(...))::uuid) OR is_admin()`; the
+--     policy's OWN left-operand `''::uuid` cast throws 22P02 (and is_admin()
+--     would throw too) — both co-causes, either suffices.
 SELECT throws_ok(
   format($$SELECT * FROM users WHERE id = %L$$, current_setting('test.admin')),
   '22P02', NULL,
-  '3: empty GUC SELECT users THROWS 22P02 (is_admin() bare ::uuid cast) — denies by jamming'
+  '3: empty GUC SELECT users THROWS 22P02 (policy ::uuid cast + is_admin() co-cause) — denies by jamming'
 );
 
--- #4: visits — `… OR is_admin()`; same 22P02 throw on empty GUC.
+-- #4: visits — policy is `(user_id = (current_setting(...))::uuid) OR is_admin()`;
+--     same dual co-cause, same 22P02 throw on empty GUC.
 SELECT throws_ok(
   format($$SELECT * FROM visits WHERE id = %L$$, current_setting('test.visit')),
   '22P02', NULL,
-  '4: empty GUC SELECT visits THROWS 22P02 (is_admin() bare ::uuid cast) — denies by jamming'
+  '4: empty GUC SELECT visits THROWS 22P02 (policy ::uuid cast + is_admin() co-cause) — denies by jamming'
 );
 
--- #5: is_admin() itself — the ROOT cause of the throws above. Pinning it
---     documents WHY users/visits jam rather than return empty.
+-- #5: is_admin() itself — ONE of the two co-causes (the other is each policy's
+--     own left-operand ::uuid cast). Pinning is_admin() documents the shared
+--     root pattern: a bare ''::uuid cast jams rather than returns empty.
 SELECT throws_ok(
   $$SELECT public.is_admin()$$,
   '22P02', NULL,

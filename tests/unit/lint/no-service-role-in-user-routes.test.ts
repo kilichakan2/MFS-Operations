@@ -19,6 +19,11 @@
  *     per-caller `…ForCaller` factory. A pre-wired singleton carries the
  *     service-role master key two hops away inside the wiring; the route never
  *     names `supabaseService`, so Rule A can't see it — Rule B can.
+ *   • Rule C — RAW-ENV MASTER KEY. A route references
+ *     `SUPABASE_SERVICE_ROLE_KEY` directly (typically `process.env.…` pasted
+ *     into a hand-rolled raw-REST fetch header). It imports NEITHER
+ *     `supabaseService` NOR a wiring singleton, so Rules A and B are both blind
+ *     to it — Rule C catches it.
  *
  * Detection rule for Rule B is convention-based, NOT a hand-maintained list of
  * singleton export NAMES (which would drift): any symbol imported from
@@ -31,11 +36,21 @@
  * F-27's in-file ALLOWLIST). ADR-0008 reproduces them in prose for human
  * auditors. When you edit a list here, update the ADR prose to match.
  *
- * Comment immunity: both matchers anchor on the `import` keyword (not the bare
- * token / module name), so `supabaseService` or `@/lib/wiring/...` appearing in
- * a COMMENT does not trip the guard — exactly the directive-anchoring discipline
- * `no-disable-arch-rules.test.ts` uses. (E.g. app/api/notifications/subscribe
- * mentions `supabaseService` in a doc comment only.)
+ * Comment immunity: all three matchers anchor on the `import` keyword (Rules A/B)
+ * or the `process.env.` access form (Rule C), not on the bare token / module
+ * name, so `supabaseService`, `@/lib/wiring/...` or `SUPABASE_SERVICE_ROLE_KEY`
+ * appearing in a COMMENT does not trip the guard — exactly the directive-anchoring
+ * discipline `no-disable-arch-rules.test.ts` uses. (E.g. app/api/notifications/
+ * subscribe mentions `supabaseService` in a doc comment only.)
+ *
+ * DOCUMENTED ASSUMPTION (Fold-in #3, not enforced this unit). All three matchers
+ * are SINGLE-LINE — they test each physical line in isolation, mirroring
+ * `no-disable-arch-rules.test.ts`. A formatter that split an import or env access
+ * across multiple physical lines (e.g. a brace body wrapped, or
+ * `process.env\n  .SUPABASE_SERVICE_ROLE_KEY`) could evade detection. No such
+ * case exists in the tree today; if one ever appears, the matchers need a
+ * multi-line / AST pass. Recorded in ADR-0008's residual section alongside the
+ * three-hop edge.
  *
  * Self-exclusion: the walk scans `app/api/**` ONLY — never `tests/**` or itself,
  * so the allow-list literal containing route names cannot trip the guard.
@@ -159,16 +174,57 @@ const RULE_B_ALLOWLIST = new Set<string>([
   "app/api/cron/haccp-alarm/route.ts",
 ]);
 
+// ───────────────────────────────────────────────────────────────────────────
+// ALLOW-LIST — Rule C (raw-env master key)
+// A route reads `SUPABASE_SERVICE_ROLE_KEY` from the environment directly and
+// pastes it into hand-rolled raw-REST fetch headers. It imports NEITHER
+// `supabaseService` NOR a wiring singleton, so Rules A/B are blind to it.
+// Seeded from the LIVE grep at implementation time:
+//   grep -rn "SUPABASE_SERVICE_ROLE_KEY" app/api/   →  the 5 routes below.
+// These raw-REST master-key uses are the audit-log / cross-cutting writers
+// tracked under F-TD-31; their cutover onto an owned port retires the raw key.
+// ───────────────────────────────────────────────────────────────────────────
+const RULE_C_ALLOWLIST = new Set<string>([
+  // raw-REST audit/discrepancy writer — screen2 note (raw key, owned-port cutover pending). (F-TD-31)
+  "app/api/screen2/note/route.ts",
+  // raw-REST audit/discrepancy writer — screen2 resolve (raw key).            (F-TD-31)
+  "app/api/screen2/resolve/route.ts",
+  // raw-REST audit/discrepancy writer — screen2 sync (raw key).               (F-TD-31)
+  "app/api/screen2/sync/route.ts",
+  // raw-REST audit cross-cut — screen3 sync (raw key; also Rule-B for visits). (F-TD-31)
+  "app/api/screen3/sync/route.ts",
+  // route optimiser — raw key for road-time compute (also Rule-A direct import). (F-TD-31)
+  "app/api/routes/optimise/route.ts",
+]);
+
 // ── Matchers ────────────────────────────────────────────────────────────────
 
 /**
  * Rule A: a direct service-role import. Anchored on the `import` keyword and the
- * supabase client module path, so `supabaseService` / `getSupabaseService`
- * appearing in a comment or string does NOT match. Covers both the named import
- * and the aliased form (`import { supabaseService as supabase } from …`).
+ * supabase adapter module path, so the symbol names appearing in a comment or
+ * string do NOT match. Covers both the named import and the aliased form
+ * (`import { supabaseService as supabase } from …`).
+ *
+ * Two doors are guarded here:
+ *   • `supabaseService` / `getSupabaseService` from `adapters/supabase/client`
+ *     — the 9 direct importers.
+ *   • `requireServiceRole` from `adapters/supabase/authenticatedClient` — the
+ *     ADR-0004-blessed master-key entry point (Fold-in #2). NO route imports it
+ *     today, so there is no false-red and no allow-list entry is needed; the
+ *     guard must not be silent on the OFFICIAL path or a future author could use
+ *     the "blessed" door and dodge the alarm.
  */
 const RULE_A_IMPORT =
-  /^\s*import\s*\{[^}]*\b(?:supabaseService|getSupabaseService)\b[^}]*\}\s*from\s*['"][^'"]*adapters\/supabase\/client['"]/;
+  /^\s*import\s*\{[^}]*\b(?:supabaseService|getSupabaseService|requireServiceRole)\b[^}]*\}\s*from\s*['"][^'"]*adapters\/supabase\/(?:client|authenticatedClient)['"]/;
+
+/**
+ * Rule C: a raw-env master-key reference. Anchored on the `process.env.` access
+ * form, so `SUPABASE_SERVICE_ROLE_KEY` appearing in a comment or string does NOT
+ * match. Catches the hand-rolled raw-REST path where a route copies the master
+ * key's value rather than importing a client.
+ */
+const RULE_C_ENV =
+  /process\.env\s*(?:\.\s*SUPABASE_SERVICE_ROLE_KEY\b|\[\s*['"]SUPABASE_SERVICE_ROLE_KEY['"]\s*\])/;
 
 /**
  * Matches a named import statement from `@/lib/wiring/**` and captures the brace
@@ -230,6 +286,15 @@ function wiringSingletonOffenders(source: string): string[] {
   return offenders;
 }
 
+/**
+ * Does this source reference the raw `SUPABASE_SERVICE_ROLE_KEY` env var via a
+ * `process.env.…` access (Rule C)? Anchored on the access form so a mention in a
+ * comment does NOT match.
+ */
+function hasRawEnvMasterKey(source: string): boolean {
+  return source.split("\n").some((line) => RULE_C_ENV.test(line));
+}
+
 describe("F-RLS-final no-service-role-in-user-routes — the master-key seal", () => {
   // ── Rule A : direct service-role import ─────────────────────────────────
   describe("Rule A — direct service-role import", () => {
@@ -245,6 +310,18 @@ describe("F-RLS-final no-service-role-in-user-routes — the master-key seal", (
       const fixture =
         "import { supabaseService as supabase } from '@/lib/adapters/supabase/client'\n";
       expect(hasDirectServiceRoleImport(fixture)).toBe(true);
+    });
+
+    it("detects the blessed requireServiceRole entry point too (Fold-in #2)", () => {
+      const fixture =
+        "import { requireServiceRole } from '@/lib/adapters/supabase/authenticatedClient'\n";
+      expect(hasDirectServiceRoleImport(fixture)).toBe(true);
+    });
+
+    it("does NOT flag the safe authenticatedClientForCaller from the same module", () => {
+      const fixture =
+        "import { authenticatedClientForCaller } from '@/lib/adapters/supabase/authenticatedClient'\n";
+      expect(hasDirectServiceRoleImport(fixture)).toBe(false);
     });
 
     it("is immune to a comment mentioning supabaseService (no import statement)", () => {
@@ -350,6 +427,63 @@ describe("F-RLS-final no-service-role-in-user-routes — the master-key seal", (
       expect(RULE_B_ALLOWLIST.has(route)).toBe(true);
       const source = readFileSync(join(ROOT, route), "utf8");
       expect(wiringSingletonOffenders(source)).toContain("ordersService");
+    });
+  });
+
+  // ── Rule C : raw-env master key ─────────────────────────────────────────
+  describe("Rule C — raw-env master key (process.env.SUPABASE_SERVICE_ROLE_KEY)", () => {
+    it("detects a raw process.env.SUPABASE_SERVICE_ROLE_KEY at a non-allow-listed path (fixture, proves it CAN go red)", () => {
+      const fixture =
+        "import { NextResponse } from 'next/server'\n" +
+        "const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''\n" +
+        "export async function POST() { return NextResponse.json({ KEY }) }\n";
+      expect(hasRawEnvMasterKey(fixture)).toBe(true);
+    });
+
+    it("detects the bracket-access form too (process.env['SUPABASE_SERVICE_ROLE_KEY'])", () => {
+      const fixture =
+        "const KEY = process.env['SUPABASE_SERVICE_ROLE_KEY']\n";
+      expect(hasRawEnvMasterKey(fixture)).toBe(true);
+    });
+
+    it("is immune to a comment mentioning SUPABASE_SERVICE_ROLE_KEY (no process.env access)", () => {
+      const fixture =
+        "// the raw SUPABASE_SERVICE_ROLE_KEY paste was retired in favour of a port\n" +
+        "import { somethingForCaller } from '@/lib/wiring/something'\n";
+      expect(hasRawEnvMasterKey(fixture)).toBe(false);
+    });
+
+    it("the LIVE app/api tree has ZERO un-allow-listed raw-env master-key references", () => {
+      const offenders: string[] = [];
+      for (const file of walkRoutes(API_ROOT, [])) {
+        const rel = relPath(file);
+        if (RULE_C_ALLOWLIST.has(rel)) continue;
+        if (hasRawEnvMasterKey(readFileSync(file, "utf8"))) {
+          offenders.push(rel);
+        }
+      }
+      expect(
+        offenders,
+        offenders.length === 0
+          ? ""
+          : `Route(s) read the raw SUPABASE_SERVICE_ROLE_KEY env var (the master ` +
+              `key, RLS-bypassing) WITHOUT being on the Rule-C allow-list: ` +
+              `${offenders.join(", ")}.\nEITHER cut the route over to an owned ` +
+              `service-role port (the F-TD-31 path) — OR, if it is a deliberate ` +
+              `raw-REST exception, add it to RULE_C_ALLOWLIST in ` +
+              `tests/unit/lint/no-service-role-in-user-routes.test.ts with a reason ` +
+              `+ follow-on ticket, and mirror it into ADR-0008's prose register.`,
+      ).toEqual([]);
+    });
+
+    it("an allow-listed route reading the raw env key is NOT a live offender (positive case)", () => {
+      // app/api/screen2/note/route.ts (allow-listed) really does read the raw
+      // env key; the live scan above must exclude it.
+      const route = "app/api/screen2/note/route.ts";
+      expect(RULE_C_ALLOWLIST.has(route)).toBe(true);
+      const source = readFileSync(join(ROOT, route), "utf8");
+      expect(hasRawEnvMasterKey(source)).toBe(true); // it does read it
+      // …but because it is allow-listed, the live scan already excludes it.
     });
   });
 });
