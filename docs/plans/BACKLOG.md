@@ -628,6 +628,16 @@ the trail matters.
 - **Owner unit:** F-INFRA-06 (unscheduled — bites every FORGE Gate-4 preview smoke until fixed; workaround above neutralises it in the meantime)
 - **Status:** open
 
+### F-INFRA-07 — CI `@critical` smoke is non-idempotent across a 2nd push to the same PR
+
+- **Surfaced:** 2026-06-27 (closing-audit seal, PR #92)
+- **What:** The `smoke` workflow re-runs on every push to a PR, but a PR has ONE Supabase preview branch shared across all its commits (per F-INFRA-05). The branch only re-seeds when migrations change. So a 2nd (or later) push that does NOT change migrations runs `@critical` against a DB **already written to by the first run** — and the HACCP once-per-period submit flows fail because today's daily checks / this week's review are already submitted. **Observed live:** run 1 on PR #92 (fresh branch) = **75/75**; run 2 on the next push (same branch, dirty DB, byte-identical bundle) = **70 passed / 4 failed / 1 flaky** — the 4 failures all HACCP "submit successfully" specs (`13-haccp-cold-storage` deviation, `16-haccp-process-room` temps + diary, `25-haccp-reviews` weekly). NOT a code regression.
+- **Workaround used to seal PR #92:** reset the PR's Supabase preview branch (MCP `reset_branch` on the branch id from `list_branches`) → wait `ACTIVE_HEALTHY` → `gh run rerun <smoke-run-id>` → clean **75/75** on the same head commit. No gate-bypass.
+- **Impact:** ANY real feature PR with ≥2 pushes and no migration change will hit a red `smoke` on the later push(es) → blocks merge with a false-red until someone resets the branch. Latent landmine for the parallel UI branch and all future multi-push PRs.
+- **Fix shape (pick one):** (a) workflow resets/reseeds the preview branch before each smoke run (cleanest — every run starts fresh); or (b) make the HACCP @critical specs idempotent / data-scoped per run (e.g. unique-per-run dates so once-per-period never collides); or (c) tear down + recreate the preview branch on each push. Option (a) is the smallest blast radius. Interacts with [[F-INFRA-03]] (the CI smoke itself) and [[F-INFRA-06]].
+- **Owner unit:** unscheduled (bites every multi-push PR until fixed; the reset-branch workaround neutralises it manually in the meantime)
+- **Status:** open
+
 ---
 
 ## RLS track follow-ups (F-RLS-)
