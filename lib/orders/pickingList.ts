@@ -16,7 +16,7 @@
  * Plan: docs/plans/2026-05-30-order-pipeline-kds-implementation.md (SB4)
  */
 
-import type { OrderUom } from './types'
+import type { OrderUom } from '@/lib/domain/Order'
 
 // ─── Input shape ──────────────────────────────────────────────
 

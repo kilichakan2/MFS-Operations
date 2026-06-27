@@ -30,7 +30,7 @@ import OrderCutoverBanner from "@/components/OrderCutoverBanner";
 import { useCustomers } from "@/hooks/useReferenceData";
 import { isOrderPipelineEnabled } from "@/lib/orders/featureFlag";
 
-import type { OrderState, OrderUom } from "@/lib/orders/types";
+import type { OrderState, OrderUom } from "@/lib/domain/Order";
 import {
   applyDashboardFilters,
   type DashboardDateFilter,

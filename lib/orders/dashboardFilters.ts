@@ -11,7 +11,7 @@
  * Plan: docs/plans/2026-05-30-order-pipeline-kds-implementation.md (SB3)
  */
 
-import type { OrderState } from './types'
+import type { OrderState } from '@/lib/domain/Order'
 
 export type DashboardDateFilter  = 'today' | 'tomorrow' | 'today_tomorrow' | 'this_week' | 'all'
 

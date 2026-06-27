@@ -29,7 +29,7 @@ import EditLockBanner from "@/components/EditLockBanner";
 import OrderPipelinePausedNotice from "@/components/OrderPipelinePausedNotice";
 import { useCustomers, useProductsWithDetail } from "@/hooks/useReferenceData";
 import type { SelectableItem } from "@/components/BottomSheetSelector";
-import type { OrderState, OrderUom } from "@/lib/orders/types";
+import type { OrderState, OrderUom } from "@/lib/domain/Order";
 import { isOrderPipelineEnabled } from "@/lib/orders/featureFlag";
 
 // ─── Types ─────────────────────────────────────────────────────
