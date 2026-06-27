@@ -52,6 +52,14 @@
           {
             "name": "web-push",
             "message": "Use the PushSender port via @/lib/wiring/pushSender. web-push may only be imported inside lib/adapters/web-push/. See ADR-0002 / F-25."
+          },
+          {
+            "name": "dexie",
+            "message": "Use the LocalCache port via @/lib/wiring/localCache. dexie may only be imported inside lib/adapters/dexie/. See ADR-0002 / F-26."
+          },
+          {
+            "name": "dexie-react-hooks",
+            "message": "Use the LocalCache reactive hooks via @/lib/wiring/localCache. dexie-react-hooks may only be imported inside lib/adapters/dexie/. See ADR-0002 / F-26."
           }
         ]
       }
@@ -79,6 +87,7 @@
         "lib/adapters/jspdf/**/*.{ts,tsx}",
         "lib/adapters/xlsx/**/*.ts",
         "lib/adapters/web-push/**/*.ts",
+        "lib/adapters/dexie/**/*.{ts,tsx}",
         "tests/**"
       ],
       "rules": {
@@ -140,6 +149,14 @@
               {
                 "name": "web-push",
                 "message": "Use the PushSender port via @/lib/wiring/pushSender. web-push may only be imported inside lib/adapters/web-push/. See ADR-0002 / F-25."
+              },
+              {
+                "name": "dexie",
+                "message": "Use the LocalCache port via @/lib/wiring/localCache. dexie may only be imported inside lib/adapters/dexie/. See ADR-0002 / F-26."
+              },
+              {
+                "name": "dexie-react-hooks",
+                "message": "Use the LocalCache reactive hooks via @/lib/wiring/localCache. dexie-react-hooks may only be imported inside lib/adapters/dexie/. See ADR-0002 / F-26."
               }
             ],
             "patterns": [
