@@ -590,7 +590,7 @@ the trail matters.
 - **Detail:** `docs/plans/2026-06-10-f-infra-02-preview-smoke-plumbing.md` + ADR-0006
 - **Shipped:** new `.github/workflows/preview-smoke.yml` — a fail-closed BLOCKING required check on `main` (the `smoke` job). Discovers the PR's READY preview via the Vercel API (reusing `VERCEL_API_TOKEN` + the public project/team ids from `preview-cred-sync.mjs`), builds the `git-<branch>` alias, polls `/api/auth/team`=200 on a finite 12-min budget (the cred-wired second deploy is the only one that 200s there), then runs `npm run test:e2e:preview -- <url> --unprotected`. Pinned by `tests/unit/ci/preview-smoke-workflow.test.ts` (8 invariants, raw-text — no yaml-parser dep). Mirrors `preview-cred-sync.yml` house style; CI/config/test/docs only — no app code, no new runtime dep, no migration, no RLS. 13 `E2E_*` repo secrets provisioned; `VERCEL_API_TOKEN` reused. Plan `docs/plans/2026-06-27-f-infra-03-preview-smoke-ci.md`.
 - **Owner unit:** F-INFRA-03
-- **Status:** ✅ **SHIPPED 2026-06-27** (PR #__ / `_______` — filled at ship)
+- **Status:** ✅ **SHIPPED 2026-06-27** (PR #91 / `65f3970`) — BLOCKING required check `smoke` on `main` (branch protection created fresh, admin-override retained). FORGE caught + fixed 2 bugs (Node ESM-syntax + 82-char constructed host); live @critical 75/75. 12 `E2E_*` secrets provisioned (`E2E_PIN_ADMIN` n/a by design — uses USER+PASSWORD). Note: shipped invariant count is 10 (not 8 — +2 from the bug fixes); discover reads Vercel `branchAlias`, does not construct the alias.
 
 ### F-INFRA-04 — Re-enable Vercel Deployment Protection (+ automation bypass) after the re-architecture
 
