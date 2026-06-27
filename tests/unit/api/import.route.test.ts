@@ -27,9 +27,11 @@ vi.mock("@/lib/wiring/llm", () => ({
 
 import { POST } from "@/app/api/admin/import/route";
 
+const ADMIN = { "x-mfs-user-id": "u-1", "x-mfs-user-role": "admin" };
+
 function makeReq(
   body: unknown,
-  headers: Record<string, string> = { "x-mfs-user-id": "u-1" },
+  headers: Record<string, string> = ADMIN,
   rawBody?: string,
 ): NextRequest {
   return new NextRequest("http://localhost/api/admin/import", {
@@ -44,11 +46,25 @@ beforeEach(() => {
   extractProducts.mockReset();
 });
 
-describe("POST /api/admin/import — guards (unchanged)", () => {
+describe("POST /api/admin/import — guards", () => {
   it("returns 401 when x-mfs-user-id is absent", async () => {
-    const res = await POST(makeReq({ raw_text: "x", type: "customers" }, {}));
+    const res = await POST(
+      makeReq({ raw_text: "x", type: "customers" }, { "x-mfs-user-role": "admin" }),
+    );
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthenticated" });
+  });
+
+  it("returns 403 'Admin only' for a non-admin (NEW — import now role-gated)", async () => {
+    const res = await POST(
+      makeReq({ raw_text: "x", type: "customers" }, {
+        "x-mfs-user-id": "o1",
+        "x-mfs-user-role": "office",
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(extractCustomers).not.toHaveBeenCalled();
   });
 
   it("returns 400 on invalid JSON body", async () => {

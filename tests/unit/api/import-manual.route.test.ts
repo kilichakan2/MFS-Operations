@@ -18,25 +18,40 @@ const customersInsertOne = vi.fn();
 const productsInsertOne = vi.fn();
 const auditRecord = vi.fn();
 
+const customersServiceForCaller = vi.fn(async (_id: string) => ({
+  insertOne: (...a: unknown[]) => customersInsertOne(...a),
+}));
+const productsServiceForCaller = vi.fn(async (_id: string) => ({
+  insertOne: (...a: unknown[]) => productsInsertOne(...a),
+}));
+const auditLogForCaller = vi.fn(async (_id: string) => ({
+  record: (...a: unknown[]) => auditRecord(...a),
+}));
+
 vi.mock("@/lib/wiring/customers", () => ({
   customersService: {
     insertOne: (...a: unknown[]) => customersInsertOne(...a),
   },
+  customersServiceForCaller: (id: string) => customersServiceForCaller(id),
 }));
 vi.mock("@/lib/wiring/products", () => ({
   productsService: {
     insertOne: (...a: unknown[]) => productsInsertOne(...a),
   },
+  productsServiceForCaller: (id: string) => productsServiceForCaller(id),
 }));
 vi.mock("@/lib/wiring/auditLog", () => ({
   auditLog: { record: (...a: unknown[]) => auditRecord(...a) },
+  auditLogForCaller: (id: string) => auditLogForCaller(id),
 }));
 
 import { POST } from "@/app/api/admin/import/manual/route";
 
+const ADMIN = { "x-mfs-user-id": "u-1", "x-mfs-user-role": "admin" };
+
 function makeReq(
   body: unknown,
-  headers: Record<string, string> = { "x-mfs-user-id": "u-1" },
+  headers: Record<string, string> = ADMIN,
   rawBody?: string,
 ): NextRequest {
   return new NextRequest("http://localhost/api/admin/import/manual", {
@@ -51,13 +66,29 @@ beforeEach(() => {
   auditRecord.mockResolvedValue(undefined);
 });
 
-describe("POST /api/admin/import/manual — guards (byte-identical)", () => {
+describe("POST /api/admin/import/manual — guards", () => {
   it("returns 401 when x-mfs-user-id is absent", async () => {
     const res = await POST(
-      makeReq({ type: "customers", rows: [["A"]], mapping: { name: 0 } }, {}),
+      makeReq({ type: "customers", rows: [["A"]], mapping: { name: 0 } }, {
+        "x-mfs-user-role": "admin",
+      }),
     );
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin (NEW — import now role-gated)", async () => {
+    const res = await POST(
+      makeReq({ type: "customers", rows: [["A"]], mapping: { name: 0 } }, {
+        "x-mfs-user-id": "o1",
+        "x-mfs-user-role": "office",
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
+    expect(auditLogForCaller).not.toHaveBeenCalled();
   });
 
   it("returns 400 on invalid JSON body", async () => {
@@ -154,7 +185,7 @@ describe("POST /api/admin/import/manual — audit", () => {
     await POST(
       makeReq(
         { type: "customers", rows: [["A"], ["B"]], mapping: { name: 0 } },
-        { "x-mfs-user-id": "u-1", "x-mfs-user-name": "Bob" },
+        { "x-mfs-user-id": "u-1", "x-mfs-user-role": "admin", "x-mfs-user-name": "Bob" },
       ),
     );
     expect(auditRecord).toHaveBeenCalledTimes(1);

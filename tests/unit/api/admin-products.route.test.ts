@@ -26,11 +26,17 @@ import { NextRequest } from "next/server";
 const listAll = vi.fn();
 const setActive = vi.fn();
 
+const productsServiceForCaller = vi.fn(async (_id: string) => ({
+  listAll: (...a: unknown[]) => listAll(...a),
+  setActive: (...a: unknown[]) => setActive(...a),
+}));
+
 vi.mock("@/lib/wiring/products", () => ({
   productsService: {
     listAll: (...a: unknown[]) => listAll(...a),
     setActive: (...a: unknown[]) => setActive(...a),
   },
+  productsServiceForCaller: (id: string) => productsServiceForCaller(id),
 }));
 
 import { GET } from "@/app/api/admin/products/route";
@@ -83,19 +89,44 @@ const PATCH_VIEW = {
 
 // ── GET /api/admin/products ─────────────────────────────────────────────────
 describe("GET /api/admin/products — guard + response shape", () => {
-  it("returns 403 'Admin only' for a non-admin (guard byte-identical)", async () => {
+  it("returns 401 'Unauthenticated' when identity is absent", async () => {
+    const res = await GET(listReq({ "x-mfs-user-role": "admin" }));
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(productsServiceForCaller).not.toHaveBeenCalled();
+    expect(listAll).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin", async () => {
     const res = await GET(
       listReq({ "x-mfs-user-id": "w1", "x-mfs-user-role": "warehouse" }),
     );
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(productsServiceForCaller).not.toHaveBeenCalled();
     expect(listAll).not.toHaveBeenCalled();
   });
 
-  it("returns the exact 7-key BARE array for an admin", async () => {
+  it("an admin COOKIE with a non-admin HEADER is refused (header is the trust source)", async () => {
+    const res = await GET(
+      new NextRequest("http://localhost/api/admin/products", {
+        method: "GET",
+        headers: {
+          "x-mfs-user-id": "w1",
+          "x-mfs-user-role": "warehouse",
+          cookie: "mfs_role=admin; mfs_user_id=admin-1",
+        },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(productsServiceForCaller).not.toHaveBeenCalled();
+  });
+
+  it("returns the exact 7-key BARE array for an admin (factory minted with header id)", async () => {
     listAll.mockResolvedValueOnce([FULL_VIEW]);
     const res = await GET(listReq(ADMIN));
     expect(res.status).toBe(200);
+    expect(productsServiceForCaller).toHaveBeenCalledWith("admin-1");
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
     expect(Object.keys(body[0]).sort()).toEqual(
@@ -123,13 +154,25 @@ describe("GET /api/admin/products — guard + response shape", () => {
 
 // ── PATCH /api/admin/products/[id] ──────────────────────────────────────────
 describe("PATCH /api/admin/products/[id] — guard + shape + 404", () => {
-  it("returns 403 'Admin only' for a non-admin (guard byte-identical)", async () => {
+  it("returns 401 'Unauthenticated' when identity is absent", async () => {
     const res = await PATCH(
-      patchReq({ "x-mfs-user-role": "office" }, { active: false }),
+      patchReq({ "x-mfs-user-role": "admin" }, { active: false }),
+      { params },
+    );
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(productsServiceForCaller).not.toHaveBeenCalled();
+    expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin", async () => {
+    const res = await PATCH(
+      patchReq({ "x-mfs-user-id": "o1", "x-mfs-user-role": "office" }, { active: false }),
       { params },
     );
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(productsServiceForCaller).not.toHaveBeenCalled();
     expect(setActive).not.toHaveBeenCalled();
   });
 

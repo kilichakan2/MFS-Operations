@@ -24,11 +24,17 @@ const listUngeocoded = vi.fn();
 const setCoords = vi.fn();
 const geocodeMany = vi.fn();
 
+const customersServiceForCaller = vi.fn(async (_id: string) => ({
+  listUngeocoded: (...a: unknown[]) => listUngeocoded(...a),
+  setCoords: (...a: unknown[]) => setCoords(...a),
+}));
+
 vi.mock("@/lib/wiring/customers", () => ({
   customersService: {
     listUngeocoded: (...a: unknown[]) => listUngeocoded(...a),
     setCoords: (...a: unknown[]) => setCoords(...a),
   },
+  customersServiceForCaller: (id: string) => customersServiceForCaller(id),
 }));
 vi.mock("@/lib/wiring/geocoder", () => ({
   geocoder: { geocodeMany: (...a: unknown[]) => geocodeMany(...a) },
@@ -82,6 +88,7 @@ describe("GET /api/admin/geocode-all — guard SWAP (?secret → requireRole)", 
       req("http://localhost/api/admin/geocode-all", ADMIN),
     );
     expect(res.status).toBe(200);
+    expect(customersServiceForCaller).toHaveBeenCalledWith("admin-1");
     expect(await res.json()).toEqual({
       message: "Nothing to geocode.",
       geocoded: 0,

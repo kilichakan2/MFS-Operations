@@ -15,16 +15,20 @@ import { ServiceError } from "@/lib/errors";
 import type { MapCustomer, MapVisit } from "@/app/api/map/data/route";
 
 const load = vi.fn();
+const mapDataServiceForCaller = vi.fn(async (_id: string) => ({ load: (...a: unknown[]) => load(...a) }));
 
 vi.mock("@/lib/wiring/mapData", () => ({
   mapDataService: { load: (...a: unknown[]) => load(...a) },
+  mapDataServiceForCaller: (id: string) => mapDataServiceForCaller(id),
 }));
 
 import { GET } from "@/app/api/map/data/route";
 
+const ADMIN = { "x-mfs-user-id": "u-1", "x-mfs-user-role": "admin" };
+
 function makeReq(
   url: string,
-  headers: Record<string, string> = { "x-mfs-user-id": "u-1" },
+  headers: Record<string, string> = ADMIN,
 ): NextRequest {
   return new NextRequest(`http://localhost${url}`, { method: "GET", headers });
 }
@@ -34,12 +38,42 @@ beforeEach(() => {
   load.mockResolvedValue({ customers: [], visits: [] });
 });
 
-describe("GET /api/map/data — guard (byte-identical)", () => {
-  it("returns 401 when x-mfs-user-id is absent", async () => {
+describe("GET /api/map/data — guard (requireRole admin)", () => {
+  it("returns 401 when x-mfs-user-id is absent (no identity)", async () => {
     const res = await GET(makeReq("/api/map/data", {}));
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(mapDataServiceForCaller).not.toHaveBeenCalled();
     expect(load).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 for a non-admin caller", async () => {
+    const res = await GET(
+      makeReq("/api/map/data", { "x-mfs-user-id": "u-2", "x-mfs-user-role": "sales" }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(mapDataServiceForCaller).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it("an admin COOKIE with a non-admin HEADER is refused (header is the trust source)", async () => {
+    const r = new NextRequest("http://localhost/api/map/data", {
+      method: "GET",
+      headers: {
+        "x-mfs-user-id": "u-2",
+        "x-mfs-user-role": "sales",
+        cookie: "mfs_role=admin; mfs_user_id=u-admin",
+      },
+    });
+    const res = await GET(r);
+    expect(res.status).toBe(403);
+    expect(mapDataServiceForCaller).not.toHaveBeenCalled();
+  });
+
+  it("admin → mapDataServiceForCaller minted with the HEADER userId", async () => {
+    await GET(makeReq("/api/map/data"));
+    expect(mapDataServiceForCaller).toHaveBeenCalledWith("u-1");
   });
 });
 

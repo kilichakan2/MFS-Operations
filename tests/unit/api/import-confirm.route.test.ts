@@ -22,29 +22,45 @@ const productsInsertMany = vi.fn();
 const geocodeMany = vi.fn();
 const auditRecord = vi.fn();
 
+const customersServiceForCaller = vi.fn(async (_id: string) => ({
+  insertMany: (...a: unknown[]) => customersInsertMany(...a),
+  setCoords: (...a: unknown[]) => customersSetCoords(...a),
+}));
+const productsServiceForCaller = vi.fn(async (_id: string) => ({
+  insertMany: (...a: unknown[]) => productsInsertMany(...a),
+}));
+const auditLogForCaller = vi.fn(async (_id: string) => ({
+  record: (...a: unknown[]) => auditRecord(...a),
+}));
+
 vi.mock("@/lib/wiring/customers", () => ({
   customersService: {
     insertMany: (...a: unknown[]) => customersInsertMany(...a),
     setCoords: (...a: unknown[]) => customersSetCoords(...a),
   },
+  customersServiceForCaller: (id: string) => customersServiceForCaller(id),
 }));
 vi.mock("@/lib/wiring/products", () => ({
   productsService: {
     insertMany: (...a: unknown[]) => productsInsertMany(...a),
   },
+  productsServiceForCaller: (id: string) => productsServiceForCaller(id),
 }));
 vi.mock("@/lib/wiring/geocoder", () => ({
   geocoder: { geocodeMany: (...a: unknown[]) => geocodeMany(...a) },
 }));
 vi.mock("@/lib/wiring/auditLog", () => ({
   auditLog: { record: (...a: unknown[]) => auditRecord(...a) },
+  auditLogForCaller: (id: string) => auditLogForCaller(id),
 }));
 
 import { POST } from "@/app/api/admin/import/confirm/route";
 
+const ADMIN = { "x-mfs-user-id": "u-1", "x-mfs-user-role": "admin" };
+
 function makeReq(
   body: unknown,
-  headers: Record<string, string> = { "x-mfs-user-id": "u-1" },
+  headers: Record<string, string> = ADMIN,
   rawBody?: string,
 ): NextRequest {
   return new NextRequest("http://localhost/api/admin/import/confirm", {
@@ -74,11 +90,43 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("POST /api/admin/import/confirm — guards (byte-identical)", () => {
+describe("POST /api/admin/import/confirm — guards", () => {
   it("returns 401 when x-mfs-user-id is absent", async () => {
-    const res = await POST(makeReq({ type: "customers", rows: [{ name: "A" }] }, {}));
+    const res = await POST(
+      makeReq({ type: "customers", rows: [{ name: "A" }] }, { "x-mfs-user-role": "admin" }),
+    );
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin (NEW — import now role-gated)", async () => {
+    const res = await POST(
+      makeReq({ type: "customers", rows: [{ name: "A" }] }, {
+        "x-mfs-user-id": "o1",
+        "x-mfs-user-role": "office",
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
+    expect(auditLogForCaller).not.toHaveBeenCalled();
+  });
+
+  it("an admin COOKIE with a non-admin HEADER is refused (header is the trust source)", async () => {
+    const r = new NextRequest("http://localhost/api/admin/import/confirm", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-mfs-user-id": "o1",
+        "x-mfs-user-role": "office",
+        cookie: "mfs_role=admin; mfs_user_id=u-1",
+      },
+      body: JSON.stringify({ type: "customers", rows: [{ name: "A" }] }),
+    });
+    const res = await POST(r);
+    expect(res.status).toBe(403);
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
   });
 
   it("returns 400 on invalid JSON body", async () => {
@@ -120,7 +168,7 @@ describe("POST /api/admin/import/confirm — customers success path", () => {
             { name: "  " }, // filtered out before insert → skipped
           ],
         },
-        { "x-mfs-user-id": "u-1", "x-mfs-user-name": "Bob" },
+        { "x-mfs-user-id": "u-1", "x-mfs-user-role": "admin", "x-mfs-user-name": "Bob" },
       ),
     );
     expect(res.status).toBe(201);
@@ -128,10 +176,16 @@ describe("POST /api/admin/import/confirm — customers success path", () => {
     expect(Object.keys(body).sort()).toEqual(["inserted", "skipped"]);
     expect(body).toEqual({ inserted: 2, skipped: 0 });
 
+    // All three per-caller factories minted with the HEADER userId.
+    expect(customersServiceForCaller).toHaveBeenCalledWith("u-1");
+    expect(productsServiceForCaller).toHaveBeenCalledWith("u-1");
+    expect(auditLogForCaller).toHaveBeenCalledWith("u-1");
+
     expect(customersInsertMany).toHaveBeenCalledWith([
       { name: "Acme", postcode: "S1 2AB", created_by: "u-1" },
       { name: "Beta", postcode: null, created_by: "u-1" },
     ]);
+    // R-AUDIT: audit user_id == caller.userId so audit_log_insert WITH CHECK passes.
     expect(auditRecord).toHaveBeenCalledWith({
       user_id: "u-1",
       screen: "screen5",

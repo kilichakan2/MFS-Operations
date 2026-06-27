@@ -29,12 +29,19 @@ const listProspects = vi.fn();
 const listAtRisk = vi.fn();
 const listCommitments = vi.fn();
 
+const visitsServiceForCaller = vi.fn(async (_id: string) => ({
+  listProspects: (...a: unknown[]) => listProspects(...a),
+  listAtRisk: (...a: unknown[]) => listAtRisk(...a),
+  listCommitments: (...a: unknown[]) => listCommitments(...a),
+}));
+
 vi.mock("@/lib/wiring/visits", () => ({
   visitsService: {
     listProspects: (...a: unknown[]) => listProspects(...a),
     listAtRisk: (...a: unknown[]) => listAtRisk(...a),
     listCommitments: (...a: unknown[]) => listCommitments(...a),
   },
+  visitsServiceForCaller: (id: string) => visitsServiceForCaller(id),
 }));
 
 import { GET as prospectsGET } from "@/app/api/admin/prospects/route";
@@ -45,7 +52,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-const AUTHED = { "x-mfs-user-id": "admin-1" };
+const AUTHED = { "x-mfs-user-id": "admin-1", "x-mfs-user-role": "admin" };
 
 function req(path: string, headers: Record<string, string>): NextRequest {
   return new NextRequest(`http://localhost${path}`, { method: "GET", headers });
@@ -76,10 +83,20 @@ function visit(overrides: Partial<Visit>): Visit {
 // ── GET /api/admin/prospects ────────────────────────────────────────────────
 describe("GET /api/admin/prospects — guard + {rows} shape + R1 null stage", () => {
   it("returns 401 'Unauthenticated' when x-mfs-user-id is absent", async () => {
-    const res = await prospectsGET(req("/api/admin/prospects", {}));
+    const res = await prospectsGET(req("/api/admin/prospects", { "x-mfs-user-role": "admin" }));
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(visitsServiceForCaller).not.toHaveBeenCalled();
     expect(listProspects).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin caller", async () => {
+    const res = await prospectsGET(
+      req("/api/admin/prospects", { "x-mfs-user-id": "s1", "x-mfs-user-role": "sales" }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(visitsServiceForCaller).not.toHaveBeenCalled();
   });
 
   it("returns the exact 7-key rows with underscore→space on outcome/visitType", async () => {
@@ -140,10 +157,20 @@ describe("GET /api/admin/prospects — guard + {rows} shape + R1 null stage", ()
 // ── GET /api/admin/at-risk ──────────────────────────────────────────────────
 describe("GET /api/admin/at-risk — guard + {rows} shape + derivation", () => {
   it("returns 401 'Unauthenticated' when x-mfs-user-id is absent", async () => {
-    const res = await atRiskGET(req("/api/admin/at-risk", {}));
+    const res = await atRiskGET(req("/api/admin/at-risk", { "x-mfs-user-role": "admin" }));
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(visitsServiceForCaller).not.toHaveBeenCalled();
     expect(listAtRisk).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin caller", async () => {
+    const res = await atRiskGET(
+      req("/api/admin/at-risk", { "x-mfs-user-id": "s1", "x-mfs-user-role": "sales" }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(visitsServiceForCaller).not.toHaveBeenCalled();
   });
 
   it("returns the exact 6-key rows with RAW outcome + hoursAgo + reason", async () => {
@@ -186,10 +213,26 @@ describe("GET /api/admin/at-risk — guard + {rows} shape + derivation", () => {
 // ── GET /api/admin/commitments ──────────────────────────────────────────────
 describe("GET /api/admin/commitments — guard + {rows} shape + derivation", () => {
   it("returns 401 'Unauthenticated' when x-mfs-user-id is absent", async () => {
-    const res = await commitmentsGET(req("/api/admin/commitments", {}));
+    const res = await commitmentsGET(req("/api/admin/commitments", { "x-mfs-user-role": "admin" }));
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(visitsServiceForCaller).not.toHaveBeenCalled();
     expect(listCommitments).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin caller", async () => {
+    const res = await commitmentsGET(
+      req("/api/admin/commitments", { "x-mfs-user-id": "s1", "x-mfs-user-role": "sales" }),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(visitsServiceForCaller).not.toHaveBeenCalled();
+  });
+
+  it("admin → visitsServiceForCaller minted with the HEADER userId (cross-rep via is_admin())", async () => {
+    listCommitments.mockResolvedValueOnce([]);
+    await commitmentsGET(req("/api/admin/commitments", AUTHED));
+    expect(visitsServiceForCaller).toHaveBeenCalledWith("admin-1");
   });
 
   it("returns the exact 6-key rows with hoursAgo + derived status", async () => {
