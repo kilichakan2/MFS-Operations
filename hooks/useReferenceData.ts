@@ -7,25 +7,16 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { useLiveQuery }       from 'dexie-react-hooks'
-import { localDb }            from '@/lib/localDb'
+import { useLocalCustomers, useLocalProducts } from '@/lib/wiring/localCache'
 import type { SelectableItem } from '@/components/BottomSheetSelector'
 
 export function useCustomers(): SelectableItem[] {
-  const rows = useLiveQuery(
-    () => localDb.customers.orderBy('name').toArray(),
-    [],
-    []
-  )
+  const rows = useLocalCustomers()
   return rows.map((r) => ({ id: r.id, label: r.name }))
 }
 
 export function useProducts(): SelectableItem[] {
-  const rows = useLiveQuery(
-    () => localDb.products.orderBy('name').toArray(),
-    [],
-    []
-  )
+  const rows = useLocalProducts()
   return rows.map((r) => ({
     id:       r.id,
     label:    r.name,
@@ -42,11 +33,7 @@ export interface ProductDetail {
 }
 
 export function useProductsWithDetail(): ProductDetail[] {
-  const rows = useLiveQuery(
-    () => localDb.products.orderBy('name').toArray(),
-    [],
-    []
-  )
+  const rows = useLocalProducts()
   return rows.map((r) => ({
     id:       r.id,
     name:     r.name,

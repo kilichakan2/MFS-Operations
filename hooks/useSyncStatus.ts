@@ -10,8 +10,7 @@
  * visibility into whether their submissions have reached the server.
  */
 
-import { useLiveQuery } from 'dexie-react-hooks'
-import { localDb }      from '@/lib/localDb'
+import { useUnsyncedQueue } from '@/lib/wiring/localCache'
 
 const MAX_RETRIES = 3
 
@@ -22,11 +21,7 @@ export interface SyncStatusCounts {
 }
 
 export function useSyncStatus(): SyncStatusCounts {
-  const unsyncedRecords = useLiveQuery(
-    () => localDb.queue.filter(r => !r.synced).toArray(),
-    [],
-    []
-  )
+  const unsyncedRecords = useUnsyncedQueue()
 
   const pending = unsyncedRecords.filter(r => (r.retries ?? 0) < MAX_RETRIES).length
   const stuck   = unsyncedRecords.filter(r => (r.retries ?? 0) >= MAX_RETRIES).length

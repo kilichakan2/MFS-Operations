@@ -139,6 +139,21 @@ const WEB_PUSH_MESSAGE =
   "web-push may only be imported inside lib/adapters/web-push/. " +
   "See ADR-0002 / F-25.";
 
+// F-26 — the `dexie` / `dexie-react-hooks` forbidden messages. Drift-catcher
+// pins: asserted verbatim against the SHIPPED .eslintrc.json (loaded from disk),
+// so a typo in the config's message fails this test. Restated in BOTH the
+// top-level paths block and the services/usecases override (legacy overrides
+// REPLACE rule options — they do not merge), so both must carry them.
+const DEXIE_MESSAGE =
+  "Use the LocalCache port via @/lib/wiring/localCache. " +
+  "dexie may only be imported inside lib/adapters/dexie/. " +
+  "See ADR-0002 / F-26.";
+
+const DEXIE_REACT_HOOKS_MESSAGE =
+  "Use the LocalCache reactive hooks via @/lib/wiring/localCache. " +
+  "dexie-react-hooks may only be imported inside lib/adapters/dexie/. " +
+  "See ADR-0002 / F-26.";
+
 /**
  * Load the SHIPPED config from disk so the pin fails if the guard is
  * weakened or deleted in `.eslintrc.json` itself. `extends` is removed
@@ -743,5 +758,103 @@ describe("F-TD-11 no-restricted-imports — adapter imports banned in services/u
     );
     expect(messages).toHaveLength(1);
     expect(messages[0].message).toContain(WEB_PUSH_MESSAGE);
+  });
+
+  // ── (55) F-26 ──────────────────────────────────────────────────
+  it("bans dexie inside components (the RecentActivity/AppHeader surface this PR fixes)", async () => {
+    const messages = await lint(
+      "components/RecentActivity.tsx",
+      "import Dexie from 'dexie'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (56) F-26 ──────────────────────────────────────────────────
+  it("bans dexie-react-hooks inside components", async () => {
+    const messages = await lint(
+      "components/RecentActivity.tsx",
+      "import { useLiveQuery } from 'dexie-react-hooks'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (57) F-26 ──────────────────────────────────────────────────
+  it("bans dexie-react-hooks inside hooks (useSyncStatus/useReferenceData)", async () => {
+    const messages = await lint(
+      "hooks/useSyncStatus.ts",
+      "import { useLiveQuery } from 'dexie-react-hooks'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (58) F-26 ──────────────────────────────────────────────────
+  it("bans dexie inside app pages (complaints/dispatch/visits/pricing)", async () => {
+    const messages = await lint(
+      "app/visits/page.tsx",
+      "import Dexie from 'dexie'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (59) F-26 ──────────────────────────────────────────────────
+  it("bans dexie inside lib/services (services override RESTATES the path)", async () => {
+    const messages = await lint(
+      "lib/services/Foo.ts",
+      "import Dexie from 'dexie'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (60) F-26 ──────────────────────────────────────────────────
+  it("bans dexie inside lib/usecases (the refreshReferenceData surface)", async () => {
+    const messages = await lint(
+      "lib/usecases/refreshReferenceData.ts",
+      "import Dexie from 'dexie'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].ruleId).toBe("no-restricted-imports");
+  });
+
+  // ── (61) F-26 ──────────────────────────────────────────────────
+  it("allows dexie inside lib/adapters/dexie (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/dexie/LocalCache.ts",
+      "import Dexie from 'dexie'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (62) F-26 ──────────────────────────────────────────────────
+  it("allows dexie-react-hooks inside lib/adapters/dexie/react.ts (the one allowed plug)", async () => {
+    const messages = await lint(
+      "lib/adapters/dexie/react.ts",
+      "import { useLiveQuery } from 'dexie-react-hooks'\n",
+    );
+    expect(messages).toEqual([]);
+  });
+
+  // ── (63) F-26 ──────────────────────────────────────────────────
+  it("reports the shipped dexie message text verbatim", async () => {
+    const messages = await lint(
+      "components/RecentActivity.tsx",
+      "import Dexie from 'dexie'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(DEXIE_MESSAGE);
+  });
+
+  // ── (64) F-26 ──────────────────────────────────────────────────
+  it("reports the shipped dexie-react-hooks message text verbatim", async () => {
+    const messages = await lint(
+      "components/RecentActivity.tsx",
+      "import { useLiveQuery } from 'dexie-react-hooks'\n",
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0].message).toContain(DEXIE_REACT_HOOKS_MESSAGE);
   });
 });

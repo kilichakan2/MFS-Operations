@@ -2,9 +2,8 @@
 
 import { useRouter }    from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { MoreVertical } from 'lucide-react'
-import { localDb }      from '@/lib/localDb'
+import { useUnsyncedQueue } from '@/lib/wiring/localCache'
 import { useLanguage }  from '@/lib/LanguageContext'
 import MfsLogo          from '@/components/MfsLogo'
 
@@ -26,10 +25,7 @@ interface AppHeaderProps {
 // ── Sync indicator — coloured dot only ────────────────────────────────────────
 
 function SyncDot() {
-  const unsynced = useLiveQuery(
-    () => localDb.queue.filter(r => !r.synced).toArray(),
-    [], []
-  )
+  const unsynced = useUnsyncedQueue()
   const total = unsynced.length
   const stuck = unsynced.filter(r => (r.retries ?? 0) >= 3).length
 

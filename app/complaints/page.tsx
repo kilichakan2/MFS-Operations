@@ -9,7 +9,7 @@ import RoleNav             from '@/components/RoleNav'
 import { useLanguage }     from '@/lib/LanguageContext'
 import AppHeader           from '@/components/AppHeader'
 import { useCustomers }    from '@/hooks/useReferenceData'
-import { localDb, syncReferenceData } from '@/lib/localDb'
+import { localCache, refreshReferenceData } from '@/lib/wiring/localCache'
 import { triggerSync }     from '@/lib/syncEngine'
 import type { SelectableItem } from '@/components/BottomSheetSelector'
 import type { TranslationKey } from '@/lib/translations'
@@ -456,9 +456,8 @@ function AllComplaintsTab() {
 
   async function handleResolve(id: string, note: string) {
     try {
-      const { localDb } = await import('@/lib/localDb')
       const { triggerSync } = await import('@/lib/syncEngine')
-      await localDb.queue.add({
+      await localCache.addToQueue({
         localId: crypto.randomUUID(), screen: 'screen2_resolve',
         payload: { complaint_id: id, resolution_note: note },
         createdAt: Date.now(), synced: false, retries: 0,
@@ -589,7 +588,7 @@ function ComplaintsPageBody() {
   const categories  = CATEGORIES(t)
   const receivedVia = RECEIVED_VIA(t)
   const formId      = useId()
-  useEffect(() => { syncReferenceData().catch(console.error) }, [])
+  useEffect(() => { refreshReferenceData().catch(console.error) }, [])
 
   // Item 5a's Open Complaints KPI tile lands here with ?status=open. The
   // outer tab defaults to 'log' (new-complaint form); when any filter
@@ -623,7 +622,7 @@ function ComplaintsPageBody() {
     setIsSubmitting(true)
     try {
       const localId2 = crypto.randomUUID()
-      await localDb.queue.add({
+      await localCache.addToQueue({
         localId: localId2, screen: 'screen2',
         payload: {
           id: localId2, customer_id: form.customer!.id, category: form.category!,
