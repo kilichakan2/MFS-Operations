@@ -191,3 +191,9 @@ export {
   type FakeAlarmSessionsSeed,
   type FakeAlarmSessionSeed,
 } from "./AlarmSessionsRepository";
+// F-26 — LocalCache fake: in-memory offline store (no IndexedDB, no dexie).
+export {
+  createFakeLocalCache,
+  fakeLocalCache,
+  type FakeLocalCache,
+} from "./LocalCache";

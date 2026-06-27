@@ -103,3 +103,12 @@ export type {
   AlarmSessionsRepository,
   ActiveAlarmSession,
 } from "./AlarmSessionsRepository";
+// F-26 — LocalCache port: the client-side offline store socket (IndexedDB).
+// The four owned offline types travel with it. Pure interfaces; no vendor.
+export type {
+  LocalCache,
+  QueuedRecord,
+  LocalCustomer,
+  LocalProduct,
+  SyncMeta,
+} from "./LocalCache";
