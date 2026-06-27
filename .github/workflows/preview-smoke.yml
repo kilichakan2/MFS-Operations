@@ -1,0 +1,206 @@
+# F-INFRA-03 — Run the @critical preview smoke in GitHub Actions CI.
+#
+# On every pull-request event this runs the 75-spec @critical Playwright preview
+# smoke against the PR's CRED-WIRED (second) Vercel preview deploy, and reports a
+# BLOCKING, fail-closed status check on `main` (the `smoke` job — its name is the
+# required-check context; branch protection pins it VERBATIM, see the plan §3 and
+# tests/unit/ci/preview-smoke-workflow.test.ts).
+#
+#   opened / synchronize / reopened -> smoke   (discover the cred-wired preview
+#                                              URL, wait for /api/auth/team=200,
+#                                              run npm run test:e2e:preview)
+#
+# The two-deploy race (plan §a/§b, R1): each PR deploys to Vercel TWICE — a first
+# credential-LESS deploy goes green with no working DB, then preview-cred-sync.yml
+# writes the DB creds and fires a SECOND deploy that actually talks to the branch
+# database. `pull_request` fires early (before the second deploy is ready), so the
+# job does NOT run a single spec until the readiness poll sees /api/auth/team
+# return 200 — an endpoint that only returns 200 on the cred-wired deploy. The
+# poll absorbs the race; on timeout the job goes RED (never green-skips — the
+# F-INFRA-06 anti-pattern we are explicitly avoiding).
+#
+# House style mirrors preview-cred-sync.yml (this repo's first workflow):
+# kebab-case filename, descriptive name, pinned first-party actions (major tag),
+# least-privilege permissions, per-job concurrency, secrets passed via env from
+# `secrets.*` and NEVER echoed. No third-party marketplace actions. The discovery
+# step runs on Node 20 with the built-in global fetch — no extra install, the same
+# posture as scripts/preview-cred-sync.mjs.
+
+name: Preview smoke (@critical E2E)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Least privilege: the job checks out the repo and calls external APIs (Vercel
+# deployments lookup, the preview readiness probe). It needs no repo-write scope —
+# GitHub auto-reports the job's own pass/fail as the required `smoke` status check,
+# so no `statuses: write` is required either.
+permissions:
+  contents: read
+
+# A new push supersedes the in-flight smoke — latest commit wins, mirroring the
+# cred-sync `sync` job. cancel-in-progress so a stale smoke never races a newer
+# deploy (plan R1).
+concurrency:
+  group: preview-smoke-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # The job key `smoke` IS the required-check context. Pinned by the unit test;
+  # a rename must be mirrored in `main` branch protection or the gate silently
+  # never blocks (plan §3 / R2).
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright chromium
+        # Only chromium — the @critical specs run --project=chromium; webkit /
+        # Mobile-Safari is not used by the smoke. --with-deps pulls the OS libs.
+        run: npx playwright install --with-deps chromium
+
+      - name: Discover cred-wired preview URL
+        id: discover
+        # Inline Node, built-in fetch (Node 20). Reuses the existing
+        # VERCEL_API_TOKEN secret + the public, non-secret project/team ids that
+        # scripts/preview-cred-sync.mjs already pins. Asks Vercel for this
+        # branch's READY preview deployments, builds the git-<branch> alias the
+        # smoke's PREVIEW_HOST_RE expects, and confirms it matches. The readiness
+        # poll (next step) then waits out the empty deploy + cred-sync. Fails
+        # closed (exit 1 → RED) if no matching READY preview is found.
+        env:
+          VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+          PR_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          node <<'NODE'
+          const token = process.env.VERCEL_API_TOKEN
+          const branch = process.env.PR_GIT_BRANCH
+          if (!token) { console.error('[discover] VERCEL_API_TOKEN missing — failing closed'); process.exit(1) }
+          if (!branch) { console.error('[discover] PR_GIT_BRANCH missing — failing closed'); process.exit(1) }
+
+          // Public, non-secret identifiers — same constants as
+          // scripts/preview-cred-sync.mjs CONFIG.
+          const PROJECT_ID = 'prj_84NlryZjHcGlA6R2O6zQ57aWkOFZ'
+          const TEAM_ID = 'team_WRtx6wNjCoPN95xacOxK6m1e'
+          // The Vercel scope slug pinned in playwright.config.ts PREVIEW_HOST_RE.
+          const SCOPE = 'hakan-kilics-projects-2c54f03f'
+          const PREVIEW_HOST_RE =
+            /^mfs-operations(-git-[a-z0-9-]+|-[a-z0-9]{9})-hakan-kilics-projects-2c54f03f\.vercel\.app$/
+
+          // Branch-name sanitisation for the git alias: lowercase, every
+          // non-[a-z0-9-] char becomes '-'. Matches Vercel's git-<branch> alias.
+          const sanitised = branch.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+          const aliasHost = `mfs-operations-git-${sanitised}-${SCOPE}.vercel.app`
+
+          // Belt-and-braces: confirm a READY preview deployment actually exists
+          // for this branch before we hand the alias to the smoke. The alias is
+          // auto-maintained by Vercel to point at the newest READY preview (which
+          // after cred-sync is the wired one), so we PREFER it; we use the API
+          // only to prove a READY preview exists (fail-closed otherwise).
+          async function findReadyPreview() {
+            const url = `https://api.vercel.com/v6/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&target=preview&limit=50`
+            const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+            if (!res.ok) {
+              console.error(`[discover] Vercel API ${res.status} — failing closed`)
+              process.exit(1)
+            }
+            const body = await res.json()
+            const deployments = body.deployments ?? []
+            return deployments.find(
+              (d) => d.meta?.githubCommitRef === branch && d.state === 'READY',
+            )
+          }
+
+          const ready = await findReadyPreview()
+          if (!ready) {
+            console.error(
+              `[discover] no READY preview deployment found for branch '${branch}' — failing closed`,
+            )
+            process.exit(1)
+          }
+
+          const previewUrl = `https://${aliasHost}`
+          if (!PREVIEW_HOST_RE.test(aliasHost)) {
+            console.error(
+              `[discover] constructed alias '${aliasHost}' does not match PREVIEW_HOST_RE — failing closed`,
+            )
+            process.exit(1)
+          }
+
+          console.log(`[discover] preview URL: ${previewUrl}`)
+          require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, `preview_url=${previewUrl}\n`)
+          NODE
+
+      - name: Wait for cred-synced deploy (readiness poll, fail-closed)
+        env:
+          PREVIEW_URL: ${{ steps.discover.outputs.preview_url }}
+        run: |
+          node <<'NODE'
+          const previewUrl = process.env.PREVIEW_URL
+          if (!previewUrl) { console.error('[readiness] PREVIEW_URL missing — failing closed'); process.exit(1) }
+
+          // Fail-closed budget: 12 minutes (720s). preview-cred-sync.mjs itself
+          // waits up to ~10 min for the Supabase branch to become healthy THEN
+          // fires the second deploy, which still has to build. 12 min gives
+          // headroom over that 10-min ceiling plus a Vercel build, without being
+          // unbounded. Only HTTP 200 at /api/auth/team counts as ready — a 500
+          // means the pre-cred deploy; /login 200s even on the dead deploy.
+          const READINESS_TIMEOUT_MS = 720_000 // 12 min
+          const INTERVAL_MS = 10_000
+          const probe = `${previewUrl}/api/auth/team`
+          const deadline = Date.now() + READINESS_TIMEOUT_MS
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+          console.log(`[readiness] polling ${probe} for HTTP 200 (12-min budget)…`)
+          while (Date.now() < deadline) {
+            let status = 0
+            try {
+              const res = await fetch(probe, { redirect: 'manual' })
+              status = res.status
+            } catch (e) {
+              status = -1
+            }
+            if (status === 200) {
+              console.log('[readiness] /api/auth/team returned 200 — cred-wired deploy is live.')
+              process.exit(0)
+            }
+            console.log(`[readiness] not ready yet (status ${status}); retrying in 10s…`)
+            await sleep(INTERVAL_MS)
+          }
+          console.error(
+            `[readiness] ${probe} never returned 200 within 12 min — the cred-synced ` +
+              'deploy may have failed; check the preview-cred-sync run for this PR. Failing closed.',
+          )
+          process.exit(1)
+          NODE
+
+      - name: Run @critical preview smoke
+        # --unprotected: Vercel Deployment Protection is OFF this sprint
+        # (F-INFRA-02). THIS is the line F-INFRA-04 will remove when protection is
+        # re-enabled (it must also add VERCEL_AUTOMATION_BYPASS_SECRET to env).
+        # All secrets arrive via env from secrets.* (GitHub auto-masks); none are
+        # echoed.
+        env:
+          PREVIEW_URL: ${{ steps.discover.outputs.preview_url }}
+          E2E_PIN_ADMIN: ${{ secrets.E2E_PIN_ADMIN }}
+          E2E_PIN_SALES: ${{ secrets.E2E_PIN_SALES }}
+          E2E_PIN_OFFICE: ${{ secrets.E2E_PIN_OFFICE }}
+          E2E_PIN_WAREHOUSE: ${{ secrets.E2E_PIN_WAREHOUSE }}
+          E2E_PIN_BUTCHER: ${{ secrets.E2E_PIN_BUTCHER }}
+          E2E_PIN_DRIVER: ${{ secrets.E2E_PIN_DRIVER }}
+          E2E_USER_ADMIN: ${{ secrets.E2E_USER_ADMIN }}
+          E2E_USER_SALES: ${{ secrets.E2E_USER_SALES }}
+          E2E_USER_OFFICE: ${{ secrets.E2E_USER_OFFICE }}
+          E2E_USER_WAREHOUSE: ${{ secrets.E2E_USER_WAREHOUSE }}
+          E2E_USER_BUTCHER: ${{ secrets.E2E_USER_BUTCHER }}
+          E2E_USER_DRIVER: ${{ secrets.E2E_USER_DRIVER }}
+          E2E_PASSWORD_ADMIN: ${{ secrets.E2E_PASSWORD_ADMIN }}
+        run: npm run test:e2e:preview -- "$PREVIEW_URL" --unprotected

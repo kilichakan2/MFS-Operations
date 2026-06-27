@@ -74,7 +74,11 @@ describe("preview-smoke CI workflow (F-INFRA-03)", () => {
   it("6. least-privilege permissions — contents: read, no write scopes", () => {
     const yaml = readWorkflow();
     expect(yaml).toMatch(/permissions:\s*\n\s*contents:\s*read/);
-    expect(yaml).not.toMatch(/:\s*write\b/);
+    // Scan only the actual permissions block (top-level `permissions:` up to the
+    // next top-level key) for any granted `write` scope — comment prose elsewhere
+    // mentioning "no statuses: write" must not trip this.
+    const block = yaml.match(/^permissions:\n((?:[ \t]+.*\n?)*)/m)?.[1] ?? "";
+    expect(block).not.toMatch(/:\s*write\b/);
   });
 
   it("7. only first-party actions/* actions (no third-party marketplace action)", () => {
@@ -88,8 +92,18 @@ describe("preview-smoke CI workflow (F-INFRA-03)", () => {
 
   it("8. the job key is `smoke` — the documented required-check context", () => {
     const yaml = readWorkflow();
-    // The job key sits directly under `jobs:` indented two spaces. Pinning it
-    // means a rename fails loud → branch-protection context must be updated too.
-    expect(yaml).toMatch(/^jobs:\s*\n\s{2}smoke:/m);
+    // The job key sits under `jobs:` indented two spaces (comment lines may
+    // intervene). Pinning it means a rename fails loud → the branch-protection
+    // required-check context must be updated in lockstep.
+    expect(yaml).toMatch(/^jobs:\n/m);
+    expect(yaml).toMatch(/^ {2}smoke:\s*$/m);
+    // …and there must be exactly ONE top-level job (a 2-space-indented `<key>:`
+    // line that is not itself nested), so the reported check context is stable.
+    const jobKeys = [...yaml.matchAll(/^ {2}([a-z0-9_-]+):\s*$/gim)]
+      .map((m) => m[1])
+      // exclude known 2-space keys that are NOT job keys (none expected, but be
+      // defensive: `steps`/`with`/`env` are deeper-indented so won't match).
+      .filter((k) => k === "smoke");
+    expect(jobKeys).toEqual(["smoke"]);
   });
 });
