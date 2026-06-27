@@ -42,5 +42,5 @@ None. RLS policies pre-existed; this PR only changes which Postgres role the rou
 2. Merge PR #87 (squash) while ON the feature branch → Vercel auto-deploys. ANVIL test (13bbb93) already pushed to the branch so it lands in the squash.
 3. Post-deploy smoke: @critical paths against prod URL (www.mfsops.com); rollback = vercel revert (code-only, no data).
 
-## Honest gap named
-The populated-admin-screen proof is via the signed-in E2E walk, not a free-hand human click of every admin screen (no link-crawl rung in this repo; an unauthenticated MCP probe can't carry the admin session). The E2E walk already proves the cutover screens populate as admin against real preview data — a manual walk would add confidence, not coverage.
+## Honest gap named — now closed
+The populated-admin-screen proof was via the signed-in E2E walk, not a free-hand human click of every admin screen (no link-crawl rung in this repo; an unauthenticated MCP probe can't carry the admin session). The E2E walk already proved the cutover screens populate as admin against real preview data. **CLOSED 2026-06-27: Hakan performed a manual post-ship walk of the live admin panel and confirmed all screens look fine** — the free-hand human click that the E2E walk substituted for is now also done. Two independent confirmations (automated + human), no discrepancy.
