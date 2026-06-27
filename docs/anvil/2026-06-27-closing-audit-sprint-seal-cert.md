@@ -5,7 +5,7 @@ Branch: closing-audit-sprint-seal
 - **Date:** 2026-06-27
 - **Scope:** Final go/no-go seal of the 16-day hexagonal (ports & adapters) re-architecture sprint (2026-06-12 → 28). NOT a feature change — this PR carries the closing-audit certificate + the F-INFRA-04 deferral bookkeeping only. NO app code, NO `lib/**`, NO migration, NO RLS, NO new dependency. Byte-identical application bundle.
 - **Baseline:** `main` @ `f5a5ab0` (F-INFRA-03 ship record; last app-code change was F-TD-12 `2c6ee1f`).
-- **Status:** **CLEARED FOR PRODUCTION** — pending the live `@critical` rung recorded below (PR fired to fire it).
+- **Status:** **CLEARED FOR PRODUCTION** — all rungs green incl. the fresh live `@critical` 75/75 (run `28304433805`).
 
 ## Why this audit
 Day-16 close of the sprint. Two Day-16 items remained: F-INFRA-04 (re-enable Vercel Deployment Protection) and this closing audit.
@@ -49,18 +49,17 @@ Day-16 close of the sprint. Two Day-16 items remained: F-INFRA-04 (re-enable Ver
 | pgTAP / RLS (`supabase test db`) | ✓ **245/245** ok (18 real test files; `_helpers.sql` no-plan parse-error is a harness glob artifact, NOT a test failure — every test file reports `ok`, 0 failed) |
 | Integration (`test:integration`, live booted server → local Supabase) | ✓ **530/530** (41 files) |
 | Rip-out / acceptance test (all domains) | ✓ PASS (Leg 1) |
-| **Live `@critical` preview smoke (75 specs)** | _firing on this PR's CI `smoke` check — recorded below once green_ |
+| **Live `@critical` preview smoke (75 specs)** | ✓ **75/75 (4.3m)** — fresh CI run on this PR's preview |
 
 ## Live `@critical` run
-<!-- recorded after the CI smoke check completes on this PR -->
-- PR: #__
-- Run: __
-- Result: __
+- PR: #92 (`closing-audit-sprint-seal` → `main`)
+- Run: `28304433805`, job `smoke` `83858119692` — conclusion **success**
+- Result: discover ✓ · readiness ✓ · **DB-identity probe 4/4** (seed-born preview DB) · **@critical 75/75 (4.3m)**
 
 ## Pre-merge checklist
 - [x] Rip-out / acceptance test PASS (all 11 vendors, zero new boundary violations).
 - [x] Full offline regression green (tsc, lint, unit, pgTAP, integration).
-- [ ] Live `@critical` smoke green on a fresh preview (75/75) — this PR fires it.
+- [x] Live `@critical` smoke green on a fresh preview (75/75) — run `28304433805`.
 - [x] No migration → no PITR gate (docs-only PR).
 - [x] F-INFRA-04 deferral recorded in BACKLOG + roadmap.
 
