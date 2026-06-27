@@ -60,6 +60,14 @@
           {
             "name": "dexie-react-hooks",
             "message": "Use the LocalCache reactive hooks via @/lib/wiring/localCache. dexie-react-hooks may only be imported inside lib/adapters/dexie/. See ADR-0002 / F-26."
+          },
+          {
+            "name": "@capacitor/core",
+            "message": "Use a Capacitor port via @/lib/wiring/. @capacitor/core may only be imported inside lib/adapters/capacitor/. See ADR-0002 / F-27."
+          },
+          {
+            "name": "@capacitor/android",
+            "message": "Use a Capacitor port via @/lib/wiring/. @capacitor/android may only be imported inside lib/adapters/capacitor/. See ADR-0002 / F-27."
           }
         ]
       }
@@ -88,6 +96,7 @@
         "lib/adapters/xlsx/**/*.ts",
         "lib/adapters/web-push/**/*.ts",
         "lib/adapters/dexie/**/*.{ts,tsx}",
+        "lib/adapters/capacitor/**/*.{ts,tsx}",
         "tests/**"
       ],
       "rules": {
@@ -157,6 +166,14 @@
               {
                 "name": "dexie-react-hooks",
                 "message": "Use the LocalCache reactive hooks via @/lib/wiring/localCache. dexie-react-hooks may only be imported inside lib/adapters/dexie/. See ADR-0002 / F-26."
+              },
+              {
+                "name": "@capacitor/core",
+                "message": "Use a Capacitor port via @/lib/wiring/. @capacitor/core may only be imported inside lib/adapters/capacitor/. See ADR-0002 / F-27."
+              },
+              {
+                "name": "@capacitor/android",
+                "message": "Use a Capacitor port via @/lib/wiring/. @capacitor/android may only be imported inside lib/adapters/capacitor/. See ADR-0002 / F-27."
               }
             ],
             "patterns": [
