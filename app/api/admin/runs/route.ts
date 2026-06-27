@@ -17,16 +17,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { routesService, routesServiceForCaller } from '@/lib/wiring/routes'
-import { ServiceError } from '@/lib/errors'
+import { ServiceError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { requireRole } from '@/lib/auth/session'
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = req.headers.get('x-mfs-user-id')
-    if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    const caller = requireRole(req, ['admin'])
 
-    // F-RLS-04c: run under the per-caller authenticated client (RLS fires).
-    // Rollback = swap `routesServiceForCaller(userId)` → `routesService`.
-    const routesService = await routesServiceForCaller(userId)
+    // F-RLS-04c/04i: run under the per-caller authenticated client (RLS fires).
+    // Rollback = swap `routesServiceForCaller(caller.userId)` → `routesService`.
+    const routesService = await routesServiceForCaller(caller.userId!)
 
     const { searchParams } = new URL(req.url)
     const fromParam = searchParams.get('from') ?? undefined
@@ -58,6 +58,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ runs, from, to })
 
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     if (err instanceof ServiceError) {
       console.error('[admin/runs GET]', err.message)
       return NextResponse.json({ error: err.message }, { status: 500 })

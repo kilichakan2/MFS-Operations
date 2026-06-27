@@ -24,7 +24,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { customersService }          from '@/lib/wiring/customers'
+import { customersServiceForCaller } from '@/lib/wiring/customers'
 import { geocoder }                  from '@/lib/wiring/geocoder'
 import { requireRole }               from '@/lib/auth/session'
 import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
@@ -36,7 +36,13 @@ function outcode(postcode: string): string {
 
 export async function GET(req: NextRequest) {
   try {
-    requireRole(req, ['admin'])
+    const caller = requireRole(req, ['admin'])
+
+    // F-RLS-04i: reads + setCoords writes through the per-caller authenticated
+    // client (the customers_select presence policy + customers_update is_admin()
+    // policy fire). Rollback = swap
+    // `customersServiceForCaller(caller.userId)` → `customersService`.
+    const customersService = await customersServiceForCaller(caller.userId!)
 
     // 1. Fetch un-geocoded customers
     const customers = await customersService.listUngeocoded(500)

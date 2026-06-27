@@ -17,7 +17,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { productsService }           from '@/lib/wiring/products'
+import { productsServiceForCaller }  from '@/lib/wiring/products'
+import { requireRole }               from '@/lib/auth/session'
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import type { ProductAdminView }     from '@/lib/domain'
 
 /** Project the admin view back to today's exact 5-field PATCH-row shape. */
@@ -36,11 +38,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  const role = req.headers.get('x-mfs-user-role')
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
+    const caller = requireRole(req, ['admin'])
 
+    // F-RLS-04i: writes through the per-caller authenticated client (the
+    // products_update is_admin() policy fires). Rollback = swap
+    // `productsServiceForCaller(caller.userId)` → `productsService`.
+    const productsService = await productsServiceForCaller(caller.userId!)
 
     const { id }     = await params
     const { active } = await req.json() as { active: boolean }
@@ -51,6 +54,12 @@ export async function PATCH(
     }
     return NextResponse.json(toRow(updated))
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }

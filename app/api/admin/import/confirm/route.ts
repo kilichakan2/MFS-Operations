@@ -13,10 +13,13 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { customersService }          from '@/lib/wiring/customers'
-import { productsService }           from '@/lib/wiring/products'
+import { customersServiceForCaller } from '@/lib/wiring/customers'
+import { productsServiceForCaller }  from '@/lib/wiring/products'
 import { geocoder }                  from '@/lib/wiring/geocoder'
-import { auditLog }                  from '@/lib/wiring/auditLog'
+import { auditLogForCaller }         from '@/lib/wiring/auditLog'
+import { requireRole }               from '@/lib/auth/session'
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import type { CustomersService }     from '@/lib/services'
 
 interface CustomerRow { name: string; postcode?: string }
 interface ProductRow  { name: string; category?: string | null; code?: string | null; box_size?: string | null }
@@ -29,7 +32,15 @@ interface ProductRow  { name: string; category?: string | null; code?: string | 
 // is non-blocking; the map simply omits that pin until next run. The call site
 // also wraps this in `.catch(() => {})` so a thrown GeocoderError OR a setCoords
 // ServiceError can NEVER turn the already-returned 201 into an error (W1).
-async function geocodeNewCustomers(rows: { id: string; postcode: string }[]) {
+//
+// F-RLS-04i: the `customersService` is passed in (the PER-CALLER authenticated
+// service built in POST), NOT a module-level singleton — so the setCoords write
+// below runs under the caller's key and the customers_update is_admin() policy
+// passes (R-GEOCODE-WRITE).
+async function geocodeNewCustomers(
+  customersService: CustomersService,
+  rows: { id: string; postcode: string }[],
+) {
   const withPostcode = rows.filter(r => r.postcode?.trim())
   if (withPostcode.length === 0) return
 
@@ -50,12 +61,17 @@ async function geocodeNewCustomers(rows: { id: string; postcode: string }[]) {
 
 export async function POST(req: NextRequest) {
   try {
-    const userId   = req.headers.get('x-mfs-user-id')
+    const caller   = requireRole(req, ['admin'])
+    const userId   = caller.userId!
     const userName = req.headers.get('x-mfs-user-name') ?? 'Admin'
 
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-    }
+    // F-RLS-04i: ALL THREE writes (customers, products, audit_log) run through
+    // the per-caller authenticated client (is_admin() insert policies + the
+    // audit_log_insert WITH CHECK user_id=GUC fire). Rollback = swap each
+    // `…ForCaller(userId)` → its module-level singleton.
+    const customersService = await customersServiceForCaller(userId)
+    const productsService  = await productsServiceForCaller(userId)
+    const auditLog         = await auditLogForCaller(userId)
 
     const body = await req.json().catch(() => null)
     if (!body) {
@@ -117,7 +133,7 @@ export async function POST(req: NextRequest) {
         const toGeocode = created
           .filter(d => d.postcode)
           .map(d => ({ id: d.id, postcode: d.postcode! }))
-        geocodeNewCustomers(toGeocode).catch(() => {/* swallow — W1, already logged inside */})
+        geocodeNewCustomers(customersService, toGeocode).catch(() => {/* swallow — W1, already logged inside */})
 
         // After geocoding completes (async), trigger road-time computation for all new customers.
         // We use a delayed fire-and-forget — geocoding must finish first so lat/lng exist.
@@ -174,6 +190,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ inserted, skipped }, { status: 201 })
 
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     console.error('[import/confirm] Unhandled error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }

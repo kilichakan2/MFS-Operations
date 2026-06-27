@@ -22,12 +22,19 @@ const setActive = vi.fn();
 const setPostcodeAndCoords = vi.fn();
 const geocode = vi.fn();
 
+const customersServiceForCaller = vi.fn(async (_id: string) => ({
+  listAll: (...a: unknown[]) => listAll(...a),
+  setActive: (...a: unknown[]) => setActive(...a),
+  setPostcodeAndCoords: (...a: unknown[]) => setPostcodeAndCoords(...a),
+}));
+
 vi.mock("@/lib/wiring/customers", () => ({
   customersService: {
     listAll: (...a: unknown[]) => listAll(...a),
     setActive: (...a: unknown[]) => setActive(...a),
     setPostcodeAndCoords: (...a: unknown[]) => setPostcodeAndCoords(...a),
   },
+  customersServiceForCaller: (id: string) => customersServiceForCaller(id),
 }));
 vi.mock("@/lib/wiring/geocoder", () => ({
   geocoder: { geocode: (...a: unknown[]) => geocode(...a) },
@@ -65,16 +72,40 @@ const params = Promise.resolve({ id: "c1" });
 
 // ── GET /api/admin/customers ────────────────────────────────────────────────
 describe("GET /api/admin/customers — guard + response shape", () => {
-  it("returns 403 'Admin only' for a non-admin (guard byte-identical)", async () => {
+  it("returns 401 'Unauthenticated' when identity is absent", async () => {
+    const res = await GET(listReq({ "x-mfs-user-role": "admin" }));
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
+    expect(listAll).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin", async () => {
     const res = await GET(
       listReq({ "x-mfs-user-id": "w1", "x-mfs-user-role": "warehouse" }),
     );
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
     expect(listAll).not.toHaveBeenCalled();
   });
 
-  it("returns the exact 7-key snake_case array for an admin", async () => {
+  it("an admin COOKIE with a non-admin HEADER is refused (header is the trust source)", async () => {
+    const res = await GET(
+      new NextRequest("http://localhost/api/admin/customers", {
+        method: "GET",
+        headers: {
+          "x-mfs-user-id": "w1",
+          "x-mfs-user-role": "warehouse",
+          cookie: "mfs_role=admin; mfs_user_id=admin-1",
+        },
+      }),
+    );
+    expect(res.status).toBe(403);
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
+  });
+
+  it("returns the exact 7-key snake_case array for an admin (factory minted with header id)", async () => {
     listAll.mockResolvedValueOnce([
       {
         id: "c1",
@@ -91,6 +122,7 @@ describe("GET /api/admin/customers — guard + response shape", () => {
     ]);
     const res = await GET(listReq(ADMIN));
     expect(res.status).toBe(200);
+    expect(customersServiceForCaller).toHaveBeenCalledWith("admin-1");
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
     expect(Object.keys(body[0]).sort()).toEqual(
@@ -110,13 +142,25 @@ describe("GET /api/admin/customers — guard + response shape", () => {
 
 // ── PATCH /api/admin/customers/[id] ─────────────────────────────────────────
 describe("PATCH /api/admin/customers/[id] — guard + branches + shape", () => {
-  it("returns 403 'Admin only' for a non-admin (guard byte-identical)", async () => {
+  it("returns 401 'Unauthenticated' when identity is absent", async () => {
     const res = await PATCH(
-      patchReq({ "x-mfs-user-role": "office" }, { active: false }),
+      patchReq({ "x-mfs-user-role": "admin" }, { active: false }),
+      { params },
+    );
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: "Unauthenticated" });
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
+    expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 'Admin only' for a non-admin", async () => {
+    const res = await PATCH(
+      patchReq({ "x-mfs-user-id": "o1", "x-mfs-user-role": "office" }, { active: false }),
       { params },
     );
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "Admin only" });
+    expect(customersServiceForCaller).not.toHaveBeenCalled();
     expect(setActive).not.toHaveBeenCalled();
   });
 

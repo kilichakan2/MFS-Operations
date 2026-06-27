@@ -30,19 +30,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { isValidRepId, isValidVisitType, isValidOutcome } from '@/lib/adminFilters'
 import { visitsServiceForCaller } from '@/lib/wiring/visits'
 import { toAdminVisitWireDto } from '@/lib/api/visits/dto'
-import { ServiceError } from '@/lib/errors'
+import { ServiceError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { requireRole } from '@/lib/auth/session'
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = req.headers.get('x-mfs-user-id')
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-    }
+    const caller = requireRole(req, ['admin'])
 
-    // F-RLS-04g: run reads as the caller (authenticated role → visits RLS fires).
-    // Admin-only route (middleware enforces the /api/admin prefix) → is_admin()
-    // in the visits policies grants admin ALL reps' rows. Per-request, never shared.
-    const visitsService = await visitsServiceForCaller(userId)
+    // F-RLS-04g/04i: run reads as the caller (authenticated role → visits RLS
+    // fires). Admin-only → is_admin() in the visits policies grants admin ALL
+    // reps' rows. Per-request, never shared. Rollback = swap
+    // `visitsServiceForCaller(caller.userId)` → `visitsService`.
+    const visitsService = await visitsServiceForCaller(caller.userId!)
 
     const now = new Date()
     const todayMidnight = new Date(now); todayMidnight.setHours(0, 0, 0, 0)
@@ -93,6 +92,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ rows })
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     console.error('[admin/visits] Unhandled error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
