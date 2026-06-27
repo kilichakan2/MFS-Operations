@@ -776,6 +776,19 @@ the trail matters.
 
 ---
 
+### F-PROD-04 — HACCP label printing (Sunmi V3 Android) regression + re-architecture — FIRST FEATURE after Day-16 sealing
+
+- **Logged:** 2026-06-27 (Hakan, during F-RLS-final session — the priority feature once the re-architecture is sealed).
+- **What (the breakage):** the HACCP label-printing flow on the Sunmi V3 Android device **worked** — Hakan installed the APK and printed labels — then **stopped working ~1 week later**. This is a REGRESSION to diagnose, NOT a greenfield build: most of the feature is already coded (Phase 1 complete per `docs/LABEL_PRINTING_PLAN.md`).
+- **What already exists (don't rebuild):** Capacitor Android shell (`capacitor.config.ts` + real `android/` Gradle project); Sunmi V3 native printing via bridge `window.MFSSunmiPrint` (ADR-0001, added 2026-05-14); Phase-1 AirPrint in-app iframe print COMPLETE; ZPL templates ready for Phase-3 Zebra. Code: `lib/printing/{html,zpl,sunmi,types,index}.ts`; API `app/api/labels/route.ts`; UI `app/haccp/delivery/page.tsx` + `components/PrintLabelStrip.tsx`. Plan: `docs/LABEL_PRINTING_PLAN.md` (Phase 1 done; Phase 2 = buy TSC TE310 WiFi, ZERO code; Phase 3 = Zebra ZD421d + DS2278 scanner).
+- **Leading hypothesis — collateral from the 16-day auth/RLS sprint.** Over 2026-06-12→27 auth changed hard: signed session cookies (T1, forced a one-time mass re-login), `x-mfs-user-role` header guards, tightened admin gates (F-RLS-04i added gates to routes that had none), RLS flips. `/api/labels` auths off `x-mfs-user-role` (roles warehouse|butcher|admin) and is a service-role route (Rule-A allow-listed in F-RLS-final's guard — it reads cross-entity data with the master key). "After a week" also fits a Capacitor/PWA stale-cached build, a session/token expiry, or APK signing. **DIAGNOSE on-device + trace the `/api/labels` auth path BEFORE assuming the printer bridge broke.**
+- **Architecture gap (re-architect candidate):** `lib/printing/` is the **ONLY functional module NOT behind a port** — there is no `Printer` port (`lib/ports/` has only `PdfRenderer.ts`), and a UI page (`app/haccp/delivery/page.tsx`) imports the printing code DIRECTLY (the last UI→implementation breach of the Lego rule). If labels get expanded across devices (Sunmi + AirPrint + Zebra), wrap behind one owned `Printer` port + per-device adapters. If just fixing the regression, the port can be a fast-follow.
+- **Sequence:** Hakan's call 2026-06-27 = SEAL FIRST (finish Day-16's F-TD-12 · F-INFRA-03 · F-INFRA-04 · closing audit), THEN this. This is the #1 feature target after sprint close. See memory `project_label_printing_next`.
+- **Priority:** HIGH (Hakan wants the system operational ASAP) — but sequenced AFTER Day-16 sealing.
+- **Owner unit:** unscheduled (its own FORGE pass after sprint close).
+
+---
+
 ## F-08 hard prerequisites (carried forward from memory)
 
 Not new entries — pointers. F-08 cannot ship until these are green:

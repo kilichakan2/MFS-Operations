@@ -1,7 +1,7 @@
 # MFS Global — Label Printing & Barcode Traceability Plan
 **Created:** 2026-04-24
 **Last updated:** 2026-04-25
-**Status:** Phase 1 complete. In-app print (no new tab) in build.
+**Status:** Phase 1 complete (in-app print in build). ⚠️ **2026-06-27 — REGRESSION: the Sunmi V3 Android APK worked, then stopped ~1 week after install. See the "2026-06-27 status" section below. Owner ticket: BACKLOG F-PROD-04.**
 **Owner:** Hakan Kilic
 
 ---
@@ -11,6 +11,35 @@
 Phase 1 is fully built and working. Both label types (Goods In and Mince/Prep)
 print correctly. The remaining Phase 1 item is removing the "new tab" step so
 staff tap Print and the iOS print sheet appears directly.
+
+---
+
+## 2026-06-27 status — REGRESSION to diagnose + architecture gap (logged during the F-RLS-final session)
+
+**The regression (Hakan's report):** the Sunmi V3 Android label-printing flow WORKED — the APK
+was installed and labels printed — then STOPPED working ~1 week later. This is a regression to
+diagnose, not new work; the feature is substantially built (Phase 1 + the Sunmi native bridge
+added 2026-05-14).
+
+**Leading hypothesis — collateral from the 16-day auth/RLS re-architecture sprint (2026-06-12→27).**
+Auth changed hard in that window: signed session cookies (forced a one-time mass re-login),
+`x-mfs-user-role` header guards, tightened admin gates, RLS flips. `/api/labels` authorises off
+the `x-mfs-user-role` header (roles warehouse | butcher | admin) and is a service-role route
+(it reads cross-entity data with the master key). "After a week" also fits a Capacitor/PWA
+stale-cached build, a session/token expiry, or APK signing. **Diagnose on-device and trace the
+`/api/labels` auth path BEFORE assuming the printer bridge broke.**
+
+**Architecture gap — the last module outside the Lego pattern.** `lib/printing/` is the only
+functional module NOT behind a port: there is no `Printer` port (`lib/ports/` has only
+`PdfRenderer.ts`), and a UI page (`app/haccp/delivery/page.tsx`) imports `lib/printing/` directly
+— the last UI→implementation breach of the hexagonal rule. When labels get expanded across
+devices (Sunmi + AirPrint + Zebra), wrap them behind one owned `Printer` port + per-device
+adapters (Sunmi / AirPrint-HTML / Zebra-ZPL). If only fixing the regression, the port can be a
+fast-follow.
+
+**Sequence:** Hakan's decision 2026-06-27 = seal the re-architecture FIRST (Day-16: F-TD-12,
+F-INFRA-03, F-INFRA-04, closing audit), THEN this as the #1 feature target. Tracked as
+BACKLOG **F-PROD-04** and memory `project_label_printing_next`.
 
 ---
 
