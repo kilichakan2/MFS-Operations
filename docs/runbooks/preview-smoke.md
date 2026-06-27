@@ -15,6 +15,32 @@ run and the change does not ship.
 Run from the conductor's machine. One smoke at a time per PR (the three
 specs are a relay — 01 creates the order 02 prints and 03 works).
 
+## 0. Now also runs automatically in CI (F-INFRA-03)
+
+As of F-INFRA-03 this smoke also runs **automatically on every PR** via
+`.github/workflows/preview-smoke.yml` — a **required, blocking** status
+check on `main` (the `smoke` job). The workflow discovers the PR's
+cred-wired preview URL, waits for `/api/auth/team` to return 200 (the
+same readiness gate as §1, 12-minute fail-closed budget), then runs
+`npm run test:e2e:preview -- <url> --unprotected`. If the readiness poll
+times out, no preview is found, or any spec fails, the check goes **RED**
+and the merge button stays locked — it never green-skips (the F-INFRA-06
+anti-pattern is deliberately avoided).
+
+- **Reading a CI failure:** use the SAME §4 table below. A globalSetup /
+  DB-identity probe failure = environment/platform wiring (check the
+  `preview-cred-sync` run for this PR first); a spec failure = a real
+  regression. A readiness-poll timeout means the cred-synced second
+  deploy never came up — debug `preview-cred-sync`, not the smoke.
+- **The manual invocation below stays valid** for local debugging and
+  re-runs; CI and the local command share the exact same
+  `scripts/e2e-preview.mjs` guards and `playwright.config.ts` probe.
+- **F-INFRA-04 will re-enable Deployment Protection** and at that point
+  must drop `--unprotected` from BOTH the manual command in this runbook
+  AND the single run line in `.github/workflows/preview-smoke.yml`, and
+  add the `VERCEL_AUTOMATION_BYPASS_SECRET` repo secret to the smoke
+  job's `env:`.
+
 ## 1. Preconditions
 
 > **Preview env vars are now auto-synced (F-INFRA-05).** The PR's four

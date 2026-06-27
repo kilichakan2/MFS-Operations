@@ -582,20 +582,22 @@ the trail matters.
 
 ## Infrastructure follow-ups (F-INFRA-)
 
-### F-INFRA-03 — Run the preview smoke in CI (GitHub Actions)
+### F-INFRA-03 — Run the preview smoke in CI (GitHub Actions)  ✅ SHIPPED (2026-06-27)
 
 - **Deferred:** 2026-06-10 (during F-INFRA-02)
-- **What:** The Gate-4 preview smoke is conductor-run from a local machine (`npm run test:e2e:preview -- <preview-url>`). Future unit: run it in CI (GitHub Actions) instead of / in addition to conductor-run, so every PR gets the smoke automatically. The Vercel Protection Bypass secret moves from `.env.e2e.local` to repo secrets; `.github/workflows/` is currently intentionally empty.
+- **What:** The Gate-4 preview smoke was conductor-run from a local machine (`npm run test:e2e:preview -- <preview-url>`). Now runs in CI (GitHub Actions) on every PR automatically. The 13 `E2E_*` test-login secrets moved to repo secrets; `.github/workflows/` was previously near-empty (only `preview-cred-sync.yml`).
 - **Why deferred:** Gate-1 lock for F-INFRA-02 explicitly scoped the smoke as FORGE-run with no CI.
 - **Detail:** `docs/plans/2026-06-10-f-infra-02-preview-smoke-plumbing.md` + ADR-0006
-- **Owner unit:** F-INFRA-03 (unscheduled)
-- **Status:** open
+- **Shipped:** new `.github/workflows/preview-smoke.yml` — a fail-closed BLOCKING required check on `main` (the `smoke` job). Discovers the PR's READY preview via the Vercel API (reusing `VERCEL_API_TOKEN` + the public project/team ids from `preview-cred-sync.mjs`), builds the `git-<branch>` alias, polls `/api/auth/team`=200 on a finite 12-min budget (the cred-wired second deploy is the only one that 200s there), then runs `npm run test:e2e:preview -- <url> --unprotected`. Pinned by `tests/unit/ci/preview-smoke-workflow.test.ts` (8 invariants, raw-text — no yaml-parser dep). Mirrors `preview-cred-sync.yml` house style; CI/config/test/docs only — no app code, no new runtime dep, no migration, no RLS. 13 `E2E_*` repo secrets provisioned; `VERCEL_API_TOKEN` reused. Plan `docs/plans/2026-06-27-f-infra-03-preview-smoke-ci.md`.
+- **Owner unit:** F-INFRA-03
+- **Status:** ✅ **SHIPPED 2026-06-27** (PR #__ / `_______` — filled at ship)
 
 ### F-INFRA-04 — Re-enable Vercel Deployment Protection (+ automation bypass) after the re-architecture
 
 - **Deferred:** 2026-06-10 (during F-INFRA-02)
 - **What:** Deployment Protection is disabled entirely on the Vercel project because Hakan's plan exposed no usable Protection Bypass for Automation; previews are publicly URL-reachable (low risk: post-F-INFRA-02 previews hold only ANVIL-TEST dummy data). The preview smoke runs with the `--unprotected` flag in the meantime.
 - **Goal:** when the migration completes (or if previews ever carry sensitive data), re-enable protection, generate the bypass secret into `.env.e2e.local` as `VERCEL_AUTOMATION_BYPASS_SECRET`, and drop the `--unprotected` flag from the Gate-4 runbook invocation.
+- **Precise change when this lands (post F-INFRA-03):** drop `--unprotected` from the single run line in `.github/workflows/preview-smoke.yml` (the "Run @critical preview smoke" step) AND provision the `VERCEL_AUTOMATION_BYPASS_SECRET` repo secret + add it to that step's `env:` block. Also drop `--unprotected` from the manual command in `docs/runbooks/preview-smoke.md`. Note: `tests/unit/ci/preview-smoke-workflow.test.ts` asserts `--unprotected` is PRESENT, so that test must be updated in the same change.
 - **Detail:** `docs/runbooks/preview-smoke.md` "Two modes" + ADR-0006 addendum
 - **Owner unit:** unscheduled (post-migration ops)
 - **Status:** open
