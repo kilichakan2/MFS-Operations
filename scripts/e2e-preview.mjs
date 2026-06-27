@@ -54,7 +54,15 @@ function die(msg) {
 
 const cliArgs = process.argv.slice(2)
 const unprotected = cliArgs.includes('--unprotected')
-const rawUrl = cliArgs.find((a) => a !== '--unprotected') ?? shellBaseUrl
+// Optional --grep override (default @critical). Lets ANVIL run a focused
+// probe (e.g. the F-26 R1 live-refresh tap, --grep @f26r1) through the
+// SAME fail-closed guards + env wiring as the full smoke. Backward
+// compatible: omitting it keeps the exact @critical behaviour.
+const grepIdx = cliArgs.indexOf('--grep')
+const grepPattern =
+  grepIdx !== -1 && cliArgs[grepIdx + 1] ? cliArgs[grepIdx + 1] : '@critical'
+const consumed = new Set(['--unprotected', '--grep', grepPattern])
+const rawUrl = cliArgs.find((a) => !consumed.has(a)) ?? shellBaseUrl
 if (!rawUrl) {
   die(
     'no preview URL given.\nUsage: npm run test:e2e:preview -- <preview-url>\n' +
@@ -106,11 +114,11 @@ if (unprotected) {
   )
 }
 
-console.log(`[e2e-preview] target: ${url.origin} — running @critical specs…`)
+console.log(`[e2e-preview] target: ${url.origin} — running ${grepPattern} specs…`)
 
 const child = spawn(
   'npx',
-  ['playwright', 'test', '--project=chromium', '--grep', '@critical'],
+  ['playwright', 'test', '--project=chromium', '--grep', grepPattern],
   {
     stdio: 'inherit',
     env: {

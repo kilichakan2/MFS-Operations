@@ -4,7 +4,9 @@
  * The MFS Operations app reads its customer and product pickers from
  * a local IndexedDB (Dexie, db name 'mfs-ops'). On a fresh browser
  * context the local DB is empty until the app's sync layer
- * (lib/localDb.ts) pulls /api/reference and writes records.
+ * (the LocalCache port — lib/adapters/dexie/LocalCache.ts, driven by
+ * lib/usecases/refreshReferenceData.ts) pulls /api/reference and writes
+ * records.
  *
  * Playwright launches a fresh browser context per test, so the sync
  * layer must run between login and the order-creation flow. That
