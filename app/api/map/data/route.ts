@@ -12,7 +12,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { mapDataService } from '@/lib/wiring/mapData'
+import { mapDataServiceForCaller } from '@/lib/wiring/mapData'
+import { requireRole } from '@/lib/auth/session'
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
 // MapCustomer / MapVisit were DECLARED here; F-24 PR2 relocated them into
 // lib/services/mapScene.ts (so buildMarkerScene doesn't import UPWARD from
@@ -21,12 +23,15 @@ import { mapDataService } from '@/lib/wiring/mapData'
 export type { MapCustomer, MapVisit } from '@/lib/services/mapScene'
 
 export async function GET(req: NextRequest) {
-  const userId = req.headers.get('x-mfs-user-id')
-  if (!userId) {
-    return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-  }
-
   try {
+    const caller = requireRole(req, ['admin'])
+
+    // F-RLS-04i: read as the caller (authenticated role → customers + visits RLS
+    // fire under the one key). Admin-only route → is_admin() grants ALL reps'
+    // rows (cross-rep). Rollback = swap
+    // `mapDataServiceForCaller(caller.userId)` → `mapDataService`.
+    const mapDataService = await mapDataServiceForCaller(caller.userId!)
+
     const { searchParams } = req.nextUrl
     const layer = searchParams.get('layer') ?? 'all'
     const from  = searchParams.get('from')  ?? null
@@ -39,6 +44,12 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ customers, visits })
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     console.error('[map/data GET] Unhandled error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }

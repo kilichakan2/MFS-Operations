@@ -11,7 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { routesService, routesServiceForCaller } from '@/lib/wiring/routes'
-import { ServiceError } from '@/lib/errors'
+import { ServiceError, UnauthorizedError, ForbiddenError } from '@/lib/errors'
+import { requireRole } from '@/lib/auth/session'
 
 const VALID_STATUSES = ['draft', 'active', 'completed'] as const
 type RouteStatus = typeof VALID_STATUSES[number]
@@ -21,20 +22,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  const role = req.headers.get('x-mfs-user-role')
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
-
-    // F-RLS-04c: the per-caller authenticated client needs the user id, which
-    // this handler did not previously read (it only role-gated). The role-gate
-    // above still runs FIRST, so a non-admin still gets 403; in production
-    // middleware always injects x-mfs-user-id alongside x-mfs-user-role, so this
-    // 401 is unreachable for real admin traffic (documented wire deviation).
-    const userId = req.headers.get('x-mfs-user-id')
-    if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-    // Rollback = swap `routesServiceForCaller(userId)` → `routesService`.
-    const routesService = await routesServiceForCaller(userId)
+    // F-RLS-04i: standardized onto requireRole — UnauthorizedError → 401,
+    // ForbiddenError → 403 (mapped in the catch below). Supplies the caller id
+    // the per-caller authenticated client needs.
+    const caller = requireRole(req, ['admin'])
+    // Rollback = swap `routesServiceForCaller(caller.userId)` → `routesService`.
+    const routesService = await routesServiceForCaller(caller.userId!)
 
     const { id }  = await params
     const body    = await req.json() as { status?: string }
@@ -66,6 +59,12 @@ export async function PATCH(
     })
 
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     if (err instanceof ServiceError) {
       console.error('[admin/runs/:id PATCH]', err.message)
       return NextResponse.json({ error: err.message }, { status: 500 })
@@ -80,20 +79,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  const role = req.headers.get('x-mfs-user-role')
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
-
-    // F-RLS-04c: the per-caller authenticated client needs the user id, which
-    // this handler did not previously read (it only role-gated). The role-gate
-    // above still runs FIRST, so a non-admin still gets 403; in production
-    // middleware always injects x-mfs-user-id alongside x-mfs-user-role, so this
-    // 401 is unreachable for real admin traffic (documented wire deviation).
-    const userId = req.headers.get('x-mfs-user-id')
-    if (!userId) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-    // Rollback = swap `routesServiceForCaller(userId)` → `routesService`.
-    const routesService = await routesServiceForCaller(userId)
+    // F-RLS-04i: standardized onto requireRole — UnauthorizedError → 401,
+    // ForbiddenError → 403 (mapped in the catch below). Supplies the caller id
+    // the per-caller authenticated client needs.
+    const caller = requireRole(req, ['admin'])
+    // Rollback = swap `routesServiceForCaller(caller.userId)` → `routesService`.
+    const routesService = await routesServiceForCaller(caller.userId!)
 
     const { id } = await params
 
@@ -104,6 +95,12 @@ export async function DELETE(
     return new NextResponse(null, { status: 204 })
 
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     if (err instanceof ServiceError) {
       console.error('[admin/runs/:id DELETE]', err.message)
       return NextResponse.json({ error: err.message }, { status: 500 })

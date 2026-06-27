@@ -16,9 +16,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { customersService }          from '@/lib/wiring/customers'
-import { productsService }           from '@/lib/wiring/products'
-import { auditLog }                  from '@/lib/wiring/auditLog'
+import { customersServiceForCaller } from '@/lib/wiring/customers'
+import { productsServiceForCaller }  from '@/lib/wiring/products'
+import { auditLogForCaller }         from '@/lib/wiring/auditLog'
+import { requireRole }               from '@/lib/auth/session'
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
 /** Trim a cell value; return null if blank */
 function cell(v: string | undefined): string | null {
@@ -29,11 +31,17 @@ function cell(v: string | undefined): string | null {
 
 export async function POST(req: NextRequest) {
   try {
-    const userId   = req.headers.get('x-mfs-user-id')
+    const caller   = requireRole(req, ['admin'])
+    const userId   = caller.userId!
     const userName = req.headers.get('x-mfs-user-name') ?? 'Admin'
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-    }
+
+    // F-RLS-04i: writes (customers/products inserts + audit_log) run through the
+    // per-caller authenticated client (is_admin() insert policies + the
+    // audit_log_insert WITH CHECK user_id=GUC fire). Rollback = swap each
+    // `…ForCaller(userId)` → its module-level singleton.
+    const customersService = await customersServiceForCaller(userId)
+    const productsService  = await productsServiceForCaller(userId)
+    const auditLog         = await auditLogForCaller(userId)
 
     const body = await req.json().catch(() => null)
     if (!body) {
@@ -106,6 +114,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ inserted, skipped }, { status: 201 })
 
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     console.error('[import/manual] Unhandled error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }

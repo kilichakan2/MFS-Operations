@@ -19,8 +19,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { customersService }          from '@/lib/wiring/customers'
+import { customersServiceForCaller } from '@/lib/wiring/customers'
 import { geocoder }                  from '@/lib/wiring/geocoder'
+import { requireRole }               from '@/lib/auth/session'
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import { GeocoderError }             from '@/lib/ports'
 import type { CustomerAdminView }    from '@/lib/domain'
 
@@ -44,11 +46,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-  const role = req.headers.get('x-mfs-user-role')
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
+    const caller = requireRole(req, ['admin'])
 
+    // F-RLS-04i: writes through the per-caller authenticated client (the
+    // customers_update/customers_insert is_admin() policies fire). Rollback =
+    // swap `customersServiceForCaller(caller.userId)` → `customersService`.
+    const customersService = await customersServiceForCaller(caller.userId!)
 
     const { id }  = await params
     const body    = await req.json() as { active?: boolean; postcode?: string }
@@ -127,6 +130,12 @@ export async function PATCH(
     return NextResponse.json({ error: 'No valid field to update' }, { status: 400 })
 
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }

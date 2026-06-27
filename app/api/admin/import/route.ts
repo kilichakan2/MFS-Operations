@@ -20,13 +20,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { llmExtractor } from '@/lib/wiring/llm'
 import { LLMExtractionError } from '@/lib/ports'
+import { requireRole } from '@/lib/auth/session'
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = req.headers.get('x-mfs-user-id')
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
-    }
+    requireRole(req, ['admin'])
 
     const body = await req.json().catch(() => null)
     if (!body) {
@@ -50,6 +49,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result)
 
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     if (err instanceof LLMExtractionError) {
       return NextResponse.json(
         { error: 'AI did not return structured data — please try again' },

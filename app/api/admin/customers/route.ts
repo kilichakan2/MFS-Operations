@@ -15,7 +15,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { customersService }          from '@/lib/wiring/customers'
+import { customersServiceForCaller } from '@/lib/wiring/customers'
+import { requireRole }               from '@/lib/auth/session'
+import { UnauthorizedError, ForbiddenError } from '@/lib/errors'
 import type { CustomerAdminView }    from '@/lib/domain'
 
 /** Project the admin view back to today's exact 7-field customer-list shape. */
@@ -33,15 +35,22 @@ function toListRow(c: CustomerAdminView) {
 
 export async function GET(req: NextRequest) {
   try {
-    const role = req.headers.get('x-mfs-user-role')
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-  }
+    const caller = requireRole(req, ['admin'])
+
+    // F-RLS-04i: read through the per-caller authenticated client (RLS fires).
+    // Rollback = swap `customersServiceForCaller(caller.userId)` → `customersService`.
+    const customersService = await customersServiceForCaller(caller.userId!)
 
     const customers = await customersService.listAll()
     return NextResponse.json(customers.map(toListRow))
 
   } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: 'Unauthenticated' }, { status: 401 })
+    }
+    if (err instanceof ForbiddenError) {
+      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    }
     console.error(`[admin/customers GET] Unhandled error:`, err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
