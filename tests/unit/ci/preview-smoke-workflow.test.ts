@@ -28,6 +28,12 @@
  *      a script, making the step crash every time and the gate permanently RED.
  *      This is the exact defect the F-INFRA-03 Guard caught: assertions 1–8 all
  *      passed while the discover heredoc was 100% un-runnable. (F-INFRA-03 Guard.)
+ *  10. The discover heredoc READS the preview host from Vercel's API-provided
+ *      field (`branchAlias`, fallback `url`) — it does NOT construct the host by
+ *      string-interpolating the branch name into a `-git-…` template. F-INFRA-03
+ *      ANVIL caught this live: on a long branch the glued host's first DNS label
+ *      was 82 chars (>63 limit), never resolved, and the readiness poll timed out
+ *      for the full 12-min budget → gate permanently RED. (F-INFRA-03 ANVIL.)
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -133,5 +139,22 @@ describe("preview-smoke CI workflow (F-INFRA-03)", () => {
       const hasAwait = /\bawait\s/.test(block);
       expect(hasRequire && hasAwait).toBe(false);
     }
+  });
+
+  it("10. discover step reads Vercel's branchAlias/url, never constructs the host from the branch name", () => {
+    // F-INFRA-03 ANVIL: the discover step used to glue the branch into a
+    // `mfs-operations-git-${sanitised}-${SCOPE}.vercel.app` template. On this
+    // branch that made an 82-char first DNS label (>63 limit) that never
+    // resolved, so the readiness poll timed out for 12 min and the gate was
+    // permanently RED. The fix reads the API-provided host. Pin both halves:
+    // the API field must be referenced, and the old constructed template must be
+    // gone.
+    const yaml = readWorkflow();
+    // Must read Vercel's own alias field.
+    expect(yaml).toContain("branchAlias");
+    // Must NOT reconstruct the host from the branch via a -git- template…
+    expect(yaml).not.toMatch(/`mfs-operations-git-\$\{/);
+    // …and the old `aliasHost` construction variable must be gone.
+    expect(yaml).not.toContain("aliasHost");
   });
 });

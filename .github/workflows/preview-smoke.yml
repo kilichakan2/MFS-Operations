@@ -72,10 +72,18 @@ jobs:
         # Inline Node, built-in fetch (Node 20). Reuses the existing
         # VERCEL_API_TOKEN secret + the public, non-secret project/team ids that
         # scripts/preview-cred-sync.mjs already pins. Asks Vercel for this
-        # branch's READY preview deployments, builds the git-<branch> alias the
-        # smoke's PREVIEW_HOST_RE expects, and confirms it matches. The readiness
-        # poll (next step) then waits out the empty deploy + cred-sync. Fails
-        # closed (exit 1 → RED) if no matching READY preview is found.
+        # branch's READY preview deployments and READS the host Vercel reports —
+        # ready.meta.branchAlias (the API-provided git alias; Vercel TRUNCATES
+        # long branch names so this is the only legal host on a long branch),
+        # falling back to ready.url. It does NOT construct the host by gluing the
+        # branch name into a -git-<branch>-<scope> template — that produced a
+        # >63-char first DNS label on this branch and never resolved, timing out
+        # the readiness poll for 12 min (F-INFRA-03 ANVIL root cause). The chosen
+        # host must still match PREVIEW_HOST_RE. The readiness poll (next step)
+        # then waits out the empty deploy + cred-sync; branchAlias auto-follows to
+        # the newest READY deploy, absorbing the two-deploy race. Fails closed
+        # (exit 1 → RED) if no matching READY preview is found or the host is
+        # invalid.
         env:
           VERCEL_API_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
           PR_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
@@ -96,21 +104,18 @@ jobs:
           // scripts/preview-cred-sync.mjs CONFIG.
           const PROJECT_ID = 'prj_84NlryZjHcGlA6R2O6zQ57aWkOFZ'
           const TEAM_ID = 'team_WRtx6wNjCoPN95xacOxK6m1e'
-          // The Vercel scope slug pinned in playwright.config.ts PREVIEW_HOST_RE.
-          const SCOPE = 'hakan-kilics-projects-2c54f03f'
+          // The host regex pinned in playwright.config.ts. It accepts BOTH the
+          // -git-<branch>-<scope> alias form AND the -<9-char-hash>-<scope>
+          // unique form, so both branchAlias and url validate here.
           const PREVIEW_HOST_RE =
             /^mfs-operations(-git-[a-z0-9-]+|-[a-z0-9]{9})-hakan-kilics-projects-2c54f03f\.vercel\.app$/
 
-          // Branch-name sanitisation for the git alias: lowercase, every
-          // non-[a-z0-9-] char becomes '-'. Matches Vercel's git-<branch> alias.
-          const sanitised = branch.toLowerCase().replace(/[^a-z0-9-]/g, '-')
-          const aliasHost = `mfs-operations-git-${sanitised}-${SCOPE}.vercel.app`
-
-          // Belt-and-braces: confirm a READY preview deployment actually exists
-          // for this branch before we hand the alias to the smoke. The alias is
-          // auto-maintained by Vercel to point at the newest READY preview (which
-          // after cred-sync is the wired one), so we PREFER it; we use the API
-          // only to prove a READY preview exists (fail-closed otherwise).
+          // Confirm a READY preview deployment exists for this branch, and READ
+          // the host Vercel reports off the deployment object — never construct
+          // it from the branch name (Vercel truncates long branch aliases; gluing
+          // the raw branch into a -git-<branch>- template made a >63-char DNS
+          // label that never resolved — F-INFRA-03 ANVIL readiness-timeout root
+          // cause).
           async function findReadyPreview() {
             const url = `https://api.vercel.com/v6/deployments?projectId=${PROJECT_ID}&teamId=${TEAM_ID}&target=preview&limit=50`
             const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -133,10 +138,24 @@ jobs:
             process.exit(1)
           }
 
-          const previewUrl = `https://${aliasHost}`
-          if (!PREVIEW_HOST_RE.test(aliasHost)) {
+          // Read the host Vercel reports. PREFER ready.meta.branchAlias: Vercel
+          // auto-maintains it pointing at the newest READY preview for the branch
+          // (which after cred-sync is the wired one), so the readiness poll can
+          // absorb the two-deploy race. Fall back to ready.url (the unique
+          // per-deploy hash host) only if branchAlias is absent — it pins to one
+          // specific, possibly credential-less, deploy and could time out forever.
+          // Both fields are bare hosts, but strip a leading scheme defensively so
+          // we never double-prefix https://.
+          const stripScheme = (h) => (h ?? '').replace(/^https?:\/\//, '')
+          const chosenHost = stripScheme(ready.meta?.branchAlias) || stripScheme(ready.url)
+          if (!chosenHost) {
+            console.error('[discover] deployment has no branchAlias or url — failing closed')
+            process.exit(1)
+          }
+          const previewUrl = `https://${chosenHost}`
+          if (!PREVIEW_HOST_RE.test(chosenHost)) {
             console.error(
-              `[discover] constructed alias '${aliasHost}' does not match PREVIEW_HOST_RE — failing closed`,
+              `[discover] host '${chosenHost}' does not match PREVIEW_HOST_RE — failing closed`,
             )
             process.exit(1)
           }
