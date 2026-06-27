@@ -16,7 +16,7 @@
  *   in the browser; middleware attaches x-mfs-user-id to the request
  */
 
-import { localDb } from '@/lib/localDb'
+import { localCache } from '@/lib/wiring/localCache'
 
 const ENDPOINT: Record<string, string> = {
   screen1: '/api/screen1/sync',
@@ -50,18 +50,17 @@ export async function triggerSync(): Promise<void> {
     // Reset any records exhausted from a previous bug/deployment cycle.
     // If retries >= MAX_RETRIES but still unsynced, reset to 0 so a hard
     // refresh gives stuck records a fresh batch of attempts.
-    const exhausted = await localDb.queue
+    const exhausted = (await localCache.listQueue())
       .filter(r => !r.synced && (r.retries ?? 0) >= MAX_RETRIES)
-      .toArray()
     if (exhausted.length > 0) {
       console.log(`[syncEngine] Resetting ${exhausted.length} exhausted record(s)`)
       await Promise.all(
-        exhausted.map(r => localDb.queue.update(r.localId, { retries: 0, syncError: undefined }))
+        exhausted.map(r => localCache.updateQueue(r.localId, { retries: 0, syncError: undefined }))
       )
     }
 
     // Fetch all records that haven't been synced and haven't exceeded retry limit
-    const pending = (await localDb.queue.toArray())
+    const pending = (await localCache.listQueue())
       .filter(r => !r.synced && (r.retries ?? 0) < MAX_RETRIES)
 
     if (pending.length === 0) return
@@ -84,7 +83,7 @@ export async function triggerSync(): Promise<void> {
 
         if (res.ok) {
           // Success — 201 = created, 200 = already exists (idempotent duplicate)
-          await localDb.queue.update(record.localId, { synced: true })
+          await localCache.updateQueue(record.localId, { synced: true })
           console.log(`[syncEngine] ✓ Synced ${record.localId} (${record.screen}) HTTP ${res.status}`)
         } else {
           // Server rejected — increment retries and store reason
@@ -94,7 +93,7 @@ export async function triggerSync(): Promise<void> {
             errorMsg = body.error ?? errorMsg
           } catch { /* ignore parse failure */ }
 
-          await localDb.queue.update(record.localId, {
+          await localCache.updateQueue(record.localId, {
             retries:   (record.retries ?? 0) + 1,
             syncError: errorMsg,
           })
@@ -103,7 +102,7 @@ export async function triggerSync(): Promise<void> {
       } catch (networkErr) {
         // Network error — increment retries
         const msg = networkErr instanceof Error ? networkErr.message : String(networkErr)
-        await localDb.queue.update(record.localId, {
+        await localCache.updateQueue(record.localId, {
           retries:   (record.retries ?? 0) + 1,
           syncError: `Network error: ${msg}`,
         })
