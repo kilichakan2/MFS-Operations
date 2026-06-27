@@ -12,17 +12,41 @@
  * + one edit to THIS file. `CustomersService`, the routes and `lib/domain` are
  * untouched.
  *
- * Security posture (PR1): SERVICE-ROLE singleton (master key, RLS bypassed) —
- * the same posture the three admin routes use today, and the one-line rollback
- * parachute. Per-user RLS for these routes is deliberately deferred to F-RLS-04i
- * (see the plan's OUT OF SCOPE), so there is intentionally NO `…ForCaller`
- * variant here yet.
+ * Security posture: the SERVICE-ROLE singleton (master key, RLS bypassed) STAYS
+ * as the one-line rollback parachute. F-RLS-04i ADDS the per-request
+ * authenticated `customersServiceForCaller(userId)` factory (mirrors
+ * `visitsServiceForCaller`): it mints a short-lived DB token, builds a per-caller
+ * authenticated client (Postgres `authenticated` role → the customers RLS
+ * policies fire), and binds the CustomersRepository adapter to it. LIVE as of
+ * F-RLS-04i: the admin customers + import + geocode-all routes call it (caller id
+ * from the tamper-proof `x-mfs-user-id` header). Per-request — NEVER memoize (a
+ * memoized client would leak one caller's identity to another).
  *
  * This file is a parts list, not logic.
  */
 import { createCustomersService, type CustomersService } from "@/lib/services";
-import { supabaseCustomersRepository } from "@/lib/adapters/supabase";
+import {
+  supabaseCustomersRepository, // keep — service-role parachute singleton
+  createSupabaseCustomersRepository, // NEW — per-caller table repo
+  authenticatedClientForCaller, // NEW
+} from "@/lib/adapters/supabase";
+import { dbTokenMinter } from "@/lib/wiring/dbToken";
 
 export const customersService: CustomersService = createCustomersService({
   customers: supabaseCustomersRepository,
 });
+
+/** Build a CustomersService whose reads/writes run as ONE caller (Postgres
+ *  `authenticated` role, so the customers RLS policies fire). Per-request —
+ *  NEVER memoize (a memoized client would leak one caller's identity to
+ *  another). The `customersService` singleton above STAYS as the rollback
+ *  parachute. Mirrors `visitsServiceForCaller`. */
+export async function customersServiceForCaller(
+  callerUserId: string,
+): Promise<CustomersService> {
+  const token = await dbTokenMinter.mint({ userId: callerUserId });
+  const client = authenticatedClientForCaller({ token });
+  return createCustomersService({
+    customers: createSupabaseCustomersRepository(client),
+  });
+}
