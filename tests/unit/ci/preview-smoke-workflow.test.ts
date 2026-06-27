@@ -22,6 +22,12 @@
  *   8. The job key is `smoke` — the documented required-check context. A rename
  *      must fail LOUD so branch protection is updated in lockstep (otherwise the
  *      required check silently never blocks).
+ *   9. No inline `node <<'NODE'` heredoc mixes `require(` with top-level `await`.
+ *      Node >=20.19 (actions/setup-node node-version: 20) throws
+ *      ERR_AMBIGUOUS_MODULE_SYNTAX (exit 1) before running a single line of such
+ *      a script, making the step crash every time and the gate permanently RED.
+ *      This is the exact defect the F-INFRA-03 Guard caught: assertions 1–8 all
+ *      passed while the discover heredoc was 100% un-runnable. (F-INFRA-03 Guard.)
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -105,5 +111,27 @@ describe("preview-smoke CI workflow (F-INFRA-03)", () => {
       // defensive: `steps`/`with`/`env` are deeper-indented so won't match).
       .filter((k) => k === "smoke");
     expect(jobKeys).toEqual(["smoke"]);
+  });
+
+  it("9. inline node heredocs must not mix require() with top-level await (ERR_AMBIGUOUS_MODULE_SYNTAX)", () => {
+    // F-INFRA-03 Guard: the original discover heredoc mixed top-level `await`
+    // with `require('node:fs')`. Node >=20.19 (the version setup-node installs)
+    // rejects that combination as ambiguous module syntax and exits 1 BEFORE
+    // running any code, so the step crashed every run and the gate was
+    // permanently RED — yet invariants 1–8 stayed green. This guards the whole
+    // defect class without a yaml parser: extract every `node <<'NODE' … NODE`
+    // heredoc and assert that within any single block, `require(` and a
+    // top-level `await ` never coexist. The heredocs are small, so this raw
+    // proxy (require present ⇒ await absent) is sound for this file.
+    const yaml = readWorkflow();
+    const heredocs = [...yaml.matchAll(/<<'NODE'\n([\s\S]*?)\n\s*NODE/g)].map(
+      (m) => m[1],
+    );
+    expect(heredocs.length).toBeGreaterThan(0);
+    for (const block of heredocs) {
+      const hasRequire = /\brequire\(/.test(block);
+      const hasAwait = /\bawait\s/.test(block);
+      expect(hasRequire && hasAwait).toBe(false);
+    }
   });
 });

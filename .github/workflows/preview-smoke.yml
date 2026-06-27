@@ -81,6 +81,12 @@ jobs:
           PR_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           node <<'NODE'
+          // ESM-only: this heredoc uses top-level await (findReadyPreview), so
+          // it must use `import`, never CommonJS module loading — Node >=20.19
+          // throws ERR_AMBIGUOUS_MODULE_SYNTAX (exit 1) before running any code
+          // when both are mixed, which would make the gate permanently RED
+          // (F-INFRA-03 Guard).
+          import { appendFileSync } from 'node:fs'
           const token = process.env.VERCEL_API_TOKEN
           const branch = process.env.PR_GIT_BRANCH
           if (!token) { console.error('[discover] VERCEL_API_TOKEN missing — failing closed'); process.exit(1) }
@@ -136,7 +142,7 @@ jobs:
           }
 
           console.log(`[discover] preview URL: ${previewUrl}`)
-          require('node:fs').appendFileSync(process.env.GITHUB_OUTPUT, `preview_url=${previewUrl}\n`)
+          appendFileSync(process.env.GITHUB_OUTPUT, `preview_url=${previewUrl}\n`)
           NODE
 
       - name: Wait for cred-synced deploy (readiness poll, fail-closed)
