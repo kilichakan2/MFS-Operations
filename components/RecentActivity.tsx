@@ -11,8 +11,7 @@
  * show "Al Turka" instead of a UUID.
  */
 
-import { useLiveQuery } from 'dexie-react-hooks'
-import { localDb }      from '@/lib/localDb'
+import { useTodayScreenActivity } from '@/lib/wiring/localCache'
 import { useLanguage } from '@/lib/LanguageContext'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -47,43 +46,11 @@ export default function RecentActivity({ screen }: RecentActivityProps) {
   const { t } = useLanguage()
   const today = todayMidnight()
 
-  // Live query: today's records for this screen, newest first, max 5
-  const items = useLiveQuery(
-    async () => {
-      const records = await localDb.queue
-        .where('screen').equals(screen)
-        .and(r => r.createdAt >= today)
-        .reverse()
-        .limit(5)
-        .toArray()
-
-      if (records.length === 0) return []
-
-      // Pre-load all relevant customers + products for name resolution
-      const customerIds = [...new Set(
-        records.map(r => r.payload.customer_id as string).filter(Boolean)
-      )]
-      const productIds = [...new Set(
-        records.map(r => r.payload.product_id  as string).filter(Boolean)
-      )]
-
-      const [customers, products] = await Promise.all([
-        customerIds.length > 0
-          ? localDb.customers.where('id').anyOf(customerIds).toArray()
-          : Promise.resolve([]),
-        productIds.length > 0
-          ? localDb.products.where('id').anyOf(productIds).toArray()
-          : Promise.resolve([]),
-      ])
-
-      const custMap = Object.fromEntries(customers.map(c => [c.id, c.name]))
-      const prodMap = Object.fromEntries(products.map(p => [p.id, p.name]))
-
-      return records.map(r => ({ ...r, custMap, prodMap }))
-    },
-    [screen, today],
-    []
-  )
+  // Live query: today's records for this screen, newest first, max 5 — with
+  // customer/product name-resolution maps. The real Dexie reads live inside the
+  // owned hook (lib/adapters/dexie/react.ts) so useLiveQuery keeps tracking the
+  // queue + customers + products tables (F-26 R1).
+  const items = useTodayScreenActivity(screen, today)
 
   if (!items || items.length === 0) return null
 

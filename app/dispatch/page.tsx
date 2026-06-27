@@ -10,7 +10,7 @@ import RoleNav from '@/components/RoleNav'
 import { useLanguage }    from '@/lib/LanguageContext'
 import AppHeader             from '@/components/AppHeader'
 import RecentActivity from '@/components/RecentActivity'
-import { localDb, syncReferenceData } from '@/lib/localDb'
+import { localCache, refreshReferenceData } from '@/lib/wiring/localCache'
 import { triggerSync }                from '@/lib/syncEngine'
 import { useCustomers, useProducts } from '@/hooks/useReferenceData'
 import type { TranslationKey } from '@/lib/translations'
@@ -222,7 +222,7 @@ export default function Screen1Page() {
 
   // Sync on mount — respects 30-min cooldown, safe to call every render
   useEffect(() => {
-    syncReferenceData().catch(console.error)
+    refreshReferenceData().catch(console.error)
   }, [])
 
   // ── Field updaters ──────────────────────────────────────────────────────────
@@ -272,7 +272,7 @@ export default function Screen1Page() {
 
     try {
       const localId1 = crypto.randomUUID()
-      await localDb.queue.add({
+      await localCache.addToQueue({
         localId:   localId1,
         screen:    'screen1',
         payload: {

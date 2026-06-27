@@ -7,7 +7,7 @@ import AppHeader        from '@/components/AppHeader'
 import RoleNav          from '@/components/RoleNav'
 import BottomSheetSelector from '@/components/BottomSheetSelector'
 import { useCustomers, useProductsWithDetail } from '@/hooks/useReferenceData'
-import { syncReferenceData } from '@/lib/localDb'
+import { refreshReferenceData } from '@/lib/wiring/localCache'
 import type { SelectableItem } from '@/components/BottomSheetSelector'
 import { pdfRenderer } from '@/lib/wiring/pdf'
 import type { PriceAgreementPdfData } from '@/lib/ports'
@@ -900,7 +900,7 @@ function PricingPageBody() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    syncReferenceData({ force: true }).catch(console.error)
+    refreshReferenceData({ force: true }).catch(console.error)
     const m = document.cookie.match(/(?:^|;\s*)mfs_user_id=([^;]+)/)
     setCurrentUserId(m?.[1] ?? null)
   }, [])

@@ -9,7 +9,7 @@ import RoleNav             from '@/components/RoleNav'
 import { useLanguage }     from '@/lib/LanguageContext'
 import AppHeader           from '@/components/AppHeader'
 import { useCustomers }    from '@/hooks/useReferenceData'
-import { localDb, syncReferenceData } from '@/lib/localDb'
+import { localCache, refreshReferenceData } from '@/lib/wiring/localCache'
 import { triggerSync }     from '@/lib/syncEngine'
 import type { SelectableItem }  from '@/components/BottomSheetSelector'
 import type { TodayVisit }      from '@/app/api/screen3/today/route'
@@ -789,7 +789,7 @@ function VisitsPageBody() {
   const formId     = useId()
   const formRef    = useRef<HTMLDivElement>(null)
 
-  useEffect(()=>{ syncReferenceData().catch(console.error) },[])
+  useEffect(()=>{ refreshReferenceData().catch(console.error) },[])
   const customers = useCustomers()
 
   // Item 5a's Visits KPI tile lands here with ?range=today|week|month|quarter.
@@ -826,7 +826,7 @@ function VisitsPageBody() {
 
   const refreshPending = useCallback(async()=>{
     const start=new Date(); start.setHours(0,0,0,0)
-    const q=await localDb.queue.filter(r=>r.screen==='screen3'&&!r.synced&&r.createdAt>=start.getTime()).toArray()
+    const q=(await localCache.listQueue()).filter(r=>r.screen==='screen3'&&!r.synced&&r.createdAt>=start.getTime())
     setPendingItems(q.map(r=>{
       const p=r.payload as Record<string,unknown>
       return{
@@ -884,9 +884,9 @@ function VisitsPageBody() {
     setIsSubmitting(true)
     const isDbRecord=editingId!==null
     try{
-      if(editingLocalId) await localDb.queue.where('localId').equals(editingLocalId).delete()
+      if(editingLocalId) await localCache.deleteFromQueue(editingLocalId)
       const recordId=editingId??editingLocalId??crypto.randomUUID()
-      await localDb.queue.put({
+      await localCache.putToQueue({
         localId:recordId, screen:'screen3',
         payload:{
           id:recordId, _upsert:isDbRecord,
@@ -914,11 +914,11 @@ function VisitsPageBody() {
     const target=deleteTarget; setDeleteTarget(null)
     try{
       if('isPending' in target){
-        await localDb.queue.where('localId').equals(target.localId).delete()
+        await localCache.deleteFromQueue(target.localId)
         await refreshPending()
       } else {
         await fetch(`/api/screen3/visit?id=${target.id}`,{method:'DELETE'})
-        await localDb.queue.where('localId').equals(target.id).delete().catch(()=>{})
+        await localCache.deleteFromQueue(target.id).catch(()=>{})
         await refreshFeed(); await refreshPending()
       }
     } catch(err){ console.error('Delete failed:',err) }
