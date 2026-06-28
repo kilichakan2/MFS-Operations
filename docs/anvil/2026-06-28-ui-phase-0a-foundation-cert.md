@@ -1,44 +1,46 @@
-# ANVIL Clearance Certificate (DRAFT)
+# ANVIL Clearance Certificate
 
 Date: 2026-06-28
 App: MFS Operations
 Branch: feat/ui-phase-0a-foundation
-PR: none (branch NOT pushed; isolated `worktree-ui-system-rebuild`; does NOT merge to `main` until the whole UI overhaul is done AND Hakan unlocks)
+PR: none yet (branch unpushed). Merge window now OPEN — integration model = step-by-step (UI roadmap decision #14). 0a is the first piece to merge to `main` once this cert is CLEARED.
 
 ## Verdict
 
-⏳ **PENDING — NOT YET CLEARED**
+✅ **CLEARED FOR PRODUCTION**
 
-All re-confirm rungs (unit, component, guards, typecheck, build) are green, the
-database/security rungs are justifiably N/A, and the live **visual smoke proves the
-foundation renders correctly with the new tokens live**. The one outstanding rung is
-the **E2E `@critical` suite**: it ran 62/75, and all 13 failures are traced to the
-**test environment** (a dirty shared local DB + the dev-server Leaflet double-mount) —
-**none are attributable to the Phase 0a change**. A definitive all-green E2E needs a
-fresh `npm run db:reset` on the shared local Supabase instance, which the runner did NOT
-perform (a second terminal shares that instance; reseeding it is the conductor's call).
+Every rung is green. The previously-outstanding **E2E `@critical` suite now runs 75/75
+clean** — on a **production build** against a **freshly reseeded** local Supabase DB
+(`npm run db:reset` → `npx playwright test --project=chromium --grep @critical` → **75 passed,
+0 failed, 0 flaky, 1.5m**, run 3 below). Unit, component, guards, typecheck and build remain
+green; the database/security rungs are justifiably N/A (no migration / API / policy in the diff).
 
-🗣 In plain English: every desk-check passes and the screens visibly wear the new brand
-paint and fonts with no breakage. The only thing not fully green is the big browser
-regression suite — and the reason is the shared test database was left messy by earlier
-runs and maps don't mount on the dev server, NOT anything this branch did. To turn it
-fully green someone needs to wipe-and-reseed the shared local DB (which would disturb the
-other terminal), so that decision is handed up to the conductor.
+🗣 In plain English: the foundation now passes the full browser regression suite end to end on
+a real production build, with a clean database — not just the desk-checks. Nothing is left amber.
 
-## Conductor decision (2026-06-28) — DEFER the clean-DB E2E to merge-time
+## Conductor record (2026-06-28) — clean-DB E2E run to CLEARED
 
-Hakan's call: **accept PENDING; do NOT `db:reset` now.** Rationale — (1) the branch is not
-merging today (merge gated until Hakan opens the window), so a fully-CLEARED cert isn't
-required yet; (2) the foundation is already strongly proven (green build/tsc/unit/component
-+ a live 6-screen prod-build visual smoke) and all 13 E2E failures are conclusively
-environmental, with the new tokens visibly live in the failing DOM; (3) the parallel
-terminal (main seal) is now DONE, so the shared local DB is free — the clean-DB run is a
-cheap, unblocked step best done at the merge window.
+The clean-DB run that flips this cert was performed at the merge window (main seal done → DB free).
+It took **three attempts**, and BOTH first failures were conclusively **test-harness wiring in the
+worktree, NOT the 0a diff** (the 0a change is CSS/tokens only and touches no write path):
 
-**Exact step that flips this cert PENDING → CLEARED (the 0a pre-merge gate):**
-`npm run db:reset` (DB now ours alone) → `npx playwright test --project=chromium --grep @critical`
-against a production build → confirm 75/75 green → update this cert to CLEARED. Then proceed
-with the merge handover (docs/plan refresh + terminal-1 handover prompt).
+1. **Run 1 — 66 fail.** Cause: a git worktree does not contain gitignored files, so the worktree
+   lacked `.env.e2e.local` (the E2E login PINs). Every `loginAs()` threw `Missing E2E_PIN_* env var`.
+   Fix: copied `.env.e2e.local` + `.env.test.local` into the worktree (NOT `.env.local` — prod values
+   kept out so `next start` can't load them).
+2. **Run 2 — 65 fail.** Cause: the hand-started prod server was wired with only 4 env vars and was
+   missing **`SUPABASE_JWT_SECRET`**; the per-caller RLS write path (F-RLS-04i `…ForCaller`) mints a
+   DB-identity token signed with it on every authenticated WRITE → `SUPABASE_JWT_SECRET is not set —
+   cannot mint DB identity tokens` (500). Reads passed (~10), writes cascade-failed (~65); order specs
+   hung waiting on the `MFS-####-####` reference that never appeared. Fix: restart the prod server with
+   the COMPLETE `.env.test.local` sourced (the dev server never hit this because Playwright loads the
+   full file into its own process env and the spawned dev server inherits it).
+3. **Run 3 — 75/75 PASS.** Reseed → prod build (NEXT_PUBLIC_* inlined local) → prod server with full
+   env → clean suite. The 2 Leaflet map specs (05/06) — the only genuinely prod-build-sensitive ones —
+   passed, confirming the dev-server StrictMode double-mount was the original cause.
+
+🗣 Plain English: it wasn't broken — my test rig in the side-folder was missing two keys (the door PIN,
+then the database signing key). Once both were supplied, the whole suite went green on the first clean try.
 
 ---
 
@@ -46,7 +48,7 @@ with the merge handover (docs/plan refresh + terminal-1 handover prompt).
 
 | Change / path | Risk tier | Layers required | Layers run |
 | --- | --- | --- | --- |
-| `app/tokens.css` (new two-tier token layer), `app/globals.css`, `tailwind.config.ts`, `app/layout.tsx` (Adieu+Inter via next/font; Plus Jakarta retired) | Low (presentation-only) | Unit, component, guards, tsc, build, visual smoke, E2E functional regression | Unit ✓, component ✓, guards ✓, tsc ✓, build ✓, visual smoke ✓, E2E **partial (62/75)** |
+| `app/tokens.css` (new two-tier token layer), `app/globals.css`, `tailwind.config.ts`, `app/layout.tsx` (Adieu+Inter via next/font; Plus Jakarta retired) | Low (presentation-only) | Unit, component, guards, tsc, build, visual smoke, E2E functional regression | Unit ✓, component ✓, guards ✓, tsc ✓, build ✓, visual smoke ✓, **E2E 75/75 ✓ (prod build, clean DB)** |
 | `vitest.config.ts` (unit/component lane split), `tests/component/**` (jsdom+RTL+axe stack), `tests/unit/design-system/**`, `tests/unit/lint/**`, `tests/unit/tokens/**` (guards) | Low | Unit + component | ✓ |
 | `package.json` / `package-lock.json` (radix-ui runtime dep + 4 test devDeps) | Low | Build + vendor-fence guard | ✓ |
 | docs/* , public/fonts/adieu/* | None | — | n/a |
@@ -78,7 +80,7 @@ empty/vacuous passes.
 | Edge Functions (Deno) | ⏭️ n/a — not required | none touched |
 | Local full-stack rung | ✅ partial | Supabase CLI adapter (local stack already up, seeded); used for the E2E + visual smoke below |
 | Visual smoke (live, prod build) | ✅ populated | 6 screens — tokens proven LIVE (see below) |
-| E2E (`@critical`, Playwright, local) | ⚠️ **62/75 — 13 env failures** | `npx playwright test --project=chromium --grep @critical` — all 13 traced to environment, none to this change (see below) |
+| E2E (`@critical`, Playwright, prod build, clean DB) | ✅ **75/75** | `npm run db:reset` → `npx playwright test --project=chromium --grep @critical` against a production server — 0 failed, 0 flaky, 1.5m (run 3). Earlier 62/75 + 66/65-fail attempts were test-harness wiring, not the diff (see Conductor record) |
 | Breadth crawl | ⏭️ not run | covered for this CSS-only change by the visual smoke (6 representative screens) + the 62 passing `@critical` specs; full crawl deferred to the conductor's clean-env re-run |
 
 ### Visual smoke — tokens proven LIVE (production build, local Supabase)
@@ -164,20 +166,12 @@ complete AND Hakan unlocks (per the Phase 0a plan: "no live app to protect").
 
 ## Manual smoke at merge
 
-**Still advised / outstanding** — the one unproven required check is a clean-environment E2E
-`@critical` run. Everything else (build, tsc, unit, component, guards, live visual smoke,
-map-mount-under-prod-build) is proven. Outstanding item for the conductor:
+**DONE** — the clean-environment E2E `@critical` run was performed at the merge window and passed
+**75/75** on a production build against a freshly reseeded local DB (run 3 above). Everything else
+(build, tsc, unit, component, guards, live visual smoke, map-mount-under-prod-build) was already proven.
+No outstanding item.
 
-- Run `npm run db:reset` (clean the shared local instance, with the second terminal's
-  agreement) **then** re-run `@critical` against a **production build** — OR accept the
-  reduced matrix for this CSS-only, unmerged-foundation branch given: build+tsc green, the
-  visual smoke proves tokens live with no blank screens, and every E2E failure is traced to
-  the environment with the new tokens visibly live in the failing DOM.
-
-🗣 Plain English: one box is still unticked — the full browser regression on a clean
-database. The conductor decides whether to do that clean reseed (which touches the shared
-DB) or to accept that, for a paint-only change that nobody ships yet, the proof already in
-hand is enough.
+🗣 Plain English: every box is ticked, including the full browser regression on a clean database.
 
 ---
 

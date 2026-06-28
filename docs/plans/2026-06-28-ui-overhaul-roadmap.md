@@ -5,8 +5,8 @@
 > session. Companion docs: `docs/ui-current-state.md` (inventory), `docs/design/2026-06-27-ui-system-brand-prompt.md`
 > (the brief sent to Claude Design), `docs/plans/2026-06-27-ui-system-rebuild-process.md` (process contract).
 
-**Status as of 2026-06-28:** ✅ Design delivered + reviewed (STRONG). ✅ **FORGE Phase 0a COMPLETE through ANVIL** — built (9 commits), code-critic NO BLOCKERS, ANVIL green on every rung **except one DEFERRED**: the clean-DB @critical E2E (cert PENDING). Branch `feat/ui-phase-0a-foundation`, unpushed. **Next build step: 0b core component library.**
-**Merge to `main` still BLOCKED** until Hakan opens the merge window. Parallel terminal (main seal) is DONE, so the shared local DB is free — the deferred clean-DB E2E can run at merge-time. **Pre-merge gate for 0a:** `db:reset` → re-run @critical green → flip cert to CLEARED → update all docs/plan → write terminal-1 handover prompt → merge.
+**Status as of 2026-06-28 (Terminal-1 takeover):** ✅ Design delivered + reviewed (STRONG). ✅ **FORGE Phase 0a COMPLETE through ANVIL** — built (9 commits), code-critic NO BLOCKERS. **Cert close IN PROGRESS:** `db:reset` ✓ done (DB free post main-seal) → prod build wired to local ✓ → running clean-DB `@critical` on the prod build → flip cert PENDING→CLEARED. **Next build step: 0b core component library.**
+**Merge window now OPEN — integration model = STEP BY STEP (decision #14):** main is sealed, so 0a merges as soon as the cert clears, then 0b, etc. (no longer accumulate-then-merge-at-end). **Reskin accepted (decision #15):** merging 0a re-skins existing un-migrated screens immediately — accepted as harmless on an internal staff tool. Weekly execution tracker: `docs/plans/2026-06-29-wc29-plan.md` (**`wc29`**). **0a pre-merge gate:** clean-DB @critical 75/75 → cert CLEARED → merge on the feature branch (migration-lock hook; no migration ⇒ no PITR).
 
 ```
 LANE
@@ -47,6 +47,9 @@ LANE
 | 11 | Spacing via **density sizing system** (control/field/tap/stack/card tokens) ON TOP of Tailwind's default 4px scale (design uses ONE ruler — no custom spacing scale) | resolves spacing open item |
 | 12 | **Fidelity, not inertness:** the `.dc.html` is the SINGLE source of truth — foundation gets the real design tokens (colours, Adieu+Inter fonts, dark, density) VERBATIM from day one. Do NOT preserve old colours / Plus Jakarta Sans. Existing screens shift look immediately — safe (isolated branch, no merge until overhaul done). Only "don't break" = the app must still BUILD. | 2026-06-28 — reverses the earlier "visually inert" plan at Hakan's direction |
 | 13 | **Phase 0 = 3 FORGE PRs:** 0a foundation (fonts/tokens/Tailwind/Radix/test-stack) · 0b core library (~30 components) · 0c speculative (DEFERRED, build-on-demand). Phase 1+ stays screen-by-screen, audit-first. | 2026-06-28 — agreed at FORGE Frame |
+| 14 | **Integration model = MERGE STEP BY STEP** — 0a merges to `main` once its cert clears, then 0b, then each Phase-1 section. Reverses the original "accumulate the whole overhaul on the branch, merge once at the end." | 2026-06-28 — Hakan's call (main is sealed, merge window open) |
+| 15 | **Reskin ACCEPTED:** merging 0a's verbatim tokens to `main` re-skins every existing un-migrated screen with the new palette/fonts immediately (old layouts, new paint) until Phase-1 migrates them. Accepted as harmless/reversible on an internal staff tool. | 2026-06-28 — consequence of #12 meeting #14; Hakan chose option A |
+| 16 | **Pause UI after Phase 0** (0a+0b merged), BEFORE any Phase-1 screen, to finalise **label printing** (F-PROD-04, critical). Repo/docs cleanup happens on clean main between 0b-merge and the pause. | 2026-06-28 — wc29 sequence |
 | — | Deferred: Tailwind v4 upgrade · Style-Dictionary/DTCG pipeline | revisit only when a real reason appears |
 
 ## 3 · Design system handover (from Claude Design)
