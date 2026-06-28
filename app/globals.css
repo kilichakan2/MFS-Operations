@@ -1,140 +1,29 @@
+/* Two-tier design tokens (must precede the @tailwind directives so the
+   custom properties are available to base/utilities at build). */
+@import './tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ── MFS Brand tokens ─────────────────────────────────────────── */
-:root {
-  --mfs-navy:    #16205B;
-  --mfs-orange:  #EB6619;
-  --mfs-maroon:  #590129;
-  --mfs-sand:    #C0946F;
-  --mfs-neutral: #EDEAE1;   /* brand-specified default background */
-  --mfs-black:   #1E1E1E;
-}
-
-/* ── Google Font — Plus Jakarta Sans (heading) ─────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 
 /* ── Base resets ──────────────────────────────────────────────── */
 * { -webkit-tap-highlight-color: transparent; }
 
 body {
   overscroll-behavior: none;
-  background-color: var(--mfs-neutral);
-  font-family: 'Inter', system-ui, sans-serif;
-  color: var(--mfs-black);
+  background-color: var(--surface-base);
+  color: var(--text-body);
+  font-family: var(--font-text);
 }
 
-/* Headings use Plus Jakarta Sans */
+/* Headings render in the display font (Adieu, via next/font) */
 h1, h2, h3,
 .font-display {
-  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-family: var(--font-display);
 }
 
-/* ── GTF Adieu (display) — self-host ───────────────────────────── */
-/* TODO: GTF Adieu web license pending. Until the woff2 ships under
-   /public/fonts/gtf-adieu/, browsers will 404 this src and the
-   `font-mfs-display` stack falls back to Inter. This is intentional
-   per the locked design-tokens spec. Do NOT remove. */
-@font-face {
-  font-family: 'GTF Adieu';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/gtf-adieu/GTFAdieu-Regular.woff2') format('woff2');
-}
-
-/* ── MFS Design Tokens (locked spec — UI Overhaul Category 5) ──── */
+/* ── Type ramp — mobile defaults (consumed by Tailwind fontSize map) ─ */
 :root {
-  /* Brand palette (duplicates the existing :root above; same values) */
-  --mfs-navy:         #16205B;
-  --mfs-orange:       #EB6619;
-  --mfs-maroon:       #590129;
-  --mfs-red:          #FF3300;
-  --mfs-sand:         #C0946F;
-  --mfs-soft-neutral: #EDEAE1;
-  --mfs-black:        #1E1E1E;
-
-  /* Functional palette */
-  --mfs-success: #16A34A;
-  --mfs-warning: #B45309;
-  --mfs-danger:  #FF3300;
-
-  /* Neutral scale */
-  --mfs-neutral-50:  #FAF8F3;
-  --mfs-neutral-100: #EDEAE1;
-  --mfs-neutral-200: #DDD8CB;
-  --mfs-neutral-300: #BFB8A8;
-  --mfs-neutral-400: #928B7A;
-  --mfs-neutral-500: #5C5648;
-  --mfs-neutral-700: #3A352C;
-  --mfs-neutral-900: #1E1E1E;
-
-  /* KDS dark theme */
-  --mfs-kds-bg:             #0F172A;
-  --mfs-kds-surface:        #1E293B;
-  --mfs-kds-surface-raised: #334155;
-  --mfs-kds-border:         #475569;
-  --mfs-kds-text:           #F1F5F9;
-  --mfs-kds-text-muted:     #94A3B8;
-  --mfs-kds-line-empty:     #475569;
-  --mfs-kds-line-done:      #16A34A;
-  --mfs-kds-accent:         #EB6619;
-
-  /* Spacing scale (8px grid + 4px half-steps) */
-  --mfs-space-0:  0;
-  --mfs-space-1:  4px;
-  --mfs-space-2:  8px;
-  --mfs-space-3:  12px;
-  --mfs-space-4:  16px;
-  --mfs-space-5:  20px;
-  --mfs-space-6:  24px;
-  --mfs-space-8:  32px;
-  --mfs-space-10: 40px;
-  --mfs-space-12: 48px;
-  --mfs-space-16: 64px;
-  --mfs-space-24: 96px;
-
-  /* Container max-widths */
-  --mfs-container-sm:   640px;
-  --mfs-container-md:   768px;
-  --mfs-container-lg:   1024px;
-  --mfs-container-xl:   1280px;
-  --mfs-container-2xl:  1440px;
-  --mfs-container-full: 100%;
-
-  /* Border radii */
-  --mfs-radius-0:    0;
-  --mfs-radius-sm:   4px;
-  --mfs-radius-md:   8px;
-  --mfs-radius-lg:   12px;
-  --mfs-radius-pill: 9999px;
-
-  /* Elevation shadows */
-  --mfs-shadow-0: none;
-  --mfs-shadow-1: 0 1px 2px rgba(22, 32, 91, 0.05);
-  --mfs-shadow-2: 0 2px 8px rgba(22, 32, 91, 0.08);
-  --mfs-shadow-3: 0 8px 24px rgba(22, 32, 91, 0.12);
-  --mfs-shadow-4: 0 16px 48px rgba(22, 32, 91, 0.15);
-
-  /* Motion durations */
-  --mfs-duration-instant: 80ms;
-  --mfs-duration-fast:    150ms;
-  --mfs-duration-medium:  250ms;
-  --mfs-duration-slow:    400ms;
-
-  /* Motion easings */
-  --mfs-ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);
-  --mfs-ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
-  --mfs-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
-
-  /* Font weights */
-  --mfs-font-weight-regular:  400;
-  --mfs-font-weight-medium:   500;
-  --mfs-font-weight-semibold: 600;
-  --mfs-font-weight-bold:     700;
-
-  /* Type ramp — mobile defaults (unprefixed: consumed by Tailwind fontSize map) */
   --text-display-size: 32px;
   --text-h1-size:      24px;
   --text-h2-size:      20px;
