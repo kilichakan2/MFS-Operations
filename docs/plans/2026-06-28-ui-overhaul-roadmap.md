@@ -5,7 +5,7 @@
 > session. Companion docs: `docs/ui-current-state.md` (inventory), `docs/design/2026-06-27-ui-system-brand-prompt.md`
 > (the brief sent to Claude Design), `docs/plans/2026-06-27-ui-system-rebuild-process.md` (process contract).
 
-**Status as of 2026-06-28:** ✅ Design delivered by Claude Design and reviewed (STRONG). ▶ **Next: FORGE Phase 0 build.**
+**Status as of 2026-06-28:** ✅ Design delivered by Claude Design and reviewed (STRONG). ▶ **FORGE Phase 0 IN PROGRESS — splitting into 3 PRs; currently planning 0a (foundation).**
 Merge to `main` still BLOCKED until the parallel terminal certifies `main` (Day-16 seal).
 
 ```
@@ -13,7 +13,8 @@ LANE
   ✓ ui-cartographer   → docs/ui-current-state.md
   ✓ brand-prompt      → docs/design/2026-06-27-ui-system-brand-prompt.md
   ✓ Claude Design     → "MFS Operations Design System" (reviewed, build-ready)
-  ▶ FORGE Phase 0     → tokens + library + theming + tests   ← WE ARE HERE
+  ✓ design pulled     → docs/design/MFS-Operations-Design-System.dc.html (on-disk source of truth)
+  ▶ FORGE Phase 0     → 3 PRs: 0a foundation ● · 0b core library ○ · 0c speculative (deferred)
   ○ FORGE Phase 1+    → section by section (requirements-audit FIRST)
   ○ ANVIL             → per phase/section test gate
   ○ MERGE             → only after main certified + Hakan unlocks
@@ -43,7 +44,9 @@ LANE
 | 8 | Per-section **requirements-audit FIRST** (incl. proactive new-business-logic suggestions); confirm each, never batch | see process doc / memory |
 | 9 | Multi-format first-class; **default density = comfortable (touch-first)**, compact on desktop | Hakan confirmed |
 | 10 | Display font = **Adieu** (licence confirmed OK to ship); Inter for body | resolves old "GTF Adieu unshipped" gap |
-| 11 | Spacing via **density sizing system** (control/field/tap/stack/card tokens) | resolves spacing open item |
+| 11 | Spacing via **density sizing system** (control/field/tap/stack/card tokens) ON TOP of Tailwind's default 4px scale (design uses ONE ruler — no custom spacing scale) | resolves spacing open item |
+| 12 | **Fidelity, not inertness:** the `.dc.html` is the SINGLE source of truth — foundation gets the real design tokens (colours, Adieu+Inter fonts, dark, density) VERBATIM from day one. Do NOT preserve old colours / Plus Jakarta Sans. Existing screens shift look immediately — safe (isolated branch, no merge until overhaul done). Only "don't break" = the app must still BUILD. | 2026-06-28 — reverses the earlier "visually inert" plan at Hakan's direction |
+| 13 | **Phase 0 = 3 FORGE PRs:** 0a foundation (fonts/tokens/Tailwind/Radix/test-stack) · 0b core library (~30 components) · 0c speculative (DEFERRED, build-on-demand). Phase 1+ stays screen-by-screen, audit-first. | 2026-06-28 — agreed at FORGE Frame |
 | — | Deferred: Tailwind v4 upgrade · Style-Dictionary/DTCG pipeline | revisit only when a real reason appears |
 
 ## 3 · Design system handover (from Claude Design)
@@ -55,6 +58,8 @@ LANE
 - The `.dc.html` is the **source of truth FORGE builds against** (pull fresh via DesignSync each session; do not hand-edit a stale copy).
 
 ## 4 · Phase 0 — design-system foundation (build FIRST, before any screen)
+
+**Split into 3 FORGE PRs** (decision #13): **0a** = the foundation rows below minus the component library (fonts/assets · token CSS · Tailwind rewire · Radix · test-stack · lint rule · token+stack tests) · **0b** = the **core** component library row · **0c** = the section-driven + build-on-demand rows (DEFERRED). The active 0a plan lives at `docs/plans/2026-06-28-ui-phase-0a-foundation.md`. Tokens are implemented VERBATIM from `docs/design/phase0a-foundation-tokens.reference.css`.
 
 | Task | Status |
 |------|--------|
@@ -102,5 +107,6 @@ PWA/offline (SyncDot + RecentActivity), Android/Capacitor + Sunmi printing, PIN 
 
 ## 9 · Change log
 
+- **2026-06-28 (later)** — FORGE Phase 0 kicked off. Frame/grill locked the spec; **Phase 0 split into 3 PRs** (0a/0b/0c — decision #13). **ADR-0009** written (Radix + component-test stack). Design `.dc.html` pulled fresh to disk (`docs/design/MFS-Operations-Design-System.dc.html`; last ~8KB truncated at the 256KiB fetch cap — 0b gallery only, foundation intact) + verbatim token reference saved (`docs/design/phase0a-foundation-tokens.reference.css`). **Inertness REVERSED → fidelity** (decision #12): foundation implements the design tokens verbatim, old colours/Plus-Jakarta retired, existing screens shift look immediately (safe on isolated branch). 0a plan (re)written at `docs/plans/2026-06-28-ui-phase-0a-foundation.md`. Next: Gate 2 plan approval → Render.
 - **2026-06-28** — Design delivered by Claude Design, reviewed STRONG/build-ready; both open items resolved (Adieu font licensed; spacing = density system). Density default = comfortable confirmed. Roadmap created. Next: FORGE Phase 0.
 - **2026-06-27** — ui-cartographer wrote `docs/ui-current-state.md`; brand-prompt fork wrote the Claude Design brief; isolated work into the `worktree-ui-system-rebuild` worktree after discovering the shared-folder branch collision; locked decisions 1–8; saved per-section discipline to memory.
