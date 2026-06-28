@@ -49,6 +49,7 @@ const ALLOWLIST = new Set<string>([
   "recharts", // presentation
   "react-markdown", // presentation
   "lucide-react", // presentation
+  "radix-ui", // a11y-primitives (presentation)
   "@capacitor/cli", // build-tooling (CLI, not an importable runtime SDK)
 ]);
 

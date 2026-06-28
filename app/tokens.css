@@ -1,0 +1,130 @@
+/* =============================================================
+   MFS Operations Design System — Phase 0a FOUNDATION TOKENS
+   Two-tier token layer (Tier-1 primitives -> Tier-2 semantic).
+   Reproduced VERBATIM from docs/design/phase0a-foundation-tokens.reference.css
+   with three justified, noted deviations only:
+     1. The reference @font-face blocks and the literal --font-display /
+        --font-text declarations are DROPPED here; next/font owns those
+        exact variable names (see app/layout.tsx).
+     2. A small LEGACY ALIAS block at the end of :root forwards the three
+        old inline-style variable names still typed into existing screens.
+     3. Channel-form (R/G/B) companions for the two alpha-modified colours
+        so Tailwind opacity modifiers work (mfs-navy, mfs-danger).
+   Everything else is the design source of truth, unedited.
+   ============================================================= */
+
+:root{
+  /* ===== TIER 1 · PRIMITIVES (MFS brand) ===== */
+  --mfs-navy:#16205B; --mfs-navy-900:#0d1338; --mfs-navy-700:#16205B; --mfs-navy-500:#2c3a86; --mfs-navy-300:#5566a8; --mfs-navy-200:#b9c0dc; --mfs-navy-100:#dde1ef; --mfs-navy-50:#eaecf4;
+  --mfs-maroon-700:#3f011d; --mfs-maroon-500:#590129; --mfs-maroon-300:#8a3354; --mfs-maroon-200:#c9a3b1; --mfs-maroon-100:#ecdae1;
+  --mfs-orange-700:#a8440c; --mfs-orange-600:#c4500f; --mfs-orange-500:#EB6619; --mfs-orange-400:#f0843f; --mfs-orange-300:#f2a472; --mfs-orange-100:#fbe4d3; --mfs-orange-50:#fef3ea;
+  --mfs-red-600:#d62a00; --mfs-red-500:#FF3300; --mfs-red-100:#ffe0d6;
+  --mfs-sand-600:#a27854; --mfs-sand-500:#C0946F; --mfs-sand-300:#d2b69c; --mfs-sand-200:#e4d4c5; --mfs-sand-100:#f1e8df;
+  --mfs-soft-100:#f6f4ee; --mfs-soft-200:#EDEAE1; --mfs-soft-300:#ddd8c9; --mfs-soft-400:#cfc9b8;
+  --mfs-ink-900:#1E1E1E; --mfs-ink-700:#333333; --mfs-ink-600:#4a4a4a; --mfs-ink-400:#7c786e; --mfs-white:#ffffff;
+  /* status hue primitives (MFS-harmonised) */
+  --green-700:#1b5e3a; --green-600:#2f7d52; --green-500:#3a9466; --green-100:#e3f0e8;
+  --amber-700:#8a5e08; --amber-600:#b07d12; --amber-500:#c98a14; --amber-100:#f7ead0;
+  --scarlet-700:#8a0b20; --scarlet-600:#c8102e; --scarlet-500:#e0263f; --scarlet-100:#fbe0e3;
+
+  /* ===== TIER 2 · SEMANTIC (light) ===== */
+  --surface-base:var(--mfs-soft-200); --surface-raised:#ffffff; --surface-sunken:#e7e2d5; --surface-overlay:#ffffff; --surface-inverse:var(--mfs-navy-700);
+  --text-body:var(--mfs-ink-900); --text-muted:var(--mfs-ink-600); --text-subtle:#645f55; --text-inverse:#ffffff; --text-on-action:#ffffff; --text-link:var(--mfs-orange-600);
+  --border-default:#d8d3c5; --border-strong:#b9b2a0; --border-subtle:#e6e2d6;
+
+  --action-primary:var(--mfs-orange-500); --action-primary-hover:var(--mfs-orange-600); --action-primary-active:var(--mfs-orange-700); --action-primary-disabled:#e7cdb8;
+  --action-secondary:var(--mfs-navy-700); --action-secondary-hover:var(--mfs-navy-500); --action-secondary-active:var(--mfs-navy-900); --action-secondary-disabled:#c7ccdf;
+  --action-ghost-fg:var(--mfs-navy-700); --action-ghost-border:var(--border-strong); --action-ghost-hover-bg:rgba(22,32,91,.06); --action-ghost-hover-border:var(--mfs-navy-700);
+  --action-danger:var(--scarlet-600); --action-danger-hover:var(--scarlet-700); --action-danger-active:#6e0a19; --action-danger-disabled:#e6b6bd;
+
+  --focus-ring:var(--mfs-orange-500); --focus-ring-shadow:rgba(235,102,25,.40);
+
+  --status-success-fill:var(--green-600); --status-success-soft:var(--green-100); --status-success-text:var(--green-700); --status-success-border:#bcdcc9;
+  --status-warning-fill:var(--amber-600); --status-warning-soft:var(--amber-100); --status-warning-text:var(--amber-700); --status-warning-border:#ecd49f;
+  --status-error-fill:var(--scarlet-600); --status-error-soft:var(--scarlet-100); --status-error-text:var(--scarlet-700); --status-error-border:#eeb9c1;
+  --status-info-fill:var(--mfs-navy-700); --status-info-soft:var(--mfs-navy-50); --status-info-text:var(--mfs-navy-700); --status-info-border:#c2c9e4;
+  --status-deviation-fill:var(--mfs-maroon-500); --status-deviation-soft:#f0e2e8; --status-deviation-text:var(--mfs-maroon-500); --status-deviation-border:#d9bcc8;
+  --status-neutral-fill:var(--mfs-ink-400); --status-neutral-soft:#efece4; --status-neutral-text:var(--mfs-ink-600); --status-neutral-border:#dcd6c8;
+  /* domain status aliases (auto-theme via lazy var resolution) */
+  --status-open-fill:var(--status-info-fill); --status-open-soft:var(--status-info-soft); --status-open-text:var(--status-info-text); --status-open-border:var(--status-info-border);
+  --status-resolved-fill:var(--status-success-fill); --status-resolved-soft:var(--status-success-soft); --status-resolved-text:var(--status-success-text); --status-resolved-border:var(--status-success-border);
+  --status-due-fill:var(--status-warning-fill); --status-due-soft:var(--status-warning-soft); --status-due-text:var(--status-warning-text); --status-due-border:var(--status-warning-border);
+  --status-overdue-fill:var(--status-error-fill); --status-overdue-soft:var(--status-error-soft); --status-overdue-text:var(--status-error-text); --status-overdue-border:var(--status-error-border);
+
+  --sync-syncing:var(--amber-600); --sync-stuck:var(--scarlet-600); --sync-clear:var(--green-600);
+
+  --shadow-sm:0 1px 2px rgba(22,32,91,.08); --shadow-md:0 4px 14px rgba(22,32,91,.10),0 2px 4px rgba(22,32,91,.06); --shadow-lg:0 18px 48px rgba(22,32,91,.16); --shadow-accent:0 8px 24px rgba(235,102,25,.30);
+
+  --radius-sm:4px; --radius-md:8px; --radius-lg:14px; --radius-xl:22px; --radius-pill:999px;
+
+  /* ===== DENSITY · comfortable (default, touch-first) ===== */
+  --ctl-h:48px; --ctl-h-sm:40px; --ctl-h-lg:56px; --ctl-px:20px; --ctl-fs:16px; --ctl-radius:10px;
+  --field-h:48px; --field-px:16px; --field-fs:16px;
+  --row-py:15px; --card-pad:24px; --tap:48px; --stack:16px; --icon:20px;
+
+  /* ===== LEGACY ALIAS (Phase-0a build-safety; retired in Phase 1) =====
+     Three existing screens type these old variable names straight into an
+     inline style attribute. --mfs-navy already exists above; forward the
+     other two so those screens keep their colour until re-tokenised.
+     NOTE (implementer): the live grep of app/ + components/ found four MORE
+     bare legacy names typed into inline styles than the plan's §5 listed
+     (--mfs-sand ×1, --mfs-red ×1, --mfs-maroon ×3, --mfs-black ×1). Each is
+     forwarded here to its same/nearest-hex new primitive so no screen goes
+     colourless when the old globals.css :root block is removed. Flagged to
+     the conductor; retired with the rest in Phase 1. */
+  --mfs-orange: var(--mfs-orange-500);
+  --mfs-neutral: var(--mfs-soft-200);
+  --mfs-sand: var(--mfs-sand-500);
+  --mfs-red: var(--mfs-red-500);
+  --mfs-maroon: var(--mfs-maroon-500);
+  --mfs-black: var(--mfs-ink-900);
+
+  /* ===== CHANNEL-FORM companions (R1) =====
+     The two brand colours used with Tailwind opacity modifiers
+     (mfs-navy /40,/50 and mfs-danger /10,/30) need their R/G/B channels
+     unmixed so `rgb(var(--…-rgb) / <alpha-value>)` can apply opacity. */
+  --mfs-navy-rgb: 22 32 91;
+  --mfs-danger-rgb: 200 16 46;
+}
+
+/* ===== DARK · unified navy skin (folds KDS + HACCP kiosk) ===== */
+[data-theme="dark"]{
+  --surface-base:#0e1640; --surface-raised:#172153; --surface-sunken:#0a1030; --surface-overlay:#1b2660; --surface-inverse:var(--mfs-soft-200);
+  --text-body:#f4f2ec; --text-muted:rgba(244,242,236,.74); --text-subtle:rgba(244,242,236,.60); --text-inverse:var(--mfs-ink-900); --text-on-action:#ffffff; --text-link:var(--mfs-orange-300);
+  --border-default:rgba(255,255,255,.14); --border-strong:rgba(255,255,255,.30); --border-subtle:rgba(255,255,255,.08);
+
+  --action-primary:var(--mfs-orange-500); --action-primary-hover:var(--mfs-orange-400); --action-primary-active:var(--mfs-orange-600); --action-primary-disabled:rgba(235,102,25,.32);
+  --action-secondary:var(--mfs-navy-500); --action-secondary-hover:#3949a0; --action-secondary-active:var(--mfs-navy-700); --action-secondary-disabled:rgba(255,255,255,.12);
+  --action-ghost-fg:#f4f2ec; --action-ghost-border:rgba(255,255,255,.30); --action-ghost-hover-bg:rgba(255,255,255,.08); --action-ghost-hover-border:#ffffff;
+  --action-danger:var(--scarlet-500); --action-danger-hover:#ea4257; --action-danger-active:var(--scarlet-600); --action-danger-disabled:rgba(224,38,63,.30);
+
+  --focus-ring:var(--mfs-orange-300); --focus-ring-shadow:rgba(242,164,114,.45);
+
+  --status-success-fill:#42a572; --status-success-soft:rgba(58,148,102,.20); --status-success-text:#9fdab8; --status-success-border:rgba(66,165,114,.38);
+  --status-warning-fill:#d99a2b; --status-warning-soft:rgba(201,138,20,.20); --status-warning-text:#ecc784; --status-warning-border:rgba(217,154,43,.38);
+  --status-error-fill:#e5556a; --status-error-soft:rgba(224,38,63,.20); --status-error-text:#f3a9b4; --status-error-border:rgba(229,85,106,.40);
+  --status-info-fill:#7d8bc7; --status-info-soft:rgba(124,139,199,.20); --status-info-text:#c3cbeb; --status-info-border:rgba(125,139,199,.42);
+  --status-deviation-fill:#b06a86; --status-deviation-soft:rgba(137,51,84,.30); --status-deviation-text:#e6b8c9; --status-deviation-border:rgba(176,106,134,.42);
+  --status-neutral-fill:#8d897e; --status-neutral-soft:rgba(255,255,255,.08); --status-neutral-text:rgba(244,242,236,.70); --status-neutral-border:rgba(255,255,255,.16);
+
+  --sync-syncing:#d99a2b; --sync-stuck:#e5556a; --sync-clear:#42a572;
+
+  --shadow-sm:0 1px 2px rgba(0,0,0,.40); --shadow-md:0 6px 20px rgba(0,0,0,.45); --shadow-lg:0 24px 60px rgba(0,0,0,.60); --shadow-accent:0 8px 24px rgba(235,102,25,.40);
+}
+
+/* ===== DENSITY · compact (desktop data) ===== */
+[data-density="compact"]{
+  --ctl-h:36px; --ctl-h-sm:30px; --ctl-h-lg:44px; --ctl-px:14px; --ctl-fs:14px; --ctl-radius:8px;
+  --field-h:36px; --field-px:12px; --field-fs:14px;
+  --row-py:9px; --card-pad:16px; --tap:36px; --stack:12px; --icon:18px;
+}
+
+@keyframes mfs-spin{to{transform:rotate(360deg)}}
+@keyframes mfs-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes mfs-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+@keyframes mfs-pinpulse{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+@keyframes mfs-toastin{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes mfs-indet{0%{transform:translateX(-100%)}100%{transform:translateX(320%)}}
+@keyframes mfs-ring{0%{box-shadow:0 0 0 0 var(--sync-stuck)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes mfs-dotpulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.55);opacity:.5}}
+@keyframes mfs-fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
