@@ -14,8 +14,8 @@
  * detection decision is testable here without an iframe or a device.
  */
 
-import { describe, it, expect } from 'vitest'
-import { classifyLabelResponse } from '@/lib/adapters/browser/Printer'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { classifyLabelResponse, createBrowserPrinter } from '@/lib/adapters/browser/Printer'
 
 describe('classifyLabelResponse', () => {
   it('classifies a real label (no redirect, ok) as "label"', () => {
@@ -106,5 +106,67 @@ describe('classifyLabelResponse', () => {
         status: 200,
       }),
     ).toBe('label')
+  })
+})
+
+// ── URL fidelity (R1 — byte-identical /api/labels query string) ─────────────────
+// The Browser adapter is the single source of truth for the /api/labels URL. These
+// assertions pin the constructed string CHARACTER-FOR-CHARACTER against the exact
+// literals the HACCP screens built before Pass 2a, so a param-order change or a
+// `usebydays` typo (a food-safety risk on the mince label) fails the suite. We stub
+// fetch to return an auth-bounce so the method short-circuits before touching the
+// DOM (the unit suite runs under node, no document) — the URL passed to fetch is
+// what we assert.
+describe('Browser adapter URL fidelity', () => {
+  let originalFetch: typeof globalThis.fetch | undefined
+  let captured: string
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch
+    captured = ''
+    globalThis.fetch = vi.fn(async (url: string) => {
+      captured = String(url)
+      // /login final url → classifier returns 'auth-bounce' → no DOM, no print.
+      return { ok: true, redirected: true, url: 'https://x/login', status: 200 }
+    }) as unknown as typeof globalThis.fetch
+  })
+
+  afterEach(() => {
+    if (originalFetch) globalThis.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  it('delivery 58mm URL is byte-identical to the pre-refactor literal', async () => {
+    await createBrowserPrinter().printDeliveryLabel(
+      {
+        id: 'abc-123', batch_number: 'b', supplier: 's', product_category: 'lamb',
+        date: '2026-06-29', temperature_c: 3, temp_status: 'pass',
+        born_in: null, reared_in: null, slaughter_site: null, cut_site: null,
+        width: '58mm', copies: 1,
+      },
+      vi.fn(),
+    )
+    expect(captured).toBe('/api/labels?type=delivery&id=abc-123&format=html&copies=1&width=58mm')
+  })
+
+  it('delivery 100mm URL is byte-identical to the pre-refactor literal', async () => {
+    await createBrowserPrinter().printDeliveryLabel(
+      {
+        id: 'abc-123', batch_number: 'b', supplier: 's', product_category: 'lamb',
+        date: '2026-06-29', temperature_c: 3, temp_status: 'pass',
+        born_in: null, reared_in: null, slaughter_site: null, cut_site: null,
+        width: '100mm', copies: 1,
+      },
+      vi.fn(),
+    )
+    expect(captured).toBe('/api/labels?type=delivery&id=abc-123&format=html&copies=1&width=100mm')
+  })
+
+  it('mince URL is byte-identical to the pre-refactor literal (usebydays + width preserved)', async () => {
+    await createBrowserPrinter().printMinceLabel(
+      { id: 'abc-123', usebydays: 2, width: '100mm', copies: 1 },
+      vi.fn(),
+    )
+    expect(captured).toBe('/api/labels?type=mince&id=abc-123&format=html&copies=1&usebydays=2&width=100mm')
   })
 })
