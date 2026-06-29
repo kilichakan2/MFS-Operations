@@ -82,3 +82,37 @@ export type { StatusPillProps } from './StatusPill'
 
 export { SyncDot } from './SyncDot'
 export type { SyncDotProps, SyncState } from './SyncDot'
+
+// ── Phase 0b Wave 3 (Overlays + Nav) ───────────────────────────────────────
+export { Modal } from './Modal'
+export type { ModalProps } from './Modal'
+
+export { Banner } from './Banner'
+export type { BannerProps } from './Banner'
+
+export { Spinner } from './Spinner'
+export type { SpinnerProps } from './Spinner'
+
+export { EmptyState } from './EmptyState'
+export type { EmptyStateProps } from './EmptyState'
+
+export { Popover } from './Popover'
+export type { PopoverProps } from './Popover'
+
+export { DropdownMenu } from './DropdownMenu'
+export type { DropdownMenuProps, DropdownMenuItem } from './DropdownMenu'
+
+export { AppHeader } from './AppHeader'
+export type { AppHeaderProps } from './AppHeader'
+
+export { BottomNav } from './BottomNav'
+export type { BottomNavProps } from './BottomNav'
+
+export { MoreDrawer } from './MoreDrawer'
+export type { MoreDrawerProps } from './MoreDrawer'
+
+export { DesktopSidebar } from './DesktopSidebar'
+export type { DesktopSidebarProps } from './DesktopSidebar'
+
+export { NavItem } from './NavItem'
+export type { NavItemProps } from './NavItem'
