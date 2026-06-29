@@ -18,8 +18,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { isSunmiNative, printDeliverySunmi, type DeliveryForPrint } from '@/lib/printing/sunmi'
-import { printLabelInApp } from '@/lib/printing/labelFetch'
+import { getPrinter } from '@/lib/wiring/printer'
+import type { DeliveryLabelInput } from '@/lib/ports'
 import PrintLabelStrip from '@/components/PrintLabelStrip'
 
 // Maps a label-print failure to a user-facing message, surfaced via each
@@ -32,33 +32,33 @@ function printErrorMessage(kind: 'auth-bounce' | 'error'): string {
     : 'Could not print label — please try again.'
 }
 
-// ── Sunmi-aware print handler ──────────────────────────────────────────────────
-// On Sunmi V3 (Capacitor shell): silent native print, no dialog.
-// All other devices: existing window.print() via iframe.
+// ── Print handlers (via the Printer port) ───────────────────────────────────────
+// The screen no longer knows HOW a label reaches paper. It builds the port's
+// DeliveryLabelInput and asks the wired printer to print; the wiring picks the
+// adapter (Sunmi native for 58mm on the V3, browser/iframe everywhere else and as
+// fallback) and the Sunmi adapter handles the native→iframe fallback internally.
 // `onError` surfaces a dead-session / failure to the caller's existing submitErr.
 
-async function handlePrint58(d: Delivery, onError: PrintErrorHandler): Promise<void> {
-  if (isSunmiNative()) {
-    const forPrint: DeliveryForPrint = {
-      id:               d.id,
-      batch_number:     d.batch_number ?? '',
-      supplier:         d.supplier,
-      product_category: d.product_category,
-      date:             d.date,
-      temperature_c:    d.temperature_c,
-      temp_status:      d.temp_status,
-      born_in:          d.born_in,
-      reared_in:        d.reared_in,
-      slaughter_site:   d.slaughter_site,
-      cut_site:         d.cut_site,
-    }
-    await printDeliverySunmi(forPrint).catch(err => {
-      console.error('[handlePrint58] Sunmi error — falling back', err)
-      printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`, onError)
-    })
-  } else {
-    printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`, onError)
+function buildDeliveryInput(d: Delivery, width: '58mm' | '100mm'): DeliveryLabelInput {
+  return {
+    id:               d.id,
+    batch_number:     d.batch_number ?? '',
+    supplier:         d.supplier,
+    product_category: d.product_category,
+    date:             d.date,
+    temperature_c:    d.temperature_c,
+    temp_status:      d.temp_status,
+    born_in:          d.born_in,
+    reared_in:        d.reared_in,
+    slaughter_site:   d.slaughter_site,
+    cut_site:         d.cut_site,
+    width,
+    copies:           1,
   }
+}
+
+async function handlePrint58(d: Delivery, onError: PrintErrorHandler): Promise<void> {
+  await getPrinter().printDeliveryLabel(buildDeliveryInput(d, '58mm'), onError)
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -735,7 +735,7 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
               <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
               <PrintLabelStrip
-                on100mm={() => printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`, onPrintError)}
+                on100mm={() => getPrinter().printDeliveryLabel(buildDeliveryInput(d, '100mm'), onPrintError)}
                 on58mm={() => handlePrint58(d, onPrintError)}
               />
               {submitErr && <p className="text-red-600 text-xs mt-2">{submitErr}</p>}
@@ -1639,7 +1639,7 @@ export default function DeliveryPage() {
                   </div>
                   {d.batch_number && (
                     <PrintLabelStrip
-                      on100mm={() => printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`, onPrintError)}
+                      on100mm={() => getPrinter().printDeliveryLabel(buildDeliveryInput(d, '100mm'), onPrintError)}
                       on58mm={() => handlePrint58(d, onPrintError)}
                     />
                   )}
