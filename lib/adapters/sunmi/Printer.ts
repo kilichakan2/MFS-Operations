@@ -34,7 +34,8 @@ interface MFSSunmiPrintBridge {
     supplierCode:  string,
     date:          string,
     tempLine:      string,
-    bornLine:      string,
+    bornIn:        string,
+    rearedIn:      string,
     slaughterSite: string,
     cutSite:       string,
     species:       string,
@@ -64,32 +65,14 @@ export function isSunmiNative(): boolean {
 // and survives the bridge transport switch.
 
 /**
- * Render the BLS born/reared line for the 58mm label.
- * - Both null → null (caller omits the line entirely)
- * - Same value → single combined "Born/Reared: GB" line
- * - Different values → "Born: GB  Reared: IE" (two spaces between fields)
- * - One present → just that field
+ * Render the temperature line for the 52×38mm die-cut label (value only).
+ * The PASS/FAIL word is dropped entirely (ADR-0012 §2) — even on a failed
+ * delivery the label shows the bare value; the pass/fail outcome lives in the
+ * daily diary, not on the sticker. Born/Reared are no longer combined here;
+ * the Java bridge renders them as two separate cells.
  */
-export function formatBornLine(bornIn: string | null, rearedIn: string | null): string | null {
-  if (!bornIn && !rearedIn) return null
-  if (bornIn && rearedIn && bornIn === rearedIn) {
-    return `Born/Reared: ${bornIn}`
-  }
-  return [
-    bornIn   ? `Born: ${bornIn}`     : null,
-    rearedIn ? `Reared: ${rearedIn}` : null,
-  ].filter(Boolean).join('  ')
-}
-
-/**
- * Render the temperature + status line for the 58mm label.
- * Both 'pass' and 'conditional' print as PASS — the conditional flag is
- * captured separately in the daily diary, not on the label.
- */
-export function formatTempStatus(temperatureC: number | null, tempStatus: string): string {
-  const tempStr = temperatureC != null ? `${temperatureC}°C` : '—'
-  const tempPass = tempStatus === 'pass' || tempStatus === 'conditional'
-  return `${tempStr}  ${tempPass ? 'PASS' : 'FAIL'}`
+export function formatTempStatus(temperatureC: number | null, _tempStatus: string): string {
+  return temperatureC != null ? `${temperatureC}°C` : '—'
 }
 
 /**
@@ -129,14 +112,14 @@ async function printDeliverySunmi(d: DeliveryLabelInput): Promise<void> {
   const supplierCode = await getSupplierCode(d.supplier)
   const species   = formatSpecies(d.product_category)
   const tempLine  = formatTempStatus(d.temperature_c, d.temp_status)
-  const bornLine  = formatBornLine(d.born_in, d.reared_in) ?? ''
 
   bridge.printDeliveryLabel(
     d.batch_number,
     supplierCode,
     d.date,
     tempLine,
-    bornLine,
+    d.born_in   ?? '',
+    d.reared_in ?? '',
     d.slaughter_site ?? '',
     d.cut_site       ?? '',
     species,
