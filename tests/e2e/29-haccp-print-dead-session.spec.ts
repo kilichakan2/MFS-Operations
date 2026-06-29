@@ -44,6 +44,60 @@ async function enterTemp(page: Page, temp: string) {
   await page.getByRole('button', { name: /^Confirm .+°C$/ }).click()
 }
 
+// Mince numpad helper — the mince screen opens a full-screen Numpad overlay when a
+// temperature field is tapped. Each digit button's accessible name is the digit
+// itself; the confirm button reads "Confirm <value>°C".
+async function enterMinceTemp(page: Page, temp: string) {
+  for (const ch of temp) {
+    if (ch === '.') {
+      await page.getByRole('button', { name: '.', exact: true }).click()
+    } else {
+      await page.getByRole('button', { name: ch, exact: true }).click()
+    }
+  }
+  await page.getByRole('button', { name: /^Confirm .+°C$/ }).click()
+}
+
+// Logs one all-pass mince run via the existing happy-path UI so a row with a
+// PrintLabelStrip (the 100mm button) renders. Uses the "Imported / vac-packed"
+// species, which carries NO enforced kill-date limit, so any past kill date is
+// accepted and the run is never blocked. Source delivery batches are optional
+// (the submit gate requires only species + kill date + input temp + output
+// temp), so this needs no pre-seeded delivery data. Returns the batch code shown
+// in the success flash.
+async function logMinceRun(page: Page): Promise<string> {
+  await page.goto('/haccp/mince')
+  await expect(page).toHaveURL(/\/haccp\/mince/)
+
+  // Species — Imported / vac-packed: no kill-date limit (killEnforced: false).
+  await page.getByRole('button', { name: /Imported \/ vac-packed/ }).click()
+
+  // Kill date — a recent past date (no limit for this species; field is required).
+  const killDate = new Date(Date.now() - 2 * 86_400_000)
+    .toISOString()
+    .slice(0, 10)
+  await page.locator('input[type="date"]').fill(killDate)
+
+  // Input temp — 5°C ≤ 7°C → pass.
+  await page.getByRole('button', { name: /tap to enter/i }).first().click()
+  await enterMinceTemp(page, '5')
+
+  // Output temp — chilled default ≤2°C; enter 1°C → pass.
+  await page.getByRole('button', { name: /tap to enter/i }).first().click()
+  await enterMinceTemp(page, '1')
+
+  // Submit — all-pass, so no corrective-action popup.
+  await page.getByRole('button', { name: /^Submit mince log$/ }).click()
+
+  // Success flash carries the new batch code; the run then renders in
+  // "Today's mince runs" with a PrintLabelStrip.
+  await expect(page.getByText(/Mince logged — /i)).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByRole('button', { name: /100mm/i }).first()).toBeVisible({
+    timeout: 10_000,
+  })
+  return killDate
+}
+
 // Logs one in-range Beef delivery so a row with a batch_number (and thus a
 // PrintLabelStrip) renders. Returns the product MARKER used.
 async function logBeefDelivery(page: Page): Promise<string> {
@@ -203,19 +257,16 @@ test.describe('@critical HACCP print — dead session shows re-login, never prin
     })
 
     await loginAs(page, 'warehouse')
-    await page.goto('/haccp/mince')
-    await expect(page).toHaveURL(/\/haccp\/mince/)
 
-    // The mince history list only shows print buttons when a mince run exists.
-    // If none is present in the local seed for today, skip — the delivery case
-    // above already pins the shared helper; this is the extra mince-path proof
-    // when data is available.
-    const printBtn = page.getByRole('button', { name: /100mm/i }).first()
-    const hasPrintable = await printBtn.isVisible().catch(() => false)
-    test.skip(!hasPrintable, 'no mince run with a printable label present in this run')
+    // Build our own mince run via the happy-path UI so the mince print path is
+    // ALWAYS exercised — never self-skipped on an empty seed (mirrors how the
+    // delivery test calls logBeefDelivery to create its own data).
+    await logMinceRun(page)
 
     await killSession(page)
-    await printBtn.click()
+
+    // The just-logged run's 100mm print button (first in "Today's mince runs").
+    await page.getByRole('button', { name: /100mm/i }).first().click()
 
     // The use-by dialog opens; pick a use-by option to trigger the fetch.
     await page.getByRole('button', { name: /fresh 7 days/i }).click()
