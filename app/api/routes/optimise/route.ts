@@ -18,7 +18,7 @@
  * Urgent = ALWAYS delivered first (kitchen prep dependency). Nearest urgent stop first.
  * Priority = delivered early within its geographic cluster, before standard stops.
  *
- * Spec: docs/routing-engine-spec.md
+ * Spec: docs/reference/routing/routing-engine-spec.md
  */
 
 import { NextRequest, NextResponse } from 'next/server'

@@ -15,7 +15,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 // ─── DOCUMENT CONTROL ────────────────────────────────────────────────────────
-// UPDATE THESE when training documents are revised (see docs/DOCUMENT_CONTROL.md)
+// UPDATE THESE when training documents are revised (see docs/reference/haccp/DOCUMENT_CONTROL.md)
 const CURRENT_VERSIONS: Record<string, string> = {
   butchery_process_room: 'V2.0',
   warehouse_operative:   'V2.0',
@@ -47,7 +47,7 @@ const JOB_ROLES: Record<string, string[]> = {
 
 // ─── Training document content ────────────────────────────────────────────────
 // Full content from MFS Butchery & Process Room Training V2.0 (Nov 2025)
-// Update this when the document version changes (see docs/DOCUMENT_CONTROL.md)
+// Update this when the document version changes (see docs/reference/haccp/DOCUMENT_CONTROL.md)
 
 const BUTCHERY_DOCUMENT_SECTIONS = [
   {
@@ -321,7 +321,7 @@ const BUTCHERY_ACK_ITEMS = [
 
 // ─── Warehouse Operative Training V2.0 — document content ─────────────────────
 // 12 sections from MFS Warehouse Operative Training V2.0 (Nov 2025)
-// Update when document version changes — see docs/DOCUMENT_CONTROL.md
+// Update when document version changes — see docs/reference/haccp/DOCUMENT_CONTROL.md
 
 const WAREHOUSE_DOCUMENT_SECTIONS = [
   {

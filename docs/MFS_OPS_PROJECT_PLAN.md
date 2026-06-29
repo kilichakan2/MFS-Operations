@@ -116,4 +116,4 @@
 
 *See also:*
 *- docs/LABEL_PRINTING_PLAN.md — label printing phases and hardware*
-*- docs/DOCUMENT_CONTROL.md — HACCP document versioning*
+*- docs/reference/haccp/DOCUMENT_CONTROL.md — HACCP document versioning*

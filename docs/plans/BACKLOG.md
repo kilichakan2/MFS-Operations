@@ -148,7 +148,7 @@ the trail matters.
 - **What:** all 32 route files under `app/api/haccp/**` read the client-writable, unsigned `mfs_role` / `mfs_user_id` cookies directly for authorization (e.g. `app/api/haccp/customers/route.ts:14`), and `/api/haccp` is a PUBLIC path in `middleware.ts` — so these routes never see the now-signed `mfs_session` at all. Signing `mfs_session` (T1) does NOT close this hole: anyone can set `mfs_role=admin` in devtools and call these endpoints. Forgeable independently of the session cookie.
 - **Why deferred:** out of T1's locked scope (Gate 1: no change to the unsigned display cookies or the HACCP route authorization model); too big to sneak into the signing PR.
 - **Fix shape:** auth-track follow-up unit — move `/api/haccp/*` authorization onto the verified session (middleware `x-mfs-*` headers or a shared `requireRole` helper reading the signed cookie); rides the T4/`requireRole` migration from the F-RLS-01 audit.
-- **Detail:** `docs/plans/2026-06-12-t1-sign-session-cookie.md` §11 R6 + `docs/rls-audit-2026-06-12.md`
+- **Detail:** `docs/plans/2026-06-12-t1-sign-session-cookie.md` §11 R6 + `docs/reference/security/rls-audit-2026-06-12.md`
 - **Owner unit:** T4 (auth track) — needs its own unit, not unscheduled hygiene
 - **Status:** open
 
@@ -485,7 +485,7 @@ the trail matters.
   - **(b) files renamed:** the 4 short-named files renamed to full 14-digit (`git mv`, byte-identical): `20260530_001_…`→`20260530000000_…`, `20260601_001_…`→`20260601000000_…`, `20260611_001_…`→`20260611000000_…`, `20260613_001_…`→`20260613000000_…`. Order preserved (`…613000000` < existing `…613020000`). Live references repointed (ADR-0007, the 16-day roadmap, `lib/adapters/supabase/OrdersRepository.ts`, `lib/orders/types.ts`).
   - **(a) convention codified:** the full-14-digit rule is written into CLAUDE.md ("Local test infrastructure") and **pinned by `tests/unit/migrations/filename-convention.test.ts`** (asserts every migration filename matches `/^\d{14}_[a-z0-9_]+\.sql$/`, rejects a known-bad name, and bars duplicate version prefixes).
 - **Descoped → moved to F-TD-18:** the originally-proposed reconciliation of **prod** `schema_migrations` was **dropped from this unit** — proven inert (preview branches build from the repo's migration FILES, not prod's recorded history; prod is append-only via `apply_migration`). Logged as optional future hygiene under **F-TD-18**.
-- **Detail:** `docs/plans/2026-06-15-f-td-15-migration-filename-reconciliation.md`; original collision context in `docs/plans/2026-06-13-t3-harden-security-definer-fns.md` §"Exact file to change".
+- **Detail:** `docs/plans/archive/2026-06-15-f-td-15-migration-filename-reconciliation.md`; original collision context in `docs/plans/2026-06-13-t3-harden-security-definer-fns.md` §"Exact file to change".
 - **Priority:** Medium → resolved.
 - **Owner unit:** F-TD-15 residual (b) (2026-06-15).
 - **Status:** done (F-TD-15 residual (a) + (b) — files renamed to 14-digit, convention codified in CLAUDE.md and pinned by `tests/unit/migrations/filename-convention.test.ts`; prod-history reconciliation descoped to F-TD-18).
