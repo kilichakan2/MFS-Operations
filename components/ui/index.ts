@@ -41,3 +41,44 @@ export type { PinKeypadProps, PinKeypadLabels } from './PinKeypad'
 
 export { Picker } from './Picker'
 export type { PickerProps, PickerItem, PickerLabels } from './Picker'
+
+// ── Phase 0b Wave 2 (Display) ──────────────────────────────────────────────
+export type { Accent } from './accent'
+
+export { Card } from './Card'
+export type { CardProps } from './Card'
+
+export { CardHead } from './CardHead'
+export type { CardHeadProps } from './CardHead'
+
+export { KpiTile } from './KpiTile'
+export type { KpiTileProps } from './KpiTile'
+
+export { SectionLabel } from './SectionLabel'
+export type { SectionLabelProps } from './SectionLabel'
+
+export { PageHeading } from './PageHeading'
+export type { PageHeadingProps } from './PageHeading'
+
+export { ListRow } from './ListRow'
+export type { ListRowProps } from './ListRow'
+
+export { Table } from './Table'
+export type {
+  TableProps,
+  TableRowProps,
+  TableCellProps,
+  TableHeaderCellProps,
+} from './Table'
+
+export { SegmentedControl } from './SegmentedControl'
+export type { SegmentedControlProps } from './SegmentedControl'
+
+export { Badge } from './Badge'
+export type { BadgeProps } from './Badge'
+
+export { StatusPill } from './StatusPill'
+export type { StatusPillProps } from './StatusPill'
+
+export { SyncDot } from './SyncDot'
+export type { SyncDotProps, SyncState } from './SyncDot'
