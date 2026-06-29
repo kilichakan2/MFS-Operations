@@ -7,39 +7,15 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { printLabelInApp } from '@/lib/printing/labelFetch'
 import PrintLabelStrip from '@/components/PrintLabelStrip'
 
-/**
- * Prints a label without opening a new tab.
- * Fetches label HTML, injects into hidden iframe, triggers native print sheet.
- * Works on desktop browser, iOS Safari, and iOS PWA standalone mode.
- */
-async function printLabelInApp(url: string): Promise<void> {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) { console.error('[printLabelInApp]', res.status); return }
-    const html = await res.text()
-
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none'
-    document.body.appendChild(iframe)
-
-    const doc = iframe.contentDocument ?? iframe.contentWindow?.document
-    if (!doc) { document.body.removeChild(iframe); return }
-
-    doc.open(); doc.write(html); doc.close()
-
-    iframe.onload = () => {
-      setTimeout(() => {
-        iframe.contentWindow?.print()
-        setTimeout(() => {
-          if (document.body.contains(iframe)) document.body.removeChild(iframe)
-        }, 2000)
-      }, 300)
-    }
-  } catch (err) {
-    console.error('[printLabelInApp]', err)
-  }
+// Maps a label-print failure to a user-facing message, surfaced via the page's
+// existing `submitErr` red-inline `<p>` (no new UI component).
+function printErrorMessage(kind: 'auth-bounce' | 'error'): string {
+  return kind === 'auth-bounce'
+    ? 'Session expired — please log in again to print.'
+    : 'Could not print label — please try again.'
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -801,8 +777,10 @@ export default function MincePage() {
                       e.preventDefault()
                       const target = printTarget
                       setPrintTarget(null)
+                      setSubmitErr('')
                       await printLabelInApp(
-                        `/api/labels?type=mince&id=${target.id}&format=html&copies=1&usebydays=${opt.days}&width=${target.width}`
+                        `/api/labels?type=mince&id=${target.id}&format=html&copies=1&usebydays=${opt.days}&width=${target.width}`,
+                        (kind) => setSubmitErr(printErrorMessage(kind)),
                       )
                     }}
                     className={`w-full h-12 px-4 rounded-xl text-sm font-bold border-2 transition-all text-left ${
@@ -1029,6 +1007,7 @@ export default function MincePage() {
 
             {/* Mince history */}
             <div>
+              {submitErr && <p className="text-red-600 text-xs mb-2">{submitErr}</p>}
               <div className="flex items-center justify-between mb-3">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
                   {dateFilter === 'today' ? "Today's mince runs" : dateFilter === 'week' ? "This week's mince runs" : "Last week's mince runs"}

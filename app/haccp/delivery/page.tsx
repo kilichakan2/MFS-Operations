@@ -19,56 +19,25 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { isSunmiNative, printDeliverySunmi, type DeliveryForPrint } from '@/lib/printing/sunmi'
+import { printLabelInApp } from '@/lib/printing/labelFetch'
 import PrintLabelStrip from '@/components/PrintLabelStrip'
 
-/**
- * Prints a label without opening a new tab.
- *
- * Fetches the label HTML from the API, injects it into a hidden iframe,
- * triggers the native print dialog (AirPrint on iOS), then removes the iframe.
- *
- * Works on: desktop browser, iOS Safari, iOS PWA standalone mode.
- */
-async function printLabelInApp(url: string): Promise<void> {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) {
-      console.error('[printLabelInApp] API error', res.status)
-      return
-    }
-    const html = await res.text()
+// Maps a label-print failure to a user-facing message, surfaced via each
+// screen's existing `submitErr` red-inline `<p>` (no new UI component).
+type PrintErrorHandler = (kind: 'auth-bounce' | 'error') => void
 
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none'
-    document.body.appendChild(iframe)
-
-    const doc = iframe.contentDocument ?? iframe.contentWindow?.document
-    if (!doc) { document.body.removeChild(iframe); return }
-
-    doc.open()
-    doc.write(html)
-    doc.close()
-
-    // Wait for iframe content (including SVG barcodes) to render before printing
-    iframe.onload = () => {
-      setTimeout(() => {
-        iframe.contentWindow?.print()
-        // Clean up after print dialog closes (or after timeout on iOS)
-        setTimeout(() => {
-          if (document.body.contains(iframe)) document.body.removeChild(iframe)
-        }, 2000)
-      }, 300)
-    }
-  } catch (err) {
-    console.error('[printLabelInApp]', err)
-  }
+function printErrorMessage(kind: 'auth-bounce' | 'error'): string {
+  return kind === 'auth-bounce'
+    ? 'Session expired — please log in again to print.'
+    : 'Could not print label — please try again.'
 }
 
 // ── Sunmi-aware print handler ──────────────────────────────────────────────────
 // On Sunmi V3 (Capacitor shell): silent native print, no dialog.
 // All other devices: existing window.print() via iframe.
+// `onError` surfaces a dead-session / failure to the caller's existing submitErr.
 
-async function handlePrint58(d: Delivery): Promise<void> {
+async function handlePrint58(d: Delivery, onError: PrintErrorHandler): Promise<void> {
   if (isSunmiNative()) {
     const forPrint: DeliveryForPrint = {
       id:               d.id,
@@ -85,10 +54,10 @@ async function handlePrint58(d: Delivery): Promise<void> {
     }
     await printDeliverySunmi(forPrint).catch(err => {
       console.error('[handlePrint58] Sunmi error — falling back', err)
-      printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`)
+      printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`, onError)
     })
   } else {
-    printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`)
+    printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=58mm`, onError)
   }
 }
 
@@ -734,6 +703,11 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
   const bornLabel   = countryLabel(d.born_in)
   const rearedLabel = countryLabel(d.reared_in)
   const catLabel    = CATEGORIES.find((c) => c.key === d.product_category)
+  // Print errors surface here (inside the modal, where the print buttons live)
+  // using the same submitErr styling as the rest of the app — the page-level
+  // submitErr line is occluded by this overlay.
+  const [submitErr, setSubmitErr] = useState('')
+  const onPrintError: PrintErrorHandler = (kind) => setSubmitErr(printErrorMessage(kind))
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end" style={{ position: 'fixed' }}>
@@ -761,9 +735,10 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
               <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
               <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
               <PrintLabelStrip
-                on100mm={() => printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)}
-                on58mm={() => handlePrint58(d)}
+                on100mm={() => printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`, onPrintError)}
+                on58mm={() => handlePrint58(d, onPrintError)}
               />
+              {submitErr && <p className="text-red-600 text-xs mt-2">{submitErr}</p>}
             </div>
           )}
 
@@ -1012,6 +987,7 @@ export default function DeliveryPage() {
   const [selectedDelivery, setSelectedDelivery] = useState<Delivery | null>(null)
   const [submitting,  setSubmitting]  = useState(false)
   const [submitErr,   setSubmitErr]   = useState('')
+  const onPrintError: PrintErrorHandler = (kind) => setSubmitErr(printErrorMessage(kind))
   const [flash,       setFlash]       = useState(false)
   const [timeNow,     setTimeNow]     = useState(nowDisplay())
 
@@ -1663,8 +1639,8 @@ export default function DeliveryPage() {
                   </div>
                   {d.batch_number && (
                     <PrintLabelStrip
-                      on100mm={() => printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`)}
-                      on58mm={() => handlePrint58(d)}
+                      on100mm={() => printLabelInApp(`/api/labels?type=delivery&id=${d.id}&format=html&copies=1&width=100mm`, onPrintError)}
+                      on58mm={() => handlePrint58(d, onPrintError)}
                     />
                   )}
                 </button>
