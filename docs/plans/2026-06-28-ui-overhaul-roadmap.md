@@ -105,6 +105,7 @@ PWA/offline (SyncDot + RecentActivity), Android/Capacitor + Sunmi printing, PIN 
 
 ## 8 · Open items / risks
 
+- **FINALISATION GATE (hard, before the UI overhaul is declared "done"): full token-binding audit.** Every shipped screen must bind to the semantic design tokens — colours, typography (fonts), spacing, radii — with NO hardcoded values anywhere in `app/**` or `components/**`. Acceptance test: **changing the single token source (`app/tokens.css` / the `next/font` declaration) must re-style every screen with zero per-page edits** (the typography rip-out test = "swap the font in one place → all pages change"). The 0a `semantic-tokens-only` ESLint rule + `token-resolve` guard enforce this on new/touched code; this gate is the WHOLE-TREE sweep that proves no legacy holdout (un-migrated screen, leftover hex, hardcoded font-family) escaped. Run it after the last Phase-1 section, before sign-off. 🗣 One paint supply, every room wired to it — prove it by changing the supply once and watching the whole building change, with no room missed.
 - Sequencing of Phase 1 sections (which screen first) — decide with Hakan at Phase 0 exit.
 - Leaflet interior can't be fully tokenised; restyle around it (accepted).
 - Map "container already initialized" re-mount bug — deferred; address when Routes/Map section comes.
