@@ -1,7 +1,9 @@
 /**
- * tests/unit/printing/labelFetch.test.ts
+ * tests/unit/adapters/browser/Printer.test.ts
  *
  * Unit tests for the pure label-response classifier (F-PROD-04 Pass 1).
+ * Relocated with the classifier into the Browser adapter at Pass 2a; this is the
+ * ORACLE that proves the move was behaviour-preserving — assertions unchanged.
  *
  * Written BEFORE implementation per workflow rules. Covers every shape of
  * response the print path can receive: a genuine label, a login auth-bounce,
@@ -13,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { classifyLabelResponse } from '@/lib/printing/labelFetch'
+import { classifyLabelResponse } from '@/lib/adapters/browser/Printer'
 
 describe('classifyLabelResponse', () => {
   it('classifies a real label (no redirect, ok) as "label"', () => {
