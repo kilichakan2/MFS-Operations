@@ -112,3 +112,12 @@ export type {
   LocalProduct,
   SyncMeta,
 } from "./LocalCache";
+// F-PROD-04 Pass 2a — Printer transport port: the client-side "get a label onto
+// paper" socket. Owned types travel with it. Pure interfaces; no vendor.
+export type {
+  Printer,
+  DeliveryLabelInput,
+  MinceLabelInput,
+  LabelWidth,
+  PrintErrorKind,
+} from "./Printer";

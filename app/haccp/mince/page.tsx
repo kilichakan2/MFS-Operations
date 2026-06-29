@@ -7,7 +7,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { printLabelInApp } from '@/lib/printing/labelFetch'
+import { getPrinter } from '@/lib/wiring/printer'
 import PrintLabelStrip from '@/components/PrintLabelStrip'
 
 // Maps a label-print failure to a user-facing message, surfaced via the page's
@@ -778,8 +778,8 @@ export default function MincePage() {
                       const target = printTarget
                       setPrintTarget(null)
                       setSubmitErr('')
-                      await printLabelInApp(
-                        `/api/labels?type=mince&id=${target.id}&format=html&copies=1&usebydays=${opt.days}&width=${target.width}`,
+                      await getPrinter().printMinceLabel(
+                        { id: target.id, usebydays: opt.days, width: target.width, copies: 1 },
                         (kind) => setSubmitErr(printErrorMessage(kind)),
                       )
                     }}

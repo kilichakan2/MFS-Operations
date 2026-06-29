@@ -197,3 +197,10 @@ export {
   fakeLocalCache,
   type FakeLocalCache,
 } from "./LocalCache";
+// F-PROD-04 Pass 2a — Printer fake: in-memory transport (no DOM, no native bridge).
+export {
+  createFakePrinter,
+  fakePrinter,
+  type FakePrinter,
+  type FakePrinterSeed,
+} from "./Printer";

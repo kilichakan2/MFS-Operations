@@ -1,7 +1,14 @@
 /**
- * lib/printing/labelFetch.ts
+ * lib/adapters/browser/Printer.ts
  *
- * Shared, testable label-print client (F-PROD-04 Pass 1).
+ * Browser/AirPrint transport adapter for the Printer port (F-PROD-04 Pass 2a,
+ * ADR-0010). Relocated verbatim from lib/printing/labelFetch.ts (Pass 1) — the
+ * fetch + hidden-iframe + window.print() path. Handles BOTH label types, ALL
+ * widths, and is the universal fallback the Sunmi adapter delegates to.
+ *
+ * The original Pass-1 rationale (load-bearing documentation) follows.
+ *
+ * ── Shared, testable label-print client (F-PROD-04 Pass 1) ──
  *
  * Both the HACCP delivery and mince screens previously held their own copy of a
  * `printLabelInApp` that fetched the label HTML and checked ONLY `res.ok`. When a
@@ -36,9 +43,17 @@
  * classifier would wrongly accept as a 'label' and print. If you role-gate the
  * route, extend the bounce detection accordingly.
  *
- * No vendor SDK and no `lib/adapters/**` import: this is owned, vendor-free
- * presentation-layer code that `app/**` is allowed to import directly.
+ * No vendor SDK: this is owned, vendor-free transport code. The browser print API
+ * (fetch + iframe + window.print) is a platform API, wrapped here behind the
+ * owned Printer port.
  */
+
+import type {
+  Printer,
+  DeliveryLabelInput,
+  MinceLabelInput,
+  PrintErrorKind,
+} from '@/lib/ports'
 
 export type LabelResponseKind = 'label' | 'auth-bounce' | 'error'
 
@@ -134,5 +149,47 @@ export async function printLabelInApp(
   } catch (err) {
     console.error('[printLabelInApp]', err)
     onError('error')
+  }
+}
+
+/**
+ * Build the byte-identical `/api/labels` URL for a delivery label.
+ * Param order (LOCKED, byte-for-byte with the pre-refactor screen): type, id,
+ * format, copies, width.
+ */
+function deliveryUrl(input: DeliveryLabelInput): string {
+  return `/api/labels?type=delivery&id=${input.id}&format=html&copies=${input.copies}&width=${input.width}`
+}
+
+/**
+ * Build the byte-identical `/api/labels` URL for a mince label.
+ * Param order (LOCKED, byte-for-byte with the pre-refactor mince screen): type,
+ * id, format, copies, usebydays, width.
+ */
+function minceUrl(input: MinceLabelInput): string {
+  return `/api/labels?type=mince&id=${input.id}&format=html&copies=${input.copies}&usebydays=${input.usebydays}&width=${input.width}`
+}
+
+/**
+ * The Browser/AirPrint transport adapter — the universal fallback. Builds the
+ * single-source-of-truth `/api/labels` URL for both label types and prints via
+ * the iframe path. This is the only place the URL strings are constructed, so the
+ * Sunmi adapter's fallback (which calls this adapter's methods) emits the exact
+ * same strings.
+ */
+export function createBrowserPrinter(): Printer {
+  return {
+    printDeliveryLabel(
+      input: DeliveryLabelInput,
+      onError: (kind: PrintErrorKind) => void,
+    ): Promise<void> {
+      return printLabelInApp(deliveryUrl(input), onError)
+    },
+    printMinceLabel(
+      input: MinceLabelInput,
+      onError: (kind: PrintErrorKind) => void,
+    ): Promise<void> {
+      return printLabelInApp(minceUrl(input), onError)
+    },
   }
 }
