@@ -1,7 +1,7 @@
 # MFS Global — Label Printing & Barcode Traceability Plan
 **Created:** 2026-04-24
 **Last updated:** 2026-04-25
-**Status:** Phase 1 complete (in-app print in build). ⚠️ **2026-06-27 — REGRESSION: the Sunmi V3 Android APK worked, then stopped ~1 week after install. See the "2026-06-27 status" section below. Owner ticket: BACKLOG F-PROD-04.**
+**Status:** Phase 1 complete (in-app print in build). ⚠️ **2026-06-27 — REGRESSION: the Sunmi V3 Android APK worked, then stopped ~1 week after install. See the "2026-06-27 status" section below. Owner ticket: BACKLOG F-PROD-04.** 🟢 **2026-06-29 — NOW ACTIVE:** all prerequisites cleared (sprint sealed · UI Phase 0 complete · repo cleanup done). Framed; work starts next session (direction decision = Hakan's, fresh session). See the "2026-06-29 frame" section below.
 **Owner:** Hakan Kilic
 
 ---
@@ -40,6 +40,23 @@ fast-follow.
 **Sequence:** Hakan's decision 2026-06-27 = seal the re-architecture FIRST (Day-16: F-TD-12,
 F-INFRA-03, F-INFRA-04, closing audit), THEN this as the #1 feature target. Tracked as
 BACKLOG **F-PROD-04** and memory `project_label_printing_next`.
+
+---
+
+## 2026-06-29 frame (session before printing work begins)
+
+Located the implementation in the repo (confirms the 2026-06-27 hypothesis is the right place to look):
+- **Native Sunmi side:** `android/app/src/main/java/com/mfsglobal/ops/SunmiPrintBridge.java` (the `window.MFSSunmiPrint`
+  bridge) + `MainActivity.java`. This is a real Capacitor Android project (`capacitor.config.ts` + `android/`).
+- **Web side:** `lib/printing/*` → `app/api/labels/route.ts` (auth off `x-mfs-user-role`, service-role) →
+  `app/haccp/delivery/page.tsx` + `components/PrintLabelStrip.tsx`.
+
+**Two separable pieces** (decision deferred to next session): ① **diagnose + fix the regression** — leading
+suspect is auth-sprint collateral on the `/api/labels` auth path (session cookie / role header / service-role),
+NOT the printer bridge; trace the code first, then on-device confirm (needs Hakan's physical Sunmi V3 — the
+conductor cannot run the APK). ② **re-architect behind a `Printer` port** (`lib/printing/` is the last module
+with no port; `app/haccp/delivery/page.tsx` imports it directly = the last UI→impl Lego breach) — a fast-follow
+if we only fix the regression now. **Direction (diagnose-first / port-first / both) is Hakan's call next session.**
 
 ---
 
