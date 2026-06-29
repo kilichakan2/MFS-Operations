@@ -196,7 +196,9 @@ test.describe('@critical HACCP print — dead session shows re-login, never prin
     await page.getByRole('button', { name: /100mm/i }).last().click()
 
     // The re-login message appears via the existing submitErr line (in-modal).
-    await expect(page.getByText(/log in again/i)).toBeVisible({ timeout: 10_000 })
+    // `.first()` — a page may mount the shared submitErr in more than one
+    // section, so scope the visibility check to a single match (strict mode).
+    await expect(page.getByText(/log in again/i).first()).toBeVisible({ timeout: 10_000 })
 
     // No login-page HTML was printed: the helper returns before creating an
     // iframe on a bounce, and window.print() must NOT have fired.
@@ -213,15 +215,6 @@ test.describe('@critical HACCP print — dead session shows re-login, never prin
     // Proves the byte-identical happy path: with a live session, the shared
     // helper fetches a real label, writes it to a hidden iframe and calls
     // window.print() exactly as before — no error message.
-    await page.addInitScript(() => {
-      ;(window as unknown as { __printCalls: number }).__printCalls = 0
-      const real = window.print.bind(window)
-      window.print = () => {
-        ;(window as unknown as { __printCalls: number }).__printCalls++
-        return real()
-      }
-    })
-
     await loginAs(page, 'warehouse')
     const marker = await logBeefDelivery(page)
 
@@ -230,15 +223,14 @@ test.describe('@critical HACCP print — dead session shows re-login, never prin
       page.getByRole('heading', { name: new RegExp(`${marker}-supplier`) }),
     ).toBeVisible({ timeout: 10_000 })
 
-    // No session kill — print should go through and fire window.print().
+    // No session kill — print should go through. The helper reaches its print
+    // branch ONLY after classifying the response as a real label, and it does so
+    // by creating a hidden print iframe (window.print() itself fires inside that
+    // iframe's contentWindow, which a main-frame spy cannot observe — so we prove
+    // the print path positively via the iframe instead). The iframe lives ~2s
+    // before cleanup, so it is reliably observable.
     await page.getByRole('button', { name: /100mm/i }).last().click()
-
-    await expect(async () => {
-      const printCalls = await page.evaluate(
-        () => (window as unknown as { __printCalls: number }).__printCalls,
-      )
-      expect(printCalls).toBeGreaterThan(0)
-    }).toPass({ timeout: 10_000 })
+    await expect(page.locator('iframe')).toHaveCount(1, { timeout: 5_000 })
 
     // No re-login / failure message on a valid print.
     await expect(page.getByText(/log in again/i)).toHaveCount(0)
@@ -271,7 +263,9 @@ test.describe('@critical HACCP print — dead session shows re-login, never prin
     // The use-by dialog opens; pick a use-by option to trigger the fetch.
     await page.getByRole('button', { name: /fresh 7 days/i }).click()
 
-    await expect(page.getByText(/log in again/i)).toBeVisible({ timeout: 10_000 })
+    // `.first()` — the mince page mounts the shared submitErr in multiple tab
+    // sections; scope the visibility check to one match (strict mode).
+    await expect(page.getByText(/log in again/i).first()).toBeVisible({ timeout: 10_000 })
     await expect(page.locator('iframe')).toHaveCount(0)
     const printCalls = await page.evaluate(
       () => (window as unknown as { __printCalls: number }).__printCalls,
