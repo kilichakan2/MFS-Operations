@@ -1,7 +1,7 @@
 # Per-Table Expand-Contract RLS Plan — 2026-06-12
 
 **Unit:** F-RLS-02 (docs only). **Author:** sprint Day 1.
-**Depends on:** F-RLS-01 audit (`docs/rls-audit-2026-06-12.md`).
+**Depends on:** F-RLS-01 audit (`docs/reference/security/rls-audit-2026-06-12.md`).
 **Governing decision:** ADR-0004. **Migration tooling:** Supabase MCP
 `apply_migration` only — never `supabase db push` (standing constraint).
 

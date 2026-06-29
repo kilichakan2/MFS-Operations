@@ -3,7 +3,7 @@
 **Maintained by:** Hakan Kilic (Managing Partner)  
 **Last reviewed:** April 2026  
 **Review frequency:** Annually, or whenever legislation, equipment, or procedures change  
-**Location:** GitHub — `kilichakan2/MFS-Operations` `/docs/DOCUMENT_CONTROL.md`
+**Location:** GitHub — `kilichakan2/MFS-Operations` `/docs/reference/haccp/DOCUMENT_CONTROL.md`
 
 ---
 
