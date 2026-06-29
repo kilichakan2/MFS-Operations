@@ -811,6 +811,7 @@ the trail matters.
   - **Reprint tracking / print log** — no "already printed" state; any label reprints unlimited times with zero record. Plan proposes a `labels_printed` counter (`LABEL_PRINTING_PLAN.md:182-184`), unbuilt.
   - **Operator + time on labels** — `submitted_by` (operator name) + `time_of_delivery`/`time_of_production` captured but only the date prints.
 - **Owner unit (active):** F-PROD-04 Pass 1 = regression hardening (its own FORGE pass, starting 2026-06-29).
+- **🔵 Pass 1 follow-up (deferred to UI Phase 1 — code-critic 🟡 #1, PR #98):** on the delivery COLLAPSED-LIST print strip (`app/haccp/delivery/page.tsx:1642`), a dead-session print error routes to the page-level `submitErr` (line ~1527, up in the entry-form area) — so on a long list the "Session expired — log in again" message renders off-screen above the tapped row. NOT silent (message renders, `window.print()` suppressed, login page never prints — the safety goal is met); only the modal path and the mince history path put the message next to the buttons. A proper fix needs per-row error state, which is bespoke screen logic best handled cohesively in the Phase 1 screen migration (decision #17: no style/logic leaking into screens now). Defer.
 
 ---
 

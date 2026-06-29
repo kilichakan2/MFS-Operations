@@ -28,6 +28,14 @@
  * page or label template is ever restyled. We only ever read `res.text()` AFTER
  * classification says "label", so login HTML is never written to an iframe.
  *
+ * ASSUMPTION (pin this): this classifier is correct because `/api/labels` lives in
+ * middleware's SHARED_API_PATHS — so an unauthenticated/dead session bounces to
+ * `/login` (caught here as 'auth-bounce'), and any authenticated session of any
+ * role passes through. If `/api/labels` is ever moved to ROLE-gating, a
+ * permission-denied redirect goes to a role-home page (NOT `/login`), which this
+ * classifier would wrongly accept as a 'label' and print. If you role-gate the
+ * route, extend the bounce detection accordingly.
+ *
  * No vendor SDK and no `lib/adapters/**` import: this is owned, vendor-free
  * presentation-layer code that `app/**` is allowed to import directly.
  */
