@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { GalleryFrame } from './GalleryFrame'
 import { GalleryForms } from './GalleryForms'
+import { GalleryDisplay } from './GalleryDisplay'
 
 /**
  * Dev-only component gallery at /dev/ui.
@@ -15,6 +16,7 @@ export default function DevUiGalleryPage() {
   return (
     <GalleryFrame>
       <GalleryForms />
+      <GalleryDisplay />
     </GalleryFrame>
   )
 }
