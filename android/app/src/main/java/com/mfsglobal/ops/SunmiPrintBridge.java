@@ -69,8 +69,13 @@ public class SunmiPrintBridge {
             // (that was the receipt-mode overrun); no enterPrinterBuffer wrap
             // (label mode commits per locate/output — calibration variable, add
             // back only if on-device shows torn/partial prints).
+            //
+            // NOTE: the Sunmi SDK (printerlibrary 1.0.24) has NO "set label mode"
+            // call — there is no setPrinterMode and no WoyouConsts label constant
+            // (verified against the AAR). labelLocate()/labelOutput() ARE the label
+            // operations; the printer's own mode/gap handling does the rest. If the
+            // printer isn't in label mode, getPrinterMode() can be checked on-device.
             printerService.printerInit(null);
-            printerService.setPrinterMode(WoyouConsts.PRINTER_LABEL_MODE);
             printerService.labelLocate();
 
             // Row 1: SPECIES + BATCH side-by-side, bold (fixed-width pad to columns).

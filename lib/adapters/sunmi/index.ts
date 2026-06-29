@@ -6,6 +6,7 @@
 export {
   createSunmiPrinter,
   isSunmiNative,
+  formatBornLine,
   formatTempStatus,
   formatSpecies,
 } from "./Printer";

@@ -13,24 +13,48 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { formatTempStatus, formatSpecies, isSunmiNative } from '@/lib/adapters/sunmi/Printer'
+import { formatBornLine, formatTempStatus, formatSpecies, isSunmiNative } from '@/lib/adapters/sunmi/Printer'
 
 describe('Sunmi label helpers', () => {
-  describe('formatTempStatus — temperature value only (ADR-0012: no PASS/FAIL)', () => {
-    it('renders numeric temperature value only (no PASS/FAIL)', () => {
-      expect(formatTempStatus(3.2, 'pass')).toBe('3.2°C')
+  describe('formatBornLine — BLS born/reared rendering', () => {
+    it('returns null when both born and reared are missing', () => {
+      expect(formatBornLine(null, null)).toBeNull()
     })
 
-    it('still value-only on a failed temperature (fail lives in the diary, not the label)', () => {
-      expect(formatTempStatus(8.1, 'fail')).toBe('8.1°C')
+    it('combines born and reared into a single line when both are the same country', () => {
+      expect(formatBornLine('GB', 'GB')).toBe('Born/Reared: GB')
     })
 
-    it('value-only for conditional status', () => {
-      expect(formatTempStatus(5.5, 'conditional')).toBe('5.5°C')
+    it('renders born and reared separately when countries differ', () => {
+      expect(formatBornLine('GB', 'IE')).toBe('Born: GB  Reared: IE')
+    })
+
+    it('renders born only when reared is missing', () => {
+      expect(formatBornLine('GB', null)).toBe('Born: GB')
+    })
+
+    it('renders reared only when born is missing', () => {
+      expect(formatBornLine(null, 'IE')).toBe('Reared: IE')
+    })
+  })
+
+  describe('formatTempStatus — temperature and PASS/FAIL line', () => {
+    it('renders numeric temperature with PASS suffix for pass status', () => {
+      expect(formatTempStatus(3.2, 'pass')).toBe('3.2°C  PASS')
+    })
+
+    it('treats conditional status as PASS on the label', () => {
+      // Operational decision: conditional acceptance still prints PASS.
+      // The conditional flag is captured separately in the daily diary.
+      expect(formatTempStatus(5.5, 'conditional')).toBe('5.5°C  PASS')
+    })
+
+    it('renders FAIL when status is fail', () => {
+      expect(formatTempStatus(8.1, 'fail')).toBe('8.1°C  FAIL')
     })
 
     it('substitutes em-dash placeholder when temperature is null', () => {
-      expect(formatTempStatus(null, 'pass')).toBe('—')
+      expect(formatTempStatus(null, 'pass')).toBe('—  PASS')
     })
   })
 
