@@ -857,3 +857,14 @@ wire-translator (5 fns, key-order tripwires). W1 fix: note-edit on missing id �
 F-TD-31 audit-raw-REST + postcodes.io geocode stay in `screen3/sync` (documented). No migration,
 no new dep. ANVIL: unit 2125 · integration 336 · build 114pp · preview `@critical` 15/15 + identity
 probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to **F-RLS-04g** (Visits).
+
+### F-UI-GALLERY-01 — make /dev/ui component gallery reachable on Vercel PREVIEW deploys
+
+- **Deferred:** 2026-06-29 (during UI Phase 0b · Wave 1)
+- **What:** the dev-only component gallery `app/dev/ui/` is currently unreachable anywhere: it 404s in production by design (`notFound()` when `NODE_ENV=production`), AND the pre-existing `middleware.ts` auth gate blocks `/dev/ui` for every role (it's in no role's permission list), so it can't be viewed on a Vercel preview deploy or even a local dev server without a temporary bypass.
+- **Why it matters:** the gallery is meant to be the visual-review surface for each 0b/Phase-1 wave. Hakan reviews from his phone via preview links, so it needs to be viewable on a PREVIEW deploy (while still 404-ing in real production).
+- **Fix shape:** gate the gallery to be reachable when `VERCEL_ENV === 'preview'` (still 404 in production) + add a `/dev` allowance in `middleware.ts` scoped to preview. Its own small FORGE follow-up (touches middleware → not an additive-only change).
+- **Workaround used for Wave 1:** captured local screenshots via a temporary, uncommitted middleware bypass (reverted) and sent them to Hakan for review.
+- **Detail:** `docs/anvil/2026-06-29-ui-phase-0b-wave1-forms-cert.md` (visual-smoke row + follow-ups).
+- **Owner unit:** unscheduled (do before/with Phase-1 visual reviews, or alongside Wave 2/3 if a live preview gallery is wanted sooner).
+- **Status:** open
