@@ -3,7 +3,7 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react'
 
 export interface TextFieldProps
-  extends InputHTMLAttributes<HTMLInputElement> {
+  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix' | 'suffix'> {
   error?: boolean
   prefix?: ReactNode
   suffix?: ReactNode
