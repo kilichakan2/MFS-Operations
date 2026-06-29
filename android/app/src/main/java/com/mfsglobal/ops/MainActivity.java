@@ -5,6 +5,7 @@ import android.webkit.WebView;
 import android.webkit.WebResourceRequest;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
+import com.mfsglobal.ops.BuildConfig;
 
 public class MainActivity extends BridgeActivity {
     private SunmiPrintBridge sunmiPrintBridge;
@@ -12,7 +13,9 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        WebView.setWebContentsDebuggingEnabled(true);
+        if (BuildConfig.DEBUG) {
+            WebView.setWebContentsDebuggingEnabled(true);
+        }
         WebView webView = this.bridge.getWebView();
         sunmiPrintBridge = new SunmiPrintBridge(this);
         webView.addJavascriptInterface(sunmiPrintBridge, "MFSSunmiPrint");
