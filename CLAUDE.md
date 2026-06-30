@@ -43,6 +43,10 @@ Every new entry in `package.json` needs a one-line written reason — in the PR 
 
 Single-use vendor libraries (imported in exactly one file) must sit behind an owned wrapper at `lib/adapters/<vendor>/`. The rest of the app depends on the wrapper, not the library.
 
+### Reusable visual components live in the kit
+
+Every shared visual primitive and brand asset (icons, logos, brand marks, shared UI primitives) is DEFINED in `components/ui/` and CONSUMED from its barrel (`components/ui/index.ts`). Screens (`app/**`) and feature components (`components/**` outside `components/ui/`) never define a reusable visual component inline, and never import one from outside `components/ui/`. A new shared visual pattern is added to `components/ui/` FIRST (ADR-0014 Rule 3), then used. Enforced by `tests/unit/lint/reusable-visual-in-kit.test.ts`.
+
 ### Blockers (code-critic will reject)
 
 - Anything in `lib/domain/**` or `lib/ports/**` importing from `lib/adapters/**` (the dependency rule points inward)
