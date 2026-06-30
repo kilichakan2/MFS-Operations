@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed (2026-06-30, F-PROD-04)
+Accepted (2026-06-30, F-PROD-04 — ratified at ship; PR #101 `84e886a`)
 
 Governs the **shape** of `MFSSunmiPrint` print methods. ADR-0012 still governs **label
 mode + layout**; ADR-0001 still governs the **bridge mechanism** + print-only rule. To be
