@@ -148,31 +148,37 @@ public class SunmiPrintBridge {
             printerService.printerInit(null);
             printerService.labelLocate();
 
-            // Row 1: SPECIES + BATCH side-by-side, bold (fixed-width pad to columns).
+            // All rows use printColumnsString — the printer lays each field into a
+            // fixed CHARACTER column with its own alignment (no manual space-pad,
+            // which overflowed at large fonts). Column widths sum to 32 = the 58mm
+            // line capacity at the standard font. Tuned on-device for 52×38mm.
             printerService.setAlignment(0, null);
-            printerService.setFontSize(30, null);
+
+            // Row 1: SPECIES (left) + BATCH (right-aligned), bold.
             printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.ENABLE);
-            printerService.printText(twoCol(species.toUpperCase(), batchCode), null);
+            printCols(new String[]{ species.toUpperCase(), batchCode },
+                      new int[]{ 13, 19 }, new int[]{ 0, 2 });
             printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.DISABLE);
 
-            // Barcode: CODE128 of batch, height 40 dots (down from 80), text below.
+            // Barcode: CODE128 of batch, height 40 dots, text below.
             printerService.setAlignment(1, null);
             printerService.printBarCode(batchCode, 8, 40, 2, 2, null);
             printerService.lineWrap(1, null);
-
-            // Two-column body (paired to fit the ~270-dot height budget).
             printerService.setAlignment(0, null);
-            printerService.setFontSize(20, null);
-            printerService.printText(twoCol("Supplier: " + supplierCode, "Date: " + date), null);
 
-            String tempCell  = "Temp: " + tempLine;
-            String bornCell  = (bornIn != null && !bornIn.isEmpty()) ? "Born: " + bornIn : "";
-            printerService.printText(twoCol(tempCell, bornCell), null);
+            // Body — paired columns (sum 32); date column wider so it never wraps.
+            printCols(new String[]{ "Sup: " + supplierCode, "Date: " + date },
+                      new int[]{ 13, 19 }, new int[]{ 0, 0 });
+
+            String bornCell = (bornIn != null && !bornIn.isEmpty()) ? "Born: " + bornIn : "";
+            printCols(new String[]{ "Temp: " + tempLine, bornCell },
+                      new int[]{ 16, 16 }, new int[]{ 0, 0 });
 
             String rearedCell = (rearedIn != null && !rearedIn.isEmpty()) ? "Reared: " + rearedIn : "";
             String slCell     = (slaughterSite != null && !slaughterSite.isEmpty()) ? "Sl: " + slaughterSite : "";
             if (!rearedCell.isEmpty() || !slCell.isEmpty()) {
-                printerService.printText(twoCol(rearedCell, slCell), null);
+                printCols(new String[]{ rearedCell, slCell },
+                          new int[]{ 16, 16 }, new int[]{ 0, 0 });
             }
 
             String cutCell = (cutSite != null && !cutSite.isEmpty()) ? "Cut: " + cutSite : "";
@@ -191,23 +197,15 @@ public class SunmiPrintBridge {
     }
 
     /**
-     * Lay two fields side-by-side on one row by padding the left field to a fixed
-     * character column then appending the right field. The column width (24 chars)
-     * is a starting value tuned on-device against the 52×38mm stock (ADR-0012).
+     * Print one row as fixed-width CHARACTER columns via the Sunmi column API,
+     * which lays each field into its own width with its own alignment (0=left,
+     * 1=centre, 2=right) and wraps within a column instead of overrunning the
+     * line. Widths are in character units summing to ~32 for the 58mm head at the
+     * standard font. Replaces the old manual space-pad, which overflowed at large
+     * fonts (ADR-0012; tuned on-device for 52×38mm die-cut stock).
      */
-    private static String twoCol(String left, String right) {
-        if (left == null) left = "";
-        if (right == null) right = "";
-        final int col = 24;
-        if (right.isEmpty()) {
-            return left + "\n";
-        }
-        StringBuilder sb = new StringBuilder(left);
-        while (sb.length() < col) {
-            sb.append(' ');
-        }
-        sb.append(right).append('\n');
-        return sb.toString();
+    private void printCols(String[] texts, int[] widths, int[] aligns) throws android.os.RemoteException {
+        printerService.printColumnsString(texts, widths, aligns, null);
     }
 
     public void unregister() {
