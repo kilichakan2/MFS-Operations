@@ -89,10 +89,7 @@ export function StatusTile({
     <div className={cx('relative overflow-hidden rounded-lg border', tone.shell)}>
       <button
         type="button"
-        onPointerDown={(e) => {
-          e.preventDefault()
-          onTap()
-        }}
+        onClick={() => onTap()}
         className={cx(
           'flex w-full h-full flex-col justify-between text-left select-none',
           'bg-transparent cursor-pointer transition-transform active:scale-[0.98]',
@@ -145,9 +142,8 @@ export function StatusTile({
         <button
           type="button"
           aria-label={helpLabel ?? `Help for ${label}`}
-          onPointerDown={(e) => {
+          onClick={(e) => {
             e.stopPropagation()
-            e.preventDefault()
             onHelp()
           }}
           className={cx(
