@@ -54,6 +54,12 @@ export type { CardHeadProps } from './CardHead'
 export { KpiTile } from './KpiTile'
 export type { KpiTileProps } from './KpiTile'
 
+export { StatusTile } from './StatusTile'
+export type { StatusTileProps, TileState, StatusTileSize } from './StatusTile'
+
+export { ProgressRing } from './ProgressRing'
+export type { ProgressRingProps, ProgressRingSize } from './ProgressRing'
+
 export { SectionLabel } from './SectionLabel'
 export type { SectionLabelProps } from './SectionLabel'
 

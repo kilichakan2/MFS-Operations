@@ -41,6 +41,31 @@ describe("Banner", () => {
     expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
   });
 
+  it("onClick makes the whole banner a single tappable button", async () => {
+    const onClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Banner tone="danger" onClick={onClick}>
+        Tap to sound alarm
+      </Banner>,
+    );
+    const btn = screen.getByRole("button");
+    expect(btn.className).toContain("w-full");
+    await user.click(btn);
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("onClick omits the dismiss button (no nested button)", () => {
+    render(
+      <Banner tone="danger" onClick={() => {}} onDismiss={() => {}}>
+        Tappable
+      </Banner>,
+    );
+    // exactly one button (the banner itself), no inner Dismiss button
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
+
   it("uses no hex / stock-palette / mfs-* colour classes", () => {
     const { container } = render(
       <Banner tone="danger" title="T" onDismiss={() => {}}>
