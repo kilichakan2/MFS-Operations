@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from 'react'
 import { MoreVertical } from 'lucide-react'
 import { useUnsyncedQueue } from '@/lib/wiring/localCache'
 import { useLanguage }  from '@/lib/LanguageContext'
-import MfsLogo          from '@/components/MfsLogo'
+import { MfsLogo }      from '@/components/ui'
 
 type Role = 'warehouse' | 'office' | 'sales' | 'admin' | 'driver' | ''
 

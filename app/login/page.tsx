@@ -2,7 +2,7 @@
 
 import { useLanguage } from '@/lib/LanguageContext'
 
-import MfsLogo from '@/components/MfsLogo'
+import { MfsLogo } from '@/components/ui'
 
 
 import { Suspense, useState, useEffect, useCallback } from 'react'
