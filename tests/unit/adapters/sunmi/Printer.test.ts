@@ -13,8 +13,12 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { formatTempStatus, formatSpecies, isSunmiNative, buildDeliveryPayload } from '@/lib/adapters/sunmi/Printer'
+import {
+  formatTempStatus, formatSpecies, isSunmiNative,
+  buildDeliveryPayload, buildMincePayload, buildPrepPayload,
+} from '@/lib/adapters/sunmi/Printer'
 import type { DeliveryLabelInput } from '@/lib/ports'
+import type { MinceLabelData, PrepLabelData } from '@/lib/printing/types'
 
 describe('Sunmi label helpers', () => {
   describe('formatTempStatus — value-only temperature line (no PASS/FAIL)', () => {
@@ -165,6 +169,136 @@ describe('Sunmi label helpers', () => {
         [
           'allergens', 'batch', 'bornIn', 'cutSite', 'date',
           'rearedIn', 'slaughterSite', 'species', 'supplier', 'temp', 'type',
+        ].sort(),
+      )
+    })
+  })
+
+  // ── buildMincePayload — native MINCE JSON contract (ADR-0013, BLS) ───────────
+  // The mince native label is COUNTRY-ONLY: slaughteredIn carries "GB" (no plant
+  // digits) and mincedIn is "GB". These keys mirror SunmiPrintBridge.java's
+  // renderMinceLabel optString reads.
+  describe('buildMincePayload — native MINCE JSON contract (country-only BLS)', () => {
+    const mince: MinceLabelData = {
+      batch_code:           'MINCE-3006-BEEF-001',
+      product_species:      'Beef',
+      output_mode:          'chilled',
+      date:                 '30 Jun 2026',
+      kill_date:            '26 Jun 2026',
+      days_from_kill:       4,
+      source_batch_numbers: ['3006-GB-1', '3006-IE-2'],
+      use_by:               '07 Jul 2026',
+      origins:              ['United Kingdom', 'Ireland'],
+      slaughtered_in:       ['GB', 'IE'],
+      minced_in:            'GB',
+      allergens_present:    [],
+    }
+
+    it('emits type "mince"', () => {
+      expect(buildMincePayload(mince).type).toBe('mince')
+    })
+
+    it('slaughteredIn is country-only, distinct, comma-joined (no plant digits)', () => {
+      const p = buildMincePayload(mince)
+      expect(p.slaughteredIn).toBe('GB, IE')
+      expect(p.slaughteredIn).not.toMatch(/GB[0-9]/)
+    })
+
+    it('mincedIn is country-only GB (no plant code)', () => {
+      expect(buildMincePayload(mince).mincedIn).toBe('GB')
+    })
+
+    it('bornIn carries the distinct origin country names comma-joined', () => {
+      expect(buildMincePayload(mince).bornIn).toBe('United Kingdom, Ireland')
+    })
+
+    it('carries batch, productName (species), date, useBy through', () => {
+      const p = buildMincePayload(mince)
+      expect(p.batch).toBe('MINCE-3006-BEEF-001')
+      expect(p.productName).toBe('Beef')
+      expect(p.date).toBe('30 Jun 2026')
+      expect(p.useBy).toBe('07 Jul 2026')
+    })
+
+    it('allergens is "None" when empty, else comma-joined', () => {
+      expect(buildMincePayload(mince).allergens).toBe('None')
+      expect(buildMincePayload({ ...mince, allergens_present: ['Mustard', 'Celery'] }).allergens).toBe('Mustard, Celery')
+    })
+
+    it('declares exactly the expected key set (pins the contract)', () => {
+      const p = buildMincePayload(mince)
+      expect(Object.keys(p).sort()).toEqual(
+        [
+          'type', 'batch', 'productName', 'date', 'useBy',
+          'bornIn', 'slaughteredIn', 'mincedIn', 'allergens',
+        ].sort(),
+      )
+    })
+  })
+
+  // ── buildPrepPayload — native PREP JSON contract (ADR-0013, BLS) ─────────────
+  // The prep native label is COUNTRY+PLANT: slaughteredIn carries raw "GB1234",
+  // cutIn carries the primary cut site, furtherCutIn is GB2946 (MFS).
+  describe('buildPrepPayload — native PREP JSON contract (country+plant BLS)', () => {
+    const prep: PrepLabelData = {
+      batch_code:           'PREP-3006-BEEF-001',
+      product_name:         'Diced beef',
+      product_species:      'Beef',
+      output_mode:          'prep',
+      date:                 '30 Jun 2026',
+      kill_date:            '26 Jun 2026',
+      days_from_kill:       4,
+      source_batch_numbers: ['3006-GB-1'],
+      use_by:               '07 Jul 2026',
+      origins:              ['United Kingdom'],
+      reared_in:            ['Ireland'],
+      slaughtered_in:       ['GB1234', 'IE5678'],
+      cut_in:               ['GB5678'],
+      further_cut_in:       'GB2946',
+      allergens_present:    [],
+    }
+
+    it('emits type "prep"', () => {
+      expect(buildPrepPayload(prep).type).toBe('prep')
+    })
+
+    it('slaughteredIn is country+plant, distinct, comma-joined (digits KEPT)', () => {
+      expect(buildPrepPayload(prep).slaughteredIn).toBe('GB1234, IE5678')
+    })
+
+    it('cutIn carries the primary cut site country+plant', () => {
+      expect(buildPrepPayload(prep).cutIn).toBe('GB5678')
+    })
+
+    it('furtherCutIn is GB2946 (MFS)', () => {
+      expect(buildPrepPayload(prep).furtherCutIn).toBe('GB2946')
+    })
+
+    it('bornIn / rearedIn carry distinct country names', () => {
+      const p = buildPrepPayload(prep)
+      expect(p.bornIn).toBe('United Kingdom')
+      expect(p.rearedIn).toBe('Ireland')
+    })
+
+    it('carries batch, productName, date, useBy through', () => {
+      const p = buildPrepPayload(prep)
+      expect(p.batch).toBe('PREP-3006-BEEF-001')
+      expect(p.productName).toBe('Diced beef')
+      expect(p.date).toBe('30 Jun 2026')
+      expect(p.useBy).toBe('07 Jul 2026')
+    })
+
+    it('allergens is "None" when empty, else comma-joined', () => {
+      expect(buildPrepPayload(prep).allergens).toBe('None')
+      expect(buildPrepPayload({ ...prep, allergens_present: ['Sesame'] }).allergens).toBe('Sesame')
+    })
+
+    it('declares exactly the expected key set (pins the contract)', () => {
+      const p = buildPrepPayload(prep)
+      expect(Object.keys(p).sort()).toEqual(
+        [
+          'type', 'batch', 'productName', 'date', 'useBy',
+          'bornIn', 'rearedIn', 'slaughteredIn', 'cutIn', 'furtherCutIn', 'allergens',
         ].sort(),
       )
     })

@@ -139,14 +139,66 @@ describe("createSunmiPrinter — native vs fallback delegation", () => {
     expect(fallback.deliveryCalls[0].width).toBe("100mm");
   });
 
-  it("case 4: V3 + mince → fallback called, native NOT called (no native mince)", async () => {
+  it("case 4: V3 + 100mm mince → fallback called, native NOT called (100mm always iframe)", async () => {
     const nativeCall = vi.fn();
     setBridge(nativeCall);
     const fallback = createFakePrinter();
     const sunmi = createSunmiPrinter(fallback);
+    // minceInput is 100mm → straight to iframe fallback, no native fetch.
     await sunmi.printMinceLabel(minceInput, vi.fn());
     expect(nativeCall).not.toHaveBeenCalled();
     expect(fallback.minceCalls).toHaveLength(1);
     expect(fallback.minceCalls[0]).toEqual(minceInput);
+  });
+
+  it("case 6: V3 + 58mm mince → fetches format=json, native printLabel called, fallback NOT", async () => {
+    const printLabel = vi.fn();
+    (globalThis as WinHolder).window = {
+      MFSSunmiPrint: { isReady: () => true, printLabel },
+    };
+    // Native mince/prep path fetches the SERVER-aggregated label data as JSON.
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        type: "mince",
+        data: {
+          batch_code: "MINCE-3006-BEEF-001", product_species: "Beef", output_mode: "chilled",
+          date: "30 Jun 2026", kill_date: null, days_from_kill: null,
+          source_batch_numbers: [], use_by: "07 Jul 2026",
+          origins: ["United Kingdom"], slaughtered_in: ["GB"], minced_in: "GB",
+          allergens_present: [],
+        },
+      }),
+    })) as unknown as typeof globalThis.fetch;
+
+    const fallback = createFakePrinter();
+    const sunmi = createSunmiPrinter(fallback);
+    await sunmi.printMinceLabel({ kind: "mince", id: "m1", usebydays: 7, width: "58mm", copies: 1 }, vi.fn());
+
+    // fetched the JSON endpoint, then printed natively (no iframe fallback).
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("format=json"));
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("type=mince"));
+    expect(printLabel).toHaveBeenCalledTimes(1);
+    const payload = JSON.parse((printLabel.mock.calls[0] as string[])[0]);
+    expect(payload.type).toBe("mince");
+    expect(payload.mincedIn).toBe("GB");
+    expect(fallback.minceCalls).toHaveLength(0);
+  });
+
+  it("case 7: V3 + 58mm prep, native fetch fails → fallback.printMinceLabel IS called", async () => {
+    const printLabel = vi.fn();
+    (globalThis as WinHolder).window = {
+      MFSSunmiPrint: { isReady: () => true, printLabel },
+    };
+    globalThis.fetch = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) })) as unknown as typeof globalThis.fetch;
+
+    const fallback = createFakePrinter();
+    const sunmi = createSunmiPrinter(fallback);
+    const input: MinceLabelInput = { kind: "prep", id: "p1", usebydays: 7, width: "58mm", copies: 1 };
+    await sunmi.printMinceLabel(input, vi.fn());
+
+    expect(printLabel).not.toHaveBeenCalled();
+    expect(fallback.minceCalls).toHaveLength(1);
+    expect(fallback.minceCalls[0]).toEqual(input);
   });
 });

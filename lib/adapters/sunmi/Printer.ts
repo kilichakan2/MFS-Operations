@@ -23,6 +23,7 @@ import type {
   MinceLabelInput,
   PrintErrorKind,
 } from '@/lib/ports'
+import type { MinceLabelData, PrepLabelData } from '@/lib/printing/types'
 
 // ── Bridge type declaration ───────────────────────────────────────────────────
 // Mirrors the @JavascriptInterface methods on android/.../SunmiPrintBridge.java.
@@ -158,6 +159,78 @@ export function buildDeliveryPayload(
   }
 }
 
+// ── Mince / Prep native payloads (ADR-0013, BLS) ──────────────────────────────
+// These are built from the SERVER-aggregated label data (fetched via
+// /api/labels?...&format=json) — the SINGLE source of the multi-source origin
+// aggregation. The adapter never re-aggregates: it only string-joins the
+// already-distinct arrays into the flat cells the Java bridge reads by name.
+// Both flow through the SAME printLabel(String json) method (no new signature);
+// the Java side branches on the `type` key.
+
+const joinAllergens = (a: string[]): string => (a.length === 0 ? 'None' : a.join(', '))
+
+/** MINCE native payload — COUNTRY-ONLY granularity (slaughteredIn = "GB",
+ *  mincedIn = "GB", no plant digits). Keys mirror renderMinceLabel in
+ *  SunmiPrintBridge.java. Pinned by a unit test (the contract oracle). */
+export interface MincePayload {
+  type:          'mince'
+  batch:         string
+  productName:   string
+  date:          string
+  useBy:         string
+  bornIn:        string
+  slaughteredIn: string
+  mincedIn:      string
+  allergens:     string
+}
+
+export function buildMincePayload(d: MinceLabelData): MincePayload {
+  return {
+    type:          'mince',
+    batch:         d.batch_code,
+    productName:   d.product_species,
+    date:          d.date,
+    useBy:         d.use_by,
+    bornIn:        d.origins.join(', '),
+    slaughteredIn: d.slaughtered_in.join(', '),
+    mincedIn:      d.minced_in,
+    allergens:     joinAllergens(d.allergens_present),
+  }
+}
+
+/** PREP native payload — COUNTRY+PLANT granularity (slaughteredIn keeps the raw
+ *  "GB1234", cutIn the primary cut site, furtherCutIn = GB2946). Keys mirror
+ *  renderPrepLabel in SunmiPrintBridge.java. Pinned by a unit test. */
+export interface PrepPayload {
+  type:          'prep'
+  batch:         string
+  productName:   string
+  date:          string
+  useBy:         string
+  bornIn:        string
+  rearedIn:      string
+  slaughteredIn: string
+  cutIn:         string
+  furtherCutIn:  string
+  allergens:     string
+}
+
+export function buildPrepPayload(d: PrepLabelData): PrepPayload {
+  return {
+    type:          'prep',
+    batch:         d.batch_code,
+    productName:   d.product_name,
+    date:          d.date,
+    useBy:         d.use_by,
+    bornIn:        d.origins.join(', '),
+    rearedIn:      d.reared_in.join(', '),
+    slaughteredIn: d.slaughtered_in.join(', '),
+    cutIn:         d.cut_in.join(', '),
+    furtherCutIn:  d.further_cut_in,
+    allergens:     joinAllergens(d.allergens_present),
+  }
+}
+
 // ── Delivery label (native) ─────────────────────────────────────────────────────
 // Builds the JSON payload, then feature-detects which bridge method exists:
 //   1. printLabel(json)         — preferred, version-tolerant (ADR-0013).
@@ -197,11 +270,46 @@ async function printDeliverySunmi(d: DeliveryLabelInput): Promise<void> {
   }
 }
 
+// ── Mince / Prep label (native) ──────────────────────────────────────────────
+// Fetches the SERVER-aggregated BLS label data as JSON (the single source of
+// truth — the same data the renderer uses; the adapter does NOT re-aggregate),
+// builds the flat native payload by kind, then prints via printLabel(json).
+// Throws on any failure (no bridge / missing printLabel / fetch fail / bad data)
+// so the caller falls back to the iframe Browser adapter.
+
+async function printMinceSunmi(input: MinceLabelInput): Promise<void> {
+  const bridge = typeof window !== 'undefined' ? window.MFSSunmiPrint : undefined
+  if (!bridge) {
+    throw new Error('printMinceSunmi called without MFSSunmiPrint bridge')
+  }
+  if (typeof bridge.printLabel !== 'function') {
+    // An old (positional-only) APK has no JSON printLabel and no native mince/prep
+    // layout — fall back to the iframe path rather than mis-print.
+    throw new Error('printMinceSunmi: bridge has no printLabel(json) method')
+  }
+
+  // Single source of truth: server aggregates the multi-source BLS fields once.
+  const url = `/api/labels?type=${input.kind}&id=${input.id}&format=json&copies=${input.copies}&usebydays=${input.usebydays}&width=${input.width}`
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`printMinceSunmi: label data fetch failed (${res.status})`)
+  }
+  const body = await res.json() as
+    | { type: 'mince'; data: MinceLabelData }
+    | { type: 'prep';  data: PrepLabelData }
+
+  const payload = body.type === 'prep'
+    ? buildPrepPayload(body.data as PrepLabelData)
+    : buildMincePayload(body.data as MinceLabelData)
+
+  bridge.printLabel(JSON.stringify(payload))
+}
+
 /**
- * The Sunmi native transport adapter. Native silent print for 58mm delivery only;
- * everything else (100mm delivery, all mince) and any native throw delegate to the
- * INJECTED fallback Printer. Preserves the exact "try native, fall back on throw"
- * sequence the delivery page held inline before Pass 2a.
+ * The Sunmi native transport adapter. Native silent print for 58mm delivery,
+ * mince and prep; 100mm (all types) and any native throw delegate to the INJECTED
+ * fallback Printer. Preserves the exact "try native, fall back on throw" sequence
+ * the delivery path established in Pass 2a.
  */
 export function createSunmiPrinter(fallback: Printer): Printer {
   return {
@@ -221,11 +329,20 @@ export function createSunmiPrinter(fallback: Printer): Printer {
       // 100mm delivery, OR not running natively → iframe fallback.
       return fallback.printDeliveryLabel(input, onError)
     },
-    printMinceLabel(
+    async printMinceLabel(
       input: MinceLabelInput,
       onError: (kind: PrintErrorKind) => void,
     ): Promise<void> {
-      // No native mince, ever.
+      if (input.width === '58mm' && isSunmiNative()) {
+        try {
+          await printMinceSunmi(input)
+        } catch (err) {
+          console.error('[printMince58] Sunmi error — falling back', err)
+          return fallback.printMinceLabel(input, onError)
+        }
+        return
+      }
+      // 100mm, OR not running natively → iframe fallback.
       return fallback.printMinceLabel(input, onError)
     },
   }
