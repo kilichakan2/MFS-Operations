@@ -55,6 +55,26 @@ describe("Banner", () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
+  it("a tappable danger banner is announced (aria-live=assertive) while staying a button", () => {
+    render(
+      <Banner tone="danger" onClick={() => {}}>
+        Tap to sound alarm
+      </Banner>,
+    );
+    const btn = screen.getByRole("button");
+    expect(btn.getAttribute("aria-live")).toBe("assertive");
+    expect(btn.getAttribute("aria-atomic")).toBe("true");
+  });
+
+  it("a tappable non-danger banner is not a live region", () => {
+    render(
+      <Banner tone="info" onClick={() => {}}>
+        Enable alarms
+      </Banner>,
+    );
+    expect(screen.getByRole("button").getAttribute("aria-live")).toBeNull();
+  });
+
   it("onClick omits the dismiss button (no nested button)", () => {
     render(
       <Banner tone="danger" onClick={() => {}} onDismiss={() => {}}>

@@ -109,10 +109,19 @@ export function Banner({
   )
 
   if (onClick) {
+    // A tappable danger banner (e.g. the overdue-alarm "tap to sound") is still
+    // a button (iOS needs the direct gesture), but on a safety surface it must
+    // also be announced when it appears — aria-live keeps the button role while
+    // giving screen readers the alert behaviour role="alert" would on the static path.
+    const announce =
+      tone === 'danger'
+        ? ({ 'aria-live': 'assertive', 'aria-atomic': true } as const)
+        : {}
     return (
       <button
         type="button"
         onClick={onClick}
+        {...announce}
         className={cx(
           shell,
           'w-full text-left cursor-pointer',
