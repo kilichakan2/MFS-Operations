@@ -24,6 +24,7 @@ import type {
   PrintErrorKind,
 } from '@/lib/ports'
 import type { MinceLabelData, PrepLabelData } from '@/lib/printing/types'
+import { formatDeliveryAllergens } from '@/lib/printing'
 
 // ── Bridge type declaration ───────────────────────────────────────────────────
 // Mirrors the @JavascriptInterface methods on android/.../SunmiPrintBridge.java.
@@ -155,7 +156,7 @@ export function buildDeliveryPayload(
     slaughterSite: d.slaughter_site ?? '',
     cutSite:       d.cut_site       ?? '',
     species:       formatSpecies(d.product_category),
-    allergens:     'None',
+    allergens:     formatDeliveryAllergens(d.allergens_flagged, d.allergen_notes).text,
   }
 }
 

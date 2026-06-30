@@ -14,6 +14,7 @@
  */
 
 import type { DeliveryLabelData, MinceLabelData, PrepLabelData } from './types'
+import { formatDeliveryAllergens } from './allergens'
 
 // Label dimensions at 203dpi
 const W = 800  // 100mm = 800 dots
@@ -93,12 +94,16 @@ export function generateDeliveryZPL(data: DeliveryLabelData, copies = 1): string
     : data.slaughter_site ? `Slaughtered in: ${sanitise(data.slaughter_site, 15)}` : null
   const cutLine    = (!sameSite && data.cut_site) ? `Cut in: ${sanitise(data.cut_site, 15)}` : null
 
+  // Allergen non-conformance line (F-PROD-04 Pass 3) — "None" when not flagged
+  // (byte-identical to today), the flagged note otherwise.
+  const allergen   = formatDeliveryAllergens(data.allergens_flagged, data.allergen_notes)
+
   // Build dynamic field list (y positions start at 196, step 26)
   const fields: string[] = [
     `${sanitise(data.supplier, 20)} — ${sanitise(data.product, 20)}`,
     `Date in: ${sanitise(data.date_received, 20)}`,
     `Temp: ${tempLbl}`,
-    ...[bornLine, rearedLine, slauxLine, cutLine, `Further cut in: ${data.mfs_plant}`, `Allergens: None`].filter((l): l is string => l !== null),
+    ...[bornLine, rearedLine, slauxLine, cutLine, `Further cut in: ${data.mfs_plant}`, `Allergens: ${sanitise(allergen.text, 30)}`].filter((l): l is string => l !== null),
   ]
 
   const fieldZpl = fields.map((f, i) =>

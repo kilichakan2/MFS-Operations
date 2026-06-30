@@ -18,6 +18,7 @@
 
 import type { DeliveryLabelData, MinceLabelData, PrepLabelData } from './types'
 import { countryName } from './countries'
+import { formatDeliveryAllergens } from './allergens'
 
 // ── Code 128B barcode generator ───────────────────────────────────────────────
 
@@ -156,6 +157,11 @@ export function renderDeliveryHTML(data: DeliveryLabelData, copies = 1): string 
   const tempColour = data.temp_status === 'pass' ? '#166534' : '#991b1b'
   const barcode    = generateBarcodeSVG(data.batch_code, 260, 42, 8)
 
+  // Allergen non-conformance line (F-PROD-04 Pass 3) — green "None" when not
+  // flagged (byte-identical to today), red warning when flagged.
+  const allergen       = formatDeliveryAllergens(data.allergens_flagged, data.allergen_notes)
+  const allergenColour = allergen.flagged ? '#991b1b' : '#166534'
+
   // Born & reared — combine if same country to save label space
   const bornName   = countryName(data.born_in)
   const rearedName = countryName(data.reared_in)
@@ -189,7 +195,7 @@ export function renderDeliveryHTML(data: DeliveryLabelData, copies = 1): string 
     originLine,
     siteLine,
     `<div class="fw"><span class="fk">Further cut in:</span><span class="fv">${data.mfs_plant}</span></div>`,
-    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#166534;font-weight:bold">None</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:${allergenColour};font-weight:bold">${allergen.text}</span></div>`,
     `</div>`,
     `</div>`,
   ].filter(Boolean).join('')
@@ -255,6 +261,11 @@ export function renderDeliveryHTML58(
   const barcode    = generateBarcodeSVG(data.batch_code, 150, 36, 7)
   const code       = supplierCode || data.supplier.slice(0, 4).toUpperCase()
 
+  // Allergen non-conformance line (F-PROD-04 Pass 3) — green "None" when not
+  // flagged (byte-identical to today), red warning when flagged.
+  const allergen       = formatDeliveryAllergens(data.allergens_flagged, data.allergen_notes)
+  const allergenColour = allergen.flagged ? '#991b1b' : '#166534'
+
   // BLS: born/reared combined if same country
   const bornName   = countryName(data.born_in)
   const rearedName = countryName(data.reared_in)
@@ -288,7 +299,7 @@ export function renderDeliveryHTML58(
     originLine,
     siteLine,
     `<div class="fw"><span class="fk">MFS:</span><span class="fv">${data.mfs_plant}</span></div>`,
-    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#166534;font-weight:bold">None</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:${allergenColour};font-weight:bold">${allergen.text}</span></div>`,
     `</div>`,
     `</div>`,
   ].filter(Boolean).join('')

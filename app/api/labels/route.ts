@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
     if (type === 'delivery') {
       const { data, error } = await supabase
         .from('haccp_deliveries')
-        .select('id, date, batch_number, supplier, product, species, product_category, temperature_c, temp_status, born_in, reared_in, slaughter_site, cut_site')
+        .select('id, date, batch_number, supplier, product, species, product_category, temperature_c, temp_status, born_in, reared_in, slaughter_site, cut_site, allergens_identified, allergen_notes')
         .eq('id', id)
         .single()
 
@@ -194,6 +194,8 @@ export async function GET(req: NextRequest) {
         mfs_plant:      MFS_PLANT_CODE,
         temperature_c:  Number(data.temperature_c),
         temp_status:    data.temp_status ?? 'pass',
+        allergens_flagged: data.allergens_identified ?? false,
+        allergen_notes:    data.allergen_notes ?? null,
       }
 
       if (isJson) {
