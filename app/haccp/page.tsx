@@ -1,56 +1,63 @@
 /**
  * app/haccp/page.tsx
  *
- * HACCP kiosk — two states:
- *   1. No session  → Login door (name cards + PIN)
- *   2. Valid session → Home screen (tile grid + status panel)
+ * HACCP kiosk hub — rebuilt onto components/ui/ + semantic tokens (UI Phase 1,
+ * ADR-0014 Tier A). Two states:
+ *   1. No session  → Login door (name cards + centred PIN modal)
+ *   2. Valid session → Home screen (tile board + status panel)
  *
- * Corrective Action is a modal popup used everywhere.
- * Each tile has a help icon that slides open SOP text.
+ * Locked deltas applied: #1 per-tile SOP help, #2 no fake "Online" dot,
+ * #3 honest 8-set progress (service), #4 operational (mid-day) diary surfaced
+ * visually (NOT in the audio alarm), #5 "Goods In" label (route unchanged).
  */
 
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import AuthKeypad from '@/components/AuthKeypad'
-import MfsLogo    from '@/components/MfsLogo'
-import { useHACCPAlarm }          from '@/hooks/useHACCPAlarm'
-import { usePushNotifications }   from '@/hooks/usePushNotifications'
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import MfsLogo from '@/components/MfsLogo'
+import { useHACCPAlarm } from '@/hooks/useHACCPAlarm'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
+import {
+  StatusTile,
+  ProgressRing,
+  Banner,
+  Modal,
+  PinKeypad,
+  type TileState,
+} from '@/components/ui'
+import {
+  type TodayStatus,
+  progressPct,
+  coldState,
+  coldBadge,
+  roomState,
+  roomBadge,
+  deliveryState,
+  deliveryBadge,
+  cleaningState,
+  cleaningBadge,
+  minceState,
+  minceBadge,
+  returnState,
+  returnBadge,
+  buildOverdueList,
+  buildMandatorySet,
+  helpForTile,
+  type MandatoryState,
+} from './hubModel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface StaffMember { id: string; name: string; role: string; secondary_roles?: string[] }
 
-interface TodayStatus {
-  cold_storage:       { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
-  processing_room:    { am_done: boolean; pm_done: boolean; am_overdue: boolean; pm_overdue: boolean }
-  daily_diary:        { opening: boolean; operational: boolean; closing: boolean; opening_overdue: boolean; operational_overdue: boolean; closing_overdue: boolean }
-  cleaning:           { count_today: number; has_issues_today: boolean; overdue: boolean; last_logged_at: string | null }
-  deliveries:         { count_today: number; deviations: number }
-  mince_runs:            { count_today: number; has_deviations: boolean }
-  product_returns:       { count_today: number; has_safety_returns: boolean }
-  calibration_due:       boolean
-  calibration_done:      boolean
-  calibration_pass:      boolean
-  weekly_review_due:     boolean
-  weekly_review_overdue: boolean
-  monthly_review_due:    boolean
-  monthly_review_overdue:boolean
-  training_overdue:      number
-  training_due_soon:     number
-  total_checks:          number
-  completed_checks:      number
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function cx(...parts: Array<string | false | null | undefined>): string {
+  return parts.filter(Boolean).join(' ')
+}
 
 function initials(name: string) {
   return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
-}
-
-function fmtTime(iso: string | null) {
-  if (!iso) return null
-  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
 }
 
 function useLiveClock() {
@@ -62,281 +69,219 @@ function useLiveClock() {
   return now
 }
 
-// ─── SVG icons ────────────────────────────────────────────────────────────────
+// ─── Icons (stroke=currentColor → inherit the tone colour) ──────────────────────
 
-const Icon = {
-  cold:     <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/></svg>,
-  room:     <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12h6M9 8h6M9 16h4"/></svg>,
-  clean:    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
-  delivery: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h5l2 3v4h-7V8zM5.5 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM18.5 21a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>,
-  mince:    <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>,
-  ret:      <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.9L1 10"/></svg>,
-  warn:     <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
-  cal:      <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>,
-  review:   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
-  people:   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-  train:    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
-  audit:    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
-  help:     <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
-  close:    <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  tick:     <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>,
+const PATHS: Record<string, ReactNode> = {
+  cold: <path d="M14 4v10.5a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" />,
+  room: (
+    <>
+      <rect width="8" height="4" x="8" y="2" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    </>
+  ),
+  goods: (
+    <>
+      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
+      <path d="M15 18H9M19 18h2a1 1 0 0 0 1-1v-3.6a1 1 0 0 0-.2-.6l-3.5-4.4A1 1 0 0 0 17.5 8H14" />
+      <circle cx="17" cy="18" r="2" />
+      <circle cx="7" cy="18" r="2" />
+    </>
+  ),
+  mince: (
+    <>
+      <path d="M3 2v7c0 1.1.9 2 2 2h0a2 2 0 0 0 2-2V2" />
+      <path d="M5 2v20" />
+      <path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" />
+    </>
+  ),
+  return: (
+    <path d="M3 12a9 9 0 0 1 9-9 9.7 9.7 0 0 1 6.7 2.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.7 9.7 0 0 1-6.7-2.7L3 16M8 16H3v5" />
+  ),
+  clean: (
+    <>
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z" />
+      <path d="M19 15l.7 1.8L21.5 17l-1.8.7L19 19.5l-.7-1.8L16.5 17l1.8-.7Z" />
+    </>
+  ),
+  gauge: <path d="m12 14 4-4M3.3 14a9 9 0 1 1 17.4 0" />,
+  reviews: (
+    <>
+      <path d="m9 11 3 3L22 4" />
+      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+    </>
+  ),
+  people: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </>
+  ),
+  training: (
+    <path d="M12 7v14M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3Z" />
+  ),
+  allergens: (
+    <>
+      <path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l6.4-6.4a2 2 0 0 0 0-2.8Z" />
+      <path d="M7 7h.01" />
+    </>
+  ),
+  recall: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+  specs: (
+    <>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v5h5M9 13h6M9 17h6" />
+    </>
+  ),
+  fraud: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  defence: (
+    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+  ),
+  audit: (
+    <>
+      <rect width="8" height="4" x="8" y="2" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <path d="m9 14 2 2 4-4" />
+    </>
+  ),
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
+    </>
+  ),
+  documents: (
+    <>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v5h5M9 13h6M9 17h6" />
+    </>
+  ),
+  logout: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
+  bell: (
+    <>
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    </>
+  ),
+  alert: (
+    <>
+      <path d="M21.7 18 13.7 4a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z" />
+      <path d="M12 9v4M12 17h.01" />
+    </>
+  ),
+  chevron: <path d="m6 9 6 6 6-6" />,
+  back: <path d="m15 18-6-6 6-6" />,
 }
 
-// ─── Tile state helpers ───────────────────────────────────────────────────────
-
-type TileState = 'complete' | 'overdue' | 'due' | 'deviation' | 'neutral'
-
-function tileClasses(state: TileState): string {
-  const base = 'rounded-2xl p-4 flex flex-col gap-2.5 cursor-pointer select-none transition-all duration-150 active:scale-[0.97]'
-  switch (state) {
-    case 'complete':  return `${base} bg-white border-2 border-green-400`
-    case 'overdue':   return `${base} bg-red-50 border-2 border-red-500`
-    case 'due':       return `${base} bg-amber-50 border-2 border-amber-400`
-    case 'deviation': return `${base} bg-red-50 border-2 border-red-500`
-    default:          return `${base} bg-white border-2 border-blue-200`
-  }
-}
-
-function Badge({ state, label }: { state: TileState; label: string }) {
-  const cls = {
-    complete:  'bg-green-100 text-green-700',
-    overdue:   'bg-red-100 text-red-700',
-    due:       'bg-amber-100 text-amber-700',
-    deviation: 'bg-red-100 text-red-700',
-    neutral:   'bg-blue-50 text-blue-600',
-  }[state]
-  return <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${cls}`}>{label}</span>
-}
-
-// ─── Help Slideout ────────────────────────────────────────────────────────────
-
-const SOP_CONTENT: Record<string, { title: string; ref: string; text: string }> = {
-  cold_storage: {
-    title: 'Cold Storage Temperature — CCP 2',
-    ref: 'SOP 3 | HB-001 V4.1',
-    text: 'Critical limits: Chillers ≤5°C target (≤8°C legal max). Freezer ≤-18°C.\n\nMonitor AM and PM daily. If chiller 5–8°C: check door seals, reduce loading, recheck within 30 minutes, transfer product if rising.\n\nIf chiller >8°C: CRITICAL — minimise door openings, transfer all product to backup immediately, contact refrigeration engineer, assess all product before release.\n\nFreezer >-15°C: assess product for thawing. Do not refreeze thawed product.',
-  },
-  processing_room: {
-    title: 'Processing Room Temperature — CCP 3',
-    ref: 'SOP 3 | HB-001 V4.1',
-    text: 'Critical limits: Product ≤4°C. Room ambient ≤12°C.\n\nIf room temperature exceeds 12°C: DO NOT stop cutting.\nBring product to production area progressively in small quantities to ensure core temperature does not exceed ≤4°C.\nMonitor product core temperature more frequently.\nInvestigate cause of room temperature rise.\n\nIf product >4°C: return to chilled storage immediately. If <2 hours at <8°C: complete processing within 30 minutes then chill.',
-  },
-  cleaning: {
-    title: 'Cleaning Diary — SOP 2',
-    ref: 'SOP 2, 2B | HB-001 V4.1',
-    text: '4-step cleaning process:\n1. Pre-cleaning — remove all visible soil, rinse with cold water\n2. Cleaning — apply alkaline detergent at correct concentration, scrub all surfaces\n3. Sanitisation — hot water ≥82°C for 30 seconds OR approved chemical sanitiser\n4. Verification — visual inspection, check temperature/concentration\n\nFrequencies:\nKnives & small tools: start and end of shift (82°C)\nCutting boards: between products and EOD\nWork surfaces: every 2 hours and EOD\n\nMeat and mince require TIME SEPARATION — full 4-step clean between categories.',
-  },
-  delivery: {
-    title: 'Delivery Intake — CCP 1',
-    ref: 'SOP 5B | HB-001 V4.1 | CA-001 V1.1',
-    text: 'Critical limits: Red meat ≤7°C. Poultry ≤4°C. Offal ≤3°C. Frozen ≤-12°C.\n\nCA-001 three-band system:\n≤5°C = pass\n5–8°C = conditional accept — urgent placement into coldest chiller, halve remaining shelf life\n>8°C = REJECT immediately\n\nIf product contaminated (faecal, wool, hide): trim using clean knife, dispose trimmings as Cat 3 ABP, sterilise knife ≥82°C.\n\nBoxed/packaged meat only — NO exposed meat in receiving area.',
-  },
-  mince: {
-    title: 'Mince & Meat Prep — CCP-M1, M2, MP2',
-    ref: 'MMP-001 V1.0 | MMP-HA-001 V1.0',
-    text: 'Kill date limits (from kill date):\nPoultry: ≤3 days\nBeef / Lamb: ≤6 days\nVac-pac beef: ≤15 days\n\nIf kill date cannot be verified — DO NOT USE for mincing.\nIf limit exceeded — DO NOT MINCE. Segregate, return to supplier or dispose as Cat 3 ABP.\n\nTemperatures:\nInput: meat ≤7°C, poultry ≤4°C\nOutput (mince): must be ≤2°C immediately after\nOutput (meat prep): must be ≤4°C\n\nNO re-freezing after thawing — legal requirement.\n\nTime separation: plain products BEFORE allergen products. Full 4-step clean between categories.',
-  },
-  product_return: {
-    title: 'Product Return — SOP 12',
-    ref: 'SOP 12 | HB-001 V4.1',
-    text: 'Return codes: RC01 Temperature complaint · RC02 Quality issue · RC03 Incorrect product · RC04 Short shelf life · RC05 Packaging damage · RC06 Quantity discrepancy · RC07 Customer cancelled · RC08 Other\n\nNEVER resell:\n— Product previously frozen then thawed\n— Broken packaging/seals\n— Unknown temperature history\n— Exceeded temperature limits at any point\n— Past use-by date\n— Returned from consumers (non-trade)\n\nAcceptance temps on return: Red meat ≤7°C (else dispose). Frozen ≤-18°C no thawing signs (else dispose).',
-  },
-  calibration: {
-    title: 'Thermometer Calibration — SOP 3',
-    ref: 'SOP 3 | HB-001 V4.1',
-    text: 'Calibrate monthly, before shift.\n\nIce water test: fill with crushed ice + small amount water, stir, wait 2 minutes. Reading must be 0°C ±1°C.\n\nBoiling water test: insert probe 2 inches into rolling boil. Reading must be 100°C ±1°C.\n\nIf out of calibration: remove from service immediately, use backup thermometer, send for professional calibration or replace.\nReview all readings taken with faulty thermometer.\n\nAnnually: buy new calibrated probe — do not rely on a probe more than 12 months old.',
-  },
-  reviews: {
-    title: 'Weekly & Monthly Reviews',
-    ref: 'SOP 5, 5B, 9, 11 | MF-001 V4.1',
-    text: 'Weekly review: Check all CCP monitoring records are complete and signed. Verify corrective actions documented. Check supplier certificates, staff training current, pest control, water supply, maintenance, waste management. One-way traffic compliance check. Structural walkthrough (floors, walls, equipment, doors, emergency items).\n\nMonthly review (legal requirement — FSA): Thermometer calibration completed. Chiller/freezer temps verified at multiple locations, door seals checked. Steriliser ≥82°C verified. Staff entrance PPE stocks checked. Facilities: handwash, soap, boot wash, hand sanitiser all stocked. Full HACCP system review — confirm CCPs still valid, limits adequate, monitoring effective.',
-  },
-  people: {
-    title: 'Health Monitoring — SOP 8',
-    ref: 'SOP 8 | HB-001 V4.1 | HM-001 V1.0',
-    text: 'New staff — before first shift: health declaration mandatory. Send home immediately if: diarrhoea/vomiting, jaundice, skin infections, open wounds. Must be symptom-free for 48 hours before returning after gastrointestinal illness.\n\nReturn to work: GI illness — 48 hours symptom-free minimum. If >5 days: medical certificate required. Serious illness/hospitalisation: GP clearance required.\n\nVisitors: complete questionnaire before entering production. Reject entry if: sickness/vomiting in past 24h, skin conditions, boils, discharge from eyes/ears, heavy cold, contact with enteric fever. Visitor must confirm: no infection, jewellery removed, equipment clean, lubricants food-grade.',
-  },
-  corrective_action: {
-    title: 'Corrective Action Reference — CA-001',
-    ref: 'CA-001 V1.1',
-    text: 'FSA requirement: every CCP deviation must be documented with: date/time of deviation, description of issue, cause (root cause analysis), action taken, product disposition, measures to prevent recurrence, operator signature, management verification for significant deviations.\n\nRecord retention: 2 years minimum. Available for FSA officers and EHOs on demand.\n\nCommon actions: Urgent chill (5–8°C receipt) · Reject >8°C · Transfer to backup (CCP 2 failure) · Progressive batches (CCP 3 room >12°C) · Remove thermometer from service · Trim contaminated product · Halt and deep clean (time separation breach).',
-  },
-}
-
-function HelpPanel({ section, onClose }: { section: string; onClose: () => void }) {
-  const content = SOP_CONTENT[section]
-  if (!content) return null
+function Ic({ name, size = 24, className }: { name: keyof typeof PATHS; size?: number; className?: string }) {
   return (
-    <div style={{minHeight:400,background:'rgba(0,0,0,0.65)',display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
-      <div className="bg-white rounded-t-3xl w-full max-w-2xl p-6 max-h-96 overflow-y-auto">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <p className="text-[#EB6619] text-[10px] font-bold tracking-widest uppercase">{content.ref}</p>
-            <h3 className="text-slate-900 font-bold text-lg mt-0.5">{content.title}</h3>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 flex-shrink-0 mt-1">{Icon.close}</button>
-        </div>
-        <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">{content.text}</div>
-      </div>
-    </div>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      {PATHS[name]}
+    </svg>
   )
 }
 
-// ─── Large Tile ───────────────────────────────────────────────────────────────
+// ─── mandatory-set row token maps ─────────────────────────────────────────────
 
-function LargeTile({
-  id, icon, label, sub, state, badge, onTap, onHelp,
-}: {
-  id: string; icon: React.ReactNode; label: string; sub: string
-  state: TileState; badge: string
-  onTap: () => void; onHelp: () => void
-}) {
-  return (
-    <div className={`${tileClasses(state)} flex-1`} onPointerDown={(e) => { e.preventDefault(); onTap() }}>
-      {/* Top row: icon + help — no badge here, no overlap */}
-      <div className="flex items-start justify-between">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-          state === 'overdue' || state === 'deviation' ? 'bg-red-100 text-red-600' :
-          state === 'complete' ? 'bg-green-100 text-green-700' :
-          state === 'due' ? 'bg-amber-100 text-amber-700' : 'bg-blue-50 text-blue-600'
-        }`}>
-          {icon}
-        </div>
-        <button
-          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); onHelp() }}
-          className="text-slate-400 hover:text-slate-600 transition-colors p-1 -mt-0.5 -mr-0.5"
-          aria-label={`Help for ${label}`}>
-          {Icon.help}
-        </button>
-      </div>
-      {/* Label + sub */}
-      <div className="flex-1">
-        <p className="text-slate-900 font-semibold text-sm leading-tight">{label}</p>
-        <p className="text-slate-600 text-[11px] mt-0.5 leading-snug">{sub}</p>
-      </div>
-      {/* Badge at bottom — no longer absolute, no overlap */}
-      <div className="mt-1">
-        <Badge state={state} label={badge} />
-      </div>
-    </div>
-  )
+const MAND_DOT: Record<MandatoryState, string> = {
+  complete: 'bg-status-success-fill',
+  overdue: 'bg-status-error-fill',
+  pending: 'bg-status-neutral-fill',
+}
+const MAND_WORD_TEXT: Record<MandatoryState, string> = {
+  complete: 'text-status-success-text',
+  overdue: 'text-status-error-text',
+  pending: 'text-status-neutral-text',
+}
+const MAND_WORD: Record<MandatoryState, string> = {
+  complete: 'Done',
+  overdue: 'Overdue',
+  pending: 'Pending',
 }
 
-// ─── Small Tile ───────────────────────────────────────────────────────────────
-
-function SmallTile({
-  id, icon, label, sub, badge, due, onTap, onHelp,
-}: {
-  id: string; icon: React.ReactNode; label: string; sub: string; badge: string; due: boolean
-  onTap: () => void; onHelp: () => void
-}) {
-  return (
-    <div
-      className={`w-full rounded-xl px-3 py-3 flex items-center gap-2 cursor-pointer border transition-all active:scale-[0.97] ${
-        due ? 'bg-amber-50 border-2 border-amber-400' : 'bg-white border-2 border-blue-200'
-      }`}
-      onPointerDown={(e) => { e.preventDefault(); onTap() }}>
-      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-50 text-slate-500 flex-shrink-0">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-slate-900 text-[12px] font-semibold leading-tight">{label}</p>
-        <p className="text-slate-600 text-[10px] mt-0.5">{sub}</p>
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${due ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{badge}</span>
-        <button
-          onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); onHelp() }}
-          className="text-slate-400 hover:text-slate-600 transition-colors"
-          aria-label={`Help for ${label}`}>
-          {Icon.help}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-
-// ─── Status Strip ─────────────────────────────────────────────────────────────
-// Replaces the w-44 sidebar. Sits between header and tile grid.
-// Collapsed: time + date + progress + overdue count. Tap to expand details.
+// ─── Status Strip (phone / Sunmi) ──────────────────────────────────────────────
 
 function StatusStrip({
-  now, pct, overdueCount, overdueItems, s,
+  now,
+  pct,
+  overdueItems,
+  s,
 }: {
-  now:          Date
-  pct:          number
-  overdueCount: number
+  now: Date
+  pct: number
   overdueItems: string[]
-  s:            TodayStatus | null
+  s: TodayStatus | null
 }) {
   const [open, setOpen] = useState(false)
-
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-  const dateStr = now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+  const n = overdueItems.length
 
   return (
-    <div className="flex-shrink-0 bg-slate-800 border-b border-slate-700">
-      {/* Collapsed bar — always visible */}
+    <div className="rounded-lg border border-default bg-surface-raised overflow-hidden">
       <button
         type="button"
-        onPointerDown={(e) => { e.preventDefault(); setOpen(v => !v) }}
-        className="w-full flex items-center gap-3 px-4 py-2 active:bg-slate-700 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-3 p-3 text-left"
       >
-        {/* Time + date */}
-        <div className="flex items-baseline gap-1.5 flex-shrink-0">
-          <span className="text-white text-sm font-bold tabular-nums">{timeStr}</span>
-          <span className="text-slate-400 text-[10px]">{dateStr}</span>
-        </div>
-
-        {/* Progress bar */}
-        <div className="flex-1 flex items-center gap-2 min-w-0">
-          <div className="flex-1 bg-slate-700 rounded-full h-1.5 overflow-hidden">
-            <div
-              className="bg-[#EB6619] h-1.5 rounded-full transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
+        <ProgressRing value={pct} size="sm" accent={n > 0 ? 'danger' : 'success'} />
+        <div className="flex-1 min-w-0">
+          <div className="text-body-sm font-semibold text-body">
+            Today&rsquo;s checks · {s ? `${s.completed_checks} of ${s.total_checks} done` : '—'}
           </div>
-          <span className="text-slate-400 text-[10px] font-bold flex-shrink-0 tabular-nums">{pct}%</span>
+          {n > 0 ? (
+            <div className="text-caption font-semibold text-status-error-text">
+              {n} check{n === 1 ? '' : 's'} overdue
+            </div>
+          ) : (
+            <div className="text-caption font-semibold text-status-success-text">
+              All checks on track
+            </div>
+          )}
         </div>
-
-        {/* Overdue badge */}
-        {overdueCount > 0 && (
-          <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
-            {overdueCount} overdue
-          </span>
-        )}
-
-        {/* Chevron */}
-        <svg
-          className={`w-3.5 h-3.5 text-slate-500 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-          fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"
-        >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
+        <span className="font-text text-h3 font-bold text-body tabular-nums">{timeStr}</span>
+        <Ic
+          name="chevron"
+          size={18}
+          className={cx('text-subtle transition-transform duration-200', open && 'rotate-180')}
+        />
       </button>
-
-      {/* Expanded details */}
       {open && (
-        <div className="px-4 pb-3 space-y-2 border-t border-slate-700">
-          <div className="flex items-center justify-between pt-2">
-            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Today</span>
-            <span className="text-white text-xs font-bold">
-              {s ? `${s.completed_checks} of ${s.total_checks} checks` : '—'}
-            </span>
+        <div className="px-3 pb-3 border-t border-subtle">
+          <div className="text-caption font-semibold uppercase tracking-wide text-subtle my-2">
+            Overdue now · {n}
           </div>
-          {overdueItems.length > 0 && (
-            <div className="space-y-1">
-              {overdueItems.map(item => (
-                <div key={item} className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
-                  <span className="text-red-300 text-[11px]">{item}</span>
+          {n > 0 ? (
+            <div className="space-y-2">
+              {overdueItems.map((item) => (
+                <div
+                  key={item}
+                  className="flex items-start gap-2.5 rounded-md bg-status-error-soft border border-status-error-border p-2.5"
+                >
+                  <Ic name="alert" size={16} className="text-status-error-fill flex-shrink-0 mt-0.5" />
+                  <span className="text-body-sm font-semibold text-body">{item}</span>
                 </div>
               ))}
             </div>
-          )}
-          {overdueItems.length === 0 && (
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-              <span className="text-green-300 text-[11px]">All checks on track</span>
+          ) : (
+            <div className="text-caption font-semibold text-status-success-text pb-1">
+              All checks on track
             </div>
           )}
         </div>
@@ -345,21 +290,20 @@ function StatusStrip({
   )
 }
 
-// ─── Home Screen ─────────────────────────────────────────────────────────────
+// ─── Home Screen ──────────────────────────────────────────────────────────────
 
 function HomeScreen({ userName, userRole }: { userName: string; userRole: string }) {
-  const isAdmin     = userRole === 'admin'
-  const now         = useLiveClock()
-  const [status, setStatus]               = useState<TodayStatus | null>(null)
-  const [specReviewDue,     setSpecReviewDue]     = useState(false)
-  const [fraudReviewDue,    setFraudReviewDue]    = useState(false)
-  const [defenceReviewDue,  setDefenceReviewDue]  = useState(false)
+  const isAdmin = userRole === 'admin'
+  const now = useLiveClock()
+  const [status, setStatus] = useState<TodayStatus | null>(null)
+  const [specReviewDue, setSpecReviewDue] = useState(false)
+  const [fraudReviewDue, setFraudReviewDue] = useState(false)
+  const [defenceReviewDue, setDefenceReviewDue] = useState(false)
   const [helpSection, setHelp] = useState<string | null>(null)
   const refreshRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // ── Alarm hooks ─────────────────────────────────────────────────────────────
   const alarm = useHACCPAlarm(status)
-  const push  = usePushNotifications()
+  const push = usePushNotifications()
 
   const loadStatus = useCallback(() => {
     fetch('/api/haccp/today-status')
@@ -367,16 +311,16 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
       .then((d) => { if (!d.error) setStatus(d) })
       .catch(() => {})
     fetch('/api/haccp/product-specs')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setSpecReviewDue(d.review_due_count > 0) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setSpecReviewDue(d.review_due_count > 0) })
       .catch(() => {})
     fetch('/api/haccp/food-fraud')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setFraudReviewDue(d.review_due === true) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setFraudReviewDue(d.review_due === true) })
       .catch(() => {})
     fetch('/api/haccp/food-defence')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setDefenceReviewDue(d.review_due === true) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setDefenceReviewDue(d.review_due === true) })
       .catch(() => {})
   }, [])
 
@@ -387,353 +331,328 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   }, [loadStatus])
 
   const s = status
+  const pct = progressPct(s)
+  const overdue = buildOverdueList(s)
+  const mandatory = buildMandatorySet(s)
 
-  const coldState: TileState = !s ? 'neutral'
-    : (s.cold_storage.am_done && s.cold_storage.pm_done) ? 'complete'
-    : (s.cold_storage.pm_overdue || s.cold_storage.am_overdue) ? 'overdue'
-    : s.cold_storage.am_done ? 'due'
+  // secondary tiles with no delta — derived inline
+  const calibState: TileState = !s ? 'neutral'
+    : (s.calibration_done && !s.calibration_pass) ? 'deviation'
+    : s.calibration_done ? 'complete'
+    : s.calibration_due ? 'due'
     : 'neutral'
+  const calibBadge = !s ? '—'
+    : (s.calibration_done && !s.calibration_pass) ? 'Done · probe failed'
+    : s.calibration_done ? 'Done'
+    : 'Due this month'
 
-  const roomState: TileState = !s ? 'neutral'
-    : (s.processing_room.am_done && s.processing_room.pm_done &&
-       s.daily_diary.opening && s.daily_diary.closing) ? 'complete'
-    : (s.processing_room.pm_overdue || s.processing_room.am_overdue ||
-       s.daily_diary.opening_overdue || s.daily_diary.closing_overdue) ? 'overdue'
-    : (s.processing_room.am_done || s.daily_diary.opening) ? 'due'
-    : 'neutral'
+  const reviewState: TileState = !s ? 'neutral'
+    : (s.weekly_review_overdue || s.monthly_review_overdue) ? 'overdue'
+    : (s.weekly_review_due || s.monthly_review_due) ? 'due'
+    : 'complete'
+  const reviewBadge = !s ? '—'
+    : s.weekly_review_overdue ? 'Weekly overdue'
+    : s.monthly_review_overdue ? 'Monthly overdue'
+    : s.weekly_review_due ? 'Weekly due'
+    : s.monthly_review_due ? 'Monthly due'
+    : 'Up to date'
 
-  const cleaningState: TileState = !s ? 'neutral'
-    : s.cleaning.count_today > 0 && s.cleaning.has_issues_today ? 'deviation'
-    : s.cleaning.count_today > 0 ? 'complete'
-    : s.cleaning.overdue ? 'overdue'
-    : 'neutral'
-
-  const delivState: TileState = !s ? 'neutral'
-    : s.deliveries.deviations > 0 ? 'deviation'
-    : s.deliveries.count_today > 0 ? 'complete'
-    : 'neutral'
-
-  const coldBadge = !s ? '—'
-    : (s.cold_storage.am_done && s.cold_storage.pm_done) ? 'Done ✓'
-    : s.cold_storage.pm_overdue ? 'PM overdue'
-    : s.cold_storage.am_overdue ? 'AM overdue'
-    : s.cold_storage.am_done    ? 'PM due'
-    : 'AM due'
-  const roomBadge = !s ? '—'
-    : (s.processing_room.am_done && s.processing_room.pm_done && s.daily_diary.opening && s.daily_diary.closing) ? 'Done ✓'
-    : s.processing_room.pm_overdue    ? 'Temp PM overdue'
-    : s.daily_diary.closing_overdue   ? 'Closing overdue'
-    : s.processing_room.am_overdue    ? 'Temp AM overdue'
-    : s.daily_diary.opening_overdue   ? 'Opening overdue'
-    : s.processing_room.am_done       ? 'Temp PM due'
-    : s.daily_diary.opening           ? 'Opening ✓'
-    : 'Opening due'
-  const delivBadge = !s ? '—'
-    : s.deliveries.deviations > 0 ? `${s.deliveries.count_today} logged · ${s.deliveries.deviations} fail`
-    : s.deliveries.count_today > 0 ? `${s.deliveries.count_today} logged`
-    : 'None yet'
-  const cleaningBadge = !s ? '—'
-    : s.cleaning.count_today > 0 && s.cleaning.has_issues_today ? `${s.cleaning.count_today} logged · issue`
-    : s.cleaning.count_today > 0 ? `${s.cleaning.count_today} logged`
-    : s.cleaning.overdue ? 'Overdue'
-    : 'None yet'
-
-  const pct   = s ? Math.round((s.completed_checks / s.total_checks) * 100) : 0
+  const trainState: TileState = !s ? 'neutral'
+    : s.training_overdue > 0 ? 'overdue'
+    : s.training_due_soon > 0 ? 'due'
+    : 'complete'
+  const trainBadge = !s ? '—'
+    : s.training_overdue > 0 ? `${s.training_overdue} overdue`
+    : s.training_due_soon > 0 ? `${s.training_due_soon} due soon`
+    : 'All current'
 
   function signOut() { window.location.href = '/api/auth/logout' }
 
-  const overdue: string[] = []
-  if (s?.cold_storage.am_overdue)          overdue.push('Cold Storage AM')
-  if (s?.cold_storage.pm_overdue)          overdue.push('Cold Storage PM')
-  if (s?.processing_room.am_overdue)       overdue.push('Process Room Temp AM')
-  if (s?.processing_room.pm_overdue)       overdue.push('Process Room Temp PM')
-  if (s?.daily_diary.opening_overdue)      overdue.push('Process Room Opening checks')
-  if (s?.daily_diary.closing_overdue)      overdue.push('Process Room Closing checks')
-  if (s?.cleaning.overdue)                 overdue.push('Cleaning log')
-  if (s?.calibration_due)                  overdue.push('Calibration (not done this month)')
-  if (s?.weekly_review_overdue)            overdue.push('Weekly review overdue')
-  if (s?.monthly_review_overdue)           overdue.push('Monthly review overdue')
+  const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
+  const help = helpSection ? helpForTile(helpSection) : null
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
+    <div className="min-h-screen bg-surface-base flex flex-col select-none">
 
-      {/* Header — turns red when alarming */}
-      <div className={`flex items-center justify-between px-5 py-3 border-b flex-shrink-0 transition-colors duration-500 ${alarm.isAlarming ? 'bg-red-700 border-red-800' : 'bg-[#1E293B] border-slate-700'}`}>
-        <div className="flex items-center gap-3">
-          <MfsLogo className="h-6 w-auto text-white" />
-          <div className={`w-px h-6 ${alarm.isAlarming ? 'bg-red-400' : 'bg-slate-600'}`} />
-          <span className="text-slate-300 text-sm font-medium">HACCP</span>
+      {/* Header — turns red while alarming (preserved behaviour) */}
+      <header
+        className={cx(
+          'flex items-center justify-between gap-3 px-4 md:px-6 h-16 border-b flex-shrink-0 transition-colors duration-500',
+          alarm.isAlarming ? 'bg-status-error-fill border-status-error-border' : 'bg-surface-raised border-default',
+        )}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <MfsLogo className={cx('h-6 w-auto', alarm.isAlarming ? 'text-inverse' : 'text-body')} />
+          <div className="w-px h-6 bg-border" />
+          <div className="min-w-0 leading-tight">
+            <div className={cx('font-display text-h3', alarm.isAlarming ? 'text-inverse' : 'text-body')}>
+              Food Safety
+            </div>
+            <div className={cx('text-caption font-semibold', alarm.isAlarming ? 'text-inverse' : 'text-subtle')}>
+              <span className="hidden md:inline">MFS Sheffield · S3 8DG · </span>HACCP
+            </div>
+          </div>
           {alarm.isAlarming && (
-            <span className="animate-pulse text-white text-xs font-bold bg-red-500 px-2 py-0.5 rounded-full">
-              🚨 {alarm.overdueCount} OVERDUE
+            <span className="ml-1 animate-pulse rounded-pill border border-current px-2 py-0.5 text-caption font-bold text-inverse">
+              {alarm.overdueCount} OVERDUE
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          {/* Documents register link */}
-          <button onClick={() => { window.location.href = '/haccp/documents' }}
-            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/18 border border-white/15 rounded-xl px-3 py-2 text-slate-200 hover:text-white transition-all text-xs font-bold">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            </svg>
-            Documents
-          </button>
-          <div className="flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-3 py-1.5">
-            <div className="w-6 h-6 rounded-full bg-[#EB6619] flex items-center justify-center text-white text-[9px] font-bold">
-              {initials(userName)}
-            </div>
-            <span className="text-white text-xs font-medium">{userName}</span>
-            <button onClick={signOut} className="text-slate-400 hover:text-slate-200 text-[10px] ml-1 transition-colors">Sign out</button>
-          </div>
-        </div>
-      </div>
 
-      {/* Overdue alarm banner — tap to sound alarm immediately (iOS requires direct gesture for audio) */}
-      {alarm.isAlarming && (
-        <button
-          onClick={() => alarm.fireAlarm()}
-          className="bg-red-600 active:bg-red-700 px-4 py-2.5 flex items-center gap-2 flex-shrink-0 w-full text-left"
-        >
-          <svg className="w-4 h-4 text-white flex-shrink-0 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
-          </svg>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-xs font-bold">⚠️ Overdue — tap to sound alarm</p>
-            <p className="text-red-100 text-[10px] truncate">{alarm.overdueLabels.join(' · ')}</p>
-          </div>
-          <span className="text-red-200 text-[10px] flex-shrink-0">🔔</span>
-        </button>
-      )}
-
-      {/* Push notification permission banner */}
-      {push.supported && push.permission === 'default' && !push.subscribed && (
-        <div className="bg-slate-800 px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
-          <span className="text-lg">🔔</span>
-          <div className="flex-1 min-w-0">
-            <p className="text-white text-xs font-bold">Enable overdue alarms</p>
-            <p className="text-slate-400 text-[10px]">Get notified even when the iPad is locked</p>
-          </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/haccp/admin' }}
+              className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-action-primary bg-surface-raised text-action-primary font-semibold text-body-sm"
+            >
+              <Ic name="settings" size={17} />
+              <span className="hidden md:inline">Admin panel</span>
+            </button>
+          )}
           <button
-            onClick={async () => { await push.subscribe() }}
-            className="flex-shrink-0 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-lg transition-colors"
+            type="button"
+            onClick={() => { window.location.href = '/haccp/documents' }}
+            className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-default bg-surface-raised text-muted font-semibold text-body-sm"
           >
-            Enable
+            <Ic name="documents" size={18} />
+            <span className="hidden md:inline">Documents</span>
           </button>
-        </div>
-      )}
-
-      {push.supported && push.subscribed && !alarm.isAlarming && (
-        <div className="bg-green-900/30 px-4 py-1.5 flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs">🔔</span>
-          <p className="text-green-400 text-[10px]">Overdue alarms active on this device</p>
-        </div>
-      )}
-
-      {/* Admin panel strip — only visible when logged in as admin */}
-      {isAdmin && (
-        <div className="bg-orange-600 px-5 py-2 flex items-center gap-3 flex-shrink-0">
-          <svg className="w-4 h-4 text-white flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <span className="text-white text-xs font-bold flex-1">Admin mode — additional controls active</span>
-          <div className="flex items-center gap-2">
-            <button onClick={() => { window.location.href = '/haccp/admin' }}
-              className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1 rounded-lg transition-all">
-              Admin panel
+          <div className="flex items-center gap-2 rounded-xl bg-surface-base border border-default px-2 py-1">
+            <span className="w-8 h-8 rounded-full bg-action-primary text-on-action flex items-center justify-center text-caption font-bold">
+              {initials(userName)}
+            </span>
+            <div className="hidden md:block min-w-0">
+              <div className="text-body-sm font-semibold text-body truncate">{userName}</div>
+            </div>
+            <button
+              type="button"
+              onClick={signOut}
+              aria-label="Sign out"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-default bg-surface-raised text-muted"
+            >
+              <Ic name="logout" size={17} />
             </button>
           </div>
         </div>
-      )}
+      </header>
 
-      {/* Status strip — phone/Sunmi only (hidden on iPad+) */}
-      <div className="md:hidden">
-        <StatusStrip
-          now={now}
-          pct={pct}
-          overdueCount={overdue.length}
-          overdueItems={overdue}
-          s={s}
-        />
+      {/* Safety banners */}
+      <div className="flex flex-col gap-2 px-4 pt-3 md:px-6 flex-shrink-0 empty:hidden">
+        {/* Overdue alarm — tap the whole banner to sound (iOS needs a direct gesture) */}
+        {alarm.isAlarming && (
+          <Banner
+            tone="danger"
+            onClick={() => alarm.fireAlarm()}
+            icon={<Ic name="bell" size={20} className="animate-pulse" />}
+            title="Overdue — tap to sound alarm"
+          >
+            {alarm.overdueLabels.join(' · ')}
+          </Banner>
+        )}
+
+        {/* Push permission prompt */}
+        {push.supported && push.permission === 'default' && !push.subscribed && (
+          <Banner tone="warning" icon={<Ic name="bell" size={19} />} title="Enable overdue alarms">
+            <div className="flex items-center gap-3">
+              <span className="flex-1 min-w-0">Get notified even when the iPad is locked</span>
+              <button
+                type="button"
+                onClick={async () => { await push.subscribe() }}
+                className="flex-shrink-0 h-9 px-4 rounded-md bg-action-primary text-on-action font-semibold text-body-sm"
+              >
+                Enable
+              </button>
+            </div>
+          </Banner>
+        )}
+
+        {/* Alarms-active strip */}
+        {push.supported && push.subscribed && !alarm.isAlarming && (
+          <div className="flex items-center gap-2 rounded-md bg-status-success-soft border border-status-success-border px-3 py-1.5">
+            <span className="w-2 h-2 rounded-full bg-status-success-fill animate-pulse" />
+            <span className="text-caption font-semibold text-status-success-text">
+              Alarms active on this device
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Body — flex row so sidebar sits beside tiles on iPad */}
+      {/* Body */}
       <div className="flex flex-1 overflow-hidden">
-
-        {/* Tile grid — full width on phone/Sunmi, flex-1 on iPad */}
-        <div className="flex-1 p-4 flex flex-col gap-3 min-h-0 overflow-y-auto pb-20">
-
-          {/* Row 1 — large tiles (2-col on phone/Sunmi, 3-col on iPad+) */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-shrink-0">
-            <LargeTile id="cold_storage" icon={Icon.cold} label="Cold Storage" state={coldState} badge={coldBadge}
-              sub={s ? `CCP 2 · 5 units${s.cold_storage.am_done ? ' · AM done' : ''}` : 'CCP 2 · 5 units'}
-              onTap={() => { window.location.href = '/haccp/cold-storage' }} onHelp={() => setHelp('cold_storage')} />
-            <LargeTile id="processing_room" icon={Icon.room} label="Process Room" state={roomState} badge={roomBadge}
-              sub={s ? `CCP 3 · Daily Diary${s.daily_diary.opening ? ' · Opening ✓' : ''}` : 'CCP 3 · Daily Diary'}
-              onTap={() => { window.location.href = '/haccp/process-room' }} onHelp={() => setHelp('processing_room')} />
-            <LargeTile id="delivery" icon={Icon.delivery} label="Delivery" state={delivState} badge={delivBadge}
-              sub={`CCP 1 · SOP 5B${s?.deliveries.deviations ? ` · ${s.deliveries.deviations} CCA` : ''}`}
-              onTap={() => { window.location.href = '/haccp/delivery' }} onHelp={() => setHelp('delivery')} />
+        <main className="flex-1 p-4 md:p-6 overflow-y-auto pb-20">
+          {/* phone / Sunmi strip */}
+          <div className="md:hidden mb-4">
+            <StatusStrip now={now} pct={pct} overdueItems={overdue} s={s} />
           </div>
 
-          {/* Row 2 — large tiles (2-col on phone/Sunmi, 3-col on iPad+) */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 flex-shrink-0">
-            <LargeTile id="mince" icon={Icon.mince} label="Mince / Prep"
-              state={!s ? 'neutral' : s.mince_runs.has_deviations ? 'deviation' : s.mince_runs.count_today > 0 ? 'complete' : 'neutral'}
-              badge={!s ? '—' : s.mince_runs.has_deviations ? `${s.mince_runs.count_today} runs · deviation` : s.mince_runs.count_today > 0 ? `${s.mince_runs.count_today} runs` : 'None today'}
-              sub="CCP-M1 M2 · Kill date"
-              onTap={() => { window.location.href = '/haccp/mince' }} onHelp={() => setHelp('mince')} />
-            <LargeTile id="product_return" icon={Icon.ret} label="Product Return"
-              state={!s ? 'neutral' : s.product_returns.has_safety_returns ? 'deviation' : s.product_returns.count_today > 0 ? 'complete' : 'neutral'}
-              badge={!s ? '—' : s.product_returns.has_safety_returns ? `${s.product_returns.count_today} logged · safety` : s.product_returns.count_today > 0 ? `${s.product_returns.count_today} logged` : 'None'}
-              sub="SOP 12 · RC01–RC08"
-              onTap={() => { window.location.href = '/haccp/product-return' }} onHelp={() => setHelp('product_return')} />
-            <LargeTile id="cleaning" icon={Icon.clean} label="Cleaning" state={cleaningState} badge={cleaningBadge}
-              sub={s?.cleaning.last_logged_at ? `Last: ${fmtTime(s.cleaning.last_logged_at)}` : 'SOP 2 — log each clean'}
-              onTap={() => { window.location.href = '/haccp/cleaning' }} onHelp={() => setHelp('cleaning')} />
+          <div className="text-caption font-semibold uppercase tracking-wide text-subtle mb-3">
+            Daily checks
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <StatusTile icon={<Ic name="cold" size={28} />} label="Cold Storage" state={coldState(s)}
+              statusLine={coldBadge(s)} onTap={() => { window.location.href = '/haccp/cold-storage' }}
+              onHelp={() => setHelp('cold_storage')} />
+            <StatusTile icon={<Ic name="room" size={28} />} label="Process Room" state={roomState(s)}
+              statusLine={roomBadge(s)} onTap={() => { window.location.href = '/haccp/process-room' }}
+              onHelp={() => setHelp('processing_room')} />
+            {/* delta #5: "Goods In" label; route stays /haccp/delivery, help key 'delivery' */}
+            <StatusTile icon={<Ic name="goods" size={28} />} label="Goods In" state={deliveryState(s)}
+              statusLine={deliveryBadge(s)} onTap={() => { window.location.href = '/haccp/delivery' }}
+              onHelp={() => setHelp('delivery')} />
+            <StatusTile icon={<Ic name="mince" size={28} />} label="Mince / Prep" state={minceState(s)}
+              statusLine={minceBadge(s)} onTap={() => { window.location.href = '/haccp/mince' }}
+              onHelp={() => setHelp('mince')} />
+            <StatusTile icon={<Ic name="return" size={28} />} label="Product Return" state={returnState(s)}
+              statusLine={returnBadge(s)} onTap={() => { window.location.href = '/haccp/product-return' }}
+              onHelp={() => setHelp('product_return')} />
+            <StatusTile icon={<Ic name="clean" size={28} />} label="Cleaning" state={cleaningState(s)}
+              statusLine={cleaningBadge(s)} onTap={() => { window.location.href = '/haccp/cleaning' }}
+              onHelp={() => setHelp('cleaning')} />
           </div>
 
-          {/* Divider */}
-          <div className="h-px bg-slate-300 mx-1 flex-shrink-0" />
-
-          {/* Secondary tiles — 2-col on phone/Sunmi, 4-col on iPad+ */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 flex-shrink-0">
-            <SmallTile id="calibration" icon={Icon.cal} label="Calibration" sub="Monthly · SOP 3"
-              badge={
-                !s ? '—'
-                : s.calibration_done && !s.calibration_pass ? 'Done · probe failed'
-                : s.calibration_done ? 'Done ✓'
-                : 'Due this month'
-              }
-              due={s?.calibration_due ?? false}
-              onTap={() => { window.location.href = '/haccp/calibration' }} onHelp={() => setHelp('calibration')} />
-            <SmallTile id="reviews" icon={Icon.review} label="Reviews" sub="Weekly · Monthly · Annual"
-              badge={
-                !s ? '—'
-                : s.weekly_review_overdue  ? 'Weekly overdue'
-                : s.monthly_review_overdue ? 'Monthly overdue'
-                : s.weekly_review_due      ? 'Weekly due'
-                : s.monthly_review_due     ? 'Monthly due'
-                : 'Up to date ✓'
-              }
-              due={s?.weekly_review_overdue || s?.monthly_review_overdue || s?.weekly_review_due || s?.monthly_review_due ? true : false}
-              onTap={() => { window.location.href = '/haccp/reviews' }} onHelp={() => setHelp('reviews')} />
-            <SmallTile id="people" icon={Icon.people} label="People" sub="Health · Visitor · Training"
-              badge="Event only" due={false}
-              onTap={() => { window.location.href = '/haccp/people' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="training" icon={Icon.train} label="Training" sub="Staff · Allergen"
-              badge={
-                !s ? '—'
-                : s.training_overdue > 0  ? `${s.training_overdue} overdue`
-                : s.training_due_soon > 0 ? `${s.training_due_soon} due soon`
-                : 'All current ✓'
-              }
-              due={!!(s?.training_overdue || s?.training_due_soon)}
-              onTap={() => { window.location.href = '/haccp/training' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="allergens" icon={Icon.audit} label="Allergens" sub="SALSA 1.4.1"
-              badge="View assessment" due={false}
-              onTap={() => { window.location.href = '/haccp/allergens' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="recall" icon={Icon.audit} label="Recall Contacts" sub="SALSA 3.4"
-              badge="View contacts" due={false}
-              onTap={() => { window.location.href = '/haccp/recall' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="product-specs" icon={Icon.review} label="Product Specs" sub="BSD 1.6.2"
-              badge={specReviewDue ? 'Review due' : 'View specs'} due={specReviewDue}
-              onTap={() => { window.location.href = '/haccp/product-specs' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="food-fraud" icon={Icon.audit} label="Food Fraud" sub="BSD 1.6.4"
-              badge={fraudReviewDue ? 'Review due' : 'Current'} due={fraudReviewDue}
-              onTap={() => { window.location.href = '/haccp/food-fraud' }} onHelp={() => setHelp('people')} />
-            <SmallTile id="food-defence" icon={Icon.audit} label="Food Defence" sub="SALSA 4.2.3"
-              badge={defenceReviewDue ? 'Review due' : 'Current'} due={defenceReviewDue}
-              onTap={() => { window.location.href = '/haccp/food-defence' }} onHelp={() => setHelp('people')} />
+          <div className="text-caption font-semibold uppercase tracking-wide text-subtle mt-7 mb-3">
+            Records &amp; compliance
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <StatusTile size="small" icon={<Ic name="gauge" size={20} />} label="Calibration" state={calibState}
+              statusLine={calibBadge} onTap={() => { window.location.href = '/haccp/calibration' }}
+              onHelp={() => setHelp('calibration')} />
+            <StatusTile size="small" icon={<Ic name="reviews" size={20} />} label="Reviews" state={reviewState}
+              statusLine={reviewBadge} onTap={() => { window.location.href = '/haccp/reviews' }}
+              onHelp={() => setHelp('reviews')} />
+            <StatusTile size="small" icon={<Ic name="people" size={20} />} label="People" state="neutral"
+              statusLine="Event only" onTap={() => { window.location.href = '/haccp/people' }}
+              onHelp={() => setHelp('people')} />
+            <StatusTile size="small" icon={<Ic name="training" size={20} />} label="Training" state={trainState}
+              statusLine={trainBadge} onTap={() => { window.location.href = '/haccp/training' }}
+              onHelp={() => setHelp('training')} />
+            <StatusTile size="small" icon={<Ic name="allergens" size={20} />} label="Allergens" state="neutral"
+              statusLine="View assessment" onTap={() => { window.location.href = '/haccp/allergens' }}
+              onHelp={() => setHelp('allergens')} />
+            <StatusTile size="small" icon={<Ic name="recall" size={20} />} label="Recall Contacts" state="neutral"
+              statusLine="View contacts" onTap={() => { window.location.href = '/haccp/recall' }}
+              onHelp={() => setHelp('recall')} />
+            <StatusTile size="small" icon={<Ic name="specs" size={20} />} label="Product Specs"
+              state={specReviewDue ? 'due' : 'neutral'} statusLine={specReviewDue ? 'Review due' : 'View specs'}
+              onTap={() => { window.location.href = '/haccp/product-specs' }} onHelp={() => setHelp('product-specs')} />
+            <StatusTile size="small" icon={<Ic name="fraud" size={20} />} label="Food Fraud"
+              state={fraudReviewDue ? 'due' : 'neutral'} statusLine={fraudReviewDue ? 'Review due' : 'Current'}
+              onTap={() => { window.location.href = '/haccp/food-fraud' }} onHelp={() => setHelp('food-fraud')} />
+            <StatusTile size="small" icon={<Ic name="defence" size={20} />} label="Food Defence"
+              state={defenceReviewDue ? 'due' : 'neutral'} statusLine={defenceReviewDue ? 'Review due' : 'Current'}
+              onTap={() => { window.location.href = '/haccp/food-defence' }} onHelp={() => setHelp('food-defence')} />
             {isAdmin && (
-              <SmallTile id="audit" icon={Icon.audit} label="Audit" sub="Records · Export"
-                badge="View all records" due={false}
-                onTap={() => { window.location.href = '/haccp/audit' }} onHelp={() => setHelp('people')} />
+              <StatusTile size="small" icon={<Ic name="audit" size={20} />} label="Audit" state="neutral"
+                statusLine="View all records" onTap={() => { window.location.href = '/haccp/audit' }}
+                onHelp={() => setHelp('audit')} />
             )}
           </div>
+        </main>
 
-        </div>
-
-        {/* Status panel — iPad+ only (hidden on phone/Sunmi) */}
-        <div className="hidden md:flex w-44 flex-shrink-0 border-l border-blue-100 bg-white p-4 flex-col gap-4">
-
+        {/* Side panel — iPad+ only */}
+        <aside className="hidden md:flex w-[326px] flex-shrink-0 border-l border-default bg-surface-raised p-6 flex-col gap-5 overflow-y-auto">
           <div>
-            <div className="text-slate-900 text-2xl font-bold tracking-wide">
-              {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-            </div>
-            <div className="text-slate-500 text-[11px] mt-0.5">
-              {now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
+            <div className="font-text text-[38px] leading-none font-bold text-body tabular-nums">{timeStr}</div>
+            <div className="text-body-sm text-subtle mt-1">{dateStr}</div>
+          </div>
+
+          <div className="flex items-center gap-4 p-4 rounded-lg bg-surface-base border border-default">
+            <ProgressRing value={pct} size="lg" accent="success" />
+            <div className="min-w-0">
+              <div className="text-caption font-semibold uppercase tracking-wide text-subtle">
+                Today&rsquo;s checks
+              </div>
+              <div className="font-display text-h2 text-body mt-1">
+                {s ? `${s.completed_checks} of ${s.total_checks}` : '—'}
+              </div>
+              <div className="text-body-sm text-subtle mt-0.5">mandatory daily set</div>
             </div>
           </div>
 
-          <div className="h-px bg-slate-200" />
-
+          {/* F4 — the honest-8 mandatory checklist */}
           <div>
-            <p className="text-slate-600 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Today</p>
-            <div className="bg-slate-100 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-[#EB6619] h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+            <div className="text-caption font-semibold uppercase tracking-wide text-subtle mb-2">
+              Mandatory set · {mandatory.length}
             </div>
-            <div className="flex justify-between mt-1.5">
-              <span className="text-slate-500 text-[10px]">{s ? `${s.completed_checks} of ${s.total_checks}` : '—'}</span>
-              <span className="text-slate-700 text-[10px] font-bold">{pct}%</span>
-            </div>
+            {mandatory.map((m) => (
+              <div key={m.label} className="flex items-center gap-3 py-2 border-b border-subtle">
+                <span className={cx('w-2.5 h-2.5 rounded-full flex-shrink-0', MAND_DOT[m.state])} />
+                <span className="flex-1 min-w-0 text-body-sm text-body">{m.label}</span>
+                <span className={cx('text-caption font-semibold', MAND_WORD_TEXT[m.state])}>
+                  {MAND_WORD[m.state]}
+                </span>
+              </div>
+            ))}
           </div>
 
           {overdue.length > 0 && (
             <div>
-              <p className="text-slate-600 text-[9px] font-bold tracking-[.1em] uppercase mb-2">Overdue</p>
-              <div className="space-y-1.5">
+              <div className="text-caption font-semibold uppercase tracking-wide text-status-error-text mb-2">
+                Overdue now · {overdue.length}
+              </div>
+              <div className="space-y-2">
                 {overdue.map((item) => (
-                  <div key={item} className="border-l-2 border-red-500 pl-2">
-                    <p className="text-red-600 text-[11px] font-medium">{item}</p>
-                    <p className="text-slate-500 text-[9px]">PM check due</p>
+                  <div
+                    key={item}
+                    className="flex items-start gap-3 rounded-lg bg-status-error-soft border border-status-error-border p-3"
+                  >
+                    <Ic name="alert" size={18} className="text-status-error-fill flex-shrink-0 mt-0.5" />
+                    <div className="text-body-sm font-semibold text-body">{item}</div>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
-          <div className="h-px bg-slate-200" />
-
-          <div>
-            <p className="text-slate-600 text-[9px] font-bold tracking-[.1em] uppercase mb-1.5">Sync</p>
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              <span className="text-slate-500 text-[10px]">Online</span>
-            </div>
-          </div>
-
-        </div>
+        </aside>
       </div>
 
-      {/* Popups — faux viewport pattern (no position:fixed) */}
-
-      {helpSection && (
-        <div className="absolute inset-0 z-50" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <HelpPanel section={helpSection} onClose={() => setHelp(null)} />
-        </div>
-      )}
-
+      {/* Per-tile SOP help sheet (delta #1) */}
+      <Modal
+        open={!!help}
+        onOpenChange={(o) => { if (!o) setHelp(null) }}
+        variant="sheet"
+        title={help?.title}
+        description={help?.ref}
+      >
+        {help && (
+          <div className="whitespace-pre-line text-body-sm text-muted leading-relaxed">
+            {help.text}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
 
-// ─── Login Door ───────────────────────────────────────────────────────────────
+// ─── Login Door ─────────────────────────────────────────────────────────────
 
 function StaffCard({ member, onSelect }: { member: StaffMember; onSelect: (m: StaffMember) => void }) {
   const isWh = member.role === 'warehouse'
   return (
-    <button type="button" aria-label={`Select ${member.name}`}
+    <button
+      type="button"
+      aria-label={`Select ${member.name}`}
       onPointerDown={(e) => { e.preventDefault(); if ('vibrate' in navigator) navigator.vibrate(8); onSelect(member) }}
-      className="flex flex-col items-center gap-3 rounded-2xl p-5 ring-1 ring-white/20 bg-slate-100 active:bg-slate-200 active:ring-[#EB6619]/60 transition-all select-none">
-      <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold ${isWh ? 'bg-[#EB6619]' : 'bg-pink-900'}`}>
+      className="flex flex-col items-start gap-3.5 rounded-lg border border-default bg-surface-raised p-4 text-left transition-transform active:scale-[0.98] select-none"
+    >
+      <span
+        className={cx(
+          'w-12 h-12 rounded-full flex items-center justify-center text-on-action text-body-lg font-bold',
+          isWh ? 'bg-action-primary' : 'bg-action-secondary',
+        )}
+      >
         {initials(member.name)}
-      </div>
-      <p className="text-slate-900 font-semibold text-sm">{member.name}</p>
-      <span className={`text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full ${isWh ? 'bg-amber-50 text-[#EB6619]' : 'bg-pink-100 text-slate-700'}`}>
-        {isWh ? 'Warehouse' : 'Butcher'}
       </span>
+      <div className="min-w-0">
+        <div className="text-body font-semibold text-body">{member.name}</div>
+        <div className="text-body-sm text-subtle mt-0.5">{isWh ? 'Warehouse' : 'Butcher'}</div>
+      </div>
       {(member.secondary_roles ?? []).length > 0 && (
-        <div className="flex flex-wrap gap-1 justify-center">
-          {(member.secondary_roles ?? []).map(r => (
-            <span key={r} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-200 text-slate-500">
+        <div className="flex flex-wrap gap-1">
+          {(member.secondary_roles ?? []).map((r) => (
+            <span key={r} className="text-caption font-semibold px-1.5 py-0.5 rounded bg-surface-sunken text-subtle">
               +{r}
             </span>
           ))}
@@ -744,11 +663,12 @@ function StaffCard({ member, onSelect }: { member: StaffMember; onSelect: (m: St
 }
 
 function LoginDoor() {
-  const [staff,      setStaff]      = useState<StaffMember[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [selected,   setSelected]   = useState<StaffMember | null>(null)
-  const [pinError,   setPinError]   = useState<string | undefined>()
-  const [reset,      setReset]      = useState(0)
+  const now = useLiveClock()
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<StaffMember | null>(null)
+  const [pinError, setPinError] = useState<string | undefined>()
+  const [reset, setReset] = useState(0)
 
   useEffect(() => {
     fetch('/api/auth/haccp-team')
@@ -761,78 +681,116 @@ function LoginDoor() {
   const handlePin = useCallback(async (pin: string) => {
     if (!selected) return
     try {
-      const res  = await fetch('/api/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: selected.name, credential: pin }),
       })
       const data = await res.json()
       if (res.ok) {
-        // Mark this as a HACCP kiosk session so the main app
-        // doesn't redirect this user to /screen1 (dispatch log)
+        // Mark this as a HACCP kiosk session so the main app doesn't redirect
+        // this user to /screen1 (dispatch log).
         document.cookie = 'mfs_haccp_session=1; path=/; max-age=86400; samesite=lax'
         window.location.href = '/haccp'
+      } else {
+        setPinError(data.error ?? 'Incorrect PIN — try again')
+        setReset((n) => n + 1)
       }
-      else { setPinError(data.error ?? 'Incorrect PIN — try again'); setReset((n) => n + 1) }
-    } catch { setPinError('Connection error — try again'); setReset((n) => n + 1) }
+    } catch {
+      setPinError('Connection error — try again')
+      setReset((n) => n + 1)
+    }
   }, [selected])
 
-  if (selected) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex flex-col">
-        <button type="button" onPointerDown={() => { setSelected(null); setPinError(undefined); setReset((n) => n + 1) }}
-          className="absolute top-5 left-5 flex items-center gap-2 text-slate-400 hover:text-slate-700 transition-colors z-10 select-none">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          <span className="text-sm">Back</span>
-        </button>
-        <AuthKeypad title={`${selected.name} — Enter PIN`} onComplete={handlePin} error={pinError} resetSignal={reset} />
-      </div>
-    )
+  function closePin() {
+    setSelected(null)
+    setPinError(undefined)
+    setReset((n) => n + 1)
   }
 
+  const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
+
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
-      {/* Top bar with back button */}
-      <div className="flex items-center px-5 pt-5">
-        <button
-          onPointerDown={(e) => { e.preventDefault(); window.location.href = '/' }}
-          className="flex items-center gap-1.5 text-slate-400 hover:text-slate-600 transition-colors text-xs font-medium select-none active:scale-95">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-          Back to main app
-        </button>
-      </div>
-      <div className="flex flex-col items-center pt-6 pb-6 px-6">
-        <MfsLogo className="h-8 mb-4 text-white" />
-        <p className="text-[#EB6619] text-xs font-bold tracking-[.35em] uppercase">Process Room</p>
-        <h1 className="text-white text-2xl font-bold tracking-wide mt-1">HACCP Compliance</h1>
-        <p className="text-slate-600 text-sm mt-2">Tap your name to continue</p>
-      </div>
-      <div className="mx-8 h-px bg-slate-100" />
-      <div className="flex-1 flex items-start justify-center px-6 pt-8 pb-10">
+    <div className="min-h-screen bg-surface-base flex flex-col select-none">
+      <header className="flex items-center justify-between gap-3 px-4 md:px-6 h-16 border-b border-default flex-shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <MfsLogo className="h-6 w-auto text-body" />
+          <div className="w-px h-6 bg-border" />
+          <div className="leading-tight">
+            <div className="font-display text-h3 text-body">Food Safety</div>
+            <div className="text-caption font-semibold text-subtle">MFS Sheffield · HACCP kiosk</div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="font-text text-h2 font-bold text-body tabular-nums leading-none">{timeStr}</div>
+          <div className="text-caption font-semibold text-subtle mt-1">{dateStr}</div>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="font-display text-h2 text-body">Tap your name to sign in</div>
+        <div className="text-body-sm text-subtle mt-1 mb-6">
+          A 4-digit PIN keeps every record signed to you.
+        </div>
+
         {loading ? (
-          <div className="flex items-center gap-3 text-slate-600 text-sm mt-12">
-            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+          <div className="flex items-center gap-3 text-subtle text-body-sm py-16 justify-center">
+            <span className="w-5 h-5 rounded-full border-2 border-default border-t-action-primary animate-[mfs-spin_0.8s_linear_infinite]" />
             Loading…
           </div>
         ) : staff.length === 0 ? (
-          <p className="text-slate-600 text-sm mt-12 text-center px-8">No staff found. Add butcher or warehouse users via the admin panel.</p>
+          <div className="flex flex-col items-center text-center gap-2 py-14">
+            <span className="w-14 h-14 rounded-lg bg-surface-sunken flex items-center justify-center text-subtle">
+              <Ic name="people" size={26} />
+            </span>
+            <div className="text-body font-semibold text-body">No staff found</div>
+            <div className="text-body-sm text-subtle max-w-[34ch]">
+              No team members are set up for this site. An admin can add staff from the main app.
+            </div>
+          </div>
         ) : (
-          <div className="w-full max-w-sm grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5 max-w-3xl">
             {staff.map((m) => <StaffCard key={m.id} member={m} onSelect={setSelected} />)}
           </div>
         )}
-      </div>
-      <div className="text-center pb-8 text-slate-300 text-xs tracking-widest uppercase">MFS Global Ltd · Sheffield</div>
-      <div className="pb-10 px-6 flex justify-center">
+      </main>
+
+      <div className="flex gap-3 p-4 md:p-6 border-t border-default bg-surface-raised flex-shrink-0">
         <button
+          type="button"
           onPointerDown={() => { window.location.href = '/haccp/visitor' }}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-700 text-slate-400 text-sm font-medium active:scale-95 transition-all select-none">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-action-primary text-on-action font-semibold text-body py-3"
+        >
+          <Ic name="people" size={19} />
           Visitor sign-in
         </button>
+        <button
+          type="button"
+          onPointerDown={(e) => { e.preventDefault(); window.location.href = '/' }}
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-action-ghost-border bg-transparent text-action-ghost-fg font-semibold text-body py-3"
+        >
+          Back to main app
+        </button>
       </div>
+
+      {/* F3 — centred PIN modal using the kit PinKeypad (auth logic preserved) */}
+      <Modal
+        open={!!selected}
+        onOpenChange={(o) => { if (!o) closePin() }}
+        variant="center"
+        title={selected ? `Hi, ${selected.name.split(' ')[0]}` : undefined}
+        description={selected ? selected.name : undefined}
+      >
+        {selected && (
+          <PinKeypad
+            onComplete={handlePin}
+            error={pinError}
+            resetSignal={reset}
+            status="Enter your 4-digit PIN"
+          />
+        )}
+      </Modal>
     </div>
   )
 }
@@ -841,8 +799,8 @@ function LoginDoor() {
 
 export default function HaccpRoot() {
   const [authState, setAuthState] = useState<'checking' | 'door' | 'home'>('checking')
-  const [userName,  setUserName]  = useState('')
-  const [userRole,  setUserRole]  = useState('')
+  const [userName, setUserName] = useState('')
+  const [userRole, setUserRole] = useState('')
 
   useEffect(() => {
     const role = document.cookie.split(';').find((c) => c.trim().startsWith('mfs_role='))?.split('=')[1]
@@ -859,8 +817,8 @@ export default function HaccpRoot() {
 
   if (authState === 'checking') {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
-        <MfsLogo className="h-10 text-white opacity-40" />
+      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+        <MfsLogo className="h-10 w-auto text-body opacity-40" />
       </div>
     )
   }
