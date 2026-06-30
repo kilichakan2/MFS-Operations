@@ -47,6 +47,8 @@ const DELIVERY: DeliveryLabelInput = {
   reared_in: "GB",
   slaughter_site: "S1",
   cut_site: "C1",
+  allergens_flagged: false,
+  allergen_notes: null,
   width: "58mm",
   copies: 1,
 };

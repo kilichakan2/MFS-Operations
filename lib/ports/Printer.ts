@@ -30,6 +30,8 @@ export interface DeliveryLabelInput {
   reared_in:        string | null
   slaughter_site:   string | null
   cut_site:         string | null
+  allergens_flagged: boolean       // intake allergen non-conformance flag (native path mirror of DeliveryLabelData)
+  allergen_notes:    string | null // free-text describing flagged allergen(s); null/blank when not flagged
   width:            LabelWidth   // 58mm → native eligible; 100mm → always iframe
   copies:           number       // currently always 1; carried for URL fidelity
 }
