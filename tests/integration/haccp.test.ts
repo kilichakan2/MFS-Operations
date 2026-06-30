@@ -347,7 +347,7 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
       body: {
         session: "AM",
         date: "2020-01-01",
-        readings: [{ unit_id: chillerId, temperature_c: 3, unit_type: "chiller" }],
+        readings: [{ unit_id: chillerId, temperature_c: 3 }],
         comments: "",
       },
     });
@@ -365,7 +365,7 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
       body: {
         session: "AM",
         date: TODAY,
-        readings: [{ unit_id: bogus, temperature_c: 3, unit_type: "chiller" }],
+        readings: [{ unit_id: bogus, temperature_c: 3 }],
         comments: "",
       },
     });
@@ -382,7 +382,7 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
       body: {
         session: "AM",
         date: TODAY,
-        readings: [{ unit_id: chillerId, temperature_c: 3, unit_type: "chiller" }],
+        readings: [{ unit_id: chillerId, temperature_c: 3 }],
         comments: "all good",
       },
     });
@@ -407,7 +407,7 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
       body: {
         session: "PM",
         date: TODAY,
-        readings: [{ unit_id: chillerId, temperature_c: 12, unit_type: "chiller" }],
+        readings: [{ unit_id: chillerId, temperature_c: 12 }],
         comments: "deviation",
         corrective_action: {
           cause: "Door left open",
@@ -437,7 +437,7 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
       body: {
         session: "AM",
         date: TODAY,
-        readings: [{ unit_id: chillerId, temperature_c: 3, unit_type: "chiller" }],
+        readings: [{ unit_id: chillerId, temperature_c: 3 }],
         comments: "retry",
       },
     });

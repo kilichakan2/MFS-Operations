@@ -303,7 +303,7 @@ describe("HaccpDailyChecksService — cold-storage", () => {
     const ok: CreateColdStorageReadingsInput = {
       session: "AM",
       date: TODAY,
-      readings: [{ unit_id: "u1", temperature_c: 3, unit_type: "chiller" }],
+      readings: [{ unit_id: "u1", temperature_c: 3 }],
       comments: "",
     };
     expect(
@@ -314,7 +314,7 @@ describe("HaccpDailyChecksService — cold-storage", () => {
     ).toMatchObject({ message: "Readings may only be submitted for today's date." });
     expect(
       s.validateColdStorage({
-        input: { ...ok, readings: [{ unit_id: "ghost", temperature_c: 3, unit_type: "chiller" }] },
+        input: { ...ok, readings: [{ unit_id: "ghost", temperature_c: 3 }] },
         today: TODAY,
         units,
         hasDeviation: false,
@@ -339,7 +339,7 @@ describe("HaccpDailyChecksService — cold-storage", () => {
       session: "AM",
       date: TODAY,
       readings: [
-        { unit_id: "u1", temperature_c: 9, unit_type: "chiller" }, // critical
+        { unit_id: "u1", temperature_c: 9 }, // critical
       ],
       comments: "warm",
       corrective_action: { cause: "Equipment failure", disposition: "Assess", recurrence: "fix" },

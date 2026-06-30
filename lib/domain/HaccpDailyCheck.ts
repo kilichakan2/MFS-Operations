@@ -177,7 +177,6 @@ export interface ColdStorageListResult {
 export interface ColdStorageReadingInput {
   readonly unit_id: string;
   readonly temperature_c: number;
-  readonly unit_type: string;
 }
 
 /** POST /api/haccp/cold-storage body. */
