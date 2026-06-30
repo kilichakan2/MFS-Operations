@@ -360,6 +360,10 @@ export default function ColdStoragePage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError,setSubmitError]= useState('')
   const [numpadUnit, setNumpadUnit] = useState<StorageUnit | null>(null)
+  // Draft buffer for the open pad — edits stay local until Confirm commits them,
+  // so an out-of-range / abandoned entry can never land in `temps` (and thus can
+  // never enable Submit). Dismissing the pad without Confirm discards the draft.
+  const [draft,      setDraft]      = useState('')
   const [showCCA,    setShowCCA]    = useState(false)
   const [submitted,  setSubmitted]  = useState(false)
   // Quick reference panel state
@@ -474,6 +478,22 @@ export default function ColdStoragePage() {
     doSubmit(null)
   }, [deviations, doSubmit])
 
+  // Open the pad for a unit, seeding the draft from its committed value (so
+  // pre-filled / already-recorded units show their existing reading).
+  const openNumpad = useCallback((unit: StorageUnit) => {
+    setDraft(temps[unit.id] ?? '')
+    setNumpadUnit(unit)
+  }, [temps])
+
+  // Confirm is the ONLY commit path — and it's range-gated by NumberPad, so an
+  // out-of-range value can never reach `temps`.
+  const commitNumpad = useCallback(() => {
+    setNumpadUnit((u) => {
+      if (u) setTemps((prev) => ({ ...prev, [u.id]: draft }))
+      return null
+    })
+  }, [draft])
+
   if (submitted) {
     return (
       <div className="min-h-screen bg-surface-base flex flex-col items-center justify-center gap-4">
@@ -486,9 +506,10 @@ export default function ColdStoragePage() {
     )
   }
 
-  // ── Numpad modal context ──
+  // ── Numpad modal context ── (tone/hint reflect the live draft, not the
+  // committed value — so feedback updates as the user types.)
   const numpadStatus = numpadUnit
-    ? getTempStatus(parseFloat(temps[numpadUnit.id] ?? ''), numpadUnit)
+    ? getTempStatus(parseFloat(draft), numpadUnit)
     : null
 
   return (
@@ -549,7 +570,7 @@ export default function ColdStoragePage() {
 
           return (
             <button key={unit.id}
-              onClick={() => setNumpadUnit(unit)}
+              onClick={() => openNumpad(unit)}
               className={`w-full text-left rounded-2xl p-4 border transition-transform active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
                 status ? STATUS_CARD[status].shell : 'bg-surface-raised border-default'
               }`}>
@@ -612,9 +633,9 @@ export default function ColdStoragePage() {
           description="CCP 2 — Cold Storage"
         >
           <NumberPad
-            value={temps[numpadUnit.id] ?? ''}
-            onChange={(v) => setTemps((prev) => ({ ...prev, [numpadUnit.id]: v }))}
-            onConfirm={() => setNumpadUnit(null)}
+            value={draft}
+            onChange={setDraft}
+            onConfirm={commitNumpad}
             allowDecimal={numpadUnit.unit_type === 'chiller'}
             allowNegative={numpadUnit.unit_type === 'freezer'}
             min={COLD_STORAGE_MIN_TEMP_C}
