@@ -27,6 +27,8 @@ export {
   renderDeliveryHTML58, renderMinceHTML58, renderPrepHTML58,
 } from './html'
 export { generateDeliveryZPL, generateMinceZPL, generatePrepZPL } from './zpl'
+export { formatDeliveryAllergens } from './allergens'
+export type { DeliveryAllergenDisplay } from './allergens'
 
 export interface LabelOutput {
   content:     string

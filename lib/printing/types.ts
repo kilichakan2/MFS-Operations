@@ -36,6 +36,8 @@ export interface DeliveryLabelData {
   mfs_plant:      string         // MFS BLS cutting-plant code — always "GB2946" (MFS_PLANT_CODE)
   temperature_c:  number
   temp_status:    string  // 'pass' | 'urgent' | 'fail'
+  allergens_flagged: boolean      // intake allergen non-conformance flag (allergens_identified)
+  allergen_notes:    string | null // free-text describing the flagged allergen(s); null/blank when not flagged
 }
 
 export interface MinceLabelData {

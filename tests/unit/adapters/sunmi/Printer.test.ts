@@ -106,6 +106,8 @@ describe('Sunmi label helpers', () => {
       reared_in:        'IE',
       slaughter_site:   'UK1234',
       cut_site:         'UK5678',
+      allergens_flagged: false,
+      allergen_notes:    null,
       width:            '58mm',
       copies:           1,
     }
@@ -134,8 +136,18 @@ describe('Sunmi label helpers', () => {
       expect(buildDeliveryPayload(base, 'ACME').species).toBe('LAMB LEG')
     })
 
-    it('always sets allergens to "None"', () => {
+    it('sets allergens to "None" when not flagged (the common path)', () => {
       expect(buildDeliveryPayload(base, 'ACME').allergens).toBe('None')
+    })
+
+    it('carries the flagged allergen notes verbatim (F-PROD-04 Pass 3)', () => {
+      const flagged = { ...base, allergens_flagged: true, allergen_notes: 'Mustard, Celery' }
+      expect(buildDeliveryPayload(flagged, 'ACME').allergens).toBe('Mustard, Celery')
+    })
+
+    it('falls back to "FLAGGED - see record" when flagged with blank notes', () => {
+      const flagged = { ...base, allergens_flagged: true, allergen_notes: '' }
+      expect(buildDeliveryPayload(flagged, 'ACME').allergens).toBe('FLAGGED - see record')
     })
 
     it('carries batch, date, slaughterSite and cutSite through', () => {

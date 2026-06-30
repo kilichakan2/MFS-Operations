@@ -52,6 +52,8 @@ function buildDeliveryInput(d: Delivery, width: '58mm' | '100mm'): DeliveryLabel
     reared_in:        d.reared_in,
     slaughter_site:   d.slaughter_site,
     cut_site:         d.cut_site,
+    allergens_flagged: d.allergens_identified,
+    allergen_notes:    d.allergen_notes,
     width,
     copies:           1,
   }

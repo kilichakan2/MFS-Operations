@@ -515,6 +515,8 @@ import {
   renderPrepHTML,
   renderPrepHTML58,
   renderDeliveryHTML,
+  renderDeliveryHTML58,
+  formatDeliveryAllergens,
   // Aliased: the file already declares inline test-local generate*ZPL helpers
   // (the legacy oracle). These imports pull the REAL production renderers so the
   // BLS cases below guard production code, not the inline copies.
@@ -574,6 +576,8 @@ const realDelivery: RealDeliveryLabelData = {
   mfs_plant:      MFS_PLANT_CODE,
   temperature_c:  3.6,
   temp_status:    'pass',
+  allergens_flagged: false,
+  allergen_notes:    null,
 }
 
 describe('BLS: GB2946 plant-code constant (regulated, must-pass)', () => {
@@ -729,5 +733,162 @@ describe('BLS: Born & reared collapse', () => {
     expect(html).toContain('Born in')
     expect(html).toContain('Reared in')
     expect(html).not.toContain('Born &amp; reared in')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F-PROD-04 Pass 3 — real allergens on the goods-in DELIVERY label.
+//
+// `allergens_identified` is a NON-CONFORMANCE warning flag ("MFS is allergen-free;
+// true = a problem was flagged at intake"), NOT a product "contains" allergen list.
+// The single source of the None/notes/FLAGGED branching is formatDeliveryAllergens.
+//
+// The #1 risk (R1) is the not-flagged common path: it must stay BYTE-IDENTICAL to
+// today's green "Allergens: None" on all four transports. Exact-string assertions
+// below guard that.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Pass 3: formatDeliveryAllergens truth table', () => {
+  it('not flagged → plain "None", flagged=false (notes ignored)', () => {
+    expect(formatDeliveryAllergens(false, null)).toEqual({ text: 'None', flagged: false })
+    expect(formatDeliveryAllergens(false, 'whatever')).toEqual({ text: 'None', flagged: false })
+  })
+
+  it('flagged + non-blank notes → the notes text, flagged=true', () => {
+    expect(formatDeliveryAllergens(true, 'Mustard (spill on pallet)')).toEqual({
+      text: 'Mustard (spill on pallet)', flagged: true,
+    })
+  })
+
+  it('flagged + padded notes → trimmed text, flagged=true', () => {
+    expect(formatDeliveryAllergens(true, '  Celery  ')).toEqual({ text: 'Celery', flagged: true })
+  })
+
+  it('flagged + blank/null notes → "FLAGGED - see record", flagged=true', () => {
+    expect(formatDeliveryAllergens(true, '')).toEqual({ text: 'FLAGGED - see record', flagged: true })
+    expect(formatDeliveryAllergens(true, null)).toEqual({ text: 'FLAGGED - see record', flagged: true })
+  })
+})
+
+describe('Pass 3: delivery HTML allergen line (100mm renderDeliveryHTML)', () => {
+  it('not flagged → green "None" (BYTE-IDENTICAL to current markup)', () => {
+    const html = renderDeliveryHTML(realDelivery)
+    expect(html).toContain(
+      '<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#166534;font-weight:bold">None</span></div>',
+    )
+    // the Allergens line is NOT red on the common path
+    expect(html).not.toContain('color:#991b1b;font-weight:bold">None')
+  })
+
+  it('flagged + notes → red, shows the notes text, not "None"', () => {
+    const html = renderDeliveryHTML({ ...realDelivery, allergens_flagged: true, allergen_notes: 'Mustard' })
+    expect(html).toContain(
+      '<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#991b1b;font-weight:bold">Mustard</span></div>',
+    )
+    expect(html).not.toContain('>None</span></div>')
+  })
+
+  it('flagged + blank notes → red "FLAGGED - see record"', () => {
+    const html = renderDeliveryHTML({ ...realDelivery, allergens_flagged: true, allergen_notes: '' })
+    expect(html).toContain(
+      '<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#991b1b;font-weight:bold">FLAGGED - see record</span></div>',
+    )
+  })
+})
+
+describe('Pass 3: delivery HTML allergen line (58mm renderDeliveryHTML58)', () => {
+  it('not flagged → green "None" (BYTE-IDENTICAL to current markup)', () => {
+    const html = renderDeliveryHTML58(realDelivery)
+    expect(html).toContain(
+      '<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#166534;font-weight:bold">None</span></div>',
+    )
+    expect(html).not.toContain('color:#991b1b;font-weight:bold">None')
+  })
+
+  it('flagged + notes → red, shows the notes text', () => {
+    const html = renderDeliveryHTML58({ ...realDelivery, allergens_flagged: true, allergen_notes: 'Celery' })
+    expect(html).toContain(
+      '<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#991b1b;font-weight:bold">Celery</span></div>',
+    )
+    expect(html).not.toContain('>None</span></div>')
+  })
+})
+
+describe('Pass 3: delivery ZPL allergen line (generateDeliveryZPL)', () => {
+  it('not flagged → "Allergens: None" (unchanged)', () => {
+    expect(realGenerateDeliveryZPL(realDelivery)).toContain('Allergens: None')
+  })
+
+  it('flagged + notes → "Allergens: <notes>"', () => {
+    const zpl = realGenerateDeliveryZPL({ ...realDelivery, allergens_flagged: true, allergen_notes: 'Mustard' })
+    expect(zpl).toContain('Allergens: Mustard')
+    expect(zpl).not.toContain('Allergens: None')
+  })
+
+  it('flagged + blank notes → carries the FLAGGED token (ASCII hyphen survives sanitise)', () => {
+    const zpl = realGenerateDeliveryZPL({ ...realDelivery, allergens_flagged: true, allergen_notes: '' })
+    expect(zpl).toContain('Allergens: FLAGGED')
+  })
+})
+
+// Guard 🟡 #1 — DB free-text fields are interpolated into the delivery HTML, which
+// renders in a same-origin print iframe. A note containing markup must render INERT
+// (escaped), not execute. ZPL/native are unaffected (they sanitise / use plain text).
+describe('Pass 3: delivery HTML escapes DB free-text (stored-XSS guard)', () => {
+  const XSS = '<script>alert(1)</script>'
+
+  it('100mm: a flagged allergen note containing <script> renders escaped, not raw', () => {
+    const html = renderDeliveryHTML({ ...realDelivery, allergens_flagged: true, allergen_notes: XSS })
+    expect(html).not.toContain('<script>alert(1)</script>')
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+  })
+
+  it('58mm: a flagged allergen note containing <script> renders escaped, not raw', () => {
+    const html = renderDeliveryHTML58({ ...realDelivery, allergens_flagged: true, allergen_notes: XSS })
+    expect(html).not.toContain('<script>alert(1)</script>')
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+  })
+
+  it('100mm: supplier/product/site free-text with markup is escaped', () => {
+    const html = renderDeliveryHTML({
+      ...realDelivery,
+      supplier:       'Acme <b>Meats</b>',
+      product:        'Beef "prime" & ribs',
+      slaughter_site: 'GB<script>1234',
+      cut_site:       'GB<script>1234',
+    })
+    expect(html).not.toContain('<b>Meats</b>')
+    expect(html).toContain('Acme &lt;b&gt;Meats&lt;/b&gt;')
+    expect(html).toContain('Beef &quot;prime&quot; &amp; ribs')
+    expect(html).not.toContain('GB<script>1234')
+    expect(html).toContain('GB&lt;script&gt;1234')
+  })
+
+  it('58mm: supplier-derived code with markup is escaped', () => {
+    const html = renderDeliveryHTML58({ ...realDelivery, supplier: '<i>xx</i>' }, 1, '<i>xx</i>')
+    expect(html).not.toContain('<i>xx</i>')
+    expect(html).toContain('&lt;i&gt;xx&lt;/i&gt;')
+  })
+})
+
+describe('Pass 3: route delivery labelData mapping (param/shape level)', () => {
+  // Mirrors the two new mapping lines in app/api/labels/route.ts (the route module
+  // pulls in server-only Supabase, so we pin the mapping shape with the same
+  // predicate rather than import the handler — matching the convention above).
+  function mapAllergens(row: { allergens_identified?: boolean; allergen_notes?: string | null }) {
+    return {
+      allergens_flagged: row.allergens_identified ?? false,
+      allergen_notes:    row.allergen_notes ?? null,
+    }
+  }
+
+  it('maps allergens_identified → allergens_flagged (true stays true, undefined → false)', () => {
+    expect(mapAllergens({ allergens_identified: true }).allergens_flagged).toBe(true)
+    expect(mapAllergens({}).allergens_flagged).toBe(false)
+  })
+
+  it('maps allergen_notes through (text stays, undefined → null)', () => {
+    expect(mapAllergens({ allergen_notes: 'Mustard' }).allergen_notes).toBe('Mustard')
+    expect(mapAllergens({}).allergen_notes).toBeNull()
   })
 })

@@ -37,6 +37,8 @@ describe("FakePrinter call recording", () => {
         reared_in: null,
         slaughter_site: null,
         cut_site: null,
+        allergens_flagged: false,
+        allergen_notes: null,
         width: "58mm",
         copies: 1,
       },

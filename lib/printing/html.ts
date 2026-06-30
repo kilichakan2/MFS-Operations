@@ -18,6 +18,22 @@
 
 import type { DeliveryLabelData, MinceLabelData, PrepLabelData } from './types'
 import { countryName } from './countries'
+import { formatDeliveryAllergens } from './allergens'
+
+// ── HTML escaping ─────────────────────────────────────────────────────────────
+// Label HTML is delivered into a same-origin print iframe (browser/AirPrint).
+// Any DB free-text field interpolated below (supplier, product, sites, allergen
+// notes, …) must be escaped so a value containing markup can't inject into that
+// iframe. ASCII-only inputs (e.g. "None", "GB1234") pass through unchanged, so
+// the byte-identical not-flagged output is preserved. Ampersand is replaced first.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
 
 // ── Code 128B barcode generator ───────────────────────────────────────────────
 
@@ -156,9 +172,15 @@ export function renderDeliveryHTML(data: DeliveryLabelData, copies = 1): string 
   const tempColour = data.temp_status === 'pass' ? '#166534' : '#991b1b'
   const barcode    = generateBarcodeSVG(data.batch_code, 260, 42, 8)
 
-  // Born & reared — combine if same country to save label space
-  const bornName   = countryName(data.born_in)
-  const rearedName = countryName(data.reared_in)
+  // Allergen non-conformance line (F-PROD-04 Pass 3) — green "None" when not
+  // flagged (byte-identical to today), red warning when flagged.
+  const allergen       = formatDeliveryAllergens(data.allergens_flagged, data.allergen_notes)
+  const allergenColour = allergen.flagged ? '#991b1b' : '#166534'
+
+  // Born & reared — combine if same country to save label space.
+  // countryName falls back to the raw DB code for unknown countries, so escape.
+  const bornName   = escapeHtml(countryName(data.born_in))
+  const rearedName = escapeHtml(countryName(data.reared_in))
   const sameOrigin = data.born_in && data.reared_in && data.born_in === data.reared_in
   const originLine = sameOrigin
     ? `<div class="fw"><span class="fk">Born &amp; reared in:</span><span class="fv">${bornName}</span></div>`
@@ -170,26 +192,26 @@ export function renderDeliveryHTML(data: DeliveryLabelData, copies = 1): string 
   // Slaughter / cut sites — combine if same plant
   const sameSite = data.slaughter_site && data.cut_site && data.slaughter_site === data.cut_site
   const siteLine = sameSite
-    ? `<div class="fw"><span class="fk">Slaughtered &amp; cut in:</span><span class="fv">${data.slaughter_site}</span></div>`
+    ? `<div class="fw"><span class="fk">Slaughtered &amp; cut in:</span><span class="fv">${escapeHtml(data.slaughter_site!)}</span></div>`
     : [
-        data.slaughter_site ? `<div class="fw"><span class="fk">Slaughtered in:</span><span class="fv">${data.slaughter_site}</span></div>` : '',
-        data.cut_site       ? `<div class="fw"><span class="fk">Cut in:</span><span class="fv">${data.cut_site}</span></div>` : '',
+        data.slaughter_site ? `<div class="fw"><span class="fk">Slaughtered in:</span><span class="fv">${escapeHtml(data.slaughter_site)}</span></div>` : '',
+        data.cut_site       ? `<div class="fw"><span class="fk">Cut in:</span><span class="fv">${escapeHtml(data.cut_site)}</span></div>` : '',
       ].join('')
 
   const lbl = [
     `<div class="label">`,
-    `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">GOODS IN · ${data.species.toUpperCase()}</span></div>`,
-    `<div class="bc">${data.batch_code}</div>`,
+    `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">GOODS IN · ${escapeHtml(data.species.toUpperCase())}</span></div>`,
+    `<div class="bc">${escapeHtml(data.batch_code)}</div>`,
     `<div class="br">${barcode}</div>`,
     `<div class="dv"></div>`,
     `<div class="fl">`,
-    `<div class="fw"><span class="fk">Supplier:</span><span class="fv">${data.supplier} — ${data.product}</span></div>`,
+    `<div class="fw"><span class="fk">Supplier:</span><span class="fv">${escapeHtml(data.supplier)} — ${escapeHtml(data.product)}</span></div>`,
     `<div class="fw"><span class="fk">Date in:</span><span class="fv">${data.date_received}</span></div>`,
     `<div class="fw"><span class="fk">Temp:</span><span class="fv" style="color:${tempColour};font-weight:bold">${data.temperature_c}°C</span></div>`,
     originLine,
     siteLine,
     `<div class="fw"><span class="fk">Further cut in:</span><span class="fv">${data.mfs_plant}</span></div>`,
-    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#166534;font-weight:bold">None</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:${allergenColour};font-weight:bold">${escapeHtml(allergen.text)}</span></div>`,
     `</div>`,
     `</div>`,
   ].filter(Boolean).join('')
@@ -253,11 +275,17 @@ export function renderDeliveryHTML58(
 ): string {
   const tempColour = data.temp_status === 'pass' ? '#166534' : '#991b1b'
   const barcode    = generateBarcodeSVG(data.batch_code, 150, 36, 7)
-  const code       = supplierCode || data.supplier.slice(0, 4).toUpperCase()
+  const code       = escapeHtml(supplierCode || data.supplier.slice(0, 4).toUpperCase())
 
-  // BLS: born/reared combined if same country
-  const bornName   = countryName(data.born_in)
-  const rearedName = countryName(data.reared_in)
+  // Allergen non-conformance line (F-PROD-04 Pass 3) — green "None" when not
+  // flagged (byte-identical to today), red warning when flagged.
+  const allergen       = formatDeliveryAllergens(data.allergens_flagged, data.allergen_notes)
+  const allergenColour = allergen.flagged ? '#991b1b' : '#166534'
+
+  // BLS: born/reared combined if same country.
+  // countryName falls back to the raw DB code for unknown countries, so escape.
+  const bornName   = escapeHtml(countryName(data.born_in))
+  const rearedName = escapeHtml(countryName(data.reared_in))
   const sameOrigin = data.born_in && data.reared_in && data.born_in === data.reared_in
   const originLine = sameOrigin
     ? `<div class="fw"><span class="fk">Born/Reared:</span><span class="fv">${bornName}</span></div>`
@@ -269,16 +297,16 @@ export function renderDeliveryHTML58(
   // BLS: slaughter/cut combined if same site
   const sameSite = data.slaughter_site && data.cut_site && data.slaughter_site === data.cut_site
   const siteLine = sameSite
-    ? `<div class="fw"><span class="fk">Sl/Cut:</span><span class="fv">${data.slaughter_site}</span></div>`
+    ? `<div class="fw"><span class="fk">Sl/Cut:</span><span class="fv">${escapeHtml(data.slaughter_site!)}</span></div>`
     : [
-        data.slaughter_site ? `<div class="fw"><span class="fk">Sl:</span><span class="fv">${data.slaughter_site}</span></div>` : '',
-        data.cut_site       ? `<div class="fw"><span class="fk">Cut:</span><span class="fv">${data.cut_site}</span></div>` : '',
+        data.slaughter_site ? `<div class="fw"><span class="fk">Sl:</span><span class="fv">${escapeHtml(data.slaughter_site)}</span></div>` : '',
+        data.cut_site       ? `<div class="fw"><span class="fk">Cut:</span><span class="fv">${escapeHtml(data.cut_site)}</span></div>` : '',
       ].join('')
 
   const lbl = [
     `<div class="label">`,
-    `<div class="hdr"><span class="co">MFS</span><span class="tp">GOODS IN · ${data.species.toUpperCase()}</span></div>`,
-    `<div class="bc">${data.batch_code}</div>`,
+    `<div class="hdr"><span class="co">MFS</span><span class="tp">GOODS IN · ${escapeHtml(data.species.toUpperCase())}</span></div>`,
+    `<div class="bc">${escapeHtml(data.batch_code)}</div>`,
     `<div class="br">${barcode}</div>`,
     `<div class="dv"></div>`,
     `<div class="fl">`,
@@ -288,7 +316,7 @@ export function renderDeliveryHTML58(
     originLine,
     siteLine,
     `<div class="fw"><span class="fk">MFS:</span><span class="fv">${data.mfs_plant}</span></div>`,
-    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:#166534;font-weight:bold">None</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv" style="color:${allergenColour};font-weight:bold">${escapeHtml(allergen.text)}</span></div>`,
     `</div>`,
     `</div>`,
   ].filter(Boolean).join('')
