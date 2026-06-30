@@ -1,7 +1,7 @@
 'use client'
 
 import { Dialog as RadixDialog } from 'radix-ui'
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 
 export type ModalVariant = 'center' | 'sheet'
 
@@ -24,6 +24,34 @@ export interface ModalProps {
 /** className composition (house style — no clsx/tailwind-merge dependency). */
 function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
+}
+
+/**
+ * Defensive cleanup for a known Radix race. `@radix-ui/react-dismissable-layer`
+ * disables the page behind a modal by setting `document.body.style.pointerEvents
+ * = 'none'`, tracking the original value in MODULE-LEVEL state and only restoring
+ * it when the LAST modal layer unmounts. Opening and closing modal dialogs in
+ * rapid succession — e.g. the cold-storage number pad, tapped across five units
+ * back-to-back — can race that restore on a production build and leave
+ * `document.body` stuck at `pointer-events: none`. Every later click on the page
+ * (Submit, the next card) is then silently swallowed: the exact prod-only smoke
+ * failure on the cold-storage screen.
+ *
+ * After this Modal closes, once Radix's own synchronous cleanup has settled (next
+ * animation frame), if NO modal dialog remains open we make the page interactive
+ * again. It is a no-op on the happy path (Radix already cleared it) and never
+ * fires while another dialog is open, so scroll-lock / outside-click semantics
+ * are untouched. Clearing the inline value back to '' also heals Radix's polluted
+ * module state: the next dialog re-captures the original as '' rather than 'none'.
+ */
+function releaseStuckBodyPointerLock(): void {
+  if (typeof document === 'undefined' || typeof requestAnimationFrame === 'undefined') return
+  requestAnimationFrame(() => {
+    const anyModalOpen = document.querySelector('[role="dialog"][data-state="open"]')
+    if (!anyModalOpen && document.body.style.pointerEvents === 'none') {
+      document.body.style.pointerEvents = ''
+    }
+  })
 }
 
 const CENTER_CONTENT = cx(
@@ -75,6 +103,15 @@ export function Modal({
 }: ModalProps) {
   const closeLabel = labels?.close ?? 'Close'
   const isSheet = variant === 'sheet'
+
+  // Guard the Radix body-pointer-events race (see releaseStuckBodyPointerLock).
+  // Run when this Modal transitions to closed AND on unmount — the cold-storage
+  // pad is conditionally rendered (`{unit && <Modal open/>}`), so it leaves via
+  // unmount, while a long-lived `open`-toggled Modal leaves via the open flag.
+  useEffect(() => {
+    if (!open) releaseStuckBodyPointerLock()
+  }, [open])
+  useEffect(() => () => releaseStuckBodyPointerLock(), [])
 
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
