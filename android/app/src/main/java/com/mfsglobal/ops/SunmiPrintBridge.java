@@ -62,23 +62,49 @@ public class SunmiPrintBridge {
         }
         try {
             JSONObject o = new JSONObject(json);
-            // "type" selects the layout; default to delivery (forward-compat for a
-            // future "mince" layout). Read but currently always renders delivery.
-            // Unknown keys are ignored — we only read the keys we know, each with
-            // an "" default.
-            o.optString("type", "delivery");
-            renderDeliveryLabel(
-                    o.optString("batch", ""),
-                    o.optString("supplier", ""),
-                    o.optString("date", ""),
-                    o.optString("temp", ""),
-                    o.optString("bornIn", ""),
-                    o.optString("rearedIn", ""),
-                    o.optString("slaughterSite", ""),
-                    o.optString("cutSite", ""),
-                    o.optString("species", ""),
-                    o.optString("allergens", "")
-            );
+            // "type" selects the layout. Unknown keys are ignored — we only read
+            // the keys we know, each with an "" default (version-tolerant). The
+            // method SIGNATURE never changes regardless of layout (ADR-0013): a
+            // new template = a new "type" + new keys, NOT a new positional method.
+            String type = o.optString("type", "delivery");
+            if ("mince".equals(type)) {
+                renderMinceLabel(
+                        o.optString("batch", ""),
+                        o.optString("productName", ""),
+                        o.optString("date", ""),
+                        o.optString("useBy", ""),
+                        o.optString("bornIn", ""),
+                        o.optString("slaughteredIn", ""),
+                        o.optString("mincedIn", ""),
+                        o.optString("allergens", "")
+                );
+            } else if ("prep".equals(type)) {
+                renderPrepLabel(
+                        o.optString("batch", ""),
+                        o.optString("productName", ""),
+                        o.optString("date", ""),
+                        o.optString("useBy", ""),
+                        o.optString("bornIn", ""),
+                        o.optString("rearedIn", ""),
+                        o.optString("slaughteredIn", ""),
+                        o.optString("cutIn", ""),
+                        o.optString("furtherCutIn", ""),
+                        o.optString("allergens", "")
+                );
+            } else {
+                renderDeliveryLabel(
+                        o.optString("batch", ""),
+                        o.optString("supplier", ""),
+                        o.optString("date", ""),
+                        o.optString("temp", ""),
+                        o.optString("bornIn", ""),
+                        o.optString("rearedIn", ""),
+                        o.optString("slaughterSite", ""),
+                        o.optString("cutSite", ""),
+                        o.optString("species", ""),
+                        o.optString("allergens", "")
+                );
+            }
         } catch (Exception e) {
             Log.e(TAG, "printLabel error: " + e.getMessage(), e);
         }
@@ -193,6 +219,123 @@ public class SunmiPrintBridge {
             Log.d(TAG, "Printed: " + batchCode);
         } catch (Exception e) {
             Log.e(TAG, "Print error: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * MINCE dispatch label (52×38mm die-cut, BLS-compliant). Country-only
+     * granularity: "Slaughtered in GB", "Minced in GB" — NO plant codes. Uses the
+     * VERBATIM compulsory wording (RPA digest). Same label-mode sequence as the
+     * delivery renderer (printerInit → labelLocate → content → labelOutput),
+     * printColumnsString for fixed columns (widths sum ~32 for the 384-dot head).
+     */
+    private void renderMinceLabel(
+            String batch,
+            String productName,
+            String date,
+            String useBy,
+            String bornIn,
+            String slaughteredIn,
+            String mincedIn,
+            String allergens
+    ) {
+        if (printerService == null) {
+            Log.w(TAG, "renderMinceLabel called but service not bound");
+            return;
+        }
+        try {
+            printerService.printerInit(null);
+            printerService.labelLocate();
+            printerService.setAlignment(0, null);
+
+            // Batch (bold), then CODE128 of batch.
+            printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.ENABLE);
+            printerService.printText("MINCE  " + batch + "\n", null);
+            printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.DISABLE);
+
+            printerService.setAlignment(1, null);
+            printerService.printBarCode(batch, 8, 40, 2, 2, null);
+            printerService.lineWrap(1, null);
+            printerService.setAlignment(0, null);
+
+            // Product + date row.
+            printCols(new String[]{ productName, date }, new int[]{ 18, 14 }, new int[]{ 0, 2 });
+            printerService.printText("Use by: " + useBy + "\n", null);
+
+            // BLS compulsory lines — verbatim wording, full-width so they never wrap mid-word.
+            if (bornIn != null && !bornIn.isEmpty()) {
+                printerService.printText("Born in: " + bornIn + "\n", null);
+            }
+            printerService.printText("Slaughtered in " + slaughteredIn + "\n", null);
+            printerService.printText("Minced in " + mincedIn + "\n", null);
+
+            String allergensText = (allergens == null || allergens.isEmpty()) ? "None" : allergens;
+            printerService.printText("Allergens: " + allergensText + "\n", null);
+
+            printerService.labelOutput();
+            Log.d(TAG, "Printed mince: " + batch);
+        } catch (Exception e) {
+            Log.e(TAG, "Mince print error: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * PREP dispatch label (52×38mm die-cut, BLS-compliant). Country+PLANT
+     * granularity: "Slaughtered in GB1234", "Cut in GB5678", "Further cut in
+     * GB2946". Uses the VERBATIM compulsory wording (RPA digest). Denser than
+     * mince — expect on-device calibration on the V3.
+     */
+    private void renderPrepLabel(
+            String batch,
+            String productName,
+            String date,
+            String useBy,
+            String bornIn,
+            String rearedIn,
+            String slaughteredIn,
+            String cutIn,
+            String furtherCutIn,
+            String allergens
+    ) {
+        if (printerService == null) {
+            Log.w(TAG, "renderPrepLabel called but service not bound");
+            return;
+        }
+        try {
+            printerService.printerInit(null);
+            printerService.labelLocate();
+            printerService.setAlignment(0, null);
+
+            printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.ENABLE);
+            printerService.printText("PREP  " + batch + "\n", null);
+            printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.DISABLE);
+
+            printerService.setAlignment(1, null);
+            printerService.printBarCode(batch, 8, 40, 2, 2, null);
+            printerService.lineWrap(1, null);
+            printerService.setAlignment(0, null);
+
+            printCols(new String[]{ productName, date }, new int[]{ 18, 14 }, new int[]{ 0, 2 });
+            printerService.printText("Use by: " + useBy + "\n", null);
+
+            // BLS compulsory lines — verbatim wording, full-width.
+            if (bornIn != null && !bornIn.isEmpty()) {
+                printerService.printText("Born in: " + bornIn + "\n", null);
+            }
+            if (rearedIn != null && !rearedIn.isEmpty()) {
+                printerService.printText("Reared in: " + rearedIn + "\n", null);
+            }
+            printerService.printText("Slaughtered in " + slaughteredIn + "\n", null);
+            printerService.printText("Cut in " + cutIn + "\n", null);
+            printerService.printText("Further cut in " + furtherCutIn + "\n", null);
+
+            String allergensText = (allergens == null || allergens.isEmpty()) ? "None" : allergens;
+            printerService.printText("Allergens: " + allergensText + "\n", null);
+
+            printerService.labelOutput();
+            Log.d(TAG, "Printed prep: " + batch);
+        } catch (Exception e) {
+            Log.e(TAG, "Prep print error: " + e.getMessage(), e);
         }
     }
 

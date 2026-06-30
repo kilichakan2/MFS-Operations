@@ -52,6 +52,7 @@ const DELIVERY: DeliveryLabelInput = {
 };
 
 const MINCE: MinceLabelInput = {
+  kind: "mince",
   id: "min-1",
   usebydays: 2,
   width: "100mm",

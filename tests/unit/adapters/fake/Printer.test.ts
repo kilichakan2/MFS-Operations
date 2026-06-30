@@ -43,7 +43,7 @@ describe("FakePrinter call recording", () => {
       vi.fn(),
     );
     await fake.printMinceLabel(
-      { id: "m1", usebydays: 2, width: "100mm", copies: 1 },
+      { kind: "mince", id: "m1", usebydays: 2, width: "100mm", copies: 1 },
       vi.fn(),
     );
     expect(fake.deliveryCalls).toHaveLength(1);

@@ -8,12 +8,14 @@
  * Auth: mfs_role cookie — warehouse or admin required
  *
  * Params:
- *   type:   'delivery' | 'mince'    (required)
- *   id:     UUID                    (required)
- *   format: 'html' | 'zpl'         (optional, default 'html')
- *   copies: 1–50                    (optional, default 1)
+ *   type:   'delivery' | 'mince' | 'prep'  (required)
+ *   id:     UUID                           (required)
+ *   format: 'html' | 'zpl' | 'json'        (optional, default 'html')
+ *   copies: 1–50                           (optional, default 1)
  *
- * Returns: HTML document or ZPL string
+ * Returns: HTML document, ZPL string, or — for format=json — the aggregated
+ *   LabelData as JSON ({ type, data }) so the native Sunmi adapter consumes the
+ *   SAME server-aggregated BLS fields the renderer uses (single source of truth).
  * Errors: 400 (bad params), 401 (auth), 404 (not found), 500 (server)
  */
 
@@ -25,8 +27,10 @@ import {
   fmtDisplayDate,
   formatGoodsInBatchCode,
   ddmmFromDate,
+  MFS_PLANT_CODE,
 } from '@/lib/printing'
-import type { DeliveryLabelData, MinceLabelData, PrintConfig, OutputMode } from '@/lib/printing/types'
+import { COUNTRY_NAMES } from '@/lib/printing/countries'
+import type { DeliveryLabelData, MinceLabelData, PrepLabelData, PrintConfig, OutputMode } from '@/lib/printing/types'
 
 const supabase = supabaseService
 
@@ -44,14 +48,17 @@ function validateParams(params: URLSearchParams): {
   const copiesStr    = params.get('copies')    ?? '1'
   const usebydaysStr = params.get('usebydays') ?? undefined
 
-  if (!type || !['delivery', 'mince'].includes(type)) {
-    return { valid: false, error: 'type must be delivery or mince' }
+  if (!type || !['delivery', 'mince', 'prep'].includes(type)) {
+    return { valid: false, error: 'type must be delivery, mince or prep' }
   }
   if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
     return { valid: false, error: 'id must be a valid UUID' }
   }
-  if (!['html', 'zpl'].includes(format)) {
-    return { valid: false, error: 'format must be html or zpl' }
+  // 'json' is the structured-data path the native Sunmi adapter fetches (ADR-0013):
+  // the server aggregates the BLS fields ONCE and hands the adapter the same
+  // LabelData the renderer uses, so there is a single source of truth.
+  if (!['html', 'zpl', 'json'].includes(format)) {
+    return { valid: false, error: 'format must be html, zpl or json' }
   }
   if (!['100mm', '58mm'].includes(width)) {
     return { valid: false, error: 'width must be 100mm or 58mm' }
@@ -62,8 +69,10 @@ function validateParams(params: URLSearchParams): {
   }
 
   let usebydays: number | undefined
-  if (type === 'mince') {
-    if (!usebydaysStr) return { valid: false, error: 'usebydays is required for mince labels' }
+  // usebydays is a print-time staff pick (use-by date), required for both
+  // production templates (mince + prep), not for the goods-in delivery label.
+  if (type === 'mince' || type === 'prep') {
+    if (!usebydaysStr) return { valid: false, error: 'usebydays is required for mince and prep labels' }
     usebydays = parseInt(usebydaysStr)
     if (isNaN(usebydays) || usebydays < 1 || usebydays > 365) {
       return { valid: false, error: 'usebydays must be 1–365' }
@@ -88,7 +97,12 @@ export async function GET(req: NextRequest) {
     }
 
     const { type, id, format, width, copies, usebydays } = result as Required<typeof result> & { usebydays?: number }
-    const config: PrintConfig = { format: format as 'html' | 'zpl', copies, width: width as '100mm' | '58mm' }
+    // For the renderer path, 'json' is never passed through — generateLabel only
+    // knows html/zpl. The json branch returns the aggregated LabelData directly
+    // (the single-source-of-truth the native Sunmi adapter consumes).
+    const isJson = format === 'json'
+    const renderFormat: 'html' | 'zpl' = format === 'zpl' ? 'zpl' : 'html'
+    const config: PrintConfig = { format: renderFormat, copies, width: width as '100mm' | '58mm' }
 
     // ── Delivery label ─────────────────────────────────────────────────────────
     if (type === 'delivery') {
@@ -129,9 +143,13 @@ export async function GET(req: NextRequest) {
         reared_in:      data.reared_in ?? null,
         slaughter_site: data.slaughter_site ?? null,
         cut_site:       data.cut_site ?? null,
-        mfs_plant:      'UK2946',
+        mfs_plant:      MFS_PLANT_CODE,
         temperature_c:  Number(data.temperature_c),
         temp_status:    data.temp_status ?? 'pass',
+      }
+
+      if (isJson) {
+        return NextResponse.json({ type: 'delivery', data: labelData })
       }
 
       // For 58mm: fetch supplier label_code (case-insensitive match, fallback handled in renderer)
@@ -184,17 +202,9 @@ export async function GET(req: NextRequest) {
           const bornCodes = [...new Set(
             deliveries.map(d => (d.born_in as string | null) ?? '').filter(Boolean)
           )]
-          origins = bornCodes.map(code => {
-            const COUNTRY_NAMES: Record<string, string> = {
-              GB:'United Kingdom', UK:'United Kingdom', IE:'Ireland',
-              AU:'Australia', NZ:'New Zealand', FR:'France', DE:'Germany',
-              NL:'Netherlands', BE:'Belgium', ES:'Spain', IT:'Italy',
-              PL:'Poland', BR:'Brazil', AR:'Argentina', UY:'Uruguay',
-              US:'United States', CA:'Canada', ZA:'South Africa',
-              NA:'Namibia', BW:'Botswana', IN:'India', PK:'Pakistan',
-            }
-            return COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
-          })
+          origins = bornCodes.map(code =>
+            COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
+          )
 
           // Extract country code prefix from slaughter_site (e.g. "GB" from "GB1234")
           slaughteredIn = [...new Set(
@@ -226,7 +236,97 @@ export async function GET(req: NextRequest) {
         allergens_present:    (data.allergens_present as string[] | null) ?? [],
       }
 
+      if (isJson) {
+        return NextResponse.json({ type: 'mince', data: labelData })
+      }
+
       const output = generateLabel('mince', labelData, config)
+
+      return new NextResponse(output.content, {
+        headers: {
+          'Content-Type': output.contentType,
+          'Content-Disposition': `inline; filename="${output.filename}"`,
+        },
+      })
+    }
+
+    // ── Prep (meat-prep) dispatch label ──────────────────────────────────────
+    // BLS rules differ from mince: slaughtered_in is COUNTRY+PLANT (raw GBxxxx,
+    // digits kept), plus "Cut in" (primary cut site, country+plant) and
+    // "Further cut in" (MFS GB2946). Reads haccp_meatprep_log + the source
+    // deliveries' cut_site/slaughter_site.
+    if (type === 'prep') {
+      const { data, error } = await supabase
+        .from('haccp_meatprep_log')
+        .select('id, date, batch_code, product_name, product_species, output_mode, kill_date, days_from_kill, source_batch_numbers, source_delivery_ids, allergens_present')
+        .eq('id', id)
+        .single()
+
+      if (error || !data) {
+        return NextResponse.json({ error: 'Prep record not found' }, { status: 404 })
+      }
+
+      const deliveryIds = (data.source_delivery_ids as string[] | null) ?? []
+      let origins:       string[] = []
+      let rearedIn:      string[] = []
+      let slaughteredIn: string[] = []   // COUNTRY+PLANT (raw, distinct)
+      let cutIn:         string[] = []   // primary cut site, country+plant (raw, distinct)
+
+      if (deliveryIds.length > 0) {
+        const { data: deliveries } = await supabase
+          .from('haccp_deliveries')
+          .select('born_in, reared_in, slaughter_site, cut_site')
+          .in('id', deliveryIds)
+
+        if (deliveries && deliveries.length > 0) {
+          const toName = (code: string) => COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
+
+          origins = [...new Set(
+            deliveries.map(d => (d.born_in as string | null) ?? '').filter(Boolean)
+          )].map(toName)
+
+          rearedIn = [...new Set(
+            deliveries.map(d => (d.reared_in as string | null) ?? '').filter(Boolean)
+          )].map(toName)
+
+          // Prep keeps the FULL country+plant code (e.g. "GB1234") — do NOT
+          // strip digits (that is the mince-only country-only rule).
+          slaughteredIn = [...new Set(
+            deliveries.map(d => (d.slaughter_site as string | null) ?? '').filter(Boolean)
+          )]
+
+          cutIn = [...new Set(
+            deliveries.map(d => (d.cut_site as string | null) ?? '').filter(Boolean)
+          )]
+        }
+      }
+
+      const outputMode = (data.output_mode ?? 'prep') as OutputMode
+      const useby      = calculateUseByFromDays(data.date, usebydays ?? 7)
+
+      const labelData: PrepLabelData = {
+        batch_code:           data.batch_code,
+        product_name:         data.product_name ?? '',
+        product_species:      data.product_species ?? '',
+        output_mode:          outputMode,
+        date:                 fmtDisplayDate(data.date),
+        kill_date:            data.kill_date ? fmtDisplayDate(data.kill_date) : null,
+        days_from_kill:       data.days_from_kill ?? null,
+        source_batch_numbers: (data.source_batch_numbers as string[]) ?? [],
+        use_by:               fmtDisplayDate(useby),
+        origins:              origins,
+        reared_in:            rearedIn,
+        slaughtered_in:       slaughteredIn,
+        cut_in:               cutIn,
+        further_cut_in:       MFS_PLANT_CODE,
+        allergens_present:    (data.allergens_present as string[] | null) ?? [],
+      }
+
+      if (isJson) {
+        return NextResponse.json({ type: 'prep', data: labelData })
+      }
+
+      const output = generateLabel('prep', labelData, config)
 
       return new NextResponse(output.content, {
         headers: {

@@ -13,7 +13,7 @@
  * Both TSC TE310 and Zebra ZD421d accept this identical ZPL via TCP port 9100.
  */
 
-import type { DeliveryLabelData, MinceLabelData } from './types'
+import type { DeliveryLabelData, MinceLabelData, PrepLabelData } from './types'
 
 // Label dimensions at 203dpi
 const W = 800  // 100mm = 800 dots
@@ -159,6 +159,59 @@ export function generateMinceZPL(data: MinceLabelData, copies = 1): string {
     `^FO20,378^A0N,20,20^FDMinced in: ${sanitise(data.minced_in, 5)}^FS`,
     `^FO20,402^A0N,20,20^FDAllergens: ${sanitise(data.allergens_present.length === 0 ? 'None' : data.allergens_present.join(', '), 30)}^FS`,
     // Footer
+    '^XZ',
+  ].filter((l): l is string => l !== null)
+
+  return lines.join('\n')
+}
+
+export function generatePrepZPL(data: PrepLabelData, copies = 1): string {
+  const batch   = sanitise(data.batch_code, 30)
+  const mode    = data.output_mode.toUpperCase()
+  const sources = data.source_batch_numbers
+    .slice(0, 3)
+    .map(b => sanitise(b, 20))
+    .join(', ')
+  const killInfo = data.kill_date && data.days_from_kill !== null
+    ? `Kill: ${data.kill_date} (${data.days_from_kill} days)`
+    : null
+
+  // BLS origin lines — collapse born & reared when equal (verbatim wording).
+  const originsStr = data.origins.join(', ') || '-'
+  const rearedStr  = data.reared_in.join(', ')
+  const sameOrigin = rearedStr !== '' && originsStr === rearedStr
+  const bornLine   = sameOrigin
+    ? `Born & reared in: ${sanitise(originsStr, 30)}`
+    : `Born in: ${sanitise(originsStr, 30)}`
+  const rearedLine = (!sameOrigin && rearedStr) ? `Reared in: ${sanitise(rearedStr, 30)}` : null
+
+  const lines = [
+    '^XA',
+    `^PW${W}`,       // print width: 800 dots (100mm)
+    `^LL${H}`,       // label length: 600 dots (75mm)
+    `^PQ${copies}`,
+    // Header
+    `^FO20,20^A0N,26,26^FDMFS GLOBAL^FS`,
+    `^FO380,20^A0N,18,18^FDPREP / ${mode}^FS`,
+    `^FO20,52^GB${W - 40},3,3^FS`,
+    // Batch code text
+    `^FO20,65^A0N,38,38^FD${batch}^FS`,
+    // Code 128 barcode
+    `^FO20,115^BCN,55,Y,N,N^FD${batch}^FS`,
+    // Production fields
+    `^FO20,196^A0N,20,20^FDProduct:   ${sanitise(data.product_name, 24)}^FS`,
+    `^FO20,220^A0N,20,20^FDProd date: ${sanitise(data.date, 20)}^FS`,
+    killInfo ? `^FO20,244^A0N,20,20^FD${sanitise(killInfo, 36)}^FS` : null,
+    sources  ? `^FO20,268^A0N,18,18^FDSource: ${sources}^FS` : null,
+    `^FO20,292^A0N,22,22^FDUse by: ${sanitise(data.use_by, 20)}^FS`,
+    // BLS divider + fields (verbatim compulsory wording)
+    `^FO20,320^GB${W - 40},2,2^FS`,
+    `^FO20,330^A0N,20,20^FD${bornLine}^FS`,
+    rearedLine ? `^FO20,354^A0N,20,20^FD${rearedLine}^FS` : null,
+    `^FO20,${rearedLine ? 378 : 354}^A0N,20,20^FDSlaughtered in: ${sanitise(data.slaughtered_in.join(', ') || '-', 30)}^FS`,
+    `^FO20,${rearedLine ? 402 : 378}^A0N,20,20^FDCut in: ${sanitise(data.cut_in.join(', ') || '-', 30)}^FS`,
+    `^FO20,${rearedLine ? 426 : 402}^A0N,20,20^FDFurther cut in: ${sanitise(data.further_cut_in, 12)}^FS`,
+    `^FO20,${rearedLine ? 450 : 426}^A0N,20,20^FDAllergens: ${sanitise(data.allergens_present.length === 0 ? 'None' : data.allergens_present.join(', '), 30)}^FS`,
     '^XZ',
   ].filter((l): l is string => l !== null)
 

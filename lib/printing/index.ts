@@ -10,12 +10,23 @@
  * Upgrade from Phase 2 → 3 = change PrintConfig.format from 'html' to 'zpl'.
  */
 
-import type { LabelType, LabelData, PrintConfig, DeliveryLabelData, MinceLabelData } from './types'
-import { generateDeliveryZPL, generateMinceZPL } from './zpl'
-import { renderDeliveryHTML, renderMinceHTML, renderDeliveryHTML58, renderMinceHTML58 } from './html'
+import type { LabelType, LabelData, PrintConfig, DeliveryLabelData, MinceLabelData, PrepLabelData } from './types'
+import { generateDeliveryZPL, generateMinceZPL, generatePrepZPL } from './zpl'
+import {
+  renderDeliveryHTML, renderMinceHTML, renderPrepHTML,
+  renderDeliveryHTML58, renderMinceHTML58, renderPrepHTML58,
+} from './html'
 
 export { formatGoodsInBatchCode, formatMinceBatchCode, ddmmFromDate, calculateUseByFromDays, fmtDisplayDate } from './zpl'
-export type { LabelType, LabelData, PrintConfig, DeliveryLabelData, MinceLabelData } from './types'
+export { MFS_PLANT_CODE } from './types'
+export type { LabelType, LabelData, PrintConfig, DeliveryLabelData, MinceLabelData, PrepLabelData } from './types'
+// Re-export renderers so the BLS compliance oracle (tests) and the Sunmi adapter
+// can import them from the single printing entry point.
+export {
+  renderDeliveryHTML, renderMinceHTML, renderPrepHTML,
+  renderDeliveryHTML58, renderMinceHTML58, renderPrepHTML58,
+} from './html'
+export { generateDeliveryZPL, generateMinceZPL, generatePrepZPL } from './zpl'
 
 export interface LabelOutput {
   content:     string
@@ -37,13 +48,12 @@ export function generateLabel(
   const { format, copies } = config
 
   if (format === 'zpl') {
-    const zpl = type === 'delivery'
-      ? generateDeliveryZPL(data as DeliveryLabelData, copies)
-      : generateMinceZPL(data as MinceLabelData, copies)
+    let zpl: string
+    if (type === 'delivery')      zpl = generateDeliveryZPL(data as DeliveryLabelData, copies)
+    else if (type === 'prep')     zpl = generatePrepZPL(data as PrepLabelData, copies)
+    else                          zpl = generateMinceZPL(data as MinceLabelData, copies)
 
-    const batchCode = type === 'delivery'
-      ? (data as DeliveryLabelData).batch_code
-      : (data as MinceLabelData).batch_code
+    const batchCode = (data as DeliveryLabelData | MinceLabelData | PrepLabelData).batch_code
 
     return {
       content:     zpl,
@@ -61,6 +71,15 @@ export function generateLabel(
       : renderDeliveryHTML(data as DeliveryLabelData, copies)
 
     const batchCode = (data as DeliveryLabelData).batch_code
+    return { content: html, contentType: 'text/html', filename: `label-${batchCode}.html` }
+  }
+
+  if (type === 'prep') {
+    const html = is58mm
+      ? renderPrepHTML58(data as PrepLabelData, copies)
+      : renderPrepHTML(data as PrepLabelData, copies)
+
+    const batchCode = (data as PrepLabelData).batch_code
     return { content: html, contentType: 'text/html', filename: `label-${batchCode}.html` }
   }
 
