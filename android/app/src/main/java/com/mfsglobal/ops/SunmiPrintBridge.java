@@ -10,6 +10,8 @@ import com.sunmi.peripheral.printer.InnerPrinterManager;
 import com.sunmi.peripheral.printer.SunmiPrinterService;
 import com.sunmi.peripheral.printer.WoyouConsts;
 
+import org.json.JSONObject;
+
 public class SunmiPrintBridge {
     private static final String TAG = "MFSSunmiPrint";
     private final Context context;
@@ -43,8 +45,76 @@ public class SunmiPrintBridge {
         return printerService != null;
     }
 
+    /**
+     * Version-tolerant JSON entry point (ADR-0013). The new web build calls this
+     * with a single JSON string read BY NAME — so adding/removing a field changes
+     * JSON keys only, never this method's signature. An APK↔web version skew then
+     * degrades gracefully (missing keys default to "", unknown keys ignored)
+     * instead of the silent no-print a positional count mismatch caused.
+     *
+     * Keys mirror buildDeliveryPayload in lib/adapters/sunmi/Printer.ts.
+     */
+    @JavascriptInterface
+    public void printLabel(String json) {
+        if (printerService == null) {
+            Log.w(TAG, "printLabel called but service not bound");
+            return;
+        }
+        try {
+            JSONObject o = new JSONObject(json);
+            // "type" selects the layout; default to delivery (forward-compat for a
+            // future "mince" layout). Read but currently always renders delivery.
+            // Unknown keys are ignored — we only read the keys we know, each with
+            // an "" default.
+            o.optString("type", "delivery");
+            renderDeliveryLabel(
+                    o.optString("batch", ""),
+                    o.optString("supplier", ""),
+                    o.optString("date", ""),
+                    o.optString("temp", ""),
+                    o.optString("bornIn", ""),
+                    o.optString("rearedIn", ""),
+                    o.optString("slaughterSite", ""),
+                    o.optString("cutSite", ""),
+                    o.optString("species", ""),
+                    o.optString("allergens", "")
+            );
+        } catch (Exception e) {
+            Log.e(TAG, "printLabel error: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Legacy positional entry point. The currently-deployed web (old 9-arg shape)
+     * still calls this, so it is kept as a safety net during switchover. It maps
+     * the old single combined bornLine into the bornIn slot (rearedIn = "") and
+     * delegates to the SAME shared renderer, so both entry points produce an
+     * identical label (no layout drift).
+     */
     @JavascriptInterface
     public void printDeliveryLabel(
+            String batchCode,
+            String supplierCode,
+            String date,
+            String tempLine,
+            String bornLine,
+            String slaughterSite,
+            String cutSite,
+            String species,
+            String allergens
+    ) {
+        renderDeliveryLabel(
+                batchCode, supplierCode, date, tempLine,
+                bornLine, "", slaughterSite, cutSite, species, allergens);
+    }
+
+    /**
+     * Shared label renderer — the single source of the label-mode sequence
+     * (printerInit → labelLocate → content → labelOutput) and the reduced
+     * 52×38mm layout (ADR-0012). Both printLabel and the legacy positional
+     * printDeliveryLabel route here so the rendered label never drifts.
+     */
+    private void renderDeliveryLabel(
             String batchCode,
             String supplierCode,
             String date,
@@ -57,7 +127,7 @@ public class SunmiPrintBridge {
             String allergens
     ) {
         if (printerService == null) {
-            Log.w(TAG, "printDeliveryLabel called but service not bound");
+            Log.w(TAG, "renderDeliveryLabel called but service not bound");
             return;
         }
         try {
