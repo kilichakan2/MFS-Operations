@@ -196,8 +196,8 @@ describe("PREP label — country+plant BLS granularity (format=json)", () => {
     expect(d.cut_in).toEqual(["GB5678"]);
     // "Further cut in" is always the MFS plant code.
     expect(d.further_cut_in).toBe("GB2946");
-    // Multi-source origins distinct (GB born + IE born → both countries, mapped to names).
-    expect(d.origins.length).toBe(2);
+    // Multi-source origins distinct, as country CODES (GB born + IE born → "GB","IE").
+    expect([...d.origins].sort()).toEqual(["GB", "IE"]);
   });
 
   it("renders the prep HTML label with the compulsory BLS wording and GB2946 (never UK2946)", async () => {

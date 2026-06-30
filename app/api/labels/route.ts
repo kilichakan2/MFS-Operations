@@ -29,7 +29,6 @@ import {
   ddmmFromDate,
   MFS_PLANT_CODE,
 } from '@/lib/printing'
-import { COUNTRY_NAMES } from '@/lib/printing/countries'
 import type { DeliveryLabelData, MinceLabelData, PrepLabelData, PrintConfig, OutputMode } from '@/lib/printing/types'
 
 const supabase = supabaseService
@@ -80,6 +79,55 @@ function validateParams(params: URLSearchParams): {
   }
 
   return { valid: true, type, id, format, width, copies, usebydays }
+}
+
+// BLS traceability chain: resolve the FULL set of underlying goods-in delivery IDs
+// for a production run. A prep/mince run may be sourced from another BATCH (e.g. a
+// burger made from MINCE-3006-BEEF-1) rather than from deliveries directly — but the
+// origin (born/slaughtered/cut) lives on the deliveries that fed that batch. Follow
+// each source batch back to its deliveries: MINCE-/PREP- batches resolve via their
+// own source rows (PREP recurses one more level); any other code is a goods-in
+// delivery batch_number. Depth-bounded to guard against cycles. Deduped by delivery id.
+async function resolveDeliveryIds(
+  directIds: string[],
+  sourceBatchNumbers: string[],
+  depth = 0,
+): Promise<string[]> {
+  const ids = new Set<string>(directIds.filter(Boolean))
+  if (depth > 3) return [...ids] // cycle / runaway guard
+  for (const batch of sourceBatchNumbers) {
+    if (!batch) continue
+    if (batch.startsWith('MINCE-')) {
+      const { data } = await supabase
+        .from('haccp_mince_log')
+        .select('source_delivery_ids')
+        .eq('batch_code', batch)
+        .maybeSingle()
+      ;((data?.source_delivery_ids as string[] | null) ?? []).forEach(id => id && ids.add(id))
+    } else if (batch.startsWith('PREP-')) {
+      const { data } = await supabase
+        .from('haccp_meatprep_log')
+        .select('source_delivery_ids, source_batch_numbers')
+        .eq('batch_code', batch)
+        .maybeSingle()
+      if (data) {
+        const nested = await resolveDeliveryIds(
+          (data.source_delivery_ids as string[] | null) ?? [],
+          (data.source_batch_numbers as string[] | null) ?? [],
+          depth + 1,
+        )
+        nested.forEach(id => ids.add(id))
+      }
+    } else {
+      // goods-in delivery batch_number (e.g. "3006-GB-1")
+      const { data } = await supabase
+        .from('haccp_deliveries')
+        .select('id')
+        .eq('batch_number', batch)
+      ;(data ?? []).forEach(d => d?.id && ids.add(d.id as string))
+    }
+  }
+  return [...ids]
 }
 
 export async function GET(req: NextRequest) {
@@ -190,7 +238,10 @@ export async function GET(req: NextRequest) {
       }
 
       // ── BLS: look up source delivery records to get origin data ──────────────
-      const deliveryIds = (data.source_delivery_ids as string[] | null) ?? []
+      const deliveryIds = await resolveDeliveryIds(
+        (data.source_delivery_ids as string[] | null) ?? [],
+        (data.source_batch_numbers as string[] | null) ?? [],
+      )
       let origins:       string[] = []
       let slaughteredIn: string[] = []
 
@@ -201,13 +252,11 @@ export async function GET(req: NextRequest) {
           .in('id', deliveryIds)
 
         if (deliveries && deliveries.length > 0) {
-          // Collect unique born_in country codes → map to country names
-          const bornCodes = [...new Set(
-            deliveries.map(d => (d.born_in as string | null) ?? '').filter(Boolean)
+          // Born-in country CODES (GB, AU) — codes, not full names, so the line
+          // stays one row and matches the Slaughtered/Cut lines (Hakan, 2026-06-30).
+          origins = [...new Set(
+            deliveries.map(d => ((d.born_in as string | null) ?? '').toUpperCase()).filter(Boolean)
           )]
-          origins = bornCodes.map(code =>
-            COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
-          )
 
           // Extract country code prefix from slaughter_site (e.g. "GB" from "GB1234")
           slaughteredIn = [...new Set(
@@ -271,7 +320,10 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Prep record not found' }, { status: 404 })
       }
 
-      const deliveryIds = (data.source_delivery_ids as string[] | null) ?? []
+      const deliveryIds = await resolveDeliveryIds(
+        (data.source_delivery_ids as string[] | null) ?? [],
+        (data.source_batch_numbers as string[] | null) ?? [],
+      )
       let origins:       string[] = []
       let rearedIn:      string[] = []
       let slaughteredIn: string[] = []   // COUNTRY+PLANT (raw, distinct)
@@ -284,15 +336,15 @@ export async function GET(req: NextRequest) {
           .in('id', deliveryIds)
 
         if (deliveries && deliveries.length > 0) {
-          const toName = (code: string) => COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
-
+          // Born/Reared country CODES (GB, AU) — codes, not full names, so each
+          // stays one row on the dense prep label (Hakan, 2026-06-30).
           origins = [...new Set(
-            deliveries.map(d => (d.born_in as string | null) ?? '').filter(Boolean)
-          )].map(toName)
+            deliveries.map(d => ((d.born_in as string | null) ?? '').toUpperCase()).filter(Boolean)
+          )]
 
           rearedIn = [...new Set(
-            deliveries.map(d => (d.reared_in as string | null) ?? '').filter(Boolean)
-          )].map(toName)
+            deliveries.map(d => ((d.reared_in as string | null) ?? '').toUpperCase()).filter(Boolean)
+          )]
 
           // Prep keeps the FULL country+plant code (e.g. "GB1234") — do NOT
           // strip digits (that is the mince-only country-only rule).
