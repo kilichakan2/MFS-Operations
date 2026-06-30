@@ -31,22 +31,58 @@ const ROOT = process.cwd();
 const SCOPE_DIRS = [join(ROOT, "app"), join(ROOT, "components")];
 const KIT_DIR = join(ROOT, "components", "ui"); // the allowed home — excluded
 
-// ── The four svg-rooted EXPORTED-component fingerprints ──────────────────────
-// `\s` spans newlines; each matches "export …(){ return ( <svg" or "=> <svg".
-const PATTERNS: RegExp[] = [
-  // R1: export default function X(...) { return ( <svg
-  /export\s+default\s+function\s+\w+\s*\([^)]*\)\s*(:\s*[^{]+)?\{\s*return\s*\(?\s*<svg[\s/>]/,
-  // R2: export function X(...) { return ( <svg
-  /export\s+function\s+\w+\s*\([^)]*\)\s*(:\s*[^{]+)?\{\s*return\s*\(?\s*<svg[\s/>]/,
-  // R3: export const X = (...) => ( <svg
-  /export\s+const\s+\w+\s*(:[^=]+)?=\s*\([^)]*\)\s*(:\s*[^=]+)?=>\s*\(?\s*<svg[\s/>]/,
-  // R4: export default (...) => ( <svg
-  /export\s+default\s+\([^)]*\)\s*=>\s*\(?\s*<svg[\s/>]/,
-];
+// ── Detection: an EXPORTED component whose render ROOT is an <svg> ────────────
+// A brand asset's tell is that the component IS the svg (root return is <svg>,
+// possibly through a fragment, possibly after early-return guards), as opposed to
+// a real screen that merely NESTS a decorative <svg> inside a <div>/etc. We match
+// each exported component's OWN body (brace-balanced) so a non-exported local
+// icon helper (e.g. `Ic` in app/haccp/page.tsx, Modal's `CloseIcon`) never counts.
+//
+// Hardened (FORGE Guard 🟡): the earlier "svg immediately after the opening brace"
+// anchor let common icon shapes evade — block-body arrows `() => { return <svg> }`,
+// early-return guards `if(!ok) return null; return <svg>`, fragment-wrapped roots,
+// and forwardRef/memo wrappers. All are caught now.
 
-/** True if the source declares an exported svg-rooted (brand-asset) component. */
-function isStrayBrandAsset(source: string): boolean {
-  return PATTERNS.some((re) => re.test(source));
+/** Extract the `{...}` block beginning at the opening brace at `openIdx`. */
+function braceBlock(src: string, openIdx: number): string {
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}" && --depth === 0) return src.slice(openIdx, i + 1);
+  }
+  return src.slice(openIdx);
+}
+
+/** A returned/implicit JSX whose ROOT is <svg> (optionally via a fragment). */
+const SVG_ROOT_RETURN =
+  /return\s*\(?\s*(?:<>\s*|<React\.Fragment>\s*)?<svg[\s/>]/;
+const SVG_ROOT_IMPLICIT =
+  /^\s*\(?\s*(?:<>\s*|<React\.Fragment>\s*)?<svg[\s/>]/;
+
+/** True if the source declares an EXPORTED svg-rooted (brand-asset) component. */
+function isStrayBrandAsset(raw: string): boolean {
+  // Collapse forwardRef/memo wrappers so they reduce to the base fn/arrow forms.
+  const src = raw.replace(/\b(?:React\.)?(?:forwardRef|memo)\s*\(/g, "");
+
+  // export [default] [async] function Name(...) { ...body... }
+  const fnHead =
+    /export\s+(?:default\s+)?(?:async\s+)?function\s*\w*\s*\([^)]*\)\s*(?::\s*[^){]+)?\{/g;
+  for (let m; (m = fnHead.exec(src)); ) {
+    if (SVG_ROOT_RETURN.test(braceBlock(src, fnHead.lastIndex - 1))) return true;
+  }
+
+  // export const Name [: T] = [<gen>] (...) => ...   |   export default (...) => ...
+  const arrowHead =
+    /export\s+(?:default\s+|const\s+\w+\s*(?::[^=]+)?=\s*)(?:<[^>]*>\s*)?\([^)]*\)\s*(?::\s*[^=]+)?=>\s*/g;
+  for (let m; (m = arrowHead.exec(src)); ) {
+    const after = src.slice(arrowHead.lastIndex);
+    if (after.startsWith("{")) {
+      if (SVG_ROOT_RETURN.test(braceBlock(src, arrowHead.lastIndex))) return true;
+    } else if (SVG_ROOT_IMPLICIT.test(after)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Recursively collect .tsx files under a dir, skipping the kit + build dirs. */
@@ -97,20 +133,35 @@ describe("reusable-visual-in-kit — brand/icon assets live only in components/u
   });
 
   // ── proven teeth: planted positives go red, planted negatives stay green ────
-  it("detects an exported svg-rooted component (rule is not vacuously true)", () => {
-    expect(
-      isStrayBrandAsset("export default function X(){ return (<svg></svg>) }"),
-    ).toBe(true);
-    expect(isStrayBrandAsset("export const Star = () => <svg/>")).toBe(true);
+  it("detects every common exported svg-rooted icon shape (no easy evasion)", () => {
+    const caught = [
+      "export default function X(){ return (<svg></svg>) }", // fn decl
+      "export const Star = (p) => (<svg/>)", // implicit arrow
+      "export const Star = () => { return (<svg/>) }", // block-body arrow
+      "export default function X(){ if(!ok) return null; return (<svg/>) }", // early return
+      "export default function X(){ return (<><svg/></>) }", // fragment-wrapped root
+      "export default forwardRef(function X(){ return (<svg/>) })", // forwardRef wrapper
+      "export default memo(function X(){ return (<svg/>) })", // memo wrapper
+      "export const Star = <T,>(p) => (<svg/>)", // generic arrow
+    ];
+    for (const shape of caught) {
+      expect(isStrayBrandAsset(shape), `should flag: ${shape}`).toBe(true);
+    }
   });
 
   it("does NOT flag a local helper or a nested decorative svg", () => {
     // local, non-exported icon helper (like `Ic` / Modal's `CloseIcon`)
     expect(isStrayBrandAsset("function Ic(){ return (<svg/>) }")).toBe(false);
-    // larger component with a nested decorative <svg> (body opens with <div>)
+    // larger component with a nested decorative <svg> (root return is <div>)
     expect(
       isStrayBrandAsset(
         "export default function P(){ return (<div><svg/></div>) }",
+      ),
+    ).toBe(false);
+    // exported screen that nests an svg deep, with a non-exported icon helper too
+    expect(
+      isStrayBrandAsset(
+        "function Ic(){ return (<svg/>) }\nexport default function Page(){ return (<main><Ic/></main>) }",
       ),
     ).toBe(false);
   });

@@ -86,6 +86,18 @@ describe("StatusTile", () => {
     expect(onTap).toHaveBeenCalledOnce();
   });
 
+  it("fires onTap on Space too (the other native button activation key)", async () => {
+    const onTap = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StatusTile icon={Icon} label="Go" statusLine="S" state="neutral" onTap={onTap} />,
+    );
+    await user.tab();
+    expect(screen.getByRole("button", { name: /Go/ })).toBe(document.activeElement);
+    await user.keyboard("{ }");
+    expect(onTap).toHaveBeenCalledOnce();
+  });
+
   it("renders the help affordance only when onHelp is given", () => {
     const { rerender } = render(
       <StatusTile icon={Icon} label="Cold" statusLine="S" state="neutral" onTap={() => {}} />,

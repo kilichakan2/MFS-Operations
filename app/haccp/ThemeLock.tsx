@@ -18,6 +18,10 @@ import { useEffect } from 'react'
 
 export default function ThemeLock() {
   useEffect(() => {
+    // Assumes sole ownership of <html data-theme> while mounted: `prev` is
+    // captured once, so if another writer (e.g. an app-wide theme provider)
+    // changed it mid-mount, the restore would clobber that newer value. No such
+    // writer exists on the kiosk route today (HACCP is a standalone surface).
     const el = document.documentElement
     const prev = el.getAttribute('data-theme')
     el.setAttribute('data-theme', 'dark')
