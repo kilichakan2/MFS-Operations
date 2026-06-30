@@ -162,12 +162,13 @@ function deliveryUrl(input: DeliveryLabelInput): string {
 }
 
 /**
- * Build the byte-identical `/api/labels` URL for a mince label.
- * Param order (LOCKED, byte-for-byte with the pre-refactor mince screen): type,
- * id, format, copies, usebydays, width.
+ * Build the `/api/labels` URL for a mince OR prep production label. The template
+ * is selected by `input.kind` (mince → type=mince, prep → type=prep). Param order
+ * preserved byte-for-byte (type, id, format, copies, usebydays, width); for a
+ * mince kind this is identical to the pre-split URL.
  */
 function minceUrl(input: MinceLabelInput): string {
-  return `/api/labels?type=mince&id=${input.id}&format=html&copies=${input.copies}&usebydays=${input.usebydays}&width=${input.width}`
+  return `/api/labels?type=${input.kind}&id=${input.id}&format=html&copies=${input.copies}&usebydays=${input.usebydays}&width=${input.width}`
 }
 
 /**

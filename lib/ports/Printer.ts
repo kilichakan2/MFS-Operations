@@ -35,6 +35,9 @@ export interface DeliveryLabelInput {
 }
 
 export interface MinceLabelInput {
+  /** Which production template to print: 'mince' (country-only BLS) or 'prep'
+   *  (country+plant BLS). Drives the `type=` query param + the native payload. */
+  kind:      'mince' | 'prep'
   id:        string
   usebydays: number
   width:     LabelWidth
@@ -44,6 +47,7 @@ export interface MinceLabelInput {
 export interface Printer {
   /** Print a delivery label. onError surfaces a dead-session/failure to the caller's submitErr. */
   printDeliveryLabel(input: DeliveryLabelInput, onError: (kind: PrintErrorKind) => void): Promise<void>
-  /** Print a mince label. Always the iframe/AirPrint path (no native mince). */
+  /** Print a mince or prep production label (input.kind selects the template).
+   *  Native on the Sunmi V3 for 58mm; iframe/AirPrint fallback otherwise. */
   printMinceLabel(input: MinceLabelInput, onError: (kind: PrintErrorKind) => void): Promise<void>
 }

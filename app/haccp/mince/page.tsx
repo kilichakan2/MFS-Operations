@@ -423,7 +423,7 @@ export default function MincePage() {
   const [deliveries,setDeliveries]    = useState<DeliveryOption[]>([])
   const [minceBatches, setMinceBatches] = useState<{ id: string; batch_code: string; species: string; kill_date: string; output_mode: string }[]>([])
   const [loading,   setLoading]       = useState(true)
-  const [printTarget, setPrintTarget] = useState<{ id: string; batchCode: string; outputMode: string; width: '100mm' | '58mm' } | null>(null)
+  const [printTarget, setPrintTarget] = useState<{ id: string; batchCode: string; outputMode: string; width: '100mm' | '58mm'; kind: 'mince' | 'prep' } | null>(null)
   const [dateFilter, setDateFilter]   = useState<'today' | 'week' | 'last_week'>('today')
 
   // ── Mince form state ────────────────────────────────────────────────────────
@@ -779,7 +779,7 @@ export default function MincePage() {
                       setPrintTarget(null)
                       setSubmitErr('')
                       await getPrinter().printMinceLabel(
-                        { id: target.id, usebydays: opt.days, width: target.width, copies: 1 },
+                        { kind: target.kind, id: target.id, usebydays: opt.days, width: target.width, copies: 1 },
                         (kind) => setSubmitErr(printErrorMessage(kind)),
                       )
                     }}
@@ -1061,8 +1061,8 @@ export default function MincePage() {
                         </div>
                       </div>
                       <PrintLabelStrip
-                        on100mm={() => setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode, width: '100mm' })}
-                        on58mm={() => setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode, width: '58mm' })}
+                        on100mm={() => setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode, width: '100mm', kind: 'mince' })}
+                        on58mm={() => setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode, width: '58mm', kind: 'mince' })}
                       />
                     </div>
                   ))}
@@ -1264,6 +1264,10 @@ export default function MincePage() {
                           </span>
                         </div>
                       </div>
+                      <PrintLabelStrip
+                        on100mm={() => setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode, width: '100mm', kind: 'prep' })}
+                        on58mm={() => setPrintTarget({ id: r.id, batchCode: r.batch_code, outputMode: r.output_mode, width: '58mm', kind: 'prep' })}
+                      />
                     </div>
                   ))}
                 </div>

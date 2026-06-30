@@ -164,9 +164,17 @@ describe('Browser adapter URL fidelity', () => {
 
   it('mince URL is byte-identical to the pre-refactor literal (usebydays + width preserved)', async () => {
     await createBrowserPrinter().printMinceLabel(
-      { id: 'abc-123', usebydays: 2, width: '100mm', copies: 1 },
+      { kind: 'mince', id: 'abc-123', usebydays: 2, width: '100mm', copies: 1 },
       vi.fn(),
     )
     expect(captured).toBe('/api/labels?type=mince&id=abc-123&format=html&copies=1&usebydays=2&width=100mm')
+  })
+
+  it('prep kind builds a type=prep URL (the meat-prep dispatch template)', async () => {
+    await createBrowserPrinter().printMinceLabel(
+      { kind: 'prep', id: 'abc-123', usebydays: 7, width: '58mm', copies: 1 },
+      vi.fn(),
+    )
+    expect(captured).toBe('/api/labels?type=prep&id=abc-123&format=html&copies=1&usebydays=7&width=58mm')
   })
 })
