@@ -40,6 +40,7 @@ let warehouseUserId: string;
 const ids = {
   delA: "",
   delB: "",
+  delFlagged: "",
   mince: "",
   prep: "",
 };
@@ -94,6 +95,25 @@ async function plantDeliveries() {
     .single();
   if (eB) throw new Error(`plant delB failed: ${eB.message}`);
   ids.delB = dB.id;
+
+  // A delivery logged WITH an allergen non-conformance (F-PROD-04 Pass 3) — its
+  // label must surface the note as a red warning, not the hardcoded "None".
+  const { data: dF, error: eF } = await supa
+    .from("haccp_deliveries")
+    .insert({
+      ...baseRow,
+      batch_number: `${SLUG}-BATCH-FLAG`,
+      born_in: "GB",
+      reared_in: "GB",
+      slaughter_site: "GB1234",
+      cut_site: "GB5678",
+      allergens_identified: true,
+      allergen_notes: "Mustard cross-contact",
+    })
+    .select("id")
+    .single();
+  if (eF) throw new Error(`plant delFlagged failed: ${eF.message}`);
+  ids.delFlagged = dF.id;
 }
 
 async function plantPrepRun() {
@@ -163,6 +183,7 @@ afterAll(async () => {
   if (ids.mince) await supa.from("haccp_mince_log").delete().eq("id", ids.mince);
   if (ids.delA) await supa.from("haccp_deliveries").delete().eq("id", ids.delA);
   if (ids.delB) await supa.from("haccp_deliveries").delete().eq("id", ids.delB);
+  if (ids.delFlagged) await supa.from("haccp_deliveries").delete().eq("id", ids.delFlagged);
 });
 
 describe("GET /api/labels auth", () => {
@@ -227,6 +248,44 @@ describe("PREP label — country+plant BLS granularity (format=json)", () => {
     expect(res.status).toBe(200);
     expect(res.raw).toContain("Further cut in");
     expect(res.raw).toContain("GB2946");
+  });
+});
+
+describe("DELIVERY label — real allergens (F-PROD-04 Pass 3)", () => {
+  it("flagged delivery → HTML shows the notes text in red (#991b1b)", async () => {
+    const res = await api(
+      `/api/labels?type=delivery&id=${ids.delFlagged}&format=html&width=100mm`,
+      { role: "warehouse", userId: warehouseUserId },
+    );
+    expect(res.status).toBe(200);
+    const html = res.raw;
+    expect(html).toContain("Mustard cross-contact");
+    expect(html).toContain("#991b1b");
+  });
+
+  it("not-flagged delivery → HTML shows green None, never the red warning colour on the allergen line", async () => {
+    const res = await api(
+      `/api/labels?type=delivery&id=${ids.delA}&format=html&width=100mm`,
+      { role: "warehouse", userId: warehouseUserId },
+    );
+    expect(res.status).toBe(200);
+    const html = res.raw;
+    expect(html).toContain(
+      '<span class="fv" style="color:#166534;font-weight:bold">None</span>',
+    );
+    expect(html).not.toContain('#991b1b;font-weight:bold">None');
+  });
+
+  it("flagged delivery → format=json carries allergens_flagged + allergen_notes", async () => {
+    const res = await api(
+      `/api/labels?type=delivery&id=${ids.delFlagged}&format=json`,
+      { role: "warehouse", userId: warehouseUserId },
+    );
+    expect(res.status).toBe(200);
+    const body = res.body as { type: string; data: Record<string, unknown> };
+    expect(body.type).toBe("delivery");
+    expect(body.data.allergens_flagged).toBe(true);
+    expect(body.data.allergen_notes).toBe("Mustard cross-contact");
   });
 });
 
