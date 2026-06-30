@@ -107,6 +107,22 @@ Produce **two distinct, beef-labelling-compliant dispatch labels** — a **MINCE
 
 ## Numbered steps (ordered, atomic, TDD where it fits)
 
+> **Implementation status (all steps complete):**
+> - [x] Step 0 — recon confirmed (all 5 facts true)
+> - [x] Step 1 — `GB2946` (`MFS_PLANT_CODE`) constant + `PrepLabelData` type + shared `countries.ts`
+> - [x] Step 2 — API prep branch + `cut_site` read + country-vs-plant split + `format=json`
+> - [x] Step 3 — mince renderers verbatim wording (html/58/zpl)
+> - [x] Step 4 — prep renderers (html/58/zpl)
+> - [x] Step 5 — `index.ts` prep routing + renderer re-exports
+> - [x] Step 6 — `kind` discriminator on `MinceLabelInput` + browser `type=${kind}` URL
+> - [x] Step 7 — Sunmi native mince/prep via `format=json` (Option (a)) + `buildMincePayload`/`buildPrepPayload`
+> - [x] Step 8 — Java bridge `renderMinceLabel`/`renderPrepLabel` (JSON `type` key, signature UNCHANGED)
+> - [x] Step 9 — mince page prep print button + `kind`
+> - [x] Step 10 — oracle tests extended (labelPrinting + sunmi/Printer)
+>
+> **Conductor scope call resolved:** native data source = **Option (a)** — server aggregates ONCE,
+> native fetches `/api/labels?...&format=json`. Single source of truth; no client-side re-aggregation.
+
 ### Step 0 — Recon confirmation (read-only, no code)
 Confirm in the running tree (the implementer cannot see this conversation):
 - `app/api/labels/route.ts` line ~132 hardcodes `mfs_plant: 'UK2946'`; the mince branch (lines ~160–229) reads `haccp_mince_log` only and aggregates `slaughtered_in` **country-only** (strips digits, line ~204) and does NOT select `cut_site`.
