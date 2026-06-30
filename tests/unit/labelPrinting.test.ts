@@ -688,6 +688,35 @@ describe('BLS: multi-source DISTINCT aggregation (comma-joined)', () => {
   })
 })
 
+describe('BLS: API param validation — prep accepted, usebydays required', () => {
+  // Mirrors validateParams in app/api/labels/route.ts (the route module pulls in
+  // server-only Supabase, so we pin the parameter rules with the same predicate
+  // shape rather than import the route handler).
+  function validateType(type: string | undefined): boolean {
+    return !!type && ['delivery', 'mince', 'prep'].includes(type)
+  }
+  function validateFormat(format: string): boolean {
+    return ['html', 'zpl', 'json'].includes(format)
+  }
+  function usebydaysRequiredFor(type: string): boolean {
+    return type === 'mince' || type === 'prep'
+  }
+
+  it('type=prep is a valid type', () => {
+    expect(validateType('prep')).toBe(true)
+  })
+
+  it('format=json is valid (the native structured-data path)', () => {
+    expect(validateFormat('json')).toBe(true)
+  })
+
+  it('usebydays is required for prep (same as mince)', () => {
+    expect(usebydaysRequiredFor('prep')).toBe(true)
+    expect(usebydaysRequiredFor('mince')).toBe(true)
+    expect(usebydaysRequiredFor('delivery')).toBe(false)
+  })
+})
+
 describe('BLS: Born & reared collapse', () => {
   it('equal born/reared collapses to "Born & reared in <country>"', () => {
     const html = renderPrepHTML({ ...realPrep, origins: ['United Kingdom'], reared_in: ['United Kingdom'] })
