@@ -1,12 +1,12 @@
 /**
- * tests/e2e/13z-haccp-cold-storage-phase1.spec.ts
+ * tests/e2e/13-haccp-cold-storage-phase1.spec.ts
  *
  * @critical
  *
  * NET-NEW E2E for the HACCP cold-storage UI Phase 1 rebuild (Tier B). Drives the
  * REBUILT /haccp/cold-storage screen (kit Modals + NumberPad + semantic tokens,
- * inherited dark theme) in a real Chromium browser against the LOCAL Supabase
- * stack, proving the three locked changes end-to-end at the UI layer:
+ * inherited dark theme) in a real Chromium browser, proving the three locked
+ * changes end-to-end at the UI layer:
  *
  *   1. BUG-FIX (headline) — a deviation reading whose corrective action cites
  *      "Defrost cycle — scheduled temperature rise" (one of the two causes the
@@ -18,33 +18,42 @@
  *      the NumberPad cannot be Confirmed (range-gated) AND, when the pad is
  *      dismissed via the scrim WITHOUT Confirm, the draft is discarded: the unit
  *      card never shows 300 and Submit is not enabled by it.
- *   3. DARK-MODE — the screen and all three kit Modals (NumberPad sheet,
- *      corrective-action sheet, Quick-reference sheet) render on the inherited
- *      dark theme with no light/white surfaces (no hardcoded light class survives
- *      the token sweep; the screen root resolves to a dark background).
+ *   3. DARK-MODE — the screen and the kit Modals (NumberPad sheet, corrective-
+ *      action sheet, Quick-reference sheet) render on the inherited dark theme
+ *      with no light/white surfaces (no hardcoded light class survives the token
+ *      sweep; the screen root resolves to a dark background).
  *   4. ONCE-PER-SESSION — re-opening a submitted session shows the read-only
  *      "already submitted" state.
  *
- * Fixture isolation: the screen renders only ACTIVE cold-storage units. This
- * file deactivates every other active unit and seeds ONE dedicated chiller
- * (target 4 / max 8) so its submit is deterministic and order-independent on a
- * shared seed (it never collides with spec 13's AM/PM submits on the 5 seed
- * units). beforeAll deactivates + seeds; afterAll restores the deactivated units
- * to active and parks the dedicated unit inactive (its readings are append-only).
+ * SEED + VERIFY exactly like the sibling @critical HACCP specs (e.g.
+ * 13-haccp-cold-storage.spec.ts): uses the 5 cold-storage units the preview seed
+ * already plants + the app's own login/flow. NO Supabase service-role client and
+ * NO SUPABASE_SERVICE_ROLE_KEY — that key is not exposed to the remote Vercel-
+ * preview @critical smoke (fail-closed by design), so a direct DB client would
+ * break the authoritative smoke. The "Session submitted" success screen IS the
+ * end-to-end save proof.
  *
- * Prereqs: npm run db:up + db:reset; .env.test.local (local Supabase URL +
- * service-role key) and .env.e2e.local (warehouse PIN/user). Runs under
- * --project=chromium. A re-run on the same calendar day without db:reset will
- * find the dedicated unit's AM slot already filled — handled gracefully (the
- * read-only banner then proves a prior submit landed), exactly as spec 13 does.
+ * RUN ORDER (deliberate filename): this file sorts BEFORE
+ * 13-haccp-cold-storage.spec.ts ('-' < '.'), so its AM submit lands on a fresh
+ * per-run seed while a once-per-session slot is still free. The regression spec's
+ * happy-path then resiliently early-returns on "AM already submitted" (it asserts
+ * the read-only banner, no CA dependency), and its deviation path keeps the PM
+ * session to itself — so its admin-queue assertion is unaffected. The deviation
+ * here uses Beef Chiller (AM), distinct from the regression's Lamb Chiller (PM).
+ *
+ * Prereqs: npm run db:up + db:reset (plants the 5 units); .env.e2e.local with the
+ * warehouse PIN/user. Runs under --project=chromium. A re-run on the same
+ * calendar day without db:reset finds the AM slot already filled — handled
+ * gracefully (the read-only banner then proves a prior submit landed), exactly as
+ * the regression spec does.
  */
 
 import { test, expect, type Page } from '@playwright/test'
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { loginAs } from './_auth'
 
-const DEDICATED_UNIT = 'E2E P1 Defrost Chiller'
-const PROD_REF = 'uqgecljspgtevoylwkep'
+const CHILLERS = ['Lamb Chiller', 'Beef Chiller', 'Dispatch Chiller', 'Dairy Chiller']
+const FREEZER = 'Main Freezer'
+const DEVIATING_UNIT = 'Beef Chiller' // AM critical here; regression uses Lamb (PM)
 
 // Light/hardcoded classes the token sweep was supposed to remove. Any element
 // carrying one of these under the dark theme would render a white/light box —
@@ -63,28 +72,13 @@ const LIGHT_SELECTOR = [
   '[class*="bg-black/50"]',
 ].join(', ')
 
-function serviceClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'http://localhost:54321'
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-  if (!key) {
-    throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY missing — set it in .env.test.local for the ' +
-        'cold-storage Phase 1 E2E fixtures.',
-    )
-  }
-  if (url.includes(PROD_REF)) {
-    throw new Error('⛔ Refusing to seed E2E fixtures against production Supabase.')
-  }
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  })
-}
-
-// Tap a unit card, clear any pre-filled value, type `temp`, Confirm. Mirrors
-// spec 13's helper so the deliberately-preserved NumberPad selectors are
-// exercised. Chiller pad → decimal key present, no sign key.
-async function enterReading(page: Page, unit: string, temp: string): Promise<void> {
+// Tap a unit card, clear any pre-filled value, type `temp`, Confirm. Mirrors the
+// regression spec's helper so the deliberately-preserved NumberPad selectors are
+// exercised. `negative` toggles the freezer +/- key.
+async function readUnit(page: Page, unit: string, temp: string, negative = false): Promise<void> {
   await page.getByText(unit, { exact: true }).click()
+  // Clear any pre-filled value via the backspace — the LAST button inside the
+  // 3-col digit grid (Confirm sits OUTSIDE the grid, so scope to it).
   const grid = page.locator('div.grid.grid-cols-3')
   for (let i = 0; i < 6; i++) {
     await grid.getByRole('button').last().click()
@@ -92,78 +86,13 @@ async function enterReading(page: Page, unit: string, temp: string): Promise<voi
   for (const ch of temp) {
     await page.getByRole('button', { name: ch === '.' ? '.' : ch, exact: true }).click()
   }
+  if (negative) {
+    await page.getByRole('button', { name: '-', exact: true }).click()
+  }
   await page.getByRole('button', { name: /^Confirm .+°C$/ }).click()
 }
 
-let supa: SupabaseClient
-let dedicatedId: string
-let deactivatedIds: string[] = []
-
 test.describe('@critical HACCP cold storage — UI Phase 1 rebuild', () => {
-  test.beforeAll(async () => {
-    supa = serviceClient()
-
-    // Seed (idempotently) the dedicated chiller and make sure it is active.
-    const { data: existing } = await supa
-      .from('haccp_cold_storage_units')
-      .select('id')
-      .eq('name', DEDICATED_UNIT)
-      .maybeSingle()
-    if (existing) {
-      dedicatedId = existing.id
-      await supa
-        .from('haccp_cold_storage_units')
-        .update({ active: true })
-        .eq('id', dedicatedId)
-    } else {
-      const { data, error } = await supa
-        .from('haccp_cold_storage_units')
-        .insert({
-          name: DEDICATED_UNIT,
-          unit_type: 'chiller',
-          target_temp_c: 4,
-          max_temp_c: 8,
-          active: true,
-        })
-        .select('id')
-        .single()
-      if (error) throw new Error(`seed dedicated unit failed: ${error.message}`)
-      dedicatedId = data.id
-    }
-
-    // Deactivate every OTHER active unit so the screen shows only ours.
-    const { data: others } = await supa
-      .from('haccp_cold_storage_units')
-      .select('id')
-      .eq('active', true)
-      .neq('id', dedicatedId)
-    deactivatedIds = (others ?? []).map((r) => r.id as string)
-    if (deactivatedIds.length) {
-      await supa
-        .from('haccp_cold_storage_units')
-        .update({ active: false })
-        .in('id', deactivatedIds)
-    }
-  })
-
-  test.afterAll(async () => {
-    // Restore the units we deactivated; park the dedicated unit inactive (its
-    // append-only readings can't be deleted, so leaving it active would leak it
-    // onto the live screen).
-    if (deactivatedIds.length) {
-      await supa
-        .from('haccp_cold_storage_units')
-        .update({ active: true })
-        .in('id', deactivatedIds)
-    }
-    if (dedicatedId) {
-      await supa
-        .from('haccp_cold_storage_units')
-        .update({ active: false })
-        .eq('id', dedicatedId)
-    }
-  })
-
   // ── 2. DRAFT-DISCARD (Guard 🟡 fix) ────────────────────────────────────────
   test('out-of-range entry dismissed via the scrim is discarded — never reaches the card or Submit', async ({
     page,
@@ -173,8 +102,8 @@ test.describe('@critical HACCP cold storage — UI Phase 1 rebuild', () => {
     await expect(page).toHaveURL(/\/haccp\/cold-storage/)
     await page.getByRole('button', { name: 'AM', exact: true }).click()
 
-    // Open the pad for the dedicated unit and type an impossible value.
-    await page.getByText(DEDICATED_UNIT, { exact: true }).click()
+    // Open the pad for a seeded unit and type an impossible value.
+    await page.getByText('Lamb Chiller', { exact: true }).click()
     const grid = page.locator('div.grid.grid-cols-3')
     for (let i = 0; i < 6; i++) {
       await grid.getByRole('button').last().click()
@@ -193,7 +122,7 @@ test.describe('@critical HACCP cold storage — UI Phase 1 rebuild', () => {
     // The draft is discarded: the unit card never shows 300, stays "Tap"
     // (unrecorded), and Submit is disabled (no committed reading).
     await expect(page.getByText('300°C')).toHaveCount(0)
-    const card = page.getByRole('button').filter({ hasText: DEDICATED_UNIT })
+    const card = page.getByRole('button').filter({ hasText: 'Lamb Chiller' })
     await expect(card).toContainText(/Tap/i)
     await expect(page.getByRole('button', { name: /^Submit AM check$/ })).toBeDisabled()
   })
@@ -222,7 +151,7 @@ test.describe('@critical HACCP cold storage — UI Phase 1 rebuild', () => {
     await expect(page.locator(LIGHT_SELECTOR)).toHaveCount(0)
 
     // NumberPad sheet — open, assert dark (no light surfaces), then close.
-    await page.getByText(DEDICATED_UNIT, { exact: true }).click()
+    await page.getByText('Lamb Chiller', { exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await expect(page.locator(LIGHT_SELECTOR)).toHaveCount(0)
     await page.keyboard.press('Escape')
@@ -243,18 +172,22 @@ test.describe('@critical HACCP cold storage — UI Phase 1 rebuild', () => {
     await page.goto('/haccp/cold-storage')
     await page.getByRole('button', { name: 'AM', exact: true }).click()
 
-    // Graceful guard: if a prior run already submitted AM for the dedicated
-    // unit (re-run without db:reset), the read-only banner itself proves a
-    // submit landed — assert it and stop (the integration layer is the
-    // authoritative Defrost-save proof).
+    // Graceful guard: if a prior run already submitted AM (re-run without
+    // db:reset), the read-only banner itself proves a submit landed — assert it
+    // and stop (the integration layer is the authoritative Defrost-save proof).
     const alreadyDone = page.getByText(/AM check already submitted/i)
     if (await alreadyDone.isVisible().catch(() => false)) {
       await expect(alreadyDone).toBeVisible()
       return
     }
 
-    // Drive a CRITICAL reading (12 °C on a target-4 / max-8 chiller → >8).
-    await enterReading(page, DEDICATED_UNIT, '12')
+    // Drive all 5 units: 4 chillers + freezer in range, Beef Chiller CRITICAL at
+    // 12 °C (>8 → critical → corrective action). Submit requires every unit
+    // filled, exactly as on the real kiosk.
+    for (const c of CHILLERS) {
+      await readUnit(page, c, c === DEVIATING_UNIT ? '12' : '4')
+    }
+    await readUnit(page, FREEZER, '20', /* negative */ true)
     await page.getByPlaceholder(/comments \(optional\)/i).fill(`E2E-P1-DEFROST-${Date.now()}`)
 
     // Submit opens the corrective-action sheet (a reading is non-pass).
@@ -268,7 +201,7 @@ test.describe('@critical HACCP cold storage — UI Phase 1 rebuild', () => {
 
     // Pick the formerly-rejected cause (em-dash variant), a disposition and a
     // recurrence, then confirm. Critical + non-equipment → disposition options
-    // are Assess / Reject; Defrost recurrence offers "Review defrost cycle
+    // are Assess / Reject; the Defrost cause offers "Review defrost cycle
     // schedule".
     await page.getByRole('button', { name: /defrost cycle .* scheduled temperature rise/i }).click()
     await page.getByRole('button', { name: /^Assess$/ }).click()
