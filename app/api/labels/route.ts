@@ -178,7 +178,10 @@ export async function GET(req: NextRequest) {
     if (type === 'mince') {
       const { data, error } = await supabase
         .from('haccp_mince_log')
-        .select('id, date, batch_code, product_species, output_mode, kill_date, days_from_kill, source_batch_numbers, source_delivery_ids, allergens_present')
+        // NOTE: haccp_mince_log has NO allergens_present column (it lives only on
+        // haccp_meatprep_log). Selecting it made PostgREST reject the query → 404.
+        // Mince allergens are out of scope until Pass 3; render "None" for now.
+        .select('id, date, batch_code, product_species, output_mode, kill_date, days_from_kill, source_batch_numbers, source_delivery_ids')
         .eq('id', id)
         .single()
 
@@ -233,7 +236,9 @@ export async function GET(req: NextRequest) {
         origins:              origins,
         slaughtered_in:       slaughteredIn,
         minced_in:            'GB',
-        allergens_present:    (data.allergens_present as string[] | null) ?? [],
+        // No allergens column on haccp_mince_log (see select above) → always empty
+        // until Pass 3 wires real mince allergens. Renders "Allergens: None".
+        allergens_present:    [],
       }
 
       if (isJson) {
