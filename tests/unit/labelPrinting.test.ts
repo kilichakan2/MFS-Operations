@@ -494,3 +494,211 @@ describe('Label allergen declaration — SALSA 1.4.3', () => {
 // These pure-helper + bridge-detection cases moved to
 // tests/unit/adapters/sunmi/Printer.test.ts at F-PROD-04 Pass 2a, when
 // lib/printing/sunmi.ts was relocated to lib/adapters/sunmi/Printer.ts.
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BEEF-LABELLING-COMPLIANCE ORACLE (F-PROD-04 — REGULATED, MUST-PASS)
+//
+// Unlike the cases above (inline copies of the renderers), these import the REAL
+// lib/printing modules so the oracle guards production code. They pin:
+//   - the GB2946 plant-code constant (and that UK2946 never appears),
+//   - the verbatim compulsory wording per template,
+//   - the country-vs-plant granularity split (mince=country only; prep=country+plant),
+//   - the multi-source distinct-list aggregation,
+//   - the born&reared collapse.
+// A wrong word or wrong code here is a real RPA compliance failure.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  MFS_PLANT_CODE,
+  renderMinceHTML,
+  renderMinceHTML58,
+  renderPrepHTML,
+  renderPrepHTML58,
+  renderDeliveryHTML,
+  // Aliased: the file already declares inline test-local generate*ZPL helpers
+  // (the legacy oracle). These imports pull the REAL production renderers so the
+  // BLS cases below guard production code, not the inline copies.
+  generateMinceZPL as realGenerateMinceZPL,
+  generatePrepZPL,
+  generateDeliveryZPL as realGenerateDeliveryZPL,
+} from '@/lib/printing'
+import type {
+  MinceLabelData as RealMinceLabelData,
+  PrepLabelData  as RealPrepLabelData,
+  DeliveryLabelData as RealDeliveryLabelData,
+} from '@/lib/printing/types'
+
+const realMince: RealMinceLabelData = {
+  batch_code:           'MINCE-3006-BEEF-001',
+  product_species:      'Beef',
+  output_mode:          'chilled',
+  date:                 '30 Jun 2026',
+  kill_date:            '26 Jun 2026',
+  days_from_kill:       4,
+  source_batch_numbers: ['3006-GB-1', '3006-IE-2'],
+  use_by:               '07 Jul 2026',
+  origins:              ['United Kingdom', 'Ireland'],
+  slaughtered_in:       ['GB', 'IE'],   // COUNTRY-ONLY (digits stripped upstream)
+  minced_in:            'GB',
+  allergens_present:    [],
+}
+
+const realPrep: RealPrepLabelData = {
+  batch_code:           'PREP-3006-BEEF-001',
+  product_name:         'Diced beef',
+  product_species:      'Beef',
+  output_mode:          'prep',
+  date:                 '30 Jun 2026',
+  kill_date:            '26 Jun 2026',
+  days_from_kill:       4,
+  source_batch_numbers: ['3006-GB-1'],
+  use_by:               '07 Jul 2026',
+  origins:              ['United Kingdom'],
+  reared_in:            ['United Kingdom'],
+  slaughtered_in:       ['GB1234', 'IE5678'],  // COUNTRY+PLANT (raw, digits kept)
+  cut_in:               ['GB5678'],            // primary cut site, country+plant
+  further_cut_in:       MFS_PLANT_CODE,
+  allergens_present:    [],
+}
+
+const realDelivery: RealDeliveryLabelData = {
+  batch_code:     'GI-3006-BEEF-001',
+  supplier:       'Euro Quality Beef',
+  product:        'Beef forequarter',
+  species:        'Beef',
+  date_received:  '30 Jun 2026',
+  born_in:        'GB',
+  reared_in:      'GB',
+  slaughter_site: 'GB1234',
+  cut_site:       'GB1234',
+  mfs_plant:      MFS_PLANT_CODE,
+  temperature_c:  3.6,
+  temp_status:    'pass',
+}
+
+describe('BLS: GB2946 plant-code constant (regulated, must-pass)', () => {
+  it('MFS_PLANT_CODE is exactly "GB2946"', () => {
+    expect(MFS_PLANT_CODE).toBe('GB2946')
+  })
+
+  it('delivery label prints GB2946 and NEVER UK2946', () => {
+    const html = renderDeliveryHTML(realDelivery)
+    const zpl  = realGenerateDeliveryZPL(realDelivery)
+    expect(html).toContain('GB2946')
+    expect(html).not.toContain('UK2946')
+    expect(zpl).toContain('GB2946')
+    expect(zpl).not.toContain('UK2946')
+  })
+
+  it('prep label prints GB2946 and NEVER UK2946', () => {
+    const html = renderPrepHTML(realPrep)
+    const zpl  = generatePrepZPL(realPrep)
+    expect(html).toContain('GB2946')
+    expect(html).not.toContain('UK2946')
+    expect(zpl).toContain('GB2946')
+    expect(zpl).not.toContain('UK2946')
+  })
+})
+
+describe('BLS: MINCE verbatim compulsory wording (country-only granularity)', () => {
+  it('100mm HTML carries "Slaughtered in", "Minced in" and an origin line', () => {
+    const html = renderMinceHTML(realMince)
+    expect(html).toContain('Slaughtered in')
+    expect(html).toContain('Minced in')
+    expect(html).toMatch(/Born in|Born &amp; reared in/)
+  })
+
+  it('mince "Slaughtered in" value is COUNTRY-ONLY (no plant digits)', () => {
+    // single-source, born==reared GB → "Slaughtered in: GB", never GB1234
+    const single: RealMinceLabelData = {
+      ...realMince, origins: ['United Kingdom'], slaughtered_in: ['GB'], source_batch_numbers: ['3006-GB-1'],
+    }
+    const html = renderMinceHTML(single)
+    expect(html).toMatch(/Slaughtered in[^0-9]*GB(?![0-9])/)
+    expect(html).not.toMatch(/Slaughtered in[\s\S]{0,60}GB[0-9]/)
+  })
+
+  it('mince "Minced in" is country-only GB (no plant code)', () => {
+    const html = renderMinceHTML(realMince)
+    expect(html).toMatch(/Minced in[^0-9]*GB(?![0-9])/)
+  })
+
+  it('mince ZPL carries the verbatim wording', () => {
+    const zpl = realGenerateMinceZPL(realMince)
+    expect(zpl).toContain('Slaughtered in')
+    expect(zpl).toContain('Minced in')
+  })
+
+  it('58mm mince carries the verbatim wording (not the abbreviated on-site form)', () => {
+    const html = renderMinceHTML58(realMince)
+    expect(html).toContain('Slaughtered in')
+    expect(html).toContain('Minced in')
+  })
+})
+
+describe('BLS: PREP verbatim compulsory wording (country+plant granularity)', () => {
+  it('100mm HTML carries "Slaughtered in", "Cut in", "Further cut in" and origin lines', () => {
+    const html = renderPrepHTML(realPrep)
+    expect(html).toContain('Slaughtered in')
+    expect(html).toContain('Cut in')
+    expect(html).toContain('Further cut in')
+    expect(html).toMatch(/Born in|Born &amp; reared in/)
+  })
+
+  it('prep "Slaughtered in" value is COUNTRY+PLANT (GB1234)', () => {
+    const html = renderPrepHTML(realPrep)
+    expect(html).toContain('GB1234')
+  })
+
+  it('prep "Cut in" value is COUNTRY+PLANT (GB5678)', () => {
+    const html = renderPrepHTML(realPrep)
+    expect(html).toContain('GB5678')
+  })
+
+  it('prep "Further cut in" value is GB2946 (MFS)', () => {
+    const html = renderPrepHTML(realPrep)
+    expect(html).toMatch(/Further cut in[\s\S]{0,40}GB2946/)
+  })
+
+  it('prep ZPL carries the verbatim wording + GB2946', () => {
+    const zpl = generatePrepZPL(realPrep)
+    expect(zpl).toContain('Slaughtered in')
+    expect(zpl).toContain('Cut in')
+    expect(zpl).toContain('Further cut in')
+    expect(zpl).toContain('GB2946')
+  })
+
+  it('58mm prep carries the verbatim wording (not the abbreviated on-site form)', () => {
+    const html = renderPrepHTML58(realPrep)
+    expect(html).toContain('Slaughtered in')
+    expect(html).toContain('Cut in')
+    expect(html).toContain('Further cut in')
+  })
+})
+
+describe('BLS: multi-source DISTINCT aggregation (comma-joined)', () => {
+  it('prep slaughtered_in ["GB1234","IE5678"] renders both distinct, comma-joined', () => {
+    const html = renderPrepHTML(realPrep)
+    expect(html).toMatch(/Slaughtered in[\s\S]{0,60}GB1234, IE5678/)
+  })
+
+  it('mince slaughtered_in ["GB","IE"] renders country-only distinct, comma-joined', () => {
+    const html = renderMinceHTML(realMince)
+    expect(html).toMatch(/Slaughtered in[\s\S]{0,60}GB, IE/)
+  })
+})
+
+describe('BLS: Born & reared collapse', () => {
+  it('equal born/reared collapses to "Born & reared in <country>"', () => {
+    const html = renderPrepHTML({ ...realPrep, origins: ['United Kingdom'], reared_in: ['United Kingdom'] })
+    expect(html).toContain('Born &amp; reared in')
+    expect(html).not.toContain('>Reared in')
+  })
+
+  it('differing born/reared renders separate "Born in" / "Reared in"', () => {
+    const html = renderPrepHTML({ ...realPrep, origins: ['United Kingdom'], reared_in: ['Ireland'] })
+    expect(html).toContain('Born in')
+    expect(html).toContain('Reared in')
+    expect(html).not.toContain('Born &amp; reared in')
+  })
+})

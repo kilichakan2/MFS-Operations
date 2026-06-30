@@ -16,7 +16,8 @@
  *   Fields: larger text, fills remaining space
  */
 
-import type { DeliveryLabelData, MinceLabelData } from './types'
+import type { DeliveryLabelData, MinceLabelData, PrepLabelData } from './types'
+import { countryName } from './countries'
 
 // ── Code 128B barcode generator ───────────────────────────────────────────────
 
@@ -99,27 +100,7 @@ function generateBarcodeSVG(
 }
 
 // ── Country code → display name ───────────────────────────────────────────────
-// Covers the main beef origin countries seen in UK trade.
-// Falls back to the raw code if not found.
-
-const COUNTRY_NAMES: Record<string, string> = {
-  GB: 'United Kingdom', UK: 'United Kingdom',
-  IE: 'Ireland',        AU: 'Australia',
-  NZ: 'New Zealand',    FR: 'France',
-  DE: 'Germany',        NL: 'Netherlands',
-  BE: 'Belgium',        ES: 'Spain',
-  IT: 'Italy',          PL: 'Poland',
-  BR: 'Brazil',         AR: 'Argentina',
-  UY: 'Uruguay',        US: 'United States',
-  CA: 'Canada',         ZA: 'South Africa',
-  NA: 'Namibia',        BW: 'Botswana',
-  IN: 'India',          PK: 'Pakistan',
-}
-
-function countryName(code: string | null): string {
-  if (!code) return '—'
-  return COUNTRY_NAMES[code.toUpperCase()] ?? code.toUpperCase()
-}
+// Single source: lib/printing/countries.ts (countryName). Imported above.
 
 // ── Shared print CSS — 100mm ──────────────────────────────────────────────────
 
@@ -345,9 +326,111 @@ export function renderMinceHTML58(data: MinceLabelData, copies = 1): string {
     killStr,
     `<div class="fw"><span class="fk">Use by:</span><span class="fv" style="font-weight:bold">${data.use_by}</span></div>`,
     `<div class="dv"></div>`,
-    `<div class="fw"><span class="fk">Born:</span><span class="fv">${originsStr}</span></div>`,
-    `<div class="fw"><span class="fk">Sl:</span><span class="fv">${slaughteredStr}</span></div>`,
-    `<div class="fw"><span class="fk">Minced:</span><span class="fv">${data.minced_in}</span></div>`,
+    `<div class="fw"><span class="fk">Born in:</span><span class="fv">${originsStr}</span></div>`,
+    `<div class="fw"><span class="fk">Slaughtered in:</span><span class="fv">${slaughteredStr}</span></div>`,
+    `<div class="fw"><span class="fk">Minced in:</span><span class="fv">${data.minced_in}</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv">${allergenStr}</span></div>`,
+    `</div>`,
+    `</div>`,
+  ].filter(Boolean).join('')
+
+  const body = Array.from({ length: copies }, () => lbl).join('')
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${labelCSS58()}</style></head><body>${body}</body></html>`
+}
+
+// ── 100mm Prep dispatch label (BLS-compliant) ────────────────────────────────
+// PREP differs from mince: slaughtered_in is COUNTRY+PLANT, plus "Cut in"
+// (primary cut site) and "Further cut in" (MFS GB2946). Verbatim compulsory
+// wording (RPA digest): Slaughtered in · Cut in · Further cut in · Born in · Reared in.
+
+function prepOriginLines(origins: string[], reared: string[]): string {
+  const originsStr = origins.length > 0 ? origins.join(', ') : '—'
+  const rearedStr  = reared.length  > 0 ? reared.join(', ')  : ''
+  // Collapse when born & reared are the same set (mirror the delivery collapse).
+  const same = rearedStr !== '' && originsStr === rearedStr
+  if (same) {
+    return `<div class="fw"><span class="fk">Born &amp; reared in:</span><span class="fv">${originsStr}</span></div>`
+  }
+  return [
+    `<div class="fw"><span class="fk">Born in:</span><span class="fv">${originsStr}</span></div>`,
+    rearedStr ? `<div class="fw"><span class="fk">Reared in:</span><span class="fv">${rearedStr}</span></div>` : '',
+  ].join('')
+}
+
+export function renderPrepHTML(data: PrepLabelData, copies = 1): string {
+  const mode    = data.output_mode.toUpperCase()
+  const sources = data.source_batch_numbers.slice(0, 3).join(', ')
+  const killStr = (data.kill_date && data.days_from_kill !== null)
+    ? `${data.kill_date} (${data.days_from_kill} days)`
+    : null
+  const barcode = generateBarcodeSVG(data.batch_code, 260, 42, 8)
+
+  const slaughteredStr = data.slaughtered_in.length > 0 ? data.slaughtered_in.join(', ') : '—'
+  const cutStr         = data.cut_in.length > 0 ? data.cut_in.join(', ') : '—'
+
+  const allergenStr = data.allergens_present.length === 0
+    ? '<span style="color:#166534;font-weight:bold">None</span>'
+    : `<span style="color:#991b1b;font-weight:bold">${data.allergens_present.join(', ')}</span>`
+
+  const lbl = [
+    `<div class="label">`,
+    `<div class="hdr"><span class="co">MFS GLOBAL</span><span class="tp">PREP · ${mode}</span></div>`,
+    `<div class="bc">${data.batch_code}</div>`,
+    `<div class="br">${barcode}</div>`,
+    `<div class="dv"></div>`,
+    `<div class="fl">`,
+    `<div class="fw"><span class="fk">Product:</span><span class="fv">${data.product_name}</span></div>`,
+    `<div class="fw"><span class="fk">Prod date:</span><span class="fv">${data.date}</span></div>`,
+    killStr ? `<div class="fw"><span class="fk">Kill date:</span><span class="fv">${killStr}</span></div>` : '',
+    sources ? `<div class="fw"><span class="fk">Source:</span><span class="fv" style="font-family:'Courier New',monospace;font-size:6.5pt">${sources}</span></div>` : '',
+    `<div class="fw"><span class="fk">Use by:</span><span class="fv" style="font-weight:bold">${data.use_by}</span></div>`,
+    `<div class="dv"></div>`,
+    prepOriginLines(data.origins, data.reared_in),
+    `<div class="fw"><span class="fk">Slaughtered in:</span><span class="fv">${slaughteredStr}</span></div>`,
+    `<div class="fw"><span class="fk">Cut in:</span><span class="fv">${cutStr}</span></div>`,
+    `<div class="fw"><span class="fk">Further cut in:</span><span class="fv">${data.further_cut_in}</span></div>`,
+    `<div class="fw"><span class="fk">Allergens:</span><span class="fv">${allergenStr}</span></div>`,
+    `</div>`,
+    `</div>`,
+  ].filter(Boolean).join('')
+
+  const body = Array.from({ length: copies }, () => lbl).join('')
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${labelCSS()}</style></head><body>${body}</body></html>`
+}
+
+// ── 58mm Prep dispatch label (Sunmi V3) ──────────────────────────────────────
+
+export function renderPrepHTML58(data: PrepLabelData, copies = 1): string {
+  const mode    = data.output_mode.toUpperCase()
+  const barcode = generateBarcodeSVG(data.batch_code, 150, 36, 7)
+
+  const slaughteredStr = data.slaughtered_in.length > 0 ? data.slaughtered_in.join(', ') : '—'
+  const cutStr         = data.cut_in.length > 0 ? data.cut_in.join(', ') : '—'
+
+  const allergenStr = data.allergens_present.length === 0
+    ? '<span style="color:#166534;font-weight:bold">None</span>'
+    : `<span style="color:#991b1b;font-weight:bold">${data.allergens_present.join(', ')}</span>`
+
+  const killStr = (data.kill_date && data.days_from_kill !== null)
+    ? `<div class="fw"><span class="fk">Kill:</span><span class="fv">${data.kill_date} (${data.days_from_kill}d)</span></div>`
+    : ''
+
+  const lbl = [
+    `<div class="label">`,
+    `<div class="hdr"><span class="co">MFS</span><span class="tp">PREP · ${mode}</span></div>`,
+    `<div class="bc">${data.batch_code}</div>`,
+    `<div class="br">${barcode}</div>`,
+    `<div class="dv"></div>`,
+    `<div class="fl">`,
+    `<div class="fw"><span class="fk">Product:</span><span class="fv">${data.product_name}</span></div>`,
+    `<div class="fw"><span class="fk">Date:</span><span class="fv">${data.date}</span></div>`,
+    killStr,
+    `<div class="fw"><span class="fk">Use by:</span><span class="fv" style="font-weight:bold">${data.use_by}</span></div>`,
+    `<div class="dv"></div>`,
+    prepOriginLines(data.origins, data.reared_in),
+    `<div class="fw"><span class="fk">Slaughtered in:</span><span class="fv">${slaughteredStr}</span></div>`,
+    `<div class="fw"><span class="fk">Cut in:</span><span class="fv">${cutStr}</span></div>`,
+    `<div class="fw"><span class="fk">Further cut in:</span><span class="fv">${data.further_cut_in}</span></div>`,
     `<div class="fw"><span class="fk">Allergens:</span><span class="fv">${allergenStr}</span></div>`,
     `</div>`,
     `</div>`,
