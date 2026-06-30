@@ -1,51 +1,172 @@
-# F-PROD-04 — Sunmi V3 die-cut label sizing (52×38mm label mode, DELIVERY only)
+# F-PROD-04 — Sunmi V3 die-cut label sizing (52×38mm label mode, DELIVERY only) — REVISED
 
 **Date:** 2026-06-30
-**Unit:** F-PROD-04 Pass 3 — die-cut label sizing (Sunmi label mode)
-**ADR:** ADR-0012 (`docs/adr/0012-sunmi-label-mode-diecut.md`) — currently *Proposed*; this plan implements it. **Ratify to Accepted at plan approval.**
-**Scope:** DELIVERY label only. MINCE is explicitly OUT of scope (a later fast-follow reuses this format).
+**Unit:** F-PROD-04 Pass 3 — die-cut label sizing (Sunmi label mode), REVISED after on-device silent-print failure
+**ADR:** ADR-0012 (`docs/adr/0012-sunmi-label-mode-diecut.md`) — already **Accepted** (label mode + layout). NEW: **ADR-0013** — version-tolerant JSON bridge for the Sunmi native print contract (this plan adds it).
+**Scope:** DELIVERY label only. MINCE is explicitly OUT of scope (a later fast-follow reuses this format and the SAME JSON bridge).
+**Supersedes:** the prior version of this file, which proposed a 9→10-arg **positional** bridge change. That approach caused a silent on-device print failure (see "Why this is a /reorder").
+
+🗣 In plain English: This is the same job — make the printer fit the 52×38mm pre-cut stickers — but we are fixing HOW the web app and the printer's native code talk to each other, because the previous fix made them talk past each other and nothing printed.
 
 ---
 
-## Goal
+## Why this is a /reorder (the on-device failure — critical context)
 
-Make the Sunmi V3's built-in 58mm thermal printer print the silent native **delivery** label in **LABEL mode** sized to Hakan's physical stock — **52mm wide × 38mm high die-cut labels with gaps between stickers** — so one print produces exactly one correctly-aligned sticker instead of overrunning onto the next label (the current receipt-mode behaviour).
+The app is a **Capacitor remote-URL shell**: the APK is a thin Android wrapper that loads the live website `https://mfsops.com` (set in `capacitor.config.ts` → `server.url`). 🗣 The phone app is basically a browser bookmark in a box — the screens come from the live website, not from inside the installed app.
 
-🗣 In plain English: Today the printer treats the roll as one long till receipt and spills each label over the perforation onto the next sticker. We're switching it to "label mode", where the printer's gap sensor finds each pre-cut sticker and prints inside its 52×38mm box. We also trim the label content so it actually fits the smaller box.
+That split is the trap. The print "doorway" has two halves that ship **independently**:
+
+- The **JavaScript half** (`lib/adapters/sunmi/Printer.ts`) is served from the **deployed website** — currently `main`, which has the **old 9-argument** `printDeliveryLabel`.
+- The **Java half** (`SunmiPrintBridge.java`) ships **inside the APK** installed on the device — the prior pass changed it to a **10-argument** method.
+
+🗣 One half lives on the website, the other half lives in the installed app, and they can be different versions at the same time.
+
+The bridge is positional (arguments matched by position/count). Android's `@JavascriptInterface` matches a call to a Java method **by exact name + argument count**. A 9-arg JS call into a 10-arg-only Java method finds **no matching method → the call silently does nothing**: no print, no JavaScript error, only a (missing) logcat line. 🗣 The website asked for a 9-key door and the app only had a 10-key door, so the key didn't fit — and instead of an error, the printer just sat there doing nothing.
+
+**The fix:** stop matching by position/count. Pass a **single JSON string** and read fields **by name** on the Java side. Adding/removing a field later (mince, real allergens) changes JSON **keys**, never the **method signature** — so a website/APK version mismatch degrades gracefully (Java ignores unknown keys, defaults missing ones) instead of silently no-printing. 🗣 Instead of a rigid 10-pin key, we hand the printer a labelled checklist; if the website's checklist has an extra or missing line, the app just reads the lines it understands and prints anyway.
+
+---
+
+## Goal (unchanged from ADR-0012)
+
+Make the Sunmi V3's built-in 58mm thermal printer print the silent native **delivery** label in **LABEL mode** sized to **52mm wide × 38mm high die-cut labels with gaps**, with the trimmed layout, so one print produces exactly one correctly-aligned sticker. What CHANGES vs the prior plan is the **transport contract** between JS and Java: positional → **version-tolerant JSON**.
 
 ---
 
 ## Domain terms (plain-English bridge)
 
-- **Receipt mode** — the printer's default "endless strip" mode (`printText` + `lineWrap`). 🗣 Like a supermarket till roll: it just keeps feeding, with no idea where one label ends and the next begins.
-- **Label mode** — the printer uses its gap sensor to feed exactly one die-cut sticker per print, aligning to the gap. 🗣 Tells the printer "the paper is pre-cut into stickers; line up to each one and stop at the gap."
-- **Gap learning / label learning** — a one-time calibration where the printer feeds the roll, detects the gap between stickers, and remembers the label pitch. 🗣 The printer "measures the ruler once" so it knows how tall each sticker is and where the gaps are.
-- **Dots @ 203dpi** — the print resolution. 203 dots per inch = ~8 dots/mm. 🗣 The unit the printer thinks in. 52mm ≈ 384 printable dots wide (the 58mm head's usable width), 38mm ≈ ~304 dots tall — everything must fit that box.
-- **Die-cut stock** — pre-cut individual stickers on a backing roll, separated by gaps. 🗣 Sheet of address-label stickers, but on a roll.
-- **Bridge signature** — the exact list of arguments the JavaScript side passes to the Java `printDeliveryLabel` method. 🗣 The shape of the doorway between the web app and the native printer code; if the two sides disagree on the shape, things fall through the gap silently.
-- **Port / adapter** — the `Printer` interface (`lib/ports/Printer.ts`) is the socket; the Sunmi adapter (`lib/adapters/sunmi/Printer.ts`) is one plug. 🗣 We're re-shaping what one plug outputs; the socket and the other plug (browser/iframe fallback) are untouched.
+- **Capacitor remote-URL shell** — the Android app loads a live website instead of bundled HTML. 🗣 A browser-in-a-box pointed at mfsops.com; the screens update when the website deploys, without reinstalling the app.
+- **`@JavascriptInterface` bridge** — the named doorway (`MFSSunmiPrint`) the website's JS calls to reach native Java printer code. 🗣 The hatch between the web page and the printer hardware.
+- **Positional contract** — arguments matched by order and count. 🗣 A rigid multi-pin key; one extra/missing pin and it won't turn.
+- **JSON (string-payload) contract** — one text string of `{"key": value}` pairs, read by name. 🗣 A labelled checklist; reader picks the lines it knows, ignores the rest.
+- **`org.json.JSONObject`** — the JSON parser **built into the Android platform** (not a library we add). 🗣 A free, already-installed tool for reading the checklist — zero new dependency.
+- **Feature-detect** — JS checks `typeof bridge.printLabel === 'function'` before calling. 🗣 Knock to see which door exists before trying the key — so a website running against an old APK falls back instead of failing.
+- **Receipt mode / Label mode** — endless-strip printing vs gap-sensor one-sticker-per-print. 🗣 Till roll vs sheet-of-stickers; label mode lines up to each pre-cut box.
+- **Dots @ 203dpi** — ~8 dots/mm. 52mm ≈ ~384 printable dots wide, 38mm ≈ ~304 dots tall. 🗣 The box everything must fit, in the printer's own units.
+- **Printer buffer** — `enterPrinterBuffer(true)…commit/exitPrinterBuffer(true)`: batch the content, then flush it as one job. 🗣 Write the whole label on a notepad, then hand the finished page over at once — the OLD receipt code did this and printed; the new code dropped it (a prime suspect if label mode emits nothing).
+- **Port / adapter** — the `Printer` interface (`lib/ports/Printer.ts`) is the socket; the Sunmi adapter (`lib/adapters/sunmi/Printer.ts`) is one plug; the Browser/iframe adapter is the other. 🗣 We change what's INSIDE one plug; the socket and the other plug are untouched.
 
 ---
 
 ## Compliance flags
 
-- **No DB / RLS / web-API change** — nothing touches Supabase, auth, migrations, or any `/api` route. No PITR gate, no pgTAP, no integration suite needed (no data layer involved).
-- **No new dependency** — the Sunmi SDK (`com.sunmi:printerlibrary:1.0.24`) and the release-signing pipeline (ADR-0011, Pass 2b) are already present. `package.json` is untouched.
-- **No-AI-references rule** — commits, PR body, code, and comments for this unit must contain NO AI/assistant references (this OVERRIDES the global git-trailer convention). The ANVIL cert later needs a BARE `Branch:` line + `CLEARED FOR PRODUCTION` for the merge-lock hook — that is ANVIL's job, not this plan's.
-- **Label-content reduction is deliberate** — dropping the PASS/FAIL word and the header is a Hakan-approved label-content change (ADR-0012 §2), separate from and not blocked by the deferred beef-labelling regulatory review.
+- **No DB / RLS / web-API change** — nothing touches Supabase, auth, migrations, or any `/api` route. No PITR gate, no pgTAP, no integration suite (no data layer involved). (The `getSupplierCode` fetch to `/api/haccp/supplier-code` is unchanged.)
+- **No new dependency** — `org.json` is in the Android platform; the Sunmi SDK (`com.sunmi:printerlibrary:1.0.24`) and the release-signing pipeline (ADR-0011) are already present. `package.json` is untouched.
+- **No-AI-references rule** — commits, PR body, code, and comments for this unit must contain **NO AI/assistant references**. This **OVERRIDES** the global git-trailer convention. (The ANVIL cert later needs a BARE `Branch:` line + `CLEARED FOR PRODUCTION` for the merge-lock hook — that is ANVIL's job, not this plan's.)
+- **Label-content reduction is deliberate** — dropping the PASS/FAIL word and the header is Hakan-approved (ADR-0012 §2), separate from the deferred beef-labelling regulatory review.
 
-🗣 In plain English: This is a printer-formatting change on the device, not a data change. So the heavy database/security/regression machinery does not apply — but the real proof (a label that physically fits) has to be done by hand on the device.
+🗣 In plain English: a printer-formatting + device-bridge change, not a data change. The heavy database/security machinery does not apply — but the real proof (a label that physically fits) is done by hand on the device, post-publish.
 
 ---
 
 ## ADR conflicts / alignment
 
-- **ADR-0001 (Sunmi JS bridge, print-only methods rule):** ALIGNED. ADR-0001 §"Future Java methods" forbids adding *non-print* methods (filesystem, credentials, HTTP, user data). This unit only *changes the signature of the existing print method* `printDeliveryLabel` and adds *print-mode* SDK calls (`setPrinterMode`/`labelLocate`/`labelOutput`) — all print-related. No new bridge method, no forbidden capability. No conflict.
-- **ADR-0010 (Printer transport port):** ALIGNED. The Sunmi adapter still implements the existing `printDeliveryLabel` port method with the same `(DeliveryLabelInput, onError)` signature. The port interface (`lib/ports/Printer.ts`) does NOT change. Rip-out test unaffected.
-- **ADR-0011 (Android release signing):** ALIGNED. Signing config + keystore.properties contract already in place. This plan only bumps `versionCode`/`versionName` per the ADR-0011 §5 "increments by 1 per release" rule.
-- **ADR-0012 (this unit):** This plan IS the implementation of ADR-0012. Ratify Proposed → Accepted at approval (Step 7).
+- **ADR-0001 (Sunmi JS bridge, print-only rule):** ALIGNED. §"Future Java methods" (line 50) forbids only **non-print** methods (filesystem, credentials, HTTP, user data). A JSON-payload **print** method is print-related — no new forbidden capability. Adding `printLabel(String json)` is a print method, so no superseding ADR is needed for ADR-0001; ADR-0013 documents the **contract shape** decision, not a new capability.
+- **ADR-0010 (Printer transport port):** ALIGNED. The Sunmi adapter still implements the existing `printDeliveryLabel` **port** method with the same `(DeliveryLabelInput, onError)` signature. The port (`lib/ports/Printer.ts`) does NOT change. Only the adapter's **internal** bridge call changes. Rip-out test unaffected.
+- **ADR-0011 (Android release signing):** ALIGNED. Signing config + `keystore.properties` already in place. This plan bumps `versionCode`/`versionName` per ADR-0011 §5.
+- **ADR-0012 (label mode + layout):** ALREADY **Accepted** (ratified 2026-06-30). This plan keeps its label-mode call sequence + layout verbatim; only the bridge transport changes. No re-ratification needed.
+- **ADR-0013 (NEW — version-tolerant JSON bridge):** this plan introduces it. Write it as **Proposed**; ANVIL/Hakan ratify at ship. Decision below.
 
 No conflicts found.
+
+---
+
+## NEW: ADR-0013 — version-tolerant JSON bridge for the Sunmi native print contract
+
+**Write `docs/adr/0013-version-tolerant-json-bridge.md` as part of this unit (Step 5), Status: Proposed.** The implementer writes it from the skeleton below; ratify to Accepted at ship.
+
+- **Title:** Version-tolerant JSON bridge for the Sunmi native print contract (APK↔remote-web deploy skew).
+- **Status:** Proposed (2026-06-30, F-PROD-04). Governs the **shape** of `MFSSunmiPrint` print methods. ADR-0012 still governs **label mode + layout**; ADR-0001 still governs the **bridge mechanism** + print-only rule.
+- **Context:** The APK is a remote-URL Capacitor shell (`capacitor.config.ts` → `server.url = https://mfsops.com`). The bridge JS ships from the deployed website; the bridge Java ships in the APK; they version-skew freely. A **positional** `@JavascriptInterface` method matched by name+arg-count fails **silently** when the two halves disagree on count (observed: 9-arg web JS × 10-arg APK Java → no matching method → no print, no error). The mince + real-allergens passes would each add fields and re-trigger this trap.
+- **Decision:** Native print methods on `MFSSunmiPrint` take a **single JSON string** payload (`printLabel(String json)`), parsed by name with `org.json` (platform-bundled, no dep). The JS builds the JSON; Java reads each field by name with a default for missing keys and ignores unknown keys. Field **add/remove** changes JSON **keys only** — never the method signature — so version skew degrades gracefully.
+- **Backward-compat clause:** during switchover the APK **keeps the old positional `printDeliveryLabel(...9 args...)` working** (delegating to the same label renderer) so the currently-deployed (old) web still prints against the new APK. The new web **feature-detects** `printLabel` and calls it; it falls back to the old positional method if `printLabel` is absent (old APK + new web). Both directions print.
+- **Consequences — easier:** future fields are JSON-key edits; APK↔web skew no longer silently kills printing; one method serves delivery now and mince later.
+- **Consequences — harder:** Java now parses JSON (small, platform-standard); the contract's "shape" lives in two places (a JSON key list in TS + the parse in Java) with no compile-time link — mitigated by an unknown-key/missing-key-tolerant parser and an on-device round-trip check.
+- **Print-only invariant preserved (ADR-0001):** `printLabel` is a print method; no filesystem/credential/HTTP/user-data capability is added.
+
+🗣 In plain English: write down WHY we switched to the labelled-checklist doorway, so a future change doesn't quietly revert to the brittle multi-pin key and re-break printing.
+
+---
+
+## The JSON contract — the exact key set, method name, and call direction
+
+### Method name (justified)
+
+Use a **NEW** method name **`printLabel(String json)`** (NOT a JSON-overload of `printDeliveryLabel`).
+
+**Justification:** (a) feature-detection (`typeof bridge.printLabel === 'function'`) only works if the new method has a **distinct name** — overloading `printDeliveryLabel` with a 1-string variant would make detection ambiguous and Android overload resolution by arg-count is exactly the fragility we are removing; (b) a generic `printLabel` cleanly serves the future mince label too (one method, `type` key selects the layout); (c) the old positional `printDeliveryLabel` stays exactly as-is for backward compat, untouched in name/shape.
+
+🗣 In plain English: a brand-new, clearly-named door (`printLabel`) the website can knock on to check it exists — and which will also serve the future mince label — while the old door stays open as a safety net.
+
+### The JSON key set (delivery `type`)
+
+The JS builds and `JSON.stringify`s this object, then calls `bridge.printLabel(json)`:
+
+```jsonc
+{
+  "type":          "delivery",   // selects the layout; future "mince"
+  "batch":         "<batch_number>",
+  "supplier":      "<supplier label code>",
+  "date":          "<date>",
+  "temp":          "<value-only, e.g. '4°C' or '—'>",   // NO PASS/FAIL ever
+  "bornIn":        "<country or ''>",
+  "rearedIn":      "<country or ''>",
+  "slaughterSite": "<site or ''>",
+  "cutSite":       "<site or ''>",
+  "species":       "<UPPERCASED species>",
+  "allergens":     "None"
+}
+```
+
+- Every value is a **string**; missing/empty fields are `""` (Java treats `""` as "omit this cell", mirroring today's non-empty guards).
+- Java reads each with `obj.optString("key", "")` → tolerant of missing keys (returns `""`).
+- Java reads `obj.optString("type", "delivery")` and renders the delivery layout for `"delivery"` (or unknown → default to delivery for now).
+- **Unknown keys are ignored** (we never enumerate the JSON; we only `optString` the keys we know). This is the forward-compat guarantee.
+
+🗣 In plain English: the website fills in a labelled form; the printer reads the lines it knows, treats blanks as "skip", ignores anything new, and never stamps PASS/FAIL.
+
+### Which method the new JS calls + the feature-detect decision
+
+**Decision: feature-detect, YES.** In `printDeliverySunmi`:
+
+```ts
+const bridge = window.MFSSunmiPrint
+if (bridge && typeof bridge.printLabel === 'function') {
+  bridge.printLabel(JSON.stringify(payload))        // new JSON path
+} else if (bridge && typeof bridge.printDeliveryLabel === 'function') {
+  // old APK still installed → use the legacy positional path so printing still works
+  bridge.printDeliveryLabel(
+    payload.batch, payload.supplier, payload.date, payload.temp,
+    /* legacy bornLine: combine born/reared as the OLD APK expects */ legacyBornLine,
+    payload.slaughterSite, payload.cutSite, payload.species, payload.allergens,
+  )
+} else {
+  throw new Error('printDeliverySunmi: no usable MFSSunmiPrint print method')
+}
+```
+
+- **Why feature-detect even though the ship plan is "publish then calibrate together":** belt-and-braces. If, after publishing the new web, a device is somehow still on an OLD APK (not yet reinstalled, or a second device missed), the new web **still prints** via the legacy positional method instead of silently no-printing. This is the exact failure we are eliminating — never trust that both halves are in sync.
+- `legacyBornLine` is built by the **old combining rule** (born/reared into one string) ONLY for the legacy fallback branch — so the old APK's 9-arg method still gets what it expects. Keep a tiny local combiner for this; it is NOT the new path. (See helper note below.)
+- The `throw` keeps the adapter's existing "try native, fall back to iframe on throw" behaviour intact (the iframe Browser adapter still serves on any throw).
+
+🗣 In plain English: the website first tries the new labelled-checklist door; if the device is still on an old app, it uses the old door so printing still happens; only if neither door exists does it hand off to the iframe fallback — three layers, never a silent dead end.
+
+---
+
+## Backward-compatibility during the switchover (confirmed sound)
+
+The currently-deployed web (`main`) calls the **old 9-arg positional** `printDeliveryLabel(batchCode, supplierCode, date, tempLine, bornLine, slaughterSite, cutSite, species, allergens)`. To avoid a dead window, the **APK keeps the old 9-arg positional method working** AND adds `printLabel(String json)`. Both delegate to the **same** label-mode renderer.
+
+Resulting matrix (all four print — no silent dead window):
+
+| | OLD web (positional 9-arg) | NEW web (JSON + feature-detect) |
+|---|---|---|
+| **OLD APK** (positional only) | prints (positional) — today | prints (web feature-detects → positional fallback) |
+| **NEW APK** (positional + JSON) | prints (old positional kept) | prints (JSON) ✅ target |
+
+🗣 In plain English: whatever combination of old/new website and old/new app is on a device, a label still comes out. That's the whole point of the fix.
+
+**Sound? Yes.** The only requirement is that the kept positional method and the new JSON method route to **one shared renderer** so the layout is identical regardless of entry path (no drift). Step 2 enforces this by extracting a private `renderDeliveryLabel(...)` Java helper both call.
 
 ---
 
@@ -53,293 +174,262 @@ No conflicts found.
 
 | # | File | Change |
 |---|------|--------|
-| 1 | `android/app/src/main/java/com/mfsglobal/ops/SunmiPrintBridge.java` | New `printDeliveryLabel` signature (born/reared split; temp value-only already formatted TS-side) + receipt mode → **label mode** call sequence sized to 52×38mm; drop header; species+batch one row; shrink barcode; born/reared separate cells. |
-| 2 | `android/app/build.gradle` | `versionCode 2 → 3`, `versionName "1.1" → "1.2"` (ADR-0011 §5). |
-| 3 | `lib/adapters/sunmi/Printer.ts` | Update `MFSSunmiPrintBridge` TS interface decl to match new Java signature; change `formatTempStatus` (value-only, drop PASS/FAIL); change `formatBornLine` → split born/reared (or replace with passing `bornIn`/`rearedIn` separately); update `printDeliverySunmi` call to the new arg list. |
-| 4 | `tests/unit/adapters/sunmi/Printer.test.ts` | Update assertions to the new helper behaviour (the oracle). |
-| 5 | `docs/adr/0012-sunmi-label-mode-diecut.md` | Status `Proposed` → `Accepted`. |
+| 1 | `android/app/src/main/java/com/mfsglobal/ops/SunmiPrintBridge.java` | Extract the existing label-mode body into a private `renderDeliveryLabel(...)` helper. Add `@JavascriptInterface printLabel(String json)` → parse with `org.json` → call `renderDeliveryLabel`. KEEP a `@JavascriptInterface printDeliveryLabel(...9 positional args...)` that builds a combined `bornLine` and calls the same `renderDeliveryLabel`. Keep the label-mode sequence + `twoCol` as-is. |
+| 2 | `lib/adapters/sunmi/Printer.ts` | MUST-FIX revert artifact (see below). Change `MFSSunmiPrintBridge` TS interface to declare BOTH `printLabel(json: string): void` AND the legacy `printDeliveryLabel(...9 args...): void` (for the fallback branch). Rewrite `printDeliverySunmi` to build the JSON payload + feature-detect + legacy fallback. `formatTempStatus` → value-only (drop PASS/FAIL). DELETE `formatBornLine` from the public helpers; add a small local `legacyBornLine` combiner used ONLY by the fallback branch. |
+| 3 | `lib/adapters/sunmi/index.ts` | Remove `formatBornLine` from the re-export (it's deleted). |
+| 4 | `tests/unit/adapters/sunmi/Printer.test.ts` | Update `formatTempStatus` assertions (value-only); DELETE the `formatBornLine` block + its import; ADD a test that the built JSON payload contains the right keys/values (value-only temp; born/reared as separate `bornIn`/`rearedIn` keys; `type:"delivery"`). |
+| 5 | `docs/adr/0013-version-tolerant-json-bridge.md` | NEW ADR, Status: Proposed (skeleton above). |
+| 6 | `android/app/build.gradle` | `versionCode 3 → 4`, `versionName "1.2" → "1.3"` (ADR-0011 §5). |
 
 **Files that MUST NOT change (verify untouched in the diff):**
-`lib/ports/Printer.ts`, `lib/wiring/printer.ts`, `lib/adapters/browser/Printer.ts`, `package.json`, any migration, any `/api` route, `MainActivity.java`.
+`lib/ports/Printer.ts`, `lib/wiring/printer.ts`, `lib/adapters/browser/Printer.ts`, `package.json`, any migration, any `/api` route, `MainActivity.java`, `capacitor.config.ts`, `docs/adr/0012-*.md` (already Accepted).
 
-🗣 In plain English: Four code/doc files plus a version bump. The web "socket" file, the wiring file, and the iframe-fallback plug stay exactly as they are — that is what keeps the architecture clean and the rip-out test passing.
-
----
-
-## The concrete Sunmi label-mode call sequence + 52×38mm dot geometry
-
-### Geometry (the box everything must fit)
-- **Stock:** 52mm wide × 38mm high die-cut, gap-fed (one sticker per print).
-- **Resolution:** 203 dpi ≈ **8 dots/mm**.
-- **Printable width:** 58mm head → usable ~48mm ≈ **384 dots**. (The 52mm sticker is wider than the head's printable area; content is constrained to the head's ~384px, centred on the sticker.)
-- **Printable height:** 38mm ≈ **~304 dots** total. Reserve ~16–24 dots top/bottom margin → usable ~**~270 dots** of content height.
-- **Vertical budget (the binding constraint — must fit ~270 dots):**
-  - Row 1: SPECIES + BATCH side-by-side, bold, ~fs28–32 → ~36–40 dots
-  - Barcode: CODE128 of batch, **height 40 dots** (down from 80) + ~16 dots for the human-readable text below → ~56 dots
-  - Body lines (supplier, date, temp, born, reared, slaughter, cut, allergens) at ~fs18–20: each ~24–28 dots. **8 lines × ~26 ≈ 208 dots** — over budget if all stacked. → **MUST use two-column rows** to halve the body height (target ~4 visual rows ≈ ~110 dots).
-  - Total target: 40 + 56 + 110 ≈ ~206 dots, comfortably inside ~270. Leaves slack for spacing — exact values tuned on-device.
-
-🗣 In plain English: The sticker is roughly 384 dots wide by ~304 tall. The old layout has ~11 stacked lines plus a tall barcode — far too tall. We pair fields into two columns and shrink the barcode so the whole thing lands at ~200 dots, leaving headroom we'll fine-tune by eye on the device.
-
-### Label-mode call sequence (Sunmi SDK `com.sunmi:printerlibrary:1.0.24`)
-
-> The exact SDK method names below are from the documented `SunmiPrinterService`/`SunmiPrinterApi` label-mode surface for 1.0.24. **The implementer MUST confirm the exact available method names against the bound SDK** (the available methods commonly include `setPrinterMode(int)`, `getPrinterMode()`, `labelLocate()`, `labelOutput()`, and a label-learning/`labelLocate`-area setup). If a named method is absent on this SDK build, the documented ESC/POS escape hatch (`sendRAWData`, ADR-0001) is the fallback transport — but try the high-level label API first. Treat the *exact* call names as the FIRST thing to verify on-device (Step 6, cycle 0).
-
-**One-time / per-bind setup (mode switch):**
-1. `printerService.printerInit(null)`
-2. Switch the printer to **label mode**: `printerService.setPrinterMode(WoyouConsts.PRINTER_LABEL_MODE)` (or the SDK's equivalent label-mode constant). *(Some firmware also requires a one-time gap learning — if the gap sensor isn't auto-detecting, trigger label learning once during calibration. This is a printer-firmware operation, not per-print.)*
-
-**Per-print sequence (inside `printDeliveryLabel`):**
-1. `printerService.printerInit(null)`
-2. `printerService.setPrinterMode(label-mode)` *(idempotent; safe to set each print)*
-3. `printerService.labelLocate()` — advance/align to the start of the next die-cut label (gap-aligned).
-4. **Content** — render the reduced layout (below) using the standard text/barcode calls (`setAlignment`, `setFontSize`, `setPrinterStyle`, `printText`, `printBarCode`). NO `lineWrap(3)` tail (that was the receipt-mode overrun).
-5. `printerService.labelOutput()` — eject/feed to the gap so the next print starts clean on the next sticker.
-
-> Do NOT wrap the per-print body in `enterPrinterBuffer(true)/exitPrinterBuffer(true)` if it conflicts with label-mode locate/output on this SDK — buffer + label-mode interaction is a known calibration variable. Start WITHOUT the buffer wrap (label mode commits per locate/output); only add it back if on-device testing shows torn/partial prints. (Calibration variable — Step 6.)
-
-### Reduced layout (ADR-0012 §2), top to bottom
-
-```
-Row 1 (one row, bold):   <SPECIES>            <BATCH>      ← side-by-side, fs ~28–32
-Barcode:                 [CODE128 of batch], height 40 dots, text below, centred
-Row group (two-column where it fits):
-   Supplier: <code>            Date: <date>
-   Temp: <value>               Born: <GB>
-   Reared: <IE>                Sl: <site>
-   Cut: <site>
-   Allergens: <None/...>
-```
-
-- **Header line "MFS GLOBAL  GOODS IN" — DELETED.**
-- **Species + batch on ONE row** (the reusable row format for the future mince label). Implement with either two `printText` columns padded to a fixed character width, or `setAlignment` left for species then a tab/padded gap then batch. Padding width tuned on-device.
-- **Barcode kept**, CODE128, **height 40 dots** (down from 80) as the *starting* value — tune on-device so it scans but fits.
-- **Born / Reared as SEPARATE cells** — no longer combined.
-- **Temp = value only** (formatted TS-side; the Java side just prints the string it receives).
-- **Two-column body** to fit the height budget; exact column padding/spacing tuned on-device.
-
-🗣 In plain English: First line is the meat type and batch code together. Under it a shorter barcode. Then the rest of the detail paired into two columns so it's short enough. We start with sensible numbers (barcode 40 dots, fonts ~18–32) and nudge them while watching real prints.
+🗣 In plain English: four code files + one new ADR + a version bump. The web "socket", the wiring, the iframe plug, and the bridge-injection in MainActivity all stay exactly as they are — that's what keeps the architecture clean and the rip-out test passing.
 
 ---
 
-## The exact new bridge signature + matching TS
+## MUST-FIX: the `lib/adapters/sunmi/Printer.ts` revert artifact
 
-### New Java signature (`SunmiPrintBridge.java`)
+Commit `4902dce` accidentally **reverted** `Printer.ts` to the OLD shape: `formatBornLine` combines born/reared, `formatTempStatus` still emits `PASS`/`FAIL`, and `printDeliverySunmi` calls the **old 9-arg** positional bridge with a combined `bornLine`. (Confirmed: the file currently on the branch is the pre-`ba69d34` shape.) Meanwhile `SunmiPrintBridge.java` on the branch is the NEW 10-arg positional shape. **So right now the branch's JS and Java already disagree (9 vs 10) — this branch as-is would not print.** The Step-2 rewrite supersedes both: JS builds JSON + feature-detects; Java exposes `printLabel(json)` + a kept positional method.
 
-Replace the combined `bornLine` arg with separate `bornIn` + `rearedIn`. Keep everything else; temp is still a pre-formatted string (now value-only, formatted TS-side).
+🗣 In plain English: the branch is currently mid-surgery and broken (the two halves don't match). The plan's TS step rebuilds the web half cleanly onto the JSON contract, so we don't just patch the old positional code back together.
+
+---
+
+## Java: the bridge after this unit (shape, not full source)
+
+`SunmiPrintBridge.java` keeps everything it has (label-mode init/locate/output, `twoCol`, the non-empty-guarded cells) but restructured so two entry points share one renderer:
 
 ```java
+// NEW — version-tolerant entry point (the new web calls this)
+@JavascriptInterface
+public void printLabel(String json) {
+    if (printerService == null) { Log.w(TAG, "printLabel: service not bound"); return; }
+    try {
+        org.json.JSONObject o = new org.json.JSONObject(json);
+        // type selects layout; default delivery (forward-compat for future "mince")
+        // unknown keys ignored — we only read the keys we know, each with a default
+        renderDeliveryLabel(
+            o.optString("batch", ""),
+            o.optString("supplier", ""),
+            o.optString("date", ""),
+            o.optString("temp", ""),
+            o.optString("bornIn", ""),
+            o.optString("rearedIn", ""),
+            o.optString("slaughterSite", ""),
+            o.optString("cutSite", ""),
+            o.optString("species", ""),
+            o.optString("allergens", "")
+        );
+    } catch (Exception e) {
+        Log.e(TAG, "printLabel error: " + e.getMessage(), e);
+    }
+}
+
+// KEPT — legacy positional entry point (old deployed web calls this; safety net)
 @JavascriptInterface
 public void printDeliveryLabel(
-        String batchCode,
-        String supplierCode,
-        String date,
-        String tempLine,      // now value-only, e.g. "4°C" or "—"
-        String bornIn,        // was: bornLine (pre-combined) — NOW the raw country, may be ""
-        String rearedIn,      // NEW separate arg — raw country, may be ""
-        String slaughterSite,
-        String cutSite,
-        String species,
-        String allergens
-)
+        String batchCode, String supplierCode, String date, String tempLine,
+        String bornLine, String slaughterSite, String cutSite,
+        String species, String allergens) {
+    // old web sends a single combined bornLine; pass it as bornIn, rearedIn ""
+    renderDeliveryLabel(batchCode, supplierCode, date, tempLine,
+        bornLine, "", slaughterSite, cutSite, species, allergens);
+}
+
+// SHARED renderer — the existing label-mode body (init→labelLocate→content→labelOutput,
+// twoCol, non-empty cell guards). Both entry points route here so layout never drifts.
+private void renderDeliveryLabel(String batch, String supplier, String date,
+        String temp, String bornIn, String rearedIn, String slaughterSite,
+        String cutSite, String species, String allergens) { /* existing body */ }
 ```
 
-- Java renders **Born** and **Reared** as separate cells: print `"Born: " + bornIn` only if `bornIn` non-empty; print `"Reared: " + rearedIn` only if `rearedIn` non-empty (mirror the existing non-empty guards used for slaughter/cut).
-- Arg count goes from 9 → 10 (bornLine → bornIn + rearedIn). **This is the #1 sync risk** — see Risks.
+- `org.json` is referenced fully-qualified (`org.json.JSONObject`) — no new import line strictly needed, but an `import org.json.JSONObject;` is fine. **No Gradle dependency** (platform-bundled).
+- The legacy method maps the old combined `bornLine` into the `bornIn` slot with `rearedIn=""` — the renderer's non-empty guard already handles that (prints one combined cell), so the old web's labels look as they did.
 
-### Matching TS interface decl (`lib/adapters/sunmi/Printer.ts`)
+🗣 In plain English: one printing routine, reached either by the new labelled-checklist door or the old multi-pin door, so both produce the same sticker and we can't drift them apart.
+
+---
+
+## TypeScript: the adapter after this unit
+
+`lib/adapters/sunmi/Printer.ts`:
 
 ```ts
 interface MFSSunmiPrintBridge {
   isReady(): boolean
-  printDeliveryLabel(
-    batchCode:     string,
-    supplierCode:  string,
-    date:          string,
-    tempLine:      string,
-    bornIn:        string,   // was bornLine
-    rearedIn:      string,   // NEW
-    slaughterSite: string,
-    cutSite:       string,
-    species:       string,
-    allergens:     string,
+  printLabel?(json: string): void                 // NEW — preferred path
+  printDeliveryLabel?(                             // LEGACY — fallback only
+    batchCode: string, supplierCode: string, date: string, tempLine: string,
+    bornLine: string, slaughterSite: string, cutSite: string,
+    species: string, allergens: string,
   ): void
 }
 ```
 
-### Matching adapter call (`printDeliverySunmi`)
+- Both methods are **optional (`?`)** on the interface so `typeof bridge.x === 'function'` is the honest gate (an old APK lacks `printLabel`; in theory a future APK could drop the legacy one).
 
-```ts
-const species  = formatSpecies(d.product_category)
-const tempLine = formatTempStatus(d.temperature_c, d.temp_status)  // now value-only
-
-bridge.printDeliveryLabel(
-  d.batch_number,
-  supplierCode,
-  d.date,
-  tempLine,
-  d.born_in  ?? '',   // pass raw country, separate
-  d.reared_in ?? '',  // pass raw country, separate
-  d.slaughter_site ?? '',
-  d.cut_site       ?? '',
-  species,
-  'None',
-)
-```
-
-### Helper changes
-
-**`formatTempStatus`** — value only, drop PASS/FAIL entirely:
+`formatTempStatus` — value only, drop PASS/FAIL:
 ```ts
 export function formatTempStatus(temperatureC: number | null, _tempStatus: string): string {
   return temperatureC != null ? `${temperatureC}°C` : '—'
 }
 ```
-*(Keep the `tempStatus` param for signature stability / call-site compatibility even though unused, OR drop it and update the single call site — implementer's choice; if dropped, update the call in `printDeliverySunmi`. Prefer keeping it to minimise call-site churn, prefix `_`.)*
+Keep the `_tempStatus` param (prefixed `_`) to avoid call-site churn.
 
-**`formatBornLine`** — RECOMMENDED: **remove it** and pass `d.born_in`/`d.reared_in` separately to the bridge (the bridge now renders the two cells). If the implementer prefers to keep a helper for a unit-test oracle, repurpose it as two trivial helpers or delete and rely on the bridge-side rendering. **Decision for this plan: DELETE `formatBornLine`** — the combining logic is gone, the bridge renders separate cells, and the adapter passes raw `??''` values. Remove its import from the test and its test block.
-
-🗣 In plain English: The web side stops gluing Born and Reared together and stops stamping PASS/FAIL — it just hands the printer the raw country codes and the bare temperature. The native side prints Born and Reared as two separate little fields. The Java and TypeScript argument lists must match exactly (10 args, same order) or the print silently misbehaves.
-
----
-
-## Updated unit-test assertions (`tests/unit/adapters/sunmi/Printer.test.ts`) — the oracle
-
-**`formatTempStatus` block — replace assertions:**
+`formatBornLine` — **DELETE** the exported helper. Born/reared go as separate JSON keys (`bornIn`, `rearedIn`). For the legacy fallback branch ONLY, add a tiny local (non-exported) combiner so the old APK's single `bornLine` arg still gets a sensible value:
 ```ts
-it('renders numeric temperature value only (no PASS/FAIL)', () => {
-  expect(formatTempStatus(3.2, 'pass')).toBe('3.2°C')
-})
-it('still value-only on a failed temperature (fail lives in the diary, not the label)', () => {
-  expect(formatTempStatus(8.1, 'fail')).toBe('8.1°C')
-})
-it('value-only for conditional status', () => {
-  expect(formatTempStatus(5.5, 'conditional')).toBe('5.5°C')
-})
-it('substitutes em-dash placeholder when temperature is null', () => {
-  expect(formatTempStatus(null, 'pass')).toBe('—')
-})
+function legacyBornLine(bornIn: string, rearedIn: string): string {
+  if (bornIn && rearedIn && bornIn === rearedIn) return `Born/Reared: ${bornIn}`
+  return [bornIn ? `Born: ${bornIn}` : '', rearedIn ? `Reared: ${rearedIn}` : '']
+    .filter(Boolean).join('  ')
+}
 ```
 
-**`formatBornLine` block — DELETE entirely** (helper removed; born/reared now rendered by the Java bridge as separate cells, not unit-testable). Remove `formatBornLine` from the import line.
+`printDeliverySunmi` — build JSON, feature-detect, fallback (the block shown in "Which method the new JS calls", with `payload` assembled from `d` using `formatSpecies`, `formatTempStatus`, `d.born_in ?? ''`, `d.reared_in ?? ''`, `d.slaughter_site ?? ''`, `d.cut_site ?? ''`, `'None'`).
 
-**`formatSpecies` block — UNCHANGED** (still uppercases, underscores→spaces).
-
-**`isSunmiNative` block — UNCHANGED** (the mock `printDeliveryLabel: () => undefined` stub still satisfies the interface regardless of arg count; the test does not call it with args).
-
-🗣 In plain English: The tests that proved "4°C PASS" now prove "4°C". The tests for the old combined Born/Reared line are deleted because that logic no longer exists. The species and bridge-detection tests are unchanged. These updated assertions ARE the spec — they define correct helper behaviour.
+🗣 In plain English: the web side stops gluing Born/Reared together and stops stamping PASS/FAIL; it hands over a labelled form. It keeps a tiny old-style combiner used only when talking to an old app.
 
 ---
 
-## Numbered steps (atomic, one commit each where code changes)
+## Unit-test assertions (the oracle) — `tests/unit/adapters/sunmi/Printer.test.ts`
 
-> Branch off `main` first (do not commit on `main`). Suggested branch: `fprod04-diecut-label-sizing`.
+- **`formatTempStatus` block** — replace with value-only assertions: `formatTempStatus(3.2,'pass') === '3.2°C'`, `(8.1,'fail') === '8.1°C'`, `(5.5,'conditional') === '5.5°C'`, `(null,'pass') === '—'`.
+- **`formatBornLine` block** — **DELETE entirely**; remove `formatBornLine` from the import line.
+- **`formatSpecies` block** — UNCHANGED.
+- **`isSunmiNative` block** — UNCHANGED (the mock bridge stub still satisfies the now-optional methods).
+- **NEW — JSON payload block:** export a small pure `buildDeliveryPayload(d: DeliveryLabelInput, supplierCode: string)` from `Printer.ts` that returns the JSON **object** (so `printDeliverySunmi` does `JSON.stringify(buildDeliveryPayload(...))`). Test it directly: asserts `type==='delivery'`, `temp` is value-only (no `PASS`), `bornIn`/`rearedIn` are SEPARATE keys carrying the raw inputs, `species` uppercased, `allergens==='None'`, empty inputs map to `''`. This is the oracle for the new contract and is fully unit-testable (no native bridge needed).
+
+🗣 In plain English: we add a tiny pure function that builds the checklist, and test THAT — so the contract (right keys, value-only temp, separate born/reared) is proven in CI even though the actual printing can't be.
+
+---
+
+## Numbered steps (atomic; one commit per code change)
+
+> Stay ON branch `fprod04-diecut-label-sizing` (tip `4902dce`). Do not branch off main.
 
 **Step 0 — Pre-flight grep (no commit).**
-Confirm `formatBornLine` / `formatTempStatus` have no callers outside `lib/adapters/sunmi/Printer.ts` and `tests/unit/adapters/sunmi/Printer.test.ts`. Grep BOTH the alias form (`@/lib/adapters/sunmi`) AND any relative form. (Lesson from F-TD-12: grep alias AND relative; trust `tsc` as backstop.) If callers exist elsewhere, STOP and report — the plan assumes the only consumers are the adapter + its test.
+Confirm `formatBornLine` / `formatTempStatus` have NO callers outside `lib/adapters/sunmi/Printer.ts`, `lib/adapters/sunmi/index.ts`, and `tests/unit/adapters/sunmi/Printer.test.ts`. Grep BOTH alias (`@/lib/adapters/sunmi`) AND relative forms (lesson F-TD-12). VERIFIED at plan time: no external callers exist — proceed. If new ones appeared, STOP and report.
 
-**Step 1 — TS helpers + adapter + interface decl + tests (one commit).**
-In `lib/adapters/sunmi/Printer.ts`: update `formatTempStatus` to value-only; delete `formatBornLine`; update `MFSSunmiPrintBridge` interface decl to the 10-arg `bornIn`/`rearedIn` signature; update `printDeliverySunmi` to pass `d.born_in ?? ''`, `d.reared_in ?? ''` separately and the value-only temp.
-In `tests/unit/adapters/sunmi/Printer.test.ts`: update `formatTempStatus` assertions; delete the `formatBornLine` block + its import.
-**Gate:** `npm run test -- tests/unit/adapters/sunmi/Printer.test.ts` green; `npx tsc --noEmit` clean; `npm run lint` clean. Commit message (NO AI refs): `fix(fprod04): temp value-only + split born/reared in Sunmi adapter`.
+**Step 1 — TS adapter + helpers + interface + tests (one commit).**
+In `lib/adapters/sunmi/Printer.ts`: declare the two-method (both optional) `MFSSunmiPrintBridge` interface; `formatTempStatus` → value-only (`_tempStatus`); DELETE exported `formatBornLine`; add non-exported `legacyBornLine`; add exported `buildDeliveryPayload`; rewrite `printDeliverySunmi` to JSON + feature-detect + legacy fallback + `throw` on neither.
+In `lib/adapters/sunmi/index.ts`: drop `formatBornLine` from the re-export.
+In `tests/unit/adapters/sunmi/Printer.test.ts`: value-only temp assertions; delete `formatBornLine` block + import; add the `buildDeliveryPayload` block.
+**Gate:** `npm run test -- tests/unit/adapters/sunmi/Printer.test.ts` green; `npx tsc --noEmit` clean; `npm run lint` clean.
+**Commit (NO AI refs):** `fix(fprod04): version-tolerant JSON payload in Sunmi adapter + value-only temp`.
 
-**Step 2 — Java bridge: signature + label mode (one commit).**
-In `SunmiPrintBridge.java`: change `printDeliveryLabel` to the 10-arg signature (bornIn + rearedIn). Replace the receipt-mode body with the label-mode sequence (setPrinterMode label → labelLocate → reduced content → labelOutput), drop the header line, put species+batch on one row, set barcode height to **40 dots**, render Born/Reared as separate non-empty-guarded cells, two-column body, NO `lineWrap(3)` tail. Use starting values from the geometry section.
-**Gate:** Java compiles (covered by the Step 3 build). Commit message: `feat(fprod04): Sunmi label mode + reduced 52x38mm delivery layout`.
+**Step 2 — Java bridge: shared renderer + JSON method + kept positional method (one commit).**
+In `SunmiPrintBridge.java`: extract the existing label-mode body into private `renderDeliveryLabel(...10 params...)`; add `@JavascriptInterface printLabel(String json)` parsing with `org.json.JSONObject` (each field `optString(key,"")`, unknown keys ignored, `type` default `"delivery"`); KEEP `@JavascriptInterface printDeliveryLabel(...9 positional args...)` mapping `bornLine→bornIn, rearedIn=""` and delegating to the renderer. Leave the label-mode sequence + `twoCol` unchanged.
+**Gate:** Java compiles (proven by Step 4 build).
+**Commit:** `feat(fprod04): version-tolerant printLabel(json) bridge + keep legacy positional`.
 
-**Step 3 — Version bump (one commit).**
-In `android/app/build.gradle`: `versionCode 3 → 4`? — **verify current value first** (current is `versionCode 2`, `versionName "1.1"`). Bump to `versionCode 3`, `versionName "1.2"` (ADR-0011 §5: +1 per release). Commit: `chore(fprod04): bump Android version to 1.2 (versionCode 3)`.
+**Step 3 — ADR-0013 (one commit).**
+Write `docs/adr/0013-version-tolerant-json-bridge.md` (Status: Proposed) from the skeleton above.
+**Commit:** `docs(fprod04): ADR-0013 version-tolerant JSON bridge (proposed)`.
 
-**Step 4 — Build the signed release APK (no commit; build artifact).**
-`cd android && ./gradlew :app:assembleRelease` (signing pipeline + keystore from Pass 2b already present via `android/keystore.properties`). **Pass criterion:** build SUCCEEDS and the output APK at `android/app/build/outputs/apk/release/app-release.apk` is RELEASE-SIGNED (verify with `apksigner verify --print-certs` showing the release key, NOT debug). If the build fails on a Java signature mismatch, fix the bridge — do NOT improvise.
+**Step 4 — Version bump (one commit).**
+`android/app/build.gradle`: `versionCode 3 → 4`, `versionName "1.2" → "1.3"` (ADR-0011 §5). (VERIFIED current = 3 / "1.2".)
+**Commit:** `chore(fprod04): bump Android version to 1.3 (versionCode 4)`.
 
-**Step 5 — Back up the current installed APK BEFORE sideloading (safety).**
-Confirm the prior signed APK is in `~/mfs-apk-backups/` (Pass 2b). This is the rollback artifact (Step 8). Do not overwrite it with the new build.
+**Step 5 — Build the signed release APK (no commit; artifact).**
+`cd android && ./gradlew :app:assembleRelease`. **Pass:** build SUCCEEDS; output `android/app/build/outputs/apk/release/app-release.apk` is RELEASE-signed (`apksigner verify --print-certs` shows the release key, NOT debug). If it fails on the bridge, fix the bridge — do NOT improvise.
 
-**Step 6 — Iterative on-device calibration loop (the real clearance gate).**
-Sideload to the physical V3 (in hand, API 33, authorized): `adb install -r android/app/build/outputs/apk/release/app-release.apk`. Print a real delivery label on the 52×38mm die-cut roll from the delivery screen.
-**Cycle 0 (first):** confirm the exact SDK label-mode method names compiled and the printer actually entered label mode (watch `adb logcat -s MFSSunmiPrint:*`). If `setPrinterMode`/`labelLocate`/`labelOutput` are not the right names for this SDK build, adjust to the SDK's actual label API (or fall back to `sendRAWData` ESC/POS per ADR-0001) and rebuild.
-**Each cycle:** print → measure the print against the physical sticker → adjust label-mode params / font sizes / barcode height / column padding / margins in the Java bridge → rebuild (Step 4) → `adb install -r` → reprint. **Expect SEVERAL cycles.**
-**Measurable pass criteria (ALL must hold):**
-1. Exactly ONE sticker per print (no overrun onto the next label).
-2. Print aligns within the 52×38mm die-cut boundary — no content clipped at top/bottom/sides, no content in the gap.
-3. The CODE128 barcode SCANS (test with a scanner / phone) AND fits within the label height.
-4. All required fields legible: species, batch, supplier, date, temp (value-only, no PASS/FAIL), Born + Reared as separate fields, slaughter, cut, allergens.
-5. The header "MFS GLOBAL GOODS IN" is absent; species+batch are on one row.
-6. The next print starts clean on the next sticker (gap alignment holds across consecutive prints — print at least 2–3 in a row).
-Any tuning that changes Java values gets folded into the Step 2 commit (amend) or a follow-up `fix(fprod04): on-device label calibration` commit — keep the final committed Java matching the APK that passed.
+**Step 6 — Back up the current installed APK BEFORE sideloading.**
+Confirm the prior signed APK is in `~/mfs-apk-backups/` (rollback artifact, Step 9). Do not overwrite it with the new build.
 
-**Step 7 — Ratify ADR-0012 (one commit).**
-`docs/adr/0012-sunmi-label-mode-diecut.md`: Status `Proposed` → `Accepted (ratified <date>, F-PROD-04)`. Commit: `docs(fprod04): ratify ADR-0012 (Sunmi label mode accepted)`.
+**Step 7 — Bridge-correctness verification (the PRE-merge ANVIL gate).**
+This is what the cert clears on (NOT the physical fit — see Step 8). On the device, sideload `adb install -r .../app-release.apk` and print ONE real delivery label, while watching `adb logcat -s MFSSunmiPrint:*`. **Cycle 0 must confirm:**
+1. The JSON path is taken: a `Printed: <batch>` log appears (NOT silence, NOT `printLabel error`). 🗣 Proves the labelled-checklist door now opens — the exact thing that silently failed before.
+2. **Label-mode emit check (TOP on-device risk):** the prior no-print was the signature mismatch; whether label mode ALONE emits ink is NOT yet confirmed. If `Printed:` logs but NO ink appears, the most likely fix is to wrap the renderer body in the printer **buffer** — `enterPrinterBuffer(true) … commitPrinterBuffer() / exitPrinterBuffer(true)` around the content (the OLD receipt code used this and DID print; the new code dropped it). Add it, rebuild (Step 5), reinstall, reprint. If buffer-wrap conflicts with `labelLocate/labelOutput`, fall back to ESC/POS `sendRAWData` per ADR-0001.
+3. Fields land in the right cells with a known test delivery (distinct born vs reared countries; a temp value) — proves the JSON round-trips field-by-field.
+**Gate to issue the cert:** JSON path taken (log) + ink emitted + fields correct + `tsc`/unit/lint green + signed build. NOTHING about physical 52×38mm fit is claimed here.
 
-**Step 8 — Rollback path (documented, not executed unless needed).**
-If label mode misbehaves in production on the V3: `adb uninstall com.mfsglobal.ops` then `adb install ~/mfs-apk-backups/<prior-release>.apk` (the backed-up prior signed APK). Same release key → in-place reinstall works. The change is otherwise fully revertible via git (the 4 code/doc commits).
+**Step 8 — Publish, then calibrate the physical fit (Hakan's chosen strategy).**
+1. Merge to `main` → deploys the new JSON-calling web to mfsops.com.
+2. Install the new APK on the V3 (the backward-compat net means order doesn't strictly matter, but install together).
+3. **THEN** calibrate the physical 52×38mm FIT live on the till by iterating the **APK only** (Java layout tweaks — font sizes, barcode height, `twoCol` column width, margins → rebuild → `adb install -r` → reprint). **No further web deploys are needed** because the layout lives entirely in Java. Expect several cycles. Physical pass criteria: one sticker per print; in-bounds (no clip, no content in the gap); barcode SCANS; all fields legible; header absent; gap alignment holds across 2–3 consecutive prints. Fold final Java tuning into a follow-up `fix(fprod04): on-device label calibration` commit so committed Java matches the APK that fit.
+
+**The cert MUST state honestly:** clearance rests on build + bridge-correctness (JSON round-trips, label mode emits) PRE-merge; the physical FIT is a known POST-publish on-device tuning loop Hakan chose ("publish then calibrate"). The cert must NOT claim the fit is proven.
+
+**Step 9 — Rollback (documented, not executed unless needed).**
+- **Web:** revert the merge commit on `main` → mfsops.com serves the prior web (which calls the old positional method; the kept positional method in any installed APK still prints). Fully revertible (no DB/state change).
+- **Device:** `adb uninstall com.mfsglobal.ops` → `adb install ~/mfs-apk-backups/<prior-release>.apk` (same release key → in-place reinstall works).
+- **Always-available net:** the iframe Browser adapter still serves the delivery screen for any native throw.
 
 ---
 
 ## TDD test plan
 
-This unit is **mostly un-automatable** — ANVIL cannot web-test a thermal print. The matrix is deliberately shaped to that reality:
+| Layer | What | Done state |
+|-------|------|-----------|
+| **Unit (oracle)** | `Printer.test.ts` — `buildDeliveryPayload` keys/values (NEW); `formatTempStatus` value-only (4); `formatSpecies` (2); `isSunmiNative` (3); `formatBornLine` block deleted. The new `buildDeliveryPayload` test is the oracle for the JSON contract. | green |
+| **Type-sync** | `npx tsc --noEmit` — the two-method `MFSSunmiPrintBridge` decl + `printDeliverySunmi` type-check. (Catches TS-side drift; CANNOT see Java — see Risk 1.) | clean |
+| **Lint** | `npm run lint` — no new violations; no adapter-boundary breach (wiring/ports untouched). | clean |
+| **Build** | `cd android && ./gradlew :app:assembleRelease` — Java compiles (JSON method + kept positional + shared renderer); APK release-signed. | success |
+| **On-device bridge-correctness (PRE-merge cert gate)** | Step 7: JSON path taken (`Printed:` log), ink emitted (buffer-wrap if needed), fields correct. | human-verified |
+| **On-device physical fit (POST-publish, NOT a cert claim)** | Step 8 calibration loop until physical criteria hold. | post-publish tuning |
 
-| Layer | What | Status when done |
-|-------|------|------------------|
-| **Unit (oracle)** | `tests/unit/adapters/sunmi/Printer.test.ts` — `formatTempStatus` value-only (4 cases), `formatSpecies` unchanged (2), `isSunmiNative` unchanged (3); `formatBornLine` block deleted. The updated assertions ARE the spec for the TS helpers. | green |
-| **Type-sync** | `npx tsc --noEmit` — the TS `MFSSunmiPrintBridge` interface decl + the `printDeliverySunmi` call must type-check against the new arg list. (Catches TS-side arg drift; does NOT catch Java-side drift — see Risks.) | clean |
-| **Lint** | `npm run lint` (`next lint`) — no new violations; no adapter-boundary breach (the no-adapter-imports pin still passes — wiring/ports untouched). | clean |
-| **Build** | `cd android && ./gradlew :app:assembleRelease` — Java compiles with the new signature; APK builds + is release-signed. | success |
-| **On-device (the real gate)** | Manual iterative calibration (Step 6) against the 52×38mm roll until all 6 pass criteria hold. | human-verified |
+**Explicitly NOT run (justified):** pgTAP, integration, PITR — no DB/RLS/data layer. E2E preview smoke / browser taps — native-bridge-only change; the web delivery-screen behaviour is unchanged except the strings handed to the bridge (covered by unit + tsc). No `@critical` regression for a native-bridge formatting change.
 
-**Explicitly NOT run (justified):** pgTAP, integration suite, PITR — no DB/RLS/data layer touched. E2E preview smoke / browser taps — the change is native-print-only; the web bundle behaviour for the delivery screen is unchanged except the flat strings passed to the bridge (covered by unit + tsc). No `@critical` regression needed for a native-bridge-only formatting change.
-
-🗣 In plain English: The automated tests prove the web side hands the printer the right strings and that Java/TS still compile together. They CANNOT prove the label physically fits — only a human printing on the real roll can. So the certificate honestly rests on: a green build + Hakan confirming a correctly-fitted sticker.
+🗣 In plain English: automated tests prove the web builds the right checklist and that JS/Java compile; a human on the device proves the doorway opens and ink comes out (pre-merge) and that the sticker physically fits (after publishing). The cert is honest about which is which.
 
 ---
 
 ## Acceptance criteria
 
-1. `formatTempStatus` returns value-only (`"4°C"`, `"—"`) — no PASS/FAIL anywhere; unit tests green on the new assertions.
-2. `formatBornLine` removed; adapter passes `born_in` and `reared_in` separately; Java renders them as two cells.
-3. The Java `printDeliveryLabel` signature and the TS `MFSSunmiPrintBridge` decl have the **identical 10-arg list, same order** (bornIn, rearedIn split). `tsc` clean.
-4. `SunmiPrintBridge.java` prints in **label mode** (setPrinterMode/labelLocate/labelOutput), header dropped, species+batch one row, barcode shortened, two-column body.
-5. `./gradlew :app:assembleRelease` produces a release-signed APK; `versionCode`/`versionName` bumped.
-6. On-device: all 6 Step-6 pass criteria hold (one sticker per print, in-bounds, scannable barcode, all fields legible, header gone, gap alignment holds across consecutive prints).
-7. `lib/ports/Printer.ts`, `lib/wiring/printer.ts`, `lib/adapters/browser/Printer.ts`, `package.json`, all migrations, all `/api` routes, `MainActivity.java` are UNCHANGED in the diff.
-8. ADR-0012 ratified to Accepted. No AI references in any commit/PR/code/comment.
+1. `buildDeliveryPayload` produces `type:"delivery"`, value-only `temp` (no PASS/FAIL), SEPARATE `bornIn`/`rearedIn`, uppercased `species`, `allergens:"None"`, `''` for empty inputs; unit tests green.
+2. `formatTempStatus` value-only; exported `formatBornLine` removed (and dropped from `index.ts`); a local `legacyBornLine` exists for the fallback branch only.
+3. The web feature-detects: calls `printLabel(json)` when present, else legacy positional, else throws (→ iframe fallback).
+4. `SunmiPrintBridge.java` exposes `@JavascriptInterface printLabel(String json)` (org.json, optString defaults, unknown keys ignored) AND a KEPT positional `printDeliveryLabel(...9 args...)`, both delegating to one shared `renderDeliveryLabel` (label-mode + reduced layout from ADR-0012). No new Gradle dependency.
+5. `./gradlew :app:assembleRelease` produces a release-signed APK; `versionCode 4` / `versionName "1.3"`.
+6. On-device (Step 7, pre-merge): JSON path taken (logcat `Printed:`), ink emitted, fields in correct cells.
+7. ADR-0013 written (Proposed). ADR-0012 left Accepted/untouched.
+8. `lib/ports/Printer.ts`, `lib/wiring/printer.ts`, `lib/adapters/browser/Printer.ts`, `package.json`, all migrations, all `/api` routes, `MainActivity.java`, `capacitor.config.ts` UNCHANGED in the diff.
+9. No AI references in any commit/PR/code/comment.
+10. The cert states the physical 52×38mm fit is a post-publish tuning loop, NOT proven at clearance.
 
 ---
 
 ## Risk Assessment
 
-### 1. Business-logic / correctness — Java↔TS signature sync (TOP RISK)
-**Severity: HIGH. MUST-FIX (verify, not block).**
-The bridge is a `@JavascriptInterface` boundary with NO compile-time link between Java and TS. If the Java `printDeliveryLabel` arg list and the TS `MFSSunmiPrintBridge` decl disagree (count or order), the native call **fails silently at runtime** — wrong fields land in wrong cells, or the call no-ops, with no JS exception (only logcat). `tsc` checks the TS side against the TS decl but CANNOT see the Java side. The arg count changes 9→10 this pass, maximising the chance of drift.
-**Mitigation:** (a) Make the TS decl + adapter call change (Step 1) and the Java signature change (Step 2) in lockstep, both to the exact 10-arg `bornIn, rearedIn` order specified above. (b) On-device cycle 0 (Step 6) MUST visually confirm each field prints in the right cell with a known test delivery (distinct born vs reared countries, a temp value) — this is the only end-to-end check of the boundary. (c) Acceptance criterion 3 makes the identical-list a gate.
-**Must-fix flag:** the *verification* (cycle-0 field-placement check + identical arg lists) is mandatory; it does not block the plan but blocks the cert.
+### 1. On-device label-mode EMIT — does ink come out at all? (TOP RISK)
+**Severity: HIGH (the unknown that actually matters). Not a Gate-2 blocker; gates the cert.**
+The prior no-print is now understood to be the **signature mismatch**, which the JSON bridge fixes. But that means **label mode emitting ink** was NEVER actually proven on this SDK build — the call never reached the printer. It is possible that `printerInit → labelLocate → content → labelOutput` **without** a printer-buffer wrap emits nothing on this firmware (the OLD receipt code wrapped content in `enterPrinterBuffer(true)…exitPrinterBuffer(true)` and DID print; the new code dropped it).
+**Mitigation:** Step 7 cycle-0 watches logcat for `Printed: <batch>` (proves the path) THEN checks for ink. If the log prints but no ink, restore the buffer wrap around the renderer body (rebuild/reinstall/reprint); if buffer conflicts with locate/output, fall back to ESC/POS `sendRAWData` (ADR-0001). The iframe fallback always serves staff meanwhile. **Most-likely fix is flagged up front: restore the buffer wrap.**
 
-### 2. On-device label-mode uncertainty (SDK method names + gap calibration)
-**Severity: HIGH (effort/iteration), LOW (safety). Not a Gate-2 blocker.**
-The exact label-mode method names on `com.sunmi:printerlibrary:1.0.24` are taken from documentation, not verified against the bound jar in this environment (Bash inspection of the SDK was not available). The real method names, whether buffer-wrap conflicts with label mode, and whether the firmware needs a one-time gap-learning step are all **on-device unknowns**. Expect several calibration cycles; the barcode height (40 dots start) and column padding are guesses to be tuned.
-**Mitigation:** Step 6 cycle 0 confirms the API names against the actual SDK first (logcat); ESC/POS `sendRAWData` is the documented ADR-0001 fallback if the high-level label API misbehaves on the V3. The iframe fallback (Browser adapter) is preserved throughout, so a misfit never blocks staff from printing (they get the iframe path). The prior APK backup is the hard rollback. This is *iteration cost*, not a safety risk — the plan is honest that the cert rests on the human on-device fit.
+### 2. Business-logic / correctness — JS↔Java contract drift (the bug we are fixing)
+**Severity: HIGH (history). MITIGATED by design.**
+A `@JavascriptInterface` boundary has no compile-time link. The OLD positional design failed silently on version skew. The JSON design removes count/order coupling: Java reads by name with defaults and ignores unknown keys, so skew degrades gracefully; the web feature-detects and falls back to the kept positional method. The remaining drift surface is **key-name spelling** between `buildDeliveryPayload` (TS) and the `optString` keys (Java) — caught by Step 7 cycle-0 field-placement check (a misspelled key prints `""` in that cell, visibly wrong) and the new unit test pinning the TS key set.
+**Mitigation:** the `buildDeliveryPayload` unit test (TS key set) + cycle-0 field-by-field on-device check (distinct born vs reared, a temp value) + the kept-positional safety net. The whole redesign IS the mitigation for the silent-failure class.
 
-### 3. Concurrency / race conditions
-**Severity: NONE.** Single-device, single-threaded print path; one print per button tap; no shared mutable state introduced. No material risks in this category.
+### 3. Backward-compat correctness — both entry points must render identically
+**Severity: MEDIUM. MITIGATED.**
+If the kept positional method and the JSON method diverged, an old-web device and a new-web device would print different labels.
+**Mitigation:** both delegate to ONE private `renderDeliveryLabel` — layout cannot drift. The positional method only maps `bornLine→bornIn, rearedIn=""` (renders one combined cell, exactly as the old web intends).
 
-### 4. Security
-**Severity: NONE.** No new bridge method (ADR-0001 print-only rule honoured — only the existing print method's signature changes + print-mode SDK calls). No filesystem/credential/network/user-data exposure. No new dependency. Web-debugging stays release-gated (ADR-0011). No material new risk.
+### 4. Concurrency / race conditions
+**Severity: NONE.** Single-device, single-threaded print path; one print per tap; no shared mutable state added. No material risk.
 
-### 5. Data migration
-**Severity: NONE.** No DB, no schema, no migration, no RLS. Not applicable.
+### 5. Security
+**Severity: NONE.** No new bridge *capability* — `printLabel` is print-only (ADR-0001 §line-50 honoured). No filesystem/credential/network/user-data exposure. JSON is parsed locally and only its known string fields are printed. No new dependency. No material new risk.
 
-### 6. Launch blockers
-- **Wrong stock loaded / gap sensor not calibrated** → label mode misaligns. Mitigated by Step-6 calibration being the explicit gate and the iframe fallback always available. Not a code blocker.
-- **Barcode too short to scan after shrinking** → caught by Step-6 pass criterion 3 (must scan). Tune up if it fails.
-- **Released APK ships before on-device fit confirmed** → cert MUST NOT be issued until Step-6 criteria hold. The cert honestly depends on Hakan's physical confirmation.
+### 6. Data migration
+**Severity: NONE.** No DB, schema, migration, or RLS. Not applicable.
 
-**Headline:** Two HIGH-severity risks, both about the same fragile JS↔Java boundary and the on-device unknowns — neither *blocks* writing/approving the plan. The single **must-fix** is the Java↔TS signature-sync verification (identical 10-arg list + cycle-0 field-placement check); it gates the ANVIL cert, not Gate 2. No security/data/concurrency risks (native formatting change only).
+### 7. Launch blockers
+- **Released APK ships before bridge-correctness confirmed** → cert MUST NOT issue until Step-7 (JSON path + ink + fields) holds. Honest about post-publish fit.
+- **Physical fit not yet tuned at publish** → Hakan's explicit "publish then calibrate"; iframe fallback + the working native path (correct fields, maybe imperfect sizing) mean staff are never blocked.
+- **A device left on the OLD APK after web publish** → handled by web feature-detect → legacy positional (kept) → still prints. Not a blocker.
+
+**Headline:** One genuine HIGH unknown — **does label mode emit ink without the printer-buffer wrap** (the thing never actually tested because the old call never arrived); flagged with its likely fix (restore the buffer wrap). The historical silent-failure risk (JS↔Java skew) is **designed out** by the JSON contract + feature-detect + kept positional method. The single **must-fix** is the Step-7 bridge-correctness verification (JSON path taken + ink emitted + fields correct) — it gates the ANVIL cert, NOT Gate 2. No security/data/concurrency risks.
 
 ---
 
-## Rollback
+## Hexagonal verdict (computed)
 
-- **Git:** revert the 4 code/doc commits — fully revertible (no DB/state change).
-- **Device:** `adb uninstall com.mfsglobal.ops` → `adb install ~/mfs-apk-backups/<prior-release>.apk` (same release key → in-place reinstall works). Band-aid if needed: iframe fallback already serves the screen for any native failure.
+- **Port used:** existing `Printer` (`lib/ports/Printer.ts`) — `printDeliveryLabel(DeliveryLabelInput, onError)`. UNCHANGED. No new port.
+- **Adapter changed:** `lib/adapters/sunmi/Printer.ts` (Sunmi plug) — internal bridge transport only. The Browser/iframe adapter and `lib/wiring/printer.ts` are untouched.
+- **New dependency:** NONE. `org.json` is platform-bundled (not a Gradle/npm entry); Sunmi SDK + signing already present; `package.json` unchanged. (Nothing to wrap — no new vendor.)
+- **Rip-out test:** **PASS.** Replacing the Sunmi printer vendor = one new adapter under `lib/adapters/<vendor>/` + one wiring line in `lib/wiring/printer.ts`. This unit touches one adapter's internals + native bridge; the port, wiring, and other adapter are untouched.
+
+🗣 In plain English: we re-wired the inside of one plug (the Sunmi printer) — the socket and the spare plug are untouched, and we added zero new vendors. Swapping the printer tomorrow is still one adapter + one wiring line.
