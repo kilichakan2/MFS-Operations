@@ -911,3 +911,23 @@ probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to *
 - **Detail:** `docs/anvil/2026-06-29-ui-phase-0b-wave1-forms-cert.md` (visual-smoke row + follow-ups).
 - **Owner unit:** unscheduled (do before/with Phase-1 visual reviews, or alongside Wave 2/3 if a live preview gallery is wanted sooner).
 - **Status:** open
+
+### F-UI-I18N-01 — Translate the HACCP kiosk (route all `/haccp` strings through `t()`)
+
+- **Deferred:** 2026-06-30 (during UI Phase 1 · `/haccp` hub rebuild — Gate 2 decision)
+- **What:** the entire HACCP suite (~22 screens, starting with the hub `app/haccp/page.tsx` ~870 lines) is **100% hardcoded English** and never used the `t()` EN/TR translation system; `lib/translations.ts` has **no HACCP keys at all**. The rest of the app routes user-facing text through `t()`.
+- **Why it matters:** project convention is EN/TR via `t()`. The kiosk is the one large surface that opted out. Until it's wired, HACCP can't be shown in Turkish even though the rest of the app can.
+- **Decision (Gate 2, Hakan):** during the hub rebuild, new/changed strings **stay hardcoded English** to match the existing screen — wiring `t()` now would be an un-audited scope increase across the whole kiosk. Carved out here as its own audited task.
+- **Fix shape:** its own FORGE unit per HACCP section (or one sweep) — add HACCP keys to `lib/translations.ts`, route every visible string through `t()`, TR audit per the per-section discipline. Pairs naturally with each Phase-1 HACCP section as it's rebuilt.
+- **Owner unit:** unscheduled (fold into the Phase-1 HACCP sections, or one dedicated pass after the kiosk rebuilds).
+- **Status:** open
+
+### F-UI-TOKENGUARD-01 — widen `semantic-tokens-only` guard to `app/haccp/**` once the kiosk is migrated
+
+- **Deferred:** 2026-06-30 (UI Phase 1 · `/haccp` hub rebuild — Guard 🔵)
+- **What:** `tests/unit/lint/semantic-tokens-only.test.ts` scopes the no-raw-colour guard to `components/ui/**` only. Rebuilt screens like `app/haccp/page.tsx` are colour-clean today (grep-verified) but NOT under the guard — a future edit could leak a raw hex/palette colour into a migrated HACCP screen without CI catching it.
+- **Why it matters:** the §8 finalisation gate (token rip-out) depends on no screen holding raw colour. A page-level guard catches regressions continuously instead of only at the final sweep.
+- **Why NOT now:** the ~21 un-migrated HACCP screens still contain raw hex/palette — widening the guard to `app/haccp/**` today would turn it RED immediately. It can only widen once every HACCP screen is rebuilt onto the kit.
+- **Fix shape:** at the END of the HACCP section (all HACCP screens migrated), widen the guard glob to include `app/haccp/**` (or `app/**`). Pairs with the §8 finalisation token audit.
+- **Owner unit:** end of Phase-1 HACCP section.
+- **Status:** open
