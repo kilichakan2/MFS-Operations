@@ -14,7 +14,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import MfsLogo from '@/components/MfsLogo'
+import { MfsIcon, MfsLogo } from '@/components/ui'
 import { useHACCPAlarm } from '@/hooks/useHACCPAlarm'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
 import {
@@ -383,7 +383,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
         )}
       >
         <div className="flex items-center gap-3 min-w-0">
-          <MfsLogo className={cx('h-6 w-auto', alarm.isAlarming ? 'text-inverse' : 'text-body')} />
+          <MfsIcon className={cx('h-7 w-7', alarm.isAlarming ? 'text-inverse' : 'text-body')} />
           <div className="w-px h-6 bg-border" />
           <div className="min-w-0 leading-tight">
             <div className={cx('font-display text-h3', alarm.isAlarming ? 'text-inverse' : 'text-body')}>
@@ -715,7 +715,7 @@ function LoginDoor() {
     <div className="min-h-screen bg-surface-base flex flex-col select-none">
       <header className="flex items-center justify-between gap-3 px-4 md:px-6 h-16 border-b border-default flex-shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <MfsLogo className="h-6 w-auto text-body" />
+          <MfsIcon className="h-7 w-7 text-body" />
           <div className="w-px h-6 bg-border" />
           <div className="leading-tight">
             <div className="font-display text-h3 text-body">Food Safety</div>

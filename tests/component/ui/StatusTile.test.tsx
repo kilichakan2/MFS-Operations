@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import { StatusTile, type TileState } from "@/components/ui/StatusTile";
 
@@ -51,17 +52,53 @@ describe("StatusTile", () => {
     }
   });
 
-  it("fires onTap when the tile is pressed", () => {
+  // ── tap vs scroll (Fix 1) ──────────────────────────────────────────────────
+  // A pointerDown ALONE is the start of a gesture that may become a scroll; it
+  // must NOT navigate. Only a real `click` (which the browser suppresses when a
+  // touch sequence turns into a scroll) opens the tile.
+  it("does NOT fire onTap on pointerDown alone (scroll-start is not a tap)", () => {
     const onTap = vi.fn();
     render(
       <StatusTile icon={Icon} label="Go" statusLine="S" state="neutral" onTap={onTap} />,
     );
     fireEvent.pointerDown(screen.getByRole("button", { name: /Go/ }));
+    expect(onTap).not.toHaveBeenCalled();
+  });
+
+  it("fires onTap once on a real click (a genuine tap)", () => {
+    const onTap = vi.fn();
+    render(
+      <StatusTile icon={Icon} label="Go" statusLine="S" state="neutral" onTap={onTap} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Go/ }));
     expect(onTap).toHaveBeenCalledOnce();
   });
 
-  it("renders the help affordance only when onHelp is given, and fires it", () => {
-    const onHelp = vi.fn();
+  it("fires onTap when activated from the keyboard (Enter on the focused tile)", async () => {
+    const onTap = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StatusTile icon={Icon} label="Go" statusLine="S" state="neutral" onTap={onTap} />,
+    );
+    await user.tab();
+    expect(screen.getByRole("button", { name: /Go/ })).toBe(document.activeElement);
+    await user.keyboard("{Enter}");
+    expect(onTap).toHaveBeenCalledOnce();
+  });
+
+  it("fires onTap on Space too (the other native button activation key)", async () => {
+    const onTap = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StatusTile icon={Icon} label="Go" statusLine="S" state="neutral" onTap={onTap} />,
+    );
+    await user.tab();
+    expect(screen.getByRole("button", { name: /Go/ })).toBe(document.activeElement);
+    await user.keyboard("{ }");
+    expect(onTap).toHaveBeenCalledOnce();
+  });
+
+  it("renders the help affordance only when onHelp is given", () => {
     const { rerender } = render(
       <StatusTile icon={Icon} label="Cold" statusLine="S" state="neutral" onTap={() => {}} />,
     );
@@ -74,11 +111,28 @@ describe("StatusTile", () => {
         statusLine="S"
         state="neutral"
         onTap={() => {}}
+        onHelp={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Help for Cold" })).not.toBeNull();
+  });
+
+  it("clicking the help button fires onHelp only — never the tile's onTap", () => {
+    const onTap = vi.fn();
+    const onHelp = vi.fn();
+    render(
+      <StatusTile
+        icon={Icon}
+        label="Cold"
+        statusLine="S"
+        state="neutral"
+        onTap={onTap}
         onHelp={onHelp}
       />,
     );
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Help for Cold" }));
+    fireEvent.click(screen.getByRole("button", { name: "Help for Cold" }));
     expect(onHelp).toHaveBeenCalledOnce();
+    expect(onTap).not.toHaveBeenCalled();
   });
 
   it("uses no hex / stock-palette / mfs-* colour classes", () => {

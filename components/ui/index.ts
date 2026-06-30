@@ -122,3 +122,7 @@ export type { DesktopSidebarProps } from './DesktopSidebar'
 
 export { NavItem } from './NavItem'
 export type { NavItemProps } from './NavItem'
+
+// ── Brand assets ───────────────────────────────────────────────────────────
+export { default as MfsLogo } from './MfsLogo'
+export { default as MfsIcon } from './MfsIcon'
