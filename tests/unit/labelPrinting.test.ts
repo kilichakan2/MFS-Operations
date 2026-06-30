@@ -831,6 +831,46 @@ describe('Pass 3: delivery ZPL allergen line (generateDeliveryZPL)', () => {
   })
 })
 
+// Guard 🟡 #1 — DB free-text fields are interpolated into the delivery HTML, which
+// renders in a same-origin print iframe. A note containing markup must render INERT
+// (escaped), not execute. ZPL/native are unaffected (they sanitise / use plain text).
+describe('Pass 3: delivery HTML escapes DB free-text (stored-XSS guard)', () => {
+  const XSS = '<script>alert(1)</script>'
+
+  it('100mm: a flagged allergen note containing <script> renders escaped, not raw', () => {
+    const html = renderDeliveryHTML({ ...realDelivery, allergens_flagged: true, allergen_notes: XSS })
+    expect(html).not.toContain('<script>alert(1)</script>')
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+  })
+
+  it('58mm: a flagged allergen note containing <script> renders escaped, not raw', () => {
+    const html = renderDeliveryHTML58({ ...realDelivery, allergens_flagged: true, allergen_notes: XSS })
+    expect(html).not.toContain('<script>alert(1)</script>')
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
+  })
+
+  it('100mm: supplier/product/site free-text with markup is escaped', () => {
+    const html = renderDeliveryHTML({
+      ...realDelivery,
+      supplier:       'Acme <b>Meats</b>',
+      product:        'Beef "prime" & ribs',
+      slaughter_site: 'GB<script>1234',
+      cut_site:       'GB<script>1234',
+    })
+    expect(html).not.toContain('<b>Meats</b>')
+    expect(html).toContain('Acme &lt;b&gt;Meats&lt;/b&gt;')
+    expect(html).toContain('Beef &quot;prime&quot; &amp; ribs')
+    expect(html).not.toContain('GB<script>1234')
+    expect(html).toContain('GB&lt;script&gt;1234')
+  })
+
+  it('58mm: supplier-derived code with markup is escaped', () => {
+    const html = renderDeliveryHTML58({ ...realDelivery, supplier: '<i>xx</i>' }, 1, '<i>xx</i>')
+    expect(html).not.toContain('<i>xx</i>')
+    expect(html).toContain('&lt;i&gt;xx&lt;/i&gt;')
+  })
+})
+
 describe('Pass 3: route delivery labelData mapping (param/shape level)', () => {
   // Mirrors the two new mapping lines in app/api/labels/route.ts (the route module
   // pulls in server-only Supabase, so we pin the mapping shape with the same
