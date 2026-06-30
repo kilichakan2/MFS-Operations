@@ -151,16 +151,24 @@ export function createHaccpReportingService(
       const amRoomDone = roomSessions.includes("AM");
       const pmRoomDone = roomSessions.includes("PM");
 
-      const total = 6;
+      const cleaning = data.cleaning ?? [];
+
+      // The fixed daily mandatory set is EIGHT checks: cold AM, cold PM,
+      // room AM, room PM, diary opening, diary operational (mid-day), diary
+      // closing, and the cleaning sign-off. `completed_checks` counts the
+      // done-state of those same eight (the full-day total — "2 of 8" at 9am,
+      // same meaning as before, the denominator corrected 6 → 8).
+      const total = 8;
       let done = 0;
       if (amColdDone) done++;
       if (pmColdDone) done++;
       if (amRoomDone) done++;
       if (pmRoomDone) done++;
       if (phases.includes("opening")) done++;
+      if (phases.includes("operational")) done++;
       if (phases.includes("closing")) done++;
+      if (cleaning.length > 0) done++;
 
-      const cleaning = data.cleaning ?? [];
       const deliveries = data.deliveries ?? [];
       const mince = data.mince ?? [];
       const returns = data.returns ?? [];

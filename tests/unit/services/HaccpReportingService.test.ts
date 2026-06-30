@@ -61,7 +61,7 @@ describe("getTodayStatus", () => {
     expect(res.daily_diary.closing_overdue).toBe(false);
     expect(res.cleaning.overdue).toBe(false);
     expect(res.weekly_review_overdue).toBe(false);
-    expect(res.total_checks).toBe(6);
+    expect(res.total_checks).toBe(8);
     expect(res.completed_checks).toBe(0);
   });
 
@@ -181,7 +181,91 @@ describe("getTodayStatus", () => {
     expect(res.monthly_review_due).toBe(false);
     expect(res.training_overdue).toBe(1);
     expect(res.training_due_soon).toBe(1);
-    expect(res.completed_checks).toBe(4); // amCold + amRoom + pmRoom + opening
+    // The full mandatory set is 8; this seed completes 6 of them:
+    // amCold + amRoom + pmRoom + opening + operational + cleaning.
+    // (pmCold + closing remain undone.)
+    expect(res.total_checks).toBe(8);
+    expect(res.completed_checks).toBe(6);
+  });
+
+  // ── delta #3: honest 8-item mandatory-set denominator ────────────────────
+  describe("honest progress — full 8-item mandatory daily set", () => {
+    const base = (over: Partial<TodayStatusData>): TodayStatusData => ({
+      cold: [],
+      room: [],
+      diary: [],
+      cleaning: [],
+      deliveries: [],
+      mince: [],
+      returns: [],
+      ccas: [],
+      weekly: [],
+      monthly: [],
+      cal: [],
+      training: [],
+      ...over,
+    });
+
+    it("total_checks is 8 at every clock value", async () => {
+      const svc = makeService({ todayStatus: base({}) });
+      for (const t of [
+        "2026-06-24T08:00:00",
+        "2026-06-24T12:00:00",
+        "2026-06-24T18:00:00",
+      ]) {
+        const res = await svc.getTodayStatus(new Date(t));
+        expect(res.total_checks).toBe(8);
+      }
+    });
+
+    it("nothing done at 08:00 → 0 of 8", async () => {
+      const svc = makeService({ todayStatus: base({}) });
+      const res = await svc.getTodayStatus(new Date("2026-06-24T08:00:00"));
+      expect(res.total_checks).toBe(8);
+      expect(res.completed_checks).toBe(0);
+    });
+
+    it("cold AM only done → completed_checks is 1", async () => {
+      const svc = makeService({ todayStatus: base({ cold: [{ session: "AM" }] }) });
+      const res = await svc.getTodayStatus(new Date("2026-06-24T08:00:00"));
+      expect(res.completed_checks).toBe(1);
+    });
+
+    it("cleaning logged counts toward completed_checks", async () => {
+      const svc = makeService({
+        todayStatus: base({
+          cleaning: [{ submitted_at: "2026-06-24T09:00:00Z", issues: false }],
+        }),
+      });
+      const res = await svc.getTodayStatus(new Date("2026-06-24T10:00:00"));
+      expect(res.completed_checks).toBe(1);
+    });
+
+    it("operational diary phase counts toward completed_checks", async () => {
+      const svc = makeService({
+        todayStatus: base({ diary: [{ phase: "operational" }] }),
+      });
+      const res = await svc.getTodayStatus(new Date("2026-06-24T14:00:00"));
+      expect(res.completed_checks).toBe(1);
+    });
+
+    it("all eight done → 8 of 8", async () => {
+      const svc = makeService({
+        todayStatus: base({
+          cold: [{ session: "AM" }, { session: "PM" }],
+          room: [{ session: "AM" }, { session: "PM" }],
+          diary: [
+            { phase: "opening" },
+            { phase: "operational" },
+            { phase: "closing" },
+          ],
+          cleaning: [{ submitted_at: "2026-06-24T09:00:00Z", issues: false }],
+        }),
+      });
+      const res = await svc.getTodayStatus(new Date("2026-06-24T18:00:00"));
+      expect(res.total_checks).toBe(8);
+      expect(res.completed_checks).toBe(8);
+    });
   });
 });
 
