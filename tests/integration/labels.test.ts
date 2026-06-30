@@ -187,9 +187,15 @@ afterAll(async () => {
 });
 
 describe("GET /api/labels auth", () => {
-  it("returns 401 when no role cookie is set", async () => {
+  it("rejects a request with no role cookie and leaks no label data", async () => {
     const res = await api(`/api/labels?type=prep&id=${ids.prep}&usebydays=7`);
-    expect(res.status).toBe(401);
+    // Two valid rejection shapes, both deny access: the middleware path-gate
+    // 307-redirects an unauthenticated caller to /login (defense in depth, hit
+    // first), or — if the handler is reached directly — it returns 401. Either
+    // way the request must NOT succeed and must NOT carry label markup.
+    expect([307, 401]).toContain(res.status);
+    expect(res.status).not.toBe(200);
+    expect(res.raw).not.toMatch(/Slaughtered in|Further cut in|Allergens:/);
   });
 });
 
