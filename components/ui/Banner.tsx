@@ -15,6 +15,13 @@ export interface BannerProps {
   title?: ReactNode
   children: ReactNode
   onDismiss?: () => void
+  /**
+   * When set, the whole banner becomes a single tappable `<button>` (iOS needs
+   * a direct gesture to start audio). Mutually exclusive with `onDismiss` —
+   * when `onClick` is set the dismiss affordance is omitted to avoid nesting a
+   * button inside a button. Default keeps the banner a non-interactive region.
+   */
+  onClick?: () => void
   labels?: BannerLabels
 }
 
@@ -62,19 +69,14 @@ export function Banner({
   title,
   children,
   onDismiss,
+  onClick,
   labels,
 }: BannerProps) {
   const dismissLabel = labels?.dismiss ?? 'Dismiss'
   const role = tone === 'danger' ? 'alert' : 'status'
 
-  return (
-    <div
-      role={role}
-      className={cx(
-        'flex items-start gap-3 rounded-xl border px-4 py-3',
-        TONE_CLASSES[tone],
-      )}
-    >
+  const body = (
+    <>
       {icon && (
         <span aria-hidden="true" className="inline-flex shrink-0 mt-0.5">
           {icon}
@@ -84,7 +86,8 @@ export function Banner({
         {title && <p className="font-semibold text-body-sm">{title}</p>}
         <div className="text-body-sm">{children}</div>
       </div>
-      {onDismiss && (
+      {/* dismiss is omitted when the whole banner is tappable (no nested button) */}
+      {onDismiss && !onClick && (
         <button
           type="button"
           onClick={onDismiss}
@@ -97,6 +100,42 @@ export function Banner({
           <DismissIcon />
         </button>
       )}
+    </>
+  )
+
+  const shell = cx(
+    'flex items-start gap-3 rounded-xl border px-4 py-3',
+    TONE_CLASSES[tone],
+  )
+
+  if (onClick) {
+    // A tappable danger banner (e.g. the overdue-alarm "tap to sound") is still
+    // a button (iOS needs the direct gesture), but on a safety surface it must
+    // also be announced when it appears — aria-live keeps the button role while
+    // giving screen readers the alert behaviour role="alert" would on the static path.
+    const announce =
+      tone === 'danger'
+        ? ({ 'aria-live': 'assertive', 'aria-atomic': true } as const)
+        : {}
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        {...announce}
+        className={cx(
+          shell,
+          'w-full text-left cursor-pointer',
+          'focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+        )}
+      >
+        {body}
+      </button>
+    )
+  }
+
+  return (
+    <div role={role} className={shell}>
+      {body}
     </div>
   )
 }

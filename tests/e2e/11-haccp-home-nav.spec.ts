@@ -16,7 +16,7 @@
  * The 7 Cluster-A tiles assert here:
  *   Cold Storage   → /haccp/cold-storage
  *   Process Room   → /haccp/process-room
- *   Delivery       → /haccp/delivery
+ *   Goods In       → /haccp/delivery   (renamed from "Delivery" — UI Phase 1 delta #5; route unchanged)
  *   Mince / Prep   → /haccp/mince
  *   Product Return → /haccp/product-return
  *   Cleaning       → /haccp/cleaning
@@ -38,7 +38,7 @@ import { loginAs } from './_auth'
 const TILES: { label: RegExp; path: RegExp }[] = [
   { label: /^Cold Storage$/,   path: /\/haccp\/cold-storage$/ },
   { label: /^Process Room$/,   path: /\/haccp\/process-room$/ },
-  { label: /^Delivery$/,       path: /\/haccp\/delivery$/ },
+  { label: /^Goods In$/,       path: /\/haccp\/delivery$/ },
   { label: /^Mince \/ Prep$/,  path: /\/haccp\/mince$/ },
   { label: /^Product Return$/, path: /\/haccp\/product-return$/ },
   { label: /^Cleaning$/,       path: /\/haccp\/cleaning$/ },
