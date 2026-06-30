@@ -65,6 +65,7 @@ import type {
   MincePrepListResult,
   ReturnRow,
 } from "@/lib/domain";
+import { COLD_STORAGE_CAUSES, isColdStorageTempInRange } from "@/lib/domain";
 import type { HaccpDailyChecksRepository } from "@/lib/ports";
 
 // ─── shared constants (verbatim from the routes) ─────────────────────────────
@@ -109,14 +110,10 @@ const VALID_CONTAM_TYPES = new Set([
   "missing_docs",
 ]);
 
-const VALID_COLD_STORAGE_CAUSES = new Set([
-  "Door left open",
-  "Unit overloaded",
-  "Seal damaged",
-  "Equipment failure",
-  "Power interruption",
-  "Other",
-]);
+// Single source of truth — derived from the shared domain constant the client
+// also consumes, so the two lists can never drift apart again (the drift was
+// the root cause of the two-cause 400 bug).
+const VALID_COLD_STORAGE_CAUSES = new Set<string>(COLD_STORAGE_CAUSES);
 
 const VALID_PROC_ROOM_CAUSES = new Set([
   "A/C or cooling failure",
@@ -1054,6 +1051,16 @@ export function createHaccpDailyChecksService(
       for (const r of input.readings) {
         if (!unitIds.has(r.unit_id)) {
           return reject(400, `Unknown or inactive unit: ${r.unit_id}`);
+        }
+      }
+      // Defence-in-depth echo of the client number-pad bound — uses the SAME
+      // shared helper so the rule can never desync. Sits AFTER missing-fields /
+      // today / unit-known (precedence preserved) and BEFORE the CA-payload
+      // checks. Classification thresholds are untouched: a real deviation is
+      // in-range; only physically impossible values are blocked.
+      for (const r of input.readings) {
+        if (!isColdStorageTempInRange(r.temperature_c)) {
+          return reject(400, "Temperature out of range");
         }
       }
       if (hasDeviation) {
