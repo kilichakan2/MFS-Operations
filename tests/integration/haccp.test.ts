@@ -1077,3 +1077,276 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
     ]);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// HACCP cold-storage UI Phase 1 — THE BUG-FIX PROOF (server cause allow-list)
+//
+// Before this change the server's VALID_COLD_STORAGE_CAUSES held only 6 causes,
+// so a reading whose deviation cited "Defrost cycle — scheduled temperature rise"
+// or "High ambient room temperature" — both already offered by the client — was
+// rejected with 400 "Invalid cause: …" and the corrective-action row never filed.
+// The fix derives VALID_COLD_STORAGE_CAUSES from the SHARED COLD_STORAGE_CAUSES
+// domain constant the client also consumes, so the lists can never drift again.
+//
+// This block drives the real route → HaccpDailyChecksService → repository →
+// Supabase adapter and proves: (a) both formerly-rejected causes now return 200
+// AND file a corrective-action row with non-empty action_taken + a mapped
+// product_disposition; (b) the −40…+30 °C server bound echo 400s an impossible
+// reading; (c) once-per-session 409; (d) non-today 400; (e) a clean all-pass AM
+// submit returns 200 and files NO CA. The request bodies use the NEW shape — no
+// dead `unit_type` field (dropped from ColdStorageReadingInput + the POST body).
+//
+// Self-seeds its OWN dedicated chiller units (target 4 / max 8) so its
+// (date, session, unit_id) slots never collide with the F-19 suite above. The
+// append-only schema means a re-run on the same calendar day without `db:reset`
+// 409s on the occupied slots — that is the immutable audit trail working as
+// designed, exactly per the run contract documented above.
+// ───────────────────────────────────────────────────────────────────────────
+
+describe("/api/haccp/cold-storage — UI Phase 1 bug-fix (8-cause allow-list + bound echo)", () => {
+  let users: TestUserSet;
+  let actor: { role: string; userId: string; name: string };
+  // one dedicated unit per successful (AM) submit so slots never collide
+  let defrostUnitId: string; // Defrost-cycle deviation
+  let ambientUnitId: string; // High-ambient deviation
+  let cleanUnitId: string; // clean all-pass + 409 duplicate
+
+  const UNIT_NAMES = {
+    defrost: "ANVIL-TEST-cs-defrost",
+    ambient: "ANVIL-TEST-cs-ambient",
+    clean: "ANVIL-TEST-cs-clean",
+  } as const;
+
+  async function seedChiller(name: string): Promise<string> {
+    const supa = getServiceClient();
+    const { data: existing } = await supa
+      .from("haccp_cold_storage_units")
+      .select("id")
+      .eq("name", name)
+      .maybeSingle();
+    if (existing) return existing.id;
+    const { data, error } = await supa
+      .from("haccp_cold_storage_units")
+      .insert({
+        name,
+        unit_type: "chiller",
+        target_temp_c: 4,
+        max_temp_c: 8,
+        active: true,
+      })
+      .select("id")
+      .single();
+    if (error) throw new Error(`seed ${name} failed: ${error.message}`);
+    return data.id;
+  }
+
+  // Locate the cold-storage temp row just written for (unit, session) today.
+  async function coldStorageRowId(
+    unitId: string,
+    session: "AM" | "PM",
+  ): Promise<string> {
+    const supa = getServiceClient();
+    const { data, error } = await supa
+      .from("haccp_cold_storage_temps")
+      .select("id")
+      .eq("unit_id", unitId)
+      .eq("date", TODAY)
+      .eq("session", session)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(`coldStorageRowId failed: ${error.message}`);
+    if (!data) throw new Error(`no cold-storage row for ${unitId}/${session}`);
+    return data.id;
+  }
+
+  beforeAll(async () => {
+    users = await setupTestUsers();
+    actor = {
+      role: "warehouse",
+      userId: users.warehouse.id,
+      name: users.warehouse.name,
+    };
+    defrostUnitId = await seedChiller(UNIT_NAMES.defrost);
+    ambientUnitId = await seedChiller(UNIT_NAMES.ambient);
+    cleanUnitId = await seedChiller(UNIT_NAMES.clean);
+  }, 30_000);
+
+  afterAll(async () => {
+    // Tidy the seeded UNITS only (not append-only). The daily-check + CA rows
+    // they produced are immutable and intentionally left in place.
+    const supa = getServiceClient();
+    await supa
+      .from("haccp_cold_storage_units")
+      .delete()
+      .in("name", [UNIT_NAMES.defrost, UNIT_NAMES.ambient, UNIT_NAMES.clean]);
+  }, 30_000);
+
+  // ── THE HEADLINE BUG-FIX: the two formerly-rejected causes now SAVE ────────
+
+  it("Defrost-cycle deviation now returns 200 and FILES a corrective-action row (was 400)", async () => {
+    const res = await api("/api/haccp/cold-storage", {
+      method: "POST",
+      ...actor,
+      body: {
+        session: "AM",
+        date: TODAY,
+        readings: [{ unit_id: defrostUnitId, temperature_c: 12 }], // >8 → critical
+        comments: "defrost blip",
+        corrective_action: {
+          cause: "Defrost cycle — scheduled temperature rise", // em-dash U+2014
+          disposition: "Assess",
+          recurrence: "Review defrost cycle schedule",
+        },
+      },
+    });
+    expect(res.status).toBe(200);
+    const body = res.body as Record<string, unknown>;
+    expect(Object.keys(body)).toEqual(["ok", "has_deviation", "ca_write_failed"]);
+    expect(body.has_deviation).toBe(true);
+    expect(body.ca_write_failed).toBe(false);
+
+    // exactly one CA row filed, with non-empty action_taken + a mapped disposition
+    const rowId = await coldStorageRowId(defrostUnitId, "AM");
+    expect(await caCountFor(rowId)).toBe(1);
+    const supa = getServiceClient();
+    const { data: ca } = await supa
+      .from("haccp_corrective_actions")
+      .select("action_taken, product_disposition, deviation_description, ccp_ref")
+      .eq("source_id", rowId)
+      .single();
+    expect(typeof ca!.action_taken).toBe("string");
+    expect((ca!.action_taken as string).length).toBeGreaterThan(0);
+    expect(ca!.product_disposition).toBe("assess"); // DISPOSITION_MAP["Assess"]
+    expect(ca!.ccp_ref).toBe("CCP2");
+    expect(ca!.deviation_description as string).toContain(
+      "Defrost cycle — scheduled temperature rise",
+    );
+  });
+
+  it("High-ambient-temperature deviation now returns 200 and FILES a corrective-action row (was 400)", async () => {
+    const res = await api("/api/haccp/cold-storage", {
+      method: "POST",
+      ...actor,
+      body: {
+        session: "AM",
+        date: TODAY,
+        readings: [{ unit_id: ambientUnitId, temperature_c: 12 }], // >8 → critical
+        comments: "hot room",
+        corrective_action: {
+          cause: "High ambient room temperature",
+          disposition: "Assess",
+          recurrence: "Improve room ventilation",
+        },
+      },
+    });
+    expect(res.status).toBe(200);
+    expect((res.body as { has_deviation: boolean }).has_deviation).toBe(true);
+    expect((res.body as { ca_write_failed: boolean }).ca_write_failed).toBe(false);
+
+    const rowId = await coldStorageRowId(ambientUnitId, "AM");
+    expect(await caCountFor(rowId)).toBe(1);
+    const supa = getServiceClient();
+    const { data: ca } = await supa
+      .from("haccp_corrective_actions")
+      .select("action_taken, product_disposition")
+      .eq("source_id", rowId)
+      .single();
+    expect((ca!.action_taken as string).length).toBeGreaterThan(0);
+    expect(ca!.product_disposition).toBe("assess");
+  });
+
+  it("junk cause is still rejected 400 (allow-list not loosened beyond the two strings)", async () => {
+    const res = await api("/api/haccp/cold-storage", {
+      method: "POST",
+      ...actor,
+      body: {
+        session: "PM",
+        date: TODAY,
+        readings: [{ unit_id: defrostUnitId, temperature_c: 12 }],
+        comments: "",
+        corrective_action: {
+          cause: "banana",
+          disposition: "Assess",
+          recurrence: "Review defrost cycle schedule",
+        },
+      },
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toBe("Invalid cause: banana");
+  });
+
+  // ── server bound echo (Change 2) ─────────────────────────────────────────
+
+  it("an impossible temperature (300 °C) is rejected 400 by the server bound echo", async () => {
+    const res = await api("/api/haccp/cold-storage", {
+      method: "POST",
+      ...actor,
+      body: {
+        session: "AM",
+        date: TODAY,
+        readings: [{ unit_id: cleanUnitId, temperature_c: 300 }],
+        comments: "",
+      },
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toBe("Temperature out of range");
+  });
+
+  // ── precedence preserved: non-today still 400 before the bound check ──────
+
+  it("a non-today date is rejected 400 (today-only guard, precedence preserved)", async () => {
+    const res = await api("/api/haccp/cold-storage", {
+      method: "POST",
+      ...actor,
+      body: {
+        session: "AM",
+        date: "2020-01-01",
+        readings: [{ unit_id: cleanUnitId, temperature_c: 3 }],
+        comments: "",
+      },
+    });
+    expect(res.status).toBe(400);
+    expect((res.body as { error: string }).error).toBe(
+      "Readings may only be submitted for today's date.",
+    );
+  });
+
+  // ── clean all-pass AM → 200, no CA; then duplicate → 409 ──────────────────
+
+  it("a clean all-pass AM submit returns 200 and files NO corrective action", async () => {
+    const res = await api("/api/haccp/cold-storage", {
+      method: "POST",
+      ...actor,
+      body: {
+        session: "AM",
+        date: TODAY,
+        readings: [{ unit_id: cleanUnitId, temperature_c: 3 }], // ≤4 → pass
+        comments: "all good",
+      },
+    });
+    expect(res.status).toBe(200);
+    expect((res.body as { has_deviation: boolean }).has_deviation).toBe(false);
+    expect((res.body as { ca_write_failed: boolean }).ca_write_failed).toBe(false);
+
+    const rowId = await coldStorageRowId(cleanUnitId, "AM");
+    expect(await caCountFor(rowId)).toBe(0);
+  });
+
+  it("re-submitting the same (date, session, unit) returns 409 (once-per-session guard)", async () => {
+    const res = await api("/api/haccp/cold-storage", {
+      method: "POST",
+      ...actor,
+      body: {
+        session: "AM",
+        date: TODAY,
+        readings: [{ unit_id: cleanUnitId, temperature_c: 3 }],
+        comments: "retry",
+      },
+    });
+    expect(res.status).toBe(409);
+    expect((res.body as { error: string }).error).toBe(
+      "This session has already been submitted for one or more units.",
+    );
+  });
+});
