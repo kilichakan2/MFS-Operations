@@ -83,7 +83,7 @@ const EXPECTED_TABS = [
 const HOME_TILE_LABELS = [
   'Cold Storage',
   'Process Room',
-  'Delivery',
+  'Goods In', // renamed from "Delivery" — UI Phase 1 delta #5; route unchanged
   'Mince / Prep',
   'Product Return',
   'Cleaning',
@@ -180,16 +180,15 @@ test.describe('@critical HACCP audit + reporting (F-19 PR8 re-point)', () => {
       await expect(helpBtn).toBeVisible()
       await helpBtn.click()
 
-      // The SOP slideout mounts inside the `.z-50` overlay (HelpPanel). Several
-      // small tiles intentionally share the same "people" SOP section, so the
-      // panel content may repeat — what matters is the overlay opened and its
-      // single close (X) control works. Wait for the overlay, then close it.
-      const overlay = page.locator('.z-50')
-      await expect(overlay).toBeVisible()
-      // HelpPanel's only <button> is the close X (onClick → setHelp(null)).
-      await overlay.locator('button').first().click()
-      // Overlay must unmount before the next tile's help icon is tapped.
-      await expect(page.locator('.z-50')).toHaveCount(0)
+      // UI Phase 1 (delta #1): the SOP help now opens in the kit `Modal`
+      // (Radix dialog, role="dialog"). Each tile routes to its OWN SOP entry
+      // (or a neutral placeholder) — what matters here is the dialog opened and
+      // closes cleanly. Wait for the dialog, then close via Escape.
+      const dialog = page.getByRole('dialog')
+      await expect(dialog).toBeVisible()
+      await page.keyboard.press('Escape')
+      // The dialog must unmount before the next tile's help icon is tapped.
+      await expect(page.getByRole('dialog')).toHaveCount(0)
     }
 
     expect(getProblems(), getProblems().join('\n')).toEqual([])
