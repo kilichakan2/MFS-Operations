@@ -246,16 +246,12 @@ public class SunmiPrintBridge {
         try {
             printerService.printerInit(null);
             printerService.labelLocate();
-            printerService.setAlignment(0, null);
 
-            // Batch (bold), then CODE128 of batch.
-            printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.ENABLE);
-            printerService.printText("MINCE  " + batch + "\n", null);
-            printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.DISABLE);
-
+            // Barcode at the top — the batch number is encoded here, so the human-
+            // readable batch line is omitted (saves a line; pulls all text up by one
+            // line to fit the 52×38mm die-cut). On-device calibrated.
             printerService.setAlignment(1, null);
             printerService.printBarCode(batch, 8, 40, 2, 2, null);
-            printerService.lineWrap(1, null);
             printerService.setAlignment(0, null);
 
             // Product + date row.
@@ -304,15 +300,11 @@ public class SunmiPrintBridge {
         try {
             printerService.printerInit(null);
             printerService.labelLocate();
-            printerService.setAlignment(0, null);
 
-            printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.ENABLE);
-            printerService.printText("PREP  " + batch + "\n", null);
-            printerService.setPrinterStyle(WoyouConsts.ENABLE_BOLD, WoyouConsts.DISABLE);
-
+            // Barcode at the top — batch encoded here, human-readable batch line
+            // omitted (saves a line; pulls text up to fit the dense 52×38mm prep label).
             printerService.setAlignment(1, null);
             printerService.printBarCode(batch, 8, 40, 2, 2, null);
-            printerService.lineWrap(1, null);
             printerService.setAlignment(0, null);
 
             printCols(new String[]{ productName, date }, new int[]{ 18, 14 }, new int[]{ 0, 2 });
