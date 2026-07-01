@@ -84,7 +84,7 @@ No new port/adapter, no new dependency, no vendor import. `lib/domain/coldStorag
    → on failure: `vercel rollback` (no PITR — no data touched).
 
 ## Verdict
-✅ CLEARED. All layers green: unit/component 3107 · integration 550 (+8 LIVE
+✅ CLEARED FOR PRODUCTION. All layers green: unit/component 3107 · integration 550 (+8 LIVE
 bug-fix proof) · local @critical 5/5 (dev + local prod build) · **prod-build
 Vercel preview `@critical` smoke GREEN (run 28511169674)**. The earlier preview
 failure was root-caused to a test-harness race against the never-reset shared
