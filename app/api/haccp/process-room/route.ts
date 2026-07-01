@@ -37,12 +37,13 @@ export async function GET(req: NextRequest) {
     const requested   = req.nextUrl.searchParams.get('date')
     const queryDate   = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today
 
-    const { date, temps, diary } = await svc.listProcessRoom(queryDate)
+    const { date, temps, diary, thresholds } = await svc.listProcessRoom(queryDate)
 
     return NextResponse.json({
       date,
       temps,
       diary,
+      thresholds,
     })
 
   } catch (err) {
@@ -69,10 +70,18 @@ export async function POST(req: NextRequest) {
     if (type === 'temps') {
       const input = body as CreateProcessingTempInput
 
-      const v = dc.validateProcessingTemp({ input, today })
+      // Bands are DB-driven — load the active thresholds and thread them through
+      // validate/build/CA (mirrors the cold-storage units flow). Empty = 500,
+      // never a hardcoded fallback (that would resurrect the drift).
+      const thresholds = await dc.listActiveProcessRoomThresholds()
+      if (thresholds.length === 0) {
+        return NextResponse.json({ error: 'Could not load thresholds' }, { status: 500 })
+      }
+
+      const v = dc.validateProcessingTemp({ input, today, thresholds })
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-      const built = dc.buildProcessingTemp({ input, userId })
+      const built = dc.buildProcessingTemp({ input, userId, thresholds })
 
       let id: string
       try {
@@ -84,7 +93,7 @@ export async function POST(req: NextRequest) {
         throw e
       }
 
-      const caRows = dc.buildProcessingTempCorrectiveActions({ input, userId, sourceId: id })
+      const caRows = dc.buildProcessingTempCorrectiveActions({ input, userId, sourceId: id, thresholds })
       const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'process-room-temps')
 
       return NextResponse.json({

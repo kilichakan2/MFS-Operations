@@ -91,7 +91,11 @@ These are the digital forms that replace paper records. All records stored in Su
 
 ## 4. Critical Temperature Limits (CCP Reference)
 
-These limits are hardcoded in the app. Any change requires a code update AND a training document update.
+Most limits are hardcoded in the app; any change requires a code update AND a training document update.
+
+**Exception — CCP 3 Process Room limits are configurable in the app.** Since Apr 2026 the process-room product-core and room-ambient limits are stored in the database (`haccp_process_room_thresholds`) and editable by an **admin** at `/haccp/admin` → Thresholds. Every change is recorded in an immutable audit log (`haccp_threshold_audit`: who / when / old→new) and the admin is reminded on save to update THIS register (section 4) and retrain staff. The values below are the current approved bands and must be kept in step with the app.
+
+CCP 3 uses a three-band model: **pass** (≤ target), **amber** (above target, up to the legal max — corrective action logged, no management sign-off), **critical** (above the max — corrective action logged AND management sign-off required).
 
 | CCP | Parameter | Limit | Source |
 |---|---|---|---|
@@ -100,8 +104,12 @@ These limits are hardcoded in the app. Any change requires a code update AND a t
 | CCP 1 — Goods In | Offal receipt | ≤3°C | Reg 853/2004 |
 | CCP 2 — Cold Storage | Fresh product storage | 0–4°C | Reg 853/2004 |
 | CCP 2 — Cold Storage | Frozen product storage | ≤-18°C | Reg 853/2004 |
-| CCP 3 — Process Room | Product during processing | ≤4°C | Reg 853/2004 |
-| CCP 3 — Process Room | Ambient room temperature | ≤12°C | Reg 853/2004 |
+| CCP 3 — Process Room | Product core — pass | ≤4°C | Reg 853/2004 |
+| CCP 3 — Process Room | Product core — amber (CA logged) | 4–7°C | Reg 853/2004 |
+| CCP 3 — Process Room | Product core — critical (CA + mgmt sign-off) | >7°C | Reg 853/2004 |
+| CCP 3 — Process Room | Ambient room — pass | ≤12°C | Reg 853/2004 |
+| CCP 3 — Process Room | Ambient room — amber (CA logged) | 12–15°C | Reg 853/2004 |
+| CCP 3 — Process Room | Ambient room — critical (CA + mgmt sign-off) | >15°C | Reg 853/2004 |
 | CCP 4 — Final Product | Packaged product pre-dispatch | ≤4°C | Reg 853/2004 |
 | SOP 3 — Calibration | Steriliser (knife/tools) | ≥82°C | Industry standard |
 | SOP 3 — Calibration | Ice water probe test | 0°C ±1°C | Industry standard |
@@ -150,6 +158,7 @@ Any new product line must be assessed against these. Allergen training must cove
 | Nov 2025 | Health Monitoring Forms | Initial issue | V1.0 | Hakan Kilic |
 | Nov 2025 | HACCP Policy Handbook | Initial issue | V2.0 | Hakan Kilic |
 | Apr 2026 | MFS Operations App | All HACCP digital forms built and deployed | — | Hakan Kilic |
+| Jul 2026 | Critical Temperature Limits (section 4) | CCP 3 Process Room moved to a three-band model (pass / amber / critical): Product core pass ≤4°C, amber 4–7°C, critical >7°C; Ambient room pass ≤12°C, amber 12–15°C, critical >15°C. Limits now admin-configurable in the app (audit-logged) — this register remains the approved source of truth. | — | Hakan Kilic |
 
 ---
 

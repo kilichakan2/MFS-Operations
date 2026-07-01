@@ -38,6 +38,8 @@ import type {
   ProcessRoomListResult,
   ProcessingTempPersist,
   DailyDiaryPersist,
+  ProcessRoomThreshold,
+  UpdateProcessRoomThresholdInput,
   // mince-prep
   MincePrepListResult,
   MincePersist,
@@ -109,6 +111,19 @@ export interface HaccpDailyChecksRepository {
   /** Insert a diary phase; returns the new id (for CA linking). 23505 →
    *  ConflictError. → POST /api/haccp/process-room type=diary. */
   insertDailyDiary(payload: DailyDiaryPersist): Promise<{ id: string }>;
+  /** Active CCP-3 thresholds — for GET display + POST band derivation.
+   *  → GET/POST /api/haccp/process-room. */
+  listActiveProcessRoomThresholds(): Promise<readonly ProcessRoomThreshold[]>;
+  /** Active + inactive thresholds — for the admin editor.
+   *  → GET /api/haccp/admin/process-room-thresholds. */
+  listAllProcessRoomThresholds(): Promise<readonly ProcessRoomThreshold[]>;
+  /** Update a threshold row AND append an immutable audit row (who/when/
+   *  old→new). Admin-only (route gate + DB RLS). Returns the updated domain row.
+   *  → PATCH /api/haccp/admin/process-room-thresholds. */
+  updateProcessRoomThreshold(
+    input: UpdateProcessRoomThresholdInput,
+    changedBy: string,
+  ): Promise<ProcessRoomThreshold>;
 
   // ── 6. mince-prep (mince + meatprep + timesep) ───────────────
   /** Today/week/last-week mince+meatprep+timesep + 16-day deliveries +
