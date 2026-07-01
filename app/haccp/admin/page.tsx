@@ -6,8 +6,20 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Banner, Button, TextField, Toggle } from '@/components/ui'
+import { isProcessRoomTempInRange } from '@/lib/domain'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+/** A CCP-3 process-room threshold row (admin editor). */
+interface Threshold {
+  id:            string
+  name:          string
+  target_temp_c: number
+  max_temp_c:    number
+  active:        boolean
+  position?:     number
+}
 
 interface CA {
   id:                    string
@@ -198,10 +210,81 @@ function CACard({ ca, onVerify, verifying }: {
   )
 }
 
+// ─── Threshold editor row (kit — new code meets the standard; the rest of this
+//     admin page is pre-existing raw-Tailwind debt, diff-scope rule) ───────────
+
+function ThresholdRow({ threshold, onSaved }: {
+  threshold: Threshold
+  onSaved:   () => void
+}) {
+  const [target, setTarget] = useState(String(threshold.target_temp_c))
+  const [max,    setMax]    = useState(String(threshold.max_temp_c))
+  const [active, setActive] = useState(threshold.active)
+  const [saving, setSaving] = useState(false)
+  const [error,  setError]  = useState('')
+
+  const targetNum = parseFloat(target)
+  const maxNum    = parseFloat(max)
+  const dirty =
+    target !== String(threshold.target_temp_c) ||
+    max !== String(threshold.max_temp_c) ||
+    active !== threshold.active
+  const valid =
+    isProcessRoomTempInRange(targetNum) &&
+    isProcessRoomTempInRange(maxNum) &&
+    targetNum <= maxNum
+
+  async function handleSave() {
+    if (!valid) { setError('Target must be ≤ max and within range'); return }
+    setSaving(true); setError('')
+    try {
+      const res = await fetch('/api/haccp/admin/process-room-thresholds', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: threshold.id, target_temp_c: targetNum, max_temp_c: maxNum, active }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        setError(d.error ?? 'Save failed')
+        return
+      }
+      onSaved()
+    } catch {
+      setError('Connection error — try again')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-surface-raised border border-default rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-body font-semibold text-sm">{threshold.name}</p>
+        <Toggle label="Active" checked={active} onCheckedChange={setActive} />
+      </div>
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Target (pass ≤)</p>
+          <TextField inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} suffix="°C" error={!isProcessRoomTempInRange(targetNum)} />
+        </div>
+        <div className="flex-1">
+          <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Max (amber ceiling)</p>
+          <TextField inputMode="decimal" value={max} onChange={(e) => setMax(e.target.value)} suffix="°C" error={!isProcessRoomTempInRange(maxNum) || maxNum < targetNum} />
+        </div>
+      </div>
+      <p className="text-subtle text-[10px]">Pass ≤ {isNaN(targetNum) ? '—' : targetNum}°C · Amber {isNaN(targetNum) ? '—' : targetNum}–{isNaN(maxNum) ? '—' : maxNum}°C · Critical &gt; {isNaN(maxNum) ? '—' : maxNum}°C</p>
+      {error && <Banner tone="danger">{error}</Banner>}
+      <Button size="sm" loading={saving} disabled={!dirty || !valid || saving} onClick={handleSave}>
+        {saving ? 'Saving…' : 'Save limit'}
+      </Button>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminCCAPage() {
-  const [tab, setTab] = useState<'ca' | 'suppliers'>('ca')
+  const [tab, setTab] = useState<'ca' | 'suppliers' | 'thresholds'>('ca')
 
   // ── CA state ─────────────────────────────────────────────────────────────────
   const [unresolved,  setUnresolved]  = useState<CA[]>([])
@@ -211,6 +294,12 @@ export default function AdminCCAPage() {
   const [verifying,   setVerifying]   = useState<string | null>(null)
   const [flash,       setFlash]       = useState('')
   const [showResolved,setShowResolved]= useState(false)
+
+  // ── Threshold state ─────────────────────────────────────────────────────────
+  const [thresholds,   setThresholds]   = useState<Threshold[]>([])
+  const [thrLoading,   setThrLoading]   = useState(false)
+  const [thrError,     setThrError]     = useState('')
+  const [savedReminder,setSavedReminder]= useState(false)
 
   // ── Supplier state ────────────────────────────────────────────────────────────
   const [suppliers,      setSuppliers]      = useState<Supplier[]>([])
@@ -252,8 +341,18 @@ export default function AdminCCAPage() {
       .finally(() => setSuppLoading(false))
   }, [])
 
+  const loadThresholds = useCallback(() => {
+    setThrLoading(true)
+    fetch('/api/haccp/admin/process-room-thresholds')
+      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
+      .then(d => setThresholds(d.thresholds ?? []))
+      .catch(e => setThrError(`Could not load — ${e.message}`))
+      .finally(() => setThrLoading(false))
+  }, [])
+
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { if (tab === 'suppliers') loadSuppliers() }, [tab, loadSuppliers])
+  useEffect(() => { if (tab === 'thresholds') loadThresholds() }, [tab, loadThresholds])
 
   async function handleVerify(id: string) {
     setVerifying(id)
@@ -383,7 +482,7 @@ export default function AdminCCAPage() {
 
       {/* Tab bar */}
       <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
-        {([['ca', 'Corrective Actions', unresolved.length], ['suppliers', 'Suppliers', suppliers.filter(s => s.active).length]] as const).map(([key, label, count]) => (
+        {([['ca', 'Corrective Actions', unresolved.length], ['suppliers', 'Suppliers', suppliers.filter(s => s.active).length], ['thresholds', 'Thresholds', 0]] as const).map(([key, label, count]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`flex-1 py-3 text-xs font-bold transition-colors ${tab === key ? 'text-orange-600 border-b-2 border-orange-500' : 'text-slate-500'}`}>
             {label}
@@ -617,6 +716,38 @@ export default function AdminCCAPage() {
                   )
                 })}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ── PROCESS-ROOM THRESHOLDS TAB ─────────────────────────────────── */}
+        {tab === 'thresholds' && (
+          <div className="space-y-3">
+            <div>
+              <p className="text-body font-semibold text-sm">CCP 3 — Process room temperature limits</p>
+              <p className="text-muted text-xs mt-0.5">Pass ≤ target · amber between target and max · critical above max. Editing a limit is a food-safety control.</p>
+            </div>
+
+            {savedReminder && (
+              <Banner tone="warning" title="Limit updated — paperwork required">
+                You MUST update docs/reference/haccp/DOCUMENT_CONTROL.md §4 and retrain staff on the new limit (SALSA/FSA control). Every change is recorded in the immutable threshold audit log.
+              </Banner>
+            )}
+
+            {thrError && <Banner tone="danger">{thrError}</Banner>}
+
+            {thrLoading ? (
+              <p className="text-muted text-sm">Loading limits…</p>
+            ) : thresholds.length === 0 ? (
+              <p className="text-muted text-sm">No thresholds configured.</p>
+            ) : (
+              thresholds.map((t) => (
+                <ThresholdRow
+                  key={t.id}
+                  threshold={t}
+                  onSaved={() => { setSavedReminder(true); loadThresholds() }}
+                />
+              ))
             )}
           </div>
         )}
