@@ -43,6 +43,14 @@
 
   --focus-ring:var(--mfs-orange-500); --focus-ring-shadow:rgba(235,102,25,.40);
 
+  /* ===== PAIRING-SYSTEM tokens (2026-07-01 Unit 2, spec §6) ===== */
+  --text-heading:var(--mfs-maroon-500);   /* LOCKED (a) — headings on cream = maroon voice */
+  --border-input:var(--mfs-ink-400);      /* #7c786e — load-bearing outlines 3.7/4.4 */
+  --action-primary-fg:var(--mfs-ink-900); /* LOCKED (b) — ink on orange 5.1 */
+  --action-secondary-fg:#ffffff;          /* white on navy 15.1 */
+  --action-danger-fg:#ffffff;             /* white on red-600 5.0 */
+  --icon-default:var(--mfs-navy-700);     /* §5.6 — icons on cream default navy */
+
   --status-success-fill:var(--green-600); --status-success-soft:var(--green-100); --status-success-text:var(--green-700); --status-success-border:#bcdcc9;
   --status-warning-fill:var(--amber-600); --status-warning-soft:var(--amber-100); --status-warning-text:var(--amber-700); --status-warning-border:#ecd49f;
   --status-error-fill:var(--mfs-red-600); --status-error-soft:var(--mfs-red-100); --status-error-text:var(--mfs-red-700); --status-error-border:#f3b6a6;
