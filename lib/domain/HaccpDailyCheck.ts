@@ -24,6 +24,8 @@
  * The POST inputs are the route bodies as the app's own vocabulary.
  */
 
+import type { ProcessRoomThreshold } from "./processRoom";
+
 // ─── shared ──────────────────────────────────────────────────────────────────
 
 /** A `{ name }` user join the GET reads resolve against (`users!inner(name)`). */
@@ -344,6 +346,15 @@ export interface ProcessRoomListResult {
   readonly date: string;
   readonly temps: readonly ProcessingTempRow[];
   readonly diary: readonly DailyDiaryRow[];
+  readonly thresholds: readonly ProcessRoomThreshold[];
+}
+
+/** Admin PATCH body for a process-room threshold row. */
+export interface UpdateProcessRoomThresholdInput {
+  readonly id: string;
+  readonly target_temp_c?: number;
+  readonly max_temp_c?: number;
+  readonly active?: boolean;
 }
 
 /** POST process-room temps body (type='temps'). */

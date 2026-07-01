@@ -140,6 +140,14 @@ export {
   isColdStorageTempInRange,
 } from "./coldStorage";
 export type { ColdStorageCause } from "./coldStorage";
+export {
+  PROCESS_ROOM_CAUSES,
+  PROCESS_ROOM_MIN_TEMP_C,
+  PROCESS_ROOM_MAX_TEMP_C,
+  isProcessRoomTempInRange,
+  processRoomBand,
+} from "./processRoom";
+export type { ProcessRoomCause, ProcessRoomThreshold } from "./processRoom";
 export type {
   // shared
   HaccpUserRef,
@@ -178,6 +186,7 @@ export type {
   CreateDailyDiaryInput,
   ProcessingTempPersist,
   DailyDiaryPersist,
+  UpdateProcessRoomThresholdInput,
   // mince-prep
   MinceLogRow,
   MeatPrepLogRow,
