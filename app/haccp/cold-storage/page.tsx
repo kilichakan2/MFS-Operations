@@ -7,9 +7,9 @@
  *
  * UI Phase 1 (Tier B): re-expressed onto components/ui/ + semantic tokens. The
  * inline number pad is now the reusable kit `NumberPad`; the number-pad,
- * corrective-action and quick-ref overlays use the kit `Modal`. Dark theme is
- * inherited from app/haccp/layout.tsx (data-theme="dark" + ThemeLock) — no
- * hardcoded colour survives. Behaviour (sessions, classification, CA flow,
+ * corrective-action and quick-ref overlays use the kit `Modal`. Inherits the
+ * light `:root` skin from app/haccp/layout.tsx — no hardcoded colour survives.
+ * Behaviour (sessions, classification, CA flow,
  * once-per-session guard, today-only, pre-fill, states) is preserved exactly.
  */
 
@@ -20,7 +20,7 @@ import {
   Modal,
   NumberPad,
   Button,
-  IconButton,
+  ScreenHeader,
   SegmentedControl,
   Textarea,
   Banner,
@@ -107,14 +107,6 @@ function CheckGlyph({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
       <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
-
-function BackGlyph() {
-  return (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
     </svg>
   )
 }
@@ -516,19 +508,22 @@ export default function ColdStoragePage() {
     <div className="min-h-screen bg-surface-base flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-default bg-surface-raised">
-        <IconButton aria-label="Back to HACCP" variant="ghost" icon={<BackGlyph />} onClick={() => { window.location.href = '/haccp' }} />
-        <div className="flex-1 min-w-0">
-          <p className="text-action-primary text-[10px] font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
-          <h1 className="text-body text-lg font-bold leading-tight">Temperature Check</h1>
-        </div>
-        <Button variant="ghost" size="sm" leadingIcon={<HelpGlyph />} onClick={() => setShowQuick(true)}>
-          Quick ref
-        </Button>
-        <Button variant="secondary" size="sm" leadingIcon={<HandbookGlyph />} onClick={openHandbook}>
-          Handbook
-        </Button>
-      </div>
+      <ScreenHeader
+        eyebrow="CCP 2 — Cold Storage"
+        title="Temperature Check"
+        onBack={() => { window.location.href = '/haccp' }}
+        backLabel="Back to HACCP"
+        actions={
+          <>
+            <Button variant="ghost-inverse" size="sm" leadingIcon={<HelpGlyph />} onClick={() => setShowQuick(true)}>
+              Quick ref
+            </Button>
+            <Button variant="ghost-inverse" size="sm" leadingIcon={<HandbookGlyph />} onClick={openHandbook}>
+              Handbook
+            </Button>
+          </>
+        }
+      />
 
       {/* Session + date selectors */}
       <div className="px-5 py-4 flex items-center gap-4 border-b border-default flex-wrap">
