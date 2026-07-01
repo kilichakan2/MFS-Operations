@@ -126,8 +126,9 @@ test.describe("@critical HACCP hub — alarm surface flip (computed styles)", ()
     await interceptTodayStatus(page, forcedAlarmStatus());
     await kioskLogin(page, WAREHOUSE_NAME, WAREHOUSE_PIN);
 
-    // The alarm surface context is present on the hub header.
-    const header = page.locator('[data-surface="alarm"]');
+    // The alarm surface context is present on the hub header — a real
+    // <header> landmark (kit ScreenHeader renders the semantic element).
+    const header = page.locator('header[data-surface="alarm"]');
     await expect(header).toBeVisible({ timeout: 10_000 });
 
     // COMPUTED background — the brand alarm fill (red-600), not a class name.
@@ -160,9 +161,9 @@ test.describe("@critical HACCP hub — alarm surface flip (computed styles)", ()
     await interceptTodayStatus(page, allClearStatus());
     await kioskLogin(page, WAREHOUSE_NAME, WAREHOUSE_PIN);
 
-    const header = page.locator('[data-surface="bold-navy"]');
+    const header = page.locator('header[data-surface="bold-navy"]');
     await expect(header).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-surface="alarm"]')).toHaveCount(0);
+    await expect(page.locator('header[data-surface="alarm"]')).toHaveCount(0);
 
     // Polled for symmetry with the alarm test (transition-colors settle).
     await expect

@@ -68,7 +68,9 @@ export function ScreenHeader({
   surface = 'bold-navy',
 }: ScreenHeaderProps) {
   return (
-    <div
+    // Semantic <header> — restores the banner landmark on every kiosk screen
+    // (all consumers render it at page top level, so it is never nested).
+    <header
       data-surface={surface}
       className={[
         'flex items-center gap-3 px-5 py-4 text-body',
@@ -103,6 +105,6 @@ export function ScreenHeader({
       {actions && (
         <div className="flex items-center gap-2 shrink-0">{actions}</div>
       )}
-    </div>
+    </header>
   )
 }

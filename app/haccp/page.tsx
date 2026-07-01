@@ -14,7 +14,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { MfsIcon, MfsLogo } from '@/components/ui'
+import { MfsLogo } from '@/components/ui'
 import { useHACCPAlarm } from '@/hooks/useHACCPAlarm'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
 import {
@@ -398,7 +398,9 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             )}
             {isAdmin && (
               <Button
-                variant="primary"
+                // Orange-500 fill is spec-banned on the red alarm surface
+                // (1.54:1, §4 red-600 row) — drop to ghost-inverse while alarming.
+                variant={alarm.isAlarming ? 'ghost-inverse' : 'primary'}
                 size="sm"
                 leadingIcon={<Ic name="settings" size={17} />}
                 onClick={() => { window.location.href = '/haccp/admin' }}
