@@ -36,6 +36,8 @@ import type {
   ProcessRoomListResult,
   ProcessingTempPersist,
   DailyDiaryPersist,
+  ProcessRoomThreshold,
+  UpdateProcessRoomThresholdInput,
   MincePrepListResult,
   MincePersist,
   MeatPrepPersist,
@@ -61,6 +63,8 @@ export interface FakeHaccpDailyChecksSeed {
   readonly suppliers?: Readonly<Record<string, DeliverySupplier>>;
   /** active cold-storage units (the POST threshold lookup). */
   readonly coldStorageUnits?: readonly ColdStorageUnit[];
+  /** seedable CCP-3 process-room thresholds (active + inactive). */
+  readonly processRoomThresholds?: readonly ProcessRoomThreshold[];
   /** table+date → existing run count (delivery_number / batch sequencing). */
   readonly counts?: Readonly<Record<string, number>>;
   /** methods that should throw ConflictError (23505 simulation). */
@@ -73,6 +77,16 @@ export interface FakeHaccpDailyChecksSeed {
   readonly processRoomList?: ProcessRoomListResult;
   readonly mincePrepList?: MincePrepListResult;
   readonly returnsList?: readonly ReturnRow[];
+}
+
+/** A recorded threshold change (test-inspectable audit trail). */
+export interface FakeThresholdAudit {
+  readonly threshold_id: string;
+  readonly changed_by: string;
+  readonly old_target_temp_c: number | null;
+  readonly new_target_temp_c: number | null;
+  readonly old_max_temp_c: number | null;
+  readonly new_max_temp_c: number | null;
 }
 
 /** A test-inspectable Fake daily-checks repository. */
@@ -89,6 +103,7 @@ export interface FakeHaccpDailyChecksRepository
   readonly meatPrepInserts: readonly MeatPrepPersist[];
   readonly timeSeparationInserts: readonly TimeSeparationPersist[];
   readonly returnInserts: readonly ReturnPersist[];
+  readonly thresholdAudits: readonly FakeThresholdAudit[];
 }
 
 let fakeIdCounter = 0;
@@ -113,6 +128,7 @@ const EMPTY_PROCESS_ROOM_LIST: ProcessRoomListResult = {
   date: "",
   temps: [],
   diary: [],
+  thresholds: [],
 };
 const EMPTY_MINCE_PREP_LIST: MincePrepListResult = {
   date: "",
@@ -137,6 +153,10 @@ export function createFakeHaccpDailyChecksRepository(
   const meatPrepInserts: MeatPrepPersist[] = [];
   const timeSeparationInserts: TimeSeparationPersist[] = [];
   const returnInserts: ReturnPersist[] = [];
+  const thresholdAudits: FakeThresholdAudit[] = [];
+  const processRoomThresholds: ProcessRoomThreshold[] = (
+    seed?.processRoomThresholds ?? []
+  ).map((t) => ({ ...t }));
 
   const conflictOn = new Set(seed?.conflictOn ?? []);
   function guardConflict(method: HaccpConflictMethod): void {
@@ -178,6 +198,9 @@ export function createFakeHaccpDailyChecksRepository(
     },
     get returnInserts() {
       return returnInserts;
+    },
+    get thresholdAudits() {
+      return thresholdAudits;
     },
 
     // ── 1. delivery ──────────────────────────────────────────
@@ -246,7 +269,49 @@ export function createFakeHaccpDailyChecksRepository(
 
     // ── 5. process-room ──────────────────────────────────────
     async listProcessRoom(date: string): Promise<ProcessRoomListResult> {
-      return seed?.processRoomList ?? { ...EMPTY_PROCESS_ROOM_LIST, date };
+      return (
+        seed?.processRoomList ?? {
+          ...EMPTY_PROCESS_ROOM_LIST,
+          date,
+          thresholds: processRoomThresholds.filter((t) => t.active !== false),
+        }
+      );
+    },
+    async listActiveProcessRoomThresholds(): Promise<
+      readonly ProcessRoomThreshold[]
+    > {
+      return processRoomThresholds.filter((t) => t.active !== false);
+    },
+    async listAllProcessRoomThresholds(): Promise<
+      readonly ProcessRoomThreshold[]
+    > {
+      return processRoomThresholds.map((t) => ({ ...t }));
+    },
+    async updateProcessRoomThreshold(
+      input: UpdateProcessRoomThresholdInput,
+      changedBy: string,
+    ): Promise<ProcessRoomThreshold> {
+      const idx = processRoomThresholds.findIndex((t) => t.id === input.id);
+      if (idx === -1) {
+        throw new Error(`threshold not found (${input.id})`);
+      }
+      const current = processRoomThresholds[idx];
+      const next: ProcessRoomThreshold = {
+        ...current,
+        target_temp_c: input.target_temp_c ?? current.target_temp_c,
+        max_temp_c: input.max_temp_c ?? current.max_temp_c,
+        active: input.active ?? current.active,
+      };
+      processRoomThresholds[idx] = next;
+      thresholdAudits.push({
+        threshold_id: current.id,
+        changed_by: changedBy,
+        old_target_temp_c: current.target_temp_c,
+        new_target_temp_c: next.target_temp_c,
+        old_max_temp_c: current.max_temp_c,
+        new_max_temp_c: next.max_temp_c,
+      });
+      return { ...next };
     },
     async insertProcessingTemp(
       payload: ProcessingTempPersist,

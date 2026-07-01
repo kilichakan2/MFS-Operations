@@ -49,6 +49,8 @@ import type {
   DailyDiaryRow,
   ProcessingTempPersist,
   DailyDiaryPersist,
+  ProcessRoomThreshold,
+  UpdateProcessRoomThresholdInput,
   MincePrepListResult,
   MinceLogRow,
   MeatPrepLogRow,
@@ -424,7 +426,7 @@ export function createSupabaseHaccpDailyChecksRepository(
 
     // ── 5. process-room ──────────────────────────────────────
     async listProcessRoom(date: string): Promise<ProcessRoomListResult> {
-      const [temps, diary] = await Promise.all([
+      const [temps, diary, thresholds] = await Promise.all([
         client
           .from("haccp_processing_temps")
           .select(
@@ -437,6 +439,11 @@ export function createSupabaseHaccpDailyChecksRepository(
           .select("phase, check_results, issues, what_did_you_do, submitted_at")
           .eq("date", date)
           .order("submitted_at"),
+        client
+          .from("haccp_process_room_thresholds")
+          .select("id, name, target_temp_c, max_temp_c")
+          .eq("active", true)
+          .order("position"),
       ]);
 
       if (temps.error) {
@@ -453,11 +460,23 @@ export function createSupabaseHaccpDailyChecksRepository(
         });
         throw new ServiceError("Failed to load diary", { cause: diary.error });
       }
+      // Thresholds are required to render bands — fatal on error (do NOT fall
+      // back to hardcoded limits, which would resurrect the drift).
+      if (thresholds.error) {
+        log.error(
+          "HaccpDailyChecksRepository.listProcessRoom thresholds DB error",
+          { error: thresholds.error.message },
+        );
+        throw new ServiceError("Failed to load thresholds", {
+          cause: thresholds.error,
+        });
+      }
 
       return {
         date,
         temps: (temps.data ?? []) as unknown as ProcessingTempRow[],
         diary: (diary.data ?? []) as unknown as DailyDiaryRow[],
+        thresholds: (thresholds.data ?? []) as unknown as ProcessRoomThreshold[],
       };
     },
 
@@ -508,6 +527,111 @@ export function createSupabaseHaccpDailyChecksRepository(
         });
       }
       return { id: (data as { id: string }).id };
+    },
+
+    async listActiveProcessRoomThresholds(): Promise<
+      readonly ProcessRoomThreshold[]
+    > {
+      const { data, error } = await client
+        .from("haccp_process_room_thresholds")
+        .select("id, name, target_temp_c, max_temp_c")
+        .eq("active", true)
+        .order("position");
+      if (error) {
+        log.error(
+          "HaccpDailyChecksRepository.listActiveProcessRoomThresholds DB error",
+          { error: error.message },
+        );
+        throw new ServiceError("Could not load active thresholds", {
+          cause: error,
+        });
+      }
+      return (data ?? []) as unknown as ProcessRoomThreshold[];
+    },
+
+    async listAllProcessRoomThresholds(): Promise<
+      readonly ProcessRoomThreshold[]
+    > {
+      const { data, error } = await client
+        .from("haccp_process_room_thresholds")
+        .select("id, name, target_temp_c, max_temp_c, active, position")
+        .order("position");
+      if (error) {
+        log.error(
+          "HaccpDailyChecksRepository.listAllProcessRoomThresholds DB error",
+          { error: error.message },
+        );
+        throw new ServiceError("Could not load thresholds", { cause: error });
+      }
+      return (data ?? []) as unknown as ProcessRoomThreshold[];
+    },
+
+    async updateProcessRoomThreshold(
+      input: UpdateProcessRoomThresholdInput,
+      changedBy: string,
+    ): Promise<ProcessRoomThreshold> {
+      // Read the current row first so the audit log can record old→new.
+      const current = await client
+        .from("haccp_process_room_thresholds")
+        .select("id, name, target_temp_c, max_temp_c, active, position")
+        .eq("id", input.id)
+        .single();
+      if (current.error || !current.data) {
+        log.error(
+          "HaccpDailyChecksRepository.updateProcessRoomThreshold read DB error",
+          { error: current.error?.message },
+        );
+        throw new ServiceError("Threshold not found", {
+          cause: current.error ?? new Error("no row returned"),
+        });
+      }
+      const before = current.data as unknown as ProcessRoomThreshold;
+
+      const patch: Record<string, unknown> = {};
+      if (input.target_temp_c !== undefined)
+        patch.target_temp_c = input.target_temp_c;
+      if (input.max_temp_c !== undefined) patch.max_temp_c = input.max_temp_c;
+      if (input.active !== undefined) patch.active = input.active;
+
+      const { data, error } = await client
+        .from("haccp_process_room_thresholds")
+        .update(patch)
+        .eq("id", input.id)
+        .select("id, name, target_temp_c, max_temp_c, active, position")
+        .single();
+      if (error || !data) {
+        log.error(
+          "HaccpDailyChecksRepository.updateProcessRoomThreshold update DB error",
+          { error: error?.message },
+        );
+        throw new ServiceError("Threshold update failed", {
+          cause: error ?? new Error("no row returned"),
+        });
+      }
+      const after = data as unknown as ProcessRoomThreshold;
+
+      // Immutable audit row (who / when / old→new). A separate statement — see
+      // plan R-3: acceptable at admin-edit frequency.
+      const audit = await client.from("haccp_threshold_audit").insert({
+        threshold_id: after.id,
+        changed_by: changedBy,
+        old_target_temp_c: before.target_temp_c,
+        new_target_temp_c: after.target_temp_c,
+        old_max_temp_c: before.max_temp_c,
+        new_max_temp_c: after.max_temp_c,
+        summary: `${after.name}: target ${before.target_temp_c}→${after.target_temp_c}, max ${before.max_temp_c}→${after.max_temp_c}`,
+      });
+      if (audit.error) {
+        log.error(
+          "HaccpDailyChecksRepository.updateProcessRoomThreshold audit DB error",
+          { error: audit.error.message },
+        );
+        throw new ServiceError("Threshold audit write failed", {
+          cause: audit.error,
+        });
+      }
+
+      return after;
     },
 
     // ── 6. mince-prep ────────────────────────────────────────
