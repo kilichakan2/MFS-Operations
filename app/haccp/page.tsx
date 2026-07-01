@@ -646,7 +646,7 @@ function StaffCard({ member, onSelect }: { member: StaffMember; onSelect: (m: St
         {initials(member.name)}
       </span>
       <div className="min-w-0">
-        <div className="text-body font-semibold text-body">{member.name}</div>
+        <div className="text-body-md font-semibold text-body">{member.name}</div>
         <div className="text-body-sm text-subtle mt-0.5">{isWh ? 'Warehouse' : 'Butcher'}</div>
       </div>
       {(member.secondary_roles ?? []).length > 0 && (
@@ -744,7 +744,7 @@ function LoginDoor() {
             <span className="w-14 h-14 rounded-lg bg-surface-sunken flex items-center justify-center text-subtle">
               <Ic name="people" size={26} />
             </span>
-            <div className="text-body font-semibold text-body">No staff found</div>
+            <div className="text-body-md font-semibold text-body">No staff found</div>
             <div className="text-body-sm text-subtle max-w-[34ch]">
               No team members are set up for this site. An admin can add staff from the main app.
             </div>
@@ -760,7 +760,7 @@ function LoginDoor() {
         <button
           type="button"
           onPointerDown={() => { window.location.href = '/haccp/visitor' }}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-action-primary text-on-action font-semibold text-body py-3"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-action-primary text-on-action font-semibold text-body-md py-3"
         >
           <Ic name="people" size={19} />
           Visitor sign-in
@@ -768,7 +768,7 @@ function LoginDoor() {
         <button
           type="button"
           onPointerDown={(e) => { e.preventDefault(); window.location.href = '/' }}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-action-ghost-border bg-transparent text-action-ghost-fg font-semibold text-body py-3"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-action-ghost-border bg-transparent text-action-ghost-fg font-semibold text-body-md py-3"
         >
           Back to main app
         </button>

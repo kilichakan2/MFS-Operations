@@ -22,7 +22,7 @@ export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
           {icon}
         </span>
       )}
-      <p className="text-body font-semibold text-body">{title}</p>
+      <p className="text-body-md font-semibold text-body">{title}</p>
       {message && <p className="text-body-sm text-muted">{message}</p>}
       {action && <div className="mt-1">{action}</div>}
     </div>
