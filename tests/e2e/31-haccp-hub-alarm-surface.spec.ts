@@ -131,10 +131,14 @@ test.describe("@critical HACCP hub — alarm surface flip (computed styles)", ()
     await expect(header).toBeVisible({ timeout: 10_000 });
 
     // COMPUTED background — the brand alarm fill (red-600), not a class name.
-    const bg = parseRgb(
-      await header.evaluate((el) => getComputedStyle(el).backgroundColor),
-    );
-    expect(bg).toEqual(RED_600);
+    // Polled: the calm→alarm flip animates via a 500ms colour transition, so
+    // an immediate read sees an interpolated in-between colour.
+    await expect
+      .poll(() => header.evaluate((el) => getComputedStyle(el).backgroundColor), {
+        timeout: 5_000,
+      })
+      .toBe(`rgb(${RED_600.r}, ${RED_600.g}, ${RED_600.b})`);
+    const bg = RED_600;
 
     // COMPUTED title colour — white through the surface context.
     const title = header.getByText("Food Safety", { exact: true });
@@ -160,10 +164,13 @@ test.describe("@critical HACCP hub — alarm surface flip (computed styles)", ()
     await expect(header).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('[data-surface="alarm"]')).toHaveCount(0);
 
-    const bg = parseRgb(
-      await header.evaluate((el) => getComputedStyle(el).backgroundColor),
-    );
-    expect(bg).toEqual(NAVY_700);
+    // Polled for symmetry with the alarm test (transition-colors settle).
+    await expect
+      .poll(() => header.evaluate((el) => getComputedStyle(el).backgroundColor), {
+        timeout: 5_000,
+      })
+      .toBe(`rgb(${NAVY_700.r}, ${NAVY_700.g}, ${NAVY_700.b})`);
+    const bg = NAVY_700;
 
     const title = header.getByText("Food Safety", { exact: true });
     await expect(title).toBeVisible();
