@@ -640,6 +640,16 @@ the trail matters.
 
 ---
 
+### F-INFRA-08 — Reset once-per-period HACCP data at smoke start so those E2E flows genuinely exercise (not degrade)
+
+- **Surfaced:** 2026-07-01 (PR #108 `/haccp/cold-storage` ship — the sibling of [[F-INFRA-07]])
+- **What:** The same never-reset shared preview DB (one branch per PR, only re-seeds on migration change) means once-per-session/day/week HACCP submit flows are already filled on any 2nd+ run. PR #108 **hardened the cold-storage @critical specs** to be deterministic against this — an `enterSession()` helper waits for the client `loadReadings` fetch to settle before checking, then gracefully early-returns on an already-submitted (read-only) session. That makes the smoke GREEN either way, BUT on a dirty DB those specs **degrade to a read-only-banner assertion** — the actual submit → "Session submitted" path is exercised only when a session is free (i.e. only on a freshly-reset DB). The authoritative save proof stays at the integration layer (+8 live tests). The other HACCP once-per-period specs (process-room, reviews, etc.) still hard-fail on a dirty DB per F-INFRA-07 until they get the same treatment or a reset.
+- **Fix shape:** Prefer [[F-INFRA-07]] option (a) — the smoke workflow resets/reseeds the PR's preview branch (or just the HACCP daily/weekly tables) BEFORE running Playwright — so EVERY run starts fresh and once-per-period flows always genuinely exercise instead of degrading. Failing that, roll the `enterSession()`-style wait-for-load + graceful-degrade pattern out to the remaining HACCP once-per-period specs as each screen is migrated.
+- **Owner unit:** unscheduled (rolls up with F-INFRA-07; each HACCP Phase-1 screen re-hits it)
+- **Status:** open
+
+---
+
 ## RLS track follow-ups (F-RLS-)
 
 ### F-RLS-04a-print-guard — Enforce order-stage transition integrity (print-before-complete) for ALL roles
