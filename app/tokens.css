@@ -33,15 +33,15 @@
 
   /* ===== TIER 2 · SEMANTIC (light) ===== */
   --surface-base:var(--mfs-soft-200); --surface-raised:#ffffff; --surface-sunken:#e7e2d5; --surface-overlay:#ffffff; --surface-inverse:var(--mfs-navy-700);
-  --text-body:var(--mfs-ink-900); --text-muted:var(--mfs-ink-600); --text-subtle:#645f55; --text-inverse:#ffffff; --text-on-action:#ffffff; --text-link:var(--mfs-orange-600);
+  --text-body:var(--mfs-ink-900); --text-muted:var(--mfs-ink-600); --text-subtle:#645f55; --text-inverse:#ffffff; --text-link:var(--mfs-orange-700);
   --border-default:#d8d3c5; --border-strong:#b9b2a0; --border-subtle:#e6e2d6;
 
   --action-primary:var(--mfs-orange-500); --action-primary-hover:var(--mfs-orange-600); --action-primary-active:var(--mfs-orange-700); --action-primary-disabled:#e7cdb8;
   --action-secondary:var(--mfs-navy-700); --action-secondary-hover:var(--mfs-navy-500); --action-secondary-active:var(--mfs-navy-900); --action-secondary-disabled:#c7ccdf;
-  --action-ghost-fg:var(--mfs-navy-700); --action-ghost-border:var(--border-strong); --action-ghost-hover-bg:rgba(22,32,91,.06); --action-ghost-hover-border:var(--mfs-navy-700);
+  --action-ghost-fg:var(--mfs-navy-700); --action-ghost-border:var(--mfs-navy-300); --action-ghost-hover-bg:rgba(22,32,91,.06); --action-ghost-hover-border:var(--mfs-navy-700);
   --action-danger:var(--mfs-red-600); --action-danger-hover:var(--mfs-red-700); --action-danger-active:#7a1800; --action-danger-disabled:#f3b6a6;
 
-  --focus-ring:var(--mfs-orange-500); --focus-ring-shadow:rgba(235,102,25,.40);
+  --focus-ring:var(--mfs-orange-600); --focus-ring-shadow:rgba(196,80,15,.40);
 
   /* ===== PAIRING-SYSTEM tokens (2026-07-01 Unit 2, spec §6) ===== */
   --text-heading:var(--mfs-maroon-500);   /* LOCKED (a) — headings on cream = maroon voice */
@@ -122,6 +122,37 @@
   --sync-syncing:#d99a2b; --sync-stuck:#e5556a; --sync-clear:#42a572;
 
   --shadow-sm:0 1px 2px rgba(0,0,0,.40); --shadow-md:0 6px 20px rgba(0,0,0,.45); --shadow-lg:0 24px 60px rgba(0,0,0,.60); --shadow-accent:0 8px 24px rgba(235,102,25,.40);
+}
+
+/* ===== SURFACE CONTEXTS (2026-07-01 Unit 2, spec §5.9) =====
+   A `data-surface` attribute re-scopes the semantic vars underneath it so
+   components inside a bold surface automatically resolve the LEGAL foreground
+   for that background — black-on-navy becomes unrepresentable, not merely
+   forbidden. Custom properties resolve per-element from the nearest ancestor
+   declaration, so these compose cleanly after the dark block. */
+[data-surface="canvas"]{ /* explicit reset so a light card nested inside a bold surface recovers */
+  --text-body:var(--mfs-ink-900); --text-muted:var(--mfs-ink-600); --text-subtle:#645f55;
+  --text-heading:var(--mfs-maroon-500); --icon-default:var(--mfs-navy-700);
+  --surface-accent-fg:var(--mfs-orange-600);
+  --border-default:#d8d3c5; --border-subtle:#e6e2d6;
+}
+[data-surface="bold-navy"]{
+  --text-body:#ffffff; --text-muted:rgba(237,234,225,.85); --text-subtle:rgba(237,234,225,.70);
+  --text-heading:#ffffff; --icon-default:#ffffff;
+  --surface-accent-fg:var(--mfs-orange-500);   /* orange on navy 4.6 — text-legal */
+  --border-default:rgba(255,255,255,.22); --border-subtle:rgba(255,255,255,.12);
+}
+[data-surface="alarm"]{
+  --text-body:#ffffff; --text-muted:rgba(255,255,255,.85); --text-subtle:rgba(255,255,255,.70);
+  --text-heading:#ffffff; --icon-default:#ffffff;
+  --surface-accent-fg:#ffffff;                 /* orange is brand-banned on red (§4) */
+  --border-default:rgba(255,255,255,.30); --border-subtle:rgba(255,255,255,.18);
+}
+[data-surface="bold-maroon"]{ /* reserved (§5.9) */
+  --text-body:#ffffff; --text-muted:rgba(237,234,225,.85); --text-subtle:rgba(237,234,225,.70);
+  --text-heading:#ffffff; --icon-default:#ffffff;
+  --surface-accent-fg:var(--mfs-orange-500);   /* orange on maroon 4.4 */
+  --border-default:rgba(255,255,255,.22); --border-subtle:rgba(255,255,255,.12);
 }
 
 /* ===== DENSITY · compact (desktop data) ===== */
