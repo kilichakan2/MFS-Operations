@@ -129,7 +129,9 @@ const config: Config = {
       // special), so `border-default` compiles exactly as call sites spell it.
       borderColor: {
         default: 'var(--border-default)',
-        strong:  'var(--border-strong)',
+        // NO `strong` here: --border-strong is decorative-only at 1.8:1 (fails
+        // the 3:1 outline bar, spec §5.4) — it keeps its token + bg-border-strong
+        // (colors namespace) but gets no border-* outline utility.
         subtle:  'var(--border-subtle)',
         input:   'var(--border-input)',
       },

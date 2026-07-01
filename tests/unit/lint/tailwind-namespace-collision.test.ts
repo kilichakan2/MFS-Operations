@@ -44,6 +44,22 @@ function collidingKeys(a: KeyedRecord, b: KeyedRecord): string[] {
   return Object.keys(a ?? {}).filter((k) => bKeys.has(k));
 }
 
+/** Flatten a Tailwind colour group into the utility key paths it generates
+ *  (nested keys join with `-`; `DEFAULT` maps to the parent path itself).
+ *  Entries under `extend.colors` ALSO generate `text-*` utilities, so a
+ *  flattened path equal to a fontSize key collides exactly like a textColor
+ *  key would — the side door next to guard (b). */
+function flattenColorKeys(group: KeyedRecord, prefix = ""): string[] {
+  return Object.entries(group ?? {}).flatMap(([key, value]) => {
+    const path =
+      key === "DEFAULT" ? prefix : prefix ? `${prefix}-${key}` : key;
+    if (value !== null && typeof value === "object") {
+      return flattenColorKeys(value as Record<string, unknown>, path);
+    }
+    return path ? [path] : [];
+  });
+}
+
 describe("tailwind-namespace-collision — F-TD-40 stays fixed", () => {
   it("(a) colors has no nested `text` group and no top-level `inverse` alias", () => {
     expect(
@@ -73,6 +89,20 @@ describe("tailwind-namespace-collision — F-TD-40 stays fixed", () => {
     ).toEqual([]);
   });
 
+  it("(b2) fontSize and the FLATTENED colors paths share no key (side door)", () => {
+    const colorPaths = new Set(flattenColorKeys(colors));
+    const collisions = Object.keys(fontSize).filter((k) => colorPaths.has(k));
+    expect(
+      collisions,
+      collisions.length === 0
+        ? ""
+        : "A fontSize key matches a flattened extend.colors path — colors " +
+          "entries generate text-* utilities too, so this recreates F-TD-40 " +
+          "through the colors namespace even though textColor is clean. " +
+          "Rename one side. Colliding keys: " + collisions.join(", "),
+    ).toEqual([]);
+  });
+
   it("(c) textColor pins the semantic text-colour contract", () => {
     expect(Object.keys(textColor).sort()).toEqual(
       ["heading", "body", "muted", "subtle", "inverse", "link", "icon"].sort(),
@@ -80,8 +110,11 @@ describe("tailwind-namespace-collision — F-TD-40 stays fixed", () => {
   });
 
   it("(d) borderColor pins the semantic border-colour contract", () => {
+    // No `strong`: --border-strong is decorative-only (1.8:1 — fails the
+    // 3:1 outline bar, spec §5.4), so it gets no `border-*` outline utility.
+    // Its 3 legitimate uses are `bg-border-strong` (colors namespace).
     expect(Object.keys(borderColor).sort()).toEqual(
-      ["default", "strong", "subtle", "input"].sort(),
+      ["default", "subtle", "input"].sort(),
     );
   });
 
@@ -129,5 +162,20 @@ describe("tailwind-namespace-collision — F-TD-40 stays fixed", () => {
     };
     expect(collidingKeys(fixture.fontSize, fixture.textColor)).toEqual(["x"]);
     expect(collidingKeys({ a: 1 }, { b: 2 })).toEqual([]);
+  });
+
+  it("side-door detector fires on a colliding flattened colors path", () => {
+    // Top-level `body` and a nested DEFAULT both flatten to fontSize names —
+    // exactly the shapes that would regenerate a broken `text-body`.
+    const fixture = {
+      body: "var(--x)",
+      card: { DEFAULT: "var(--y)", caption: "var(--z)" },
+    };
+    expect(flattenColorKeys(fixture).sort()).toEqual(
+      ["body", "card", "card-caption"].sort(),
+    );
+    const paths = new Set(flattenColorKeys(fixture));
+    const fontSizeKeys = ["body", "caption", "h1"];
+    expect(fontSizeKeys.filter((k) => paths.has(k))).toEqual(["body"]);
   });
 });

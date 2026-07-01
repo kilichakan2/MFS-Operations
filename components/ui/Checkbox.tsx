@@ -74,6 +74,9 @@ export function Checkbox({
           'border-input bg-transparent',
           'data-[state=checked]:bg-action-primary data-[state=checked]:border-action-primary',
           'data-[state=indeterminate]:bg-action-primary data-[state=indeterminate]:border-action-primary',
+          // Intentional borrow: --action-secondary-fg IS the shared white
+          // foreground — legal as the tick glyph on the orange fill at the
+          // ≥3:1 icon bar (measured 3.3, spec §4).
           'text-action-secondary-fg',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
           'disabled:cursor-not-allowed',

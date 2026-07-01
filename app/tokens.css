@@ -50,6 +50,7 @@
   --action-secondary-fg:#ffffff;          /* white on navy 15.1 */
   --action-danger-fg:#ffffff;             /* white on red-600 5.0 */
   --icon-default:var(--mfs-navy-700);     /* §5.6 — icons on cream default navy */
+  --surface-accent-fg:var(--mfs-orange-600); /* fail-safe default — matches [data-surface="canvas"]; the 4 surface-context blocks re-scope it */
 
   --status-success-fill:var(--green-600); --status-success-soft:var(--green-100); --status-success-text:var(--green-700); --status-success-border:#bcdcc9;
   --status-warning-fill:var(--amber-600); --status-warning-soft:var(--amber-100); --status-warning-text:var(--amber-700); --status-warning-border:#ecd49f;
