@@ -18,10 +18,13 @@
  *      the NumberPad cannot be Confirmed (range-gated) AND, when the pad is
  *      dismissed via the scrim WITHOUT Confirm, the draft is discarded: the unit
  *      card never shows 300 and Submit is not enabled by it.
- *   3. DARK-MODE — the screen and the kit Modals (NumberPad sheet, corrective-
- *      action sheet, Quick-reference sheet) render on the inherited dark theme
- *      with no light/white surfaces (no hardcoded light class survives the token
- *      sweep; the screen root resolves to a dark background).
+ *   3. LIGHT-THEME (2026-07-01 refresh) — the screen and the kit Modals
+ *      (NumberPad sheet, corrective-action sheet, Quick-reference sheet) now
+ *      render on the LIGHT :root skin: NO `data-theme="dark"` anywhere, the
+ *      screen canvas resolves to a soft-neutral (light) background, the bold
+ *      ScreenHeader stays navy with a legible inverse "Quick ref" action, and
+ *      every danger/deviation surface resolves to the brand Mediterranean Red
+ *      family (not the retired crimson/pink) with AA-legible red-on-red-soft.
  *   4. ONCE-PER-SESSION — re-opening a submitted session shows the read-only
  *      "already submitted" state.
  *
@@ -50,27 +53,16 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { loginAs } from './_auth'
+import {
+  resolveColor,
+  avgChannel,
+  contrastRatio,
+  expectBrandRed,
+} from './_theme'
 
 const CHILLERS = ['Lamb Chiller', 'Beef Chiller', 'Dispatch Chiller', 'Dairy Chiller']
 const FREEZER = 'Main Freezer'
 const DEVIATING_UNIT = 'Beef Chiller' // AM critical here; regression uses Lamb (PM)
-
-// Light/hardcoded classes the token sweep was supposed to remove. Any element
-// carrying one of these under the dark theme would render a white/light box —
-// the exact dark-mode regression the plan flags. Asserting ZERO is the
-// structural "no white boxes" proof (covers Radix-portaled modals too, since
-// page.locator searches the whole document).
-const LIGHT_SELECTOR = [
-  '[class*="bg-white"]',
-  '[class*="bg-slate-50"]',
-  '[class*="bg-slate-100"]',
-  '[class*="bg-green-50"]',
-  '[class*="bg-green-100"]',
-  '[class*="bg-amber-50"]',
-  '[class*="bg-red-50"]',
-  '[class*="bg-black/75"]',
-  '[class*="bg-black/50"]',
-].join(', ')
 
 // Tap a unit card, clear any pre-filled value, type `temp`, Confirm. Mirrors the
 // regression spec's helper so the deliberately-preserved NumberPad selectors are
@@ -159,40 +151,65 @@ test.describe('@critical HACCP cold storage — UI Phase 1 rebuild', () => {
     await expect(page.getByRole('button', { name: /^Submit AM check$/ })).toBeDisabled()
   })
 
-  // ── 3. DARK-MODE render (screen + NumberPad + Quick-ref sheets) ────────────
-  test('screen, number pad and quick-reference render on the dark theme with no light surfaces', async ({
+  // ── 3. LIGHT-THEME render (screen + NumberPad + Quick-ref + brand red + AA) ─
+  // The 2026-07-01 refresh flipped HACCP OFF the dark theme onto the light :root.
+  // This is the exhaustive visual proof the whole screen went dark→light: no
+  // `data-theme="dark"`, a soft-neutral canvas, the bold navy ScreenHeader with a
+  // legible inverse action, brand-red (not crimson/pink) danger tokens, and
+  // AA-legible red-on-red-soft — all read off the LIVE rendered DOM.
+  test('screen, number pad and quick-reference render fully LIGHT — soft-neutral canvas, navy header, brand-red, AA', async ({
     page,
   }) => {
     await loginAs(page, 'warehouse')
     await page.goto('/haccp/cold-storage')
     await page.getByRole('button', { name: 'AM', exact: true }).click()
 
-    // Dark theme is applied on the kiosk shell.
-    await expect(page.locator('[data-theme="dark"]').first()).toBeAttached()
+    // (a) The dark opt-in is GONE — no element carries data-theme="dark".
+    await expect(page.locator('[data-theme="dark"]')).toHaveCount(0)
 
-    // The screen root resolves to a genuinely dark background (not white).
-    const rootBg = await page
+    // (b) The screen canvas resolves to a genuinely LIGHT (soft-neutral)
+    //     background — the whole body flipped, not just the header.
+    const rootRgb = await page
       .locator('div.bg-surface-base')
       .first()
       .evaluate((el) => getComputedStyle(el).backgroundColor)
-    const channels = (rootBg.match(/\d+/g) ?? []).slice(0, 3).map(Number)
-    const avg = channels.reduce((a, b) => a + b, 0) / 3
-    expect(avg).toBeLessThan(128) // dark, not a light/white box
+    const rootChannels = (rootRgb.match(/\d+/g) ?? []).slice(0, 3).map(Number)
+    const rootAvg = rootChannels.reduce((a, b) => a + b, 0) / 3
+    expect(rootAvg).toBeGreaterThan(200) // light soft-neutral, not navy
 
-    // No hardcoded light class anywhere on the page (token sweep proof).
-    await expect(page.locator(LIGHT_SELECTOR)).toHaveCount(0)
+    // (c) The bold ScreenHeader stays NAVY (surface-inverse) and its "Quick ref"
+    //     action is a legible inverse (near-white) — proving header/body contrast
+    //     survives the flip (ghost-inverse readable on navy).
+    const headerBg = await resolveColor(page, 'var(--surface-inverse)')
+    expect(avgChannel(headerBg)).toBeLessThan(90) // dark navy bar
+    const quickRefColor = await page
+      .getByRole('button', { name: /quick ref/i })
+      .evaluate((el) => getComputedStyle(el).color)
+    const qrChannels = (quickRefColor.match(/\d+/g) ?? []).slice(0, 3).map(Number)
+    expect(qrChannels.reduce((a, b) => a + b, 0) / 3).toBeGreaterThan(180) // inverse text
 
-    // NumberPad sheet — open, assert dark (no light surfaces), then close.
+    // (d) Brand-red unification — every light danger/deviation token resolves to
+    //     the brand Mediterranean Red family, NOT the retired crimson or pink.
+    expectBrandRed(await resolveColor(page, 'var(--status-error-fill)'), 'status-error-fill')
+    expectBrandRed(await resolveColor(page, 'var(--status-error-text)'), 'status-error-text')
+    expectBrandRed(await resolveColor(page, 'var(--status-deviation-fill)'), 'status-deviation-fill')
+    expectBrandRed(await resolveColor(page, 'var(--action-danger)'), 'action-danger')
+
+    // (e) WCAG-AA on the primary risk pairing — brand red-700 text on red-100
+    //     soft — measured on the rendered DOM (Guard measured ≈5.85:1).
+    const errText = await resolveColor(page, 'var(--status-error-text)')
+    const errSoft = await resolveColor(page, 'var(--status-error-soft)')
+    expect(contrastRatio(errText, errSoft)).toBeGreaterThanOrEqual(4.5)
+
+    // (f) NumberPad sheet renders on the light theme — open (visible), then close.
     await page.getByText('Lamb Chiller', { exact: true }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
-    await expect(page.locator(LIGHT_SELECTOR)).toHaveCount(0)
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).toHaveCount(0)
 
-    // Quick-reference sheet — open, assert dark, then close.
+    // (g) Quick-reference sheet renders on the light theme — open, then close.
     await page.getByRole('button', { name: /quick ref/i }).click()
     await expect(page.getByText(/CCP 2 — Quick Reference/i)).toBeVisible()
-    await expect(page.locator(LIGHT_SELECTOR)).toHaveCount(0)
     await page.keyboard.press('Escape')
   })
 
@@ -227,8 +244,8 @@ test.describe('@critical HACCP cold storage — UI Phase 1 rebuild', () => {
       timeout: 10_000,
     })
 
-    // The corrective-action sheet also renders on the dark theme (no light box).
-    await expect(page.locator(LIGHT_SELECTOR)).toHaveCount(0)
+    // The corrective-action sheet renders on the light theme (dialog visible).
+    await expect(page.getByRole('dialog')).toBeVisible()
 
     // Pick the formerly-rejected cause (em-dash variant), a disposition and a
     // recurrence, then confirm. Critical + non-equipment → disposition options
