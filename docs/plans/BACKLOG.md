@@ -969,12 +969,12 @@ probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to *
 - **Owner unit:** unscheduled (tiny; fold into any process-room touch-up). Also: widen the spec-16 "temps happy" cold-start assertion timeout to de-flake the one preview retry.
 - **Status:** open
 
-### F-TD-40 — 🔵 Tailwind `text-*` semantic colour utilities were inert (naming collision); fixed narrowly
+### F-TD-40 — ✅ CLOSED — Tailwind `text-*` semantic colour utilities were inert (naming collision)
 
 - **Raised:** 2026-07-01 (PR #110 light design-refresh, ANVIL-caught real bug + Guard).
-- **What:** in `tailwind.config.ts` the semantic text colours are nested under a colour group literally named `text` (`colors.text.inverse` → compiles only `text-text-inverse`). So the literal utilities `text-inverse` / `text-body` / `text-muted` / `text-subtle` / `text-on-action` / `text-link` used across the kit emitted **no colour rule** — inert. It stayed hidden because the old dark theme's default text was already light; the HACCP light-flip exposed `text-inverse` as dark-on-navy (illegible). Fixed in Unit 1 by adding a top-level `colors.inverse` alias so `text-inverse` compiles (the only one actually needed on a coloured surface).
-- **Why it matters (low, latent):** the other inert `text-*` colour utilities (`text-body`/`muted`/`subtle`/`on-action`/`link`) still don't compile — they "work" today only because text colour is inherited from defaults. Any future element that needs an EXPLICIT semantic text colour override on a non-default surface will silently get the wrong colour.
-- **Also:** the Unit-1 fix's side-effect utilities `bg-inverse` / `border-inverse` now compile to the *text* token (white), unused today but a foot-gun if someone reaches for `bg-inverse` expecting the navy surface (that's `bg-surface-inverse`). Consider not emitting them, or renaming.
-- **Fix shape:** rename the `text` colour group (e.g. to `fg`/`ink`) or add top-level aliases for the whole semantic-text family so `text-*` compiles as authored; then a full app-wide LIGHT + KDS-dark regression (blast radius = every place a semantic text-colour class is used). Deliberate follow-up, not a hotfix.
-- **Owner unit:** unscheduled (fold into a kit/design-system hardening pass).
-- **Status:** open
+- **What:** in `tailwind.config.ts` the semantic text colours were nested under a colour group literally named `text` (`colors.text.inverse` → compiles only `text-text-inverse`). So the literal utilities `text-inverse` / `text-body` / `text-muted` / `text-subtle` / `text-on-action` / `text-link` used across the kit emitted **no colour rule** — inert. Unit 1 patched only `text-inverse` via a top-level alias.
+- **CLOSED 2026-07-01** by the colour-pairing Unit 2 (branch `feat/colour-pairing-unit2`):
+  - **Extension found during implementation:** the same collision made the whole BORDER namespace inert too — `border-default`/`border-strong`/`border-subtle` emitted nothing (only `border-border-*` compiled); every card edge on the migrated screens silently rendered Tailwind preflight's cool grey `#e5e7eb` instead of the warm token `#d8d3c5`. (`bg-border`/`bg-border-strong` DID work and were preserved.)
+  - **Proper fix:** semantic text colours moved to Tailwind's dedicated `theme.extend.textColor` key and border colours to `theme.extend.borderColor` (each emits ONLY its own utility namespace); the one colliding `fontSize` key renamed `body` → `body-md`; the dead `colors.text` group and `colors.inverse` alias deleted (killing the `bg-inverse`/`border-inverse` foot-guns, 0 call sites).
+  - **Guards:** `tests/unit/lint/tailwind-namespace-collision.test.ts` (bans any fontSize↔textColor shared key forever, pins both contracts, and greps `text-on-action` out of the tree) + `tests/unit/design/contrast-pairings.test.ts` (the §4 pairing matrix recomputed on every CI run, incl. negative fixtures).
+- **Status:** closed (2026-07-01)
