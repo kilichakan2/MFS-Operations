@@ -577,7 +577,30 @@ describe("HaccpDailyChecksService — process-room", () => {
       product_temp_c: 5, // > 4 → deviation
       room_temp_c: 10,
     };
-    expect(s.validateProcessingTemp({ input: temps, today: TODAY })).toMatchObject({
+    expect(
+      s.validateProcessingTemp({
+        input: temps,
+        today: TODAY,
+        thresholds: [
+          {
+            id: "p-1",
+            name: "Product core",
+            target_temp_c: 4,
+            max_temp_c: 7,
+            active: true,
+            position: 1,
+          },
+          {
+            id: "r-1",
+            name: "Room ambient",
+            target_temp_c: 12,
+            max_temp_c: 15,
+            active: true,
+            position: 2,
+          },
+        ],
+      }),
+    ).toMatchObject({
       message: "Corrective action required for deviation",
     });
 

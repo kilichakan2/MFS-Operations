@@ -66,6 +66,15 @@ import type {
   ReturnRow,
 } from "@/lib/domain";
 import { COLD_STORAGE_CAUSES, isColdStorageTempInRange } from "@/lib/domain";
+import {
+  PROCESS_ROOM_CAUSES,
+  isProcessRoomTempInRange,
+  processRoomBand,
+} from "@/lib/domain";
+import type {
+  ProcessRoomThreshold,
+  UpdateProcessRoomThresholdInput,
+} from "@/lib/domain";
 import type { HaccpDailyChecksRepository } from "@/lib/ports";
 
 // ─── shared constants (verbatim from the routes) ─────────────────────────────
@@ -115,15 +124,9 @@ const VALID_CONTAM_TYPES = new Set([
 // the root cause of the two-cause 400 bug).
 const VALID_COLD_STORAGE_CAUSES = new Set<string>(COLD_STORAGE_CAUSES);
 
-const VALID_PROC_ROOM_CAUSES = new Set([
-  "A/C or cooling failure",
-  "Doors left open",
-  "Product held in room too long",
-  "Batch too large",
-  "Equipment failure",
-  "Power interruption",
-  "Other",
-]);
+// Single source of truth — the SAME list the screen renders (lib/domain), so the
+// server can never reject a cause the client offers.
+const VALID_PROC_ROOM_CAUSES = new Set<string>(PROCESS_ROOM_CAUSES);
 
 // ─── delivery protocol lookups (CA-001 verbatim) ─────────────────────────────
 
@@ -348,17 +351,31 @@ function deriveProcRoomAction(
   cause: string,
   productBreached: boolean,
   roomBreached: boolean,
-  roomTemp: number,
+  roomCritical: boolean,
 ): string {
   if (cause === "Equipment failure")
     return PR_PROTOCOLS.equipment_failure.join(" | ");
   if (productBreached) return PR_PROTOCOLS.product_breach.join(" | ");
   if (roomBreached) {
-    return roomTemp > 15
+    return roomCritical
       ? PR_PROTOCOLS.room_breach_high.join(" | ")
       : PR_PROTOCOLS.room_breach_amber.join(" | ");
   }
   return PR_PROTOCOLS.product_breach.join(" | ");
+}
+
+/**
+ * Resolve the Product core + Room ambient threshold rows from the active set
+ * (by name, position as fallback). The seed guarantees both exist; the route
+ * 500s if the set is empty (mirrors cold-storage units-empty).
+ */
+function resolveProcRoomThresholds(
+  thresholds: readonly ProcessRoomThreshold[],
+): { product: ProcessRoomThreshold; room: ProcessRoomThreshold } {
+  const byName = (n: string) => thresholds.find((t) => t.name === n);
+  const product = byName("Product core") ?? thresholds[0];
+  const room = byName("Room ambient") ?? thresholds[1] ?? thresholds[0];
+  return { product, room };
 }
 
 // ─── mince-prep logic (verbatim) ─────────────────────────────────────────────
@@ -632,16 +649,30 @@ export interface HaccpDailyChecksService {
   validateProcessingTemp(args: {
     input: CreateProcessingTempInput;
     today: string;
+    thresholds: readonly ProcessRoomThreshold[];
   }): ValidationResult;
   buildProcessingTemp(args: {
     input: CreateProcessingTempInput;
     userId: string;
+    thresholds: readonly ProcessRoomThreshold[];
   }): ProcessingTempPersist;
   buildProcessingTempCorrectiveActions(args: {
     input: CreateProcessingTempInput;
     userId: string;
     sourceId: string;
+    thresholds: readonly ProcessRoomThreshold[];
   }): readonly CorrectiveActionInsert[];
+
+  // ── process-room thresholds (admin) ──
+  listActiveProcessRoomThresholds(): Promise<readonly ProcessRoomThreshold[]>;
+  listProcessRoomThresholds(): Promise<readonly ProcessRoomThreshold[]>;
+  validateProcessRoomThreshold(
+    input: UpdateProcessRoomThresholdInput,
+  ): ValidationResult;
+  updateProcessRoomThreshold(args: {
+    input: UpdateProcessRoomThresholdInput;
+    changedBy: string;
+  }): Promise<ProcessRoomThreshold>;
 
   // ── process-room diary ──
   validateDailyDiary(args: {
@@ -772,6 +803,8 @@ export function createHaccpDailyChecksService(
     listCalibration: () => dailyChecks.listCalibration(),
     listCleaning: () => dailyChecks.listCleaning(),
     listProcessRoom: (date) => dailyChecks.listProcessRoom(date),
+    listActiveProcessRoomThresholds: () =>
+      dailyChecks.listActiveProcessRoomThresholds(),
     listMincePrep: (range) => dailyChecks.listMincePrep(range),
     countMinceRuns: (table, date) => dailyChecks.countMinceRuns(table, date),
     listReturns: () => dailyChecks.listReturns(),
@@ -1319,7 +1352,7 @@ export function createHaccpDailyChecksService(
     },
 
     // ── process-room temps ──
-    validateProcessingTemp({ input, today }): ValidationResult {
+    validateProcessingTemp({ input, today, thresholds }): ValidationResult {
       if (
         !input.session ||
         !input.date ||
@@ -1331,9 +1364,26 @@ export function createHaccpDailyChecksService(
       if (input.date !== today) {
         return reject(400, "Readings may only be submitted for today's date.");
       }
-      const productPass = input.product_temp_c <= 4.0;
-      const roomPass = input.room_temp_c <= 12.0;
-      const hasDeviation = !(productPass && roomPass);
+      // Defence-in-depth echo of the client number-pad bound (shared helper so
+      // the rule can never desync). AFTER today, BEFORE the CA-payload checks.
+      if (
+        !isProcessRoomTempInRange(input.product_temp_c) ||
+        !isProcessRoomTempInRange(input.room_temp_c)
+      ) {
+        return reject(400, "Temperature out of range");
+      }
+      const { product, room } = resolveProcRoomThresholds(thresholds);
+      const productBand = processRoomBand(
+        input.product_temp_c,
+        Number(product.target_temp_c),
+        Number(product.max_temp_c),
+      );
+      const roomBand = processRoomBand(
+        input.room_temp_c,
+        Number(room.target_temp_c),
+        Number(room.max_temp_c),
+      );
+      const hasDeviation = productBand !== "pass" || roomBand !== "pass";
       if (hasDeviation) {
         if (!input.corrective_action) {
           return reject(400, "Corrective action required for deviation");
@@ -1352,9 +1402,20 @@ export function createHaccpDailyChecksService(
       return { ok: true };
     },
 
-    buildProcessingTemp({ input, userId }): ProcessingTempPersist {
-      const productPass = input.product_temp_c <= 4.0;
-      const roomPass = input.room_temp_c <= 12.0;
+    buildProcessingTemp({ input, userId, thresholds }): ProcessingTempPersist {
+      const { product, room } = resolveProcRoomThresholds(thresholds);
+      const productBand = processRoomBand(
+        input.product_temp_c,
+        Number(product.target_temp_c),
+        Number(product.max_temp_c),
+      );
+      const roomBand = processRoomBand(
+        input.room_temp_c,
+        Number(room.target_temp_c),
+        Number(room.max_temp_c),
+      );
+      const productPass = productBand === "pass";
+      const roomPass = roomBand === "pass";
       const bothPass = productPass && roomPass;
       return {
         submitted_by: userId,
@@ -1373,10 +1434,20 @@ export function createHaccpDailyChecksService(
       input,
       userId,
       sourceId,
+      thresholds,
     }): readonly CorrectiveActionInsert[] {
-      const productPass = input.product_temp_c <= 4.0;
-      const roomPass = input.room_temp_c <= 12.0;
-      const hasDeviation = !(productPass && roomPass);
+      const { product, room } = resolveProcRoomThresholds(thresholds);
+      const productBand = processRoomBand(
+        input.product_temp_c,
+        Number(product.target_temp_c),
+        Number(product.max_temp_c),
+      );
+      const roomBand = processRoomBand(
+        input.room_temp_c,
+        Number(room.target_temp_c),
+        Number(room.max_temp_c),
+      );
+      const hasDeviation = productBand !== "pass" || roomBand !== "pass";
       if (!hasDeviation || !input.corrective_action) return [];
 
       const ca = input.corrective_action;
@@ -1384,47 +1455,72 @@ export function createHaccpDailyChecksService(
       const recurrence = ca.notes
         ? `${ca.recurrence} | Notes: ${ca.notes}`
         : ca.recurrence;
-      const productActionText = deriveProcRoomAction(
-        ca.cause,
-        true,
-        false,
-        input.room_temp_c,
-      );
+      const productActionText = deriveProcRoomAction(ca.cause, true, false, false);
       const roomActionText = deriveProcRoomAction(
         ca.cause,
         false,
         true,
-        input.room_temp_c,
+        roomBand === "critical",
       );
 
       const caRows: CorrectiveActionInsert[] = [];
-      if (!productPass) {
+      if (productBand !== "pass") {
         caRows.push({
           actioned_by: userId,
           source_table: "haccp_processing_temps",
           source_id: sourceId,
           ccp_ref: "CCP3",
-          deviation_description: `Product: ${input.product_temp_c}°C (limit ≤4°C). Cause: ${ca.cause}`,
+          deviation_description: `Product: ${input.product_temp_c}°C (limit ≤${Number(product.target_temp_c)}°C). Cause: ${ca.cause}`,
           action_taken: productActionText,
           product_disposition: dispositionEnum,
           recurrence_prevention: recurrence,
-          management_verification_required: true,
+          // Amber (target < t ≤ max): CA raised, no mgmt sign-off. Critical
+          // (> max): mgmt sign-off required.
+          management_verification_required: productBand === "critical",
         });
       }
-      if (!roomPass) {
+      if (roomBand !== "pass") {
         caRows.push({
           actioned_by: userId,
           source_table: "haccp_processing_temps",
           source_id: sourceId,
           ccp_ref: "CCP3",
-          deviation_description: `Room: ${input.room_temp_c}°C (limit ≤12°C). Cause: ${ca.cause}`,
+          deviation_description: `Room: ${input.room_temp_c}°C (limit ≤${Number(room.target_temp_c)}°C). Cause: ${ca.cause}`,
           action_taken: roomActionText,
           product_disposition: dispositionEnum,
           recurrence_prevention: recurrence,
-          management_verification_required: input.room_temp_c > 15,
+          management_verification_required: roomBand === "critical",
         });
       }
       return caRows;
+    },
+
+    // ── process-room thresholds (admin) ──
+    listProcessRoomThresholds: () =>
+      dailyChecks.listAllProcessRoomThresholds(),
+
+    validateProcessRoomThreshold(input): ValidationResult {
+      if (!input.id) return reject(400, "Threshold id is required");
+      const hasTarget = input.target_temp_c !== undefined;
+      const hasMax = input.max_temp_c !== undefined;
+      const hasActive = input.active !== undefined;
+      if (!hasTarget && !hasMax && !hasActive) {
+        return reject(400, "No valid fields to update");
+      }
+      if (hasTarget && !isProcessRoomTempInRange(input.target_temp_c!)) {
+        return reject(400, "Target temperature out of range");
+      }
+      if (hasMax && !isProcessRoomTempInRange(input.max_temp_c!)) {
+        return reject(400, "Max temperature out of range");
+      }
+      if (hasTarget && hasMax && input.target_temp_c! > input.max_temp_c!) {
+        return reject(400, "Target must be less than or equal to max");
+      }
+      return { ok: true };
+    },
+
+    updateProcessRoomThreshold({ input, changedBy }) {
+      return dailyChecks.updateProcessRoomThreshold(input, changedBy);
     },
 
     // ── process-room diary ──
