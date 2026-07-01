@@ -31,7 +31,9 @@ describe("StatusTile", () => {
     { state: "overdue", shell: "bg-status-error-soft", line: "text-status-error-text" },
     { state: "due", shell: "bg-status-warning-soft", line: "text-status-warning-text" },
     { state: "deviation", shell: "bg-status-deviation-soft", line: "text-status-deviation-text" },
-    { state: "neutral", shell: "bg-status-neutral-soft", line: "text-status-neutral-text" },
+    // §5.8 (2026-07-01 Unit 2): neutral = white card + navy icon + ink-600
+    // status line — the grey wash is demoted to genuinely-disabled elements.
+    { state: "neutral", shell: "bg-surface-raised", line: "text-muted" },
   ];
 
   it("maps every state to its semantic shell + status-text token", () => {

@@ -58,11 +58,14 @@ const TILE_TONE: Record<
     line: 'text-status-deviation-text',
     icon: 'text-status-deviation-text',
   },
+  // §5.8 (2026-07-01 Unit 2): neutral = white card + navy icon + ink-600
+  // status line. The grey WASH is retired (demoted to disabled-only); the 8px
+  // grey dot stays as the "dormant / no status yet" signal.
   neutral: {
-    shell: 'bg-status-neutral-soft border-status-neutral-border',
+    shell: 'bg-surface-raised border-default',
     dot: 'bg-status-neutral-fill',
-    line: 'text-status-neutral-text',
-    icon: 'text-status-neutral-text',
+    line: 'text-muted',
+    icon: 'text-icon',
   },
 }
 

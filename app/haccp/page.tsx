@@ -420,7 +420,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
             <span className="hidden md:inline">Documents</span>
           </button>
           <div className="flex items-center gap-2 rounded-xl bg-surface-base border border-default px-2 py-1">
-            <span className="w-8 h-8 rounded-full bg-action-primary text-on-action flex items-center justify-center text-caption font-bold">
+            <span className="w-8 h-8 rounded-full bg-action-primary text-action-primary-fg flex items-center justify-center text-caption font-bold">
               {initials(userName)}
             </span>
             <div className="hidden md:block min-w-0">
@@ -460,7 +460,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               <button
                 type="button"
                 onClick={async () => { await push.subscribe() }}
-                className="flex-shrink-0 h-9 px-4 rounded-md bg-action-primary text-on-action font-semibold text-body-sm"
+                className="flex-shrink-0 h-9 px-4 rounded-md bg-action-primary text-action-primary-fg font-semibold text-body-sm"
               >
                 Enable
               </button>
@@ -639,8 +639,10 @@ function StaffCard({ member, onSelect }: { member: StaffMember; onSelect: (m: St
     >
       <span
         className={cx(
-          'w-12 h-12 rounded-full flex items-center justify-center text-on-action text-body-lg font-bold',
-          isWh ? 'bg-action-primary' : 'bg-action-secondary',
+          'w-12 h-12 rounded-full flex items-center justify-center text-body-lg font-bold',
+          isWh
+            ? 'bg-action-primary text-action-primary-fg'
+            : 'bg-action-secondary text-action-secondary-fg',
         )}
       >
         {initials(member.name)}
@@ -729,7 +731,7 @@ function LoginDoor() {
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="font-display text-h2 text-body">Tap your name to sign in</div>
+        <div className="font-display text-h2 text-heading">Tap your name to sign in</div>
         <div className="text-body-sm text-subtle mt-1 mb-6">
           A 4-digit PIN keeps every record signed to you.
         </div>
@@ -760,7 +762,7 @@ function LoginDoor() {
         <button
           type="button"
           onPointerDown={() => { window.location.href = '/haccp/visitor' }}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-action-primary text-on-action font-semibold text-body-md py-3"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-action-primary text-action-primary-fg font-semibold text-body-md py-3"
         >
           <Ic name="people" size={19} />
           Visitor sign-in

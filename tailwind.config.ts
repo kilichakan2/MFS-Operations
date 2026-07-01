@@ -123,10 +123,6 @@ const config: Config = {
         inverse: 'var(--text-inverse)',
         link:    'var(--text-link)',
         icon:    'var(--icon-default)',
-        // Phase-0 bridge — deprecated by the per-action -fg tokens; ordered
-        // AFTER `body` so state-variant overrides (active:text-on-action)
-        // keep winning the cascade until every call site migrates.
-        'on-action': 'var(--text-on-action)',
       },
       // ── Semantic BORDER colours (F-TD-40 border-namespace fix) ──────────
       // Lower-case `default` is a legal key (only upper-case DEFAULT is

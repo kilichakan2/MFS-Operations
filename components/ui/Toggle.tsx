@@ -40,7 +40,7 @@ export function Toggle({
       >
         <RadixSwitch.Thumb
           className={[
-            'block w-[21px] h-[21px] rounded-full bg-[var(--text-on-action)]',
+            'block w-[21px] h-[21px] rounded-full bg-[var(--action-secondary-fg)]',
             'translate-x-[3px] data-[state=checked]:translate-x-[22px]',
             'transition-transform',
           ].join(' ')}

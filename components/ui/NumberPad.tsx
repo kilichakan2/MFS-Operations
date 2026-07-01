@@ -225,7 +225,7 @@ export function NumberPad({
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
                 isBack
                   ? 'bg-surface-sunken text-body'
-                  : 'bg-surface-raised text-body active:bg-action-primary active:text-on-action',
+                  : 'bg-surface-raised text-body active:bg-action-primary active:text-action-primary-fg',
               )}
             >
               {isBack ? <BackspaceGlyph /> : key}
@@ -240,7 +240,7 @@ export function NumberPad({
         disabled={!confirmable}
         className={cx(
           'w-full max-w-xs py-4 rounded-2xl text-base font-bold transition-colors',
-          'bg-action-primary text-on-action',
+          'bg-action-primary text-action-primary-fg',
           'disabled:bg-action-primary-disabled disabled:cursor-not-allowed disabled:opacity-40',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
         )}

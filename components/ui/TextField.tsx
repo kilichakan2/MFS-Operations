@@ -19,8 +19,10 @@ const BASE_INPUT =
   'rounded-[var(--ctl-radius)] disabled:bg-surface-sunken disabled:text-subtle ' +
   'disabled:cursor-not-allowed placeholder:text-subtle'
 
+// Load-bearing boundary (§5.4): the border is how you FIND the field, so it
+// uses --border-input (ink-400, ≥3:1) — not the decorative border-default.
 const BORDER_DEFAULT =
-  'border-[1.5px] border-default ' +
+  'border-[1.5px] border-input ' +
   'focus-visible:border-focus-ring focus-visible:shadow-[0_0_0_3px_var(--focus-ring-shadow)]'
 
 const BORDER_ERROR =
@@ -36,7 +38,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
           className={cx(
             'flex items-center h-[var(--field-h)] overflow-hidden box-border',
             'rounded-[var(--ctl-radius)] bg-surface-raised',
-            error ? BORDER_ERROR : 'border-[1.5px] border-default',
+            error ? BORDER_ERROR : 'border-[1.5px] border-input',
             className,
           )}
         >

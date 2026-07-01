@@ -71,10 +71,10 @@ export function Checkbox({
         className={[
           'flex shrink-0 items-center justify-center',
           'w-[22px] h-[22px] rounded-[6px] border-2',
-          'border-strong bg-transparent',
+          'border-input bg-transparent',
           'data-[state=checked]:bg-action-primary data-[state=checked]:border-action-primary',
           'data-[state=indeterminate]:bg-action-primary data-[state=indeterminate]:border-action-primary',
-          'text-on-action',
+          'text-action-secondary-fg',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
           'disabled:cursor-not-allowed',
         ].join(' ')}

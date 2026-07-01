@@ -90,7 +90,8 @@ export function Select({
           'rounded-[var(--ctl-radius)] bg-surface-raised',
           'font-text text-[length:var(--field-fs)] text-body',
           'border-[1.5px]',
-          error ? 'border-status-error-fill' : 'border-default',
+          // Load-bearing trigger boundary (§5.4) — border-input ≥ 3:1.
+          error ? 'border-status-error-fill' : 'border-input',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
           'disabled:bg-surface-sunken disabled:text-subtle disabled:cursor-not-allowed',
           'data-[placeholder]:text-subtle',

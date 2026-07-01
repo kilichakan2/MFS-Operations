@@ -25,6 +25,8 @@
  *
  * A fixture case proves the collision detector itself has teeth.
  */
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import config from "@/tailwind.config";
 
@@ -73,7 +75,7 @@ describe("tailwind-namespace-collision — F-TD-40 stays fixed", () => {
 
   it("(c) textColor pins the semantic text-colour contract", () => {
     expect(Object.keys(textColor).sort()).toEqual(
-      ["heading", "body", "muted", "subtle", "inverse", "link", "icon", "on-action"].sort(),
+      ["heading", "body", "muted", "subtle", "inverse", "link", "icon"].sort(),
     );
   });
 
@@ -81,6 +83,42 @@ describe("tailwind-namespace-collision — F-TD-40 stays fixed", () => {
     expect(Object.keys(borderColor).sort()).toEqual(
       ["default", "strong", "subtle", "input"].sort(),
     );
+  });
+
+  // ── deprecation guard: the blanket on-action colour is fully retired ───────
+  it("text-on-action / var(--text-on-action) appear nowhere in app/** + components/**", () => {
+    const ROOT = process.cwd();
+    const offenders: string[] = [];
+    const BANNED = /text-on-action|var\(--text-on-action\)/;
+    function walk(dir: string): void {
+      let entries: string[];
+      try {
+        entries = readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (/\.(ts|tsx|css)$/.test(entry) && BANNED.test(readFileSync(full, "utf8"))) {
+          // app/tokens.css legitimately keeps ONE declaration in the
+          // [data-theme="dark"] block (KDS kiosk; retired with KDS) — its
+          // light :root purge is pinned by contrast-pairings.test.ts.
+          if (full.endsWith(join("app", "tokens.css"))) continue;
+          offenders.push(full.slice(ROOT.length + 1));
+        }
+      }
+    }
+    walk(join(ROOT, "app"));
+    walk(join(ROOT, "components"));
+    expect(
+      offenders,
+      offenders.length === 0
+        ? ""
+        : "`text-on-action` is deprecated — use the per-action -fg utilities " +
+          "(text-action-primary-fg / -secondary-fg / -danger-fg). Offenders:\n" +
+          offenders.join("\n"),
+    ).toEqual([]);
   });
 
   // ── proven teeth: the detector actually fires on a collision ───────────────

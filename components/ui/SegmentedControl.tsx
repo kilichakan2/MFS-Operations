@@ -55,7 +55,7 @@ export function SegmentedControl<T extends string>({
             className={cx(
               BUTTON_BASE,
               active
-                ? 'bg-action-secondary text-on-action'
+                ? 'bg-action-secondary text-action-secondary-fg'
                 : 'bg-transparent text-muted hover:text-body',
             )}
           >
