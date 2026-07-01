@@ -170,6 +170,49 @@ describe("HaccpDailyChecksService — process-room band-aware temps", () => {
   });
 });
 
+describe("HaccpDailyChecksService — fail-closed when a required threshold is missing", () => {
+  // A required CCP-3 measurement point absent from the active set (e.g. an admin
+  // somehow deactivated "Product core") must STOP the submit, never grade the
+  // product against the Room ambient row (12/15) — that would false-`pass` a
+  // 10°C product on a CCP. resolveProcRoomThresholds throws (→ route 500).
+  const ROOM_ONLY: readonly ProcessRoomThreshold[] = [THRESHOLDS[1]]; // Room ambient only
+  const PRODUCT_ONLY: readonly ProcessRoomThreshold[] = [THRESHOLDS[0]]; // Product core only
+
+  it("validateProcessingTemp throws when 'Product core' is absent (no fallback to Room ambient)", () => {
+    const s = svc();
+    // 10°C product would falsely 'pass' against Room ambient's 12/15 — must throw instead.
+    expect(() =>
+      s.validateProcessingTemp({
+        input: temps({ product_temp_c: 10, room_temp_c: 10 }),
+        today: TODAY,
+        thresholds: ROOM_ONLY,
+      }),
+    ).toThrow(/Product core/);
+  });
+
+  it("buildProcessingTemp throws when 'Product core' is absent", () => {
+    const s = svc();
+    expect(() =>
+      s.buildProcessingTemp({
+        input: temps({ product_temp_c: 10 }),
+        userId: "u1",
+        thresholds: ROOM_ONLY,
+      }),
+    ).toThrow(/Product core/);
+  });
+
+  it("throws when 'Room ambient' is absent", () => {
+    const s = svc();
+    expect(() =>
+      s.validateProcessingTemp({
+        input: temps({}),
+        today: TODAY,
+        thresholds: PRODUCT_ONLY,
+      }),
+    ).toThrow(/Room ambient/);
+  });
+});
+
 describe("HaccpDailyChecksService — validateProcessRoomThreshold", () => {
   const base: UpdateProcessRoomThresholdInput = { id: "p-1" };
 

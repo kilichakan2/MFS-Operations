@@ -300,7 +300,6 @@ export function createFakeHaccpDailyChecksRepository(
         ...current,
         target_temp_c: input.target_temp_c ?? current.target_temp_c,
         max_temp_c: input.max_temp_c ?? current.max_temp_c,
-        active: input.active ?? current.active,
       };
       processRoomThresholds[idx] = next;
       thresholdAudits.push({

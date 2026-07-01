@@ -591,7 +591,6 @@ export function createSupabaseHaccpDailyChecksRepository(
       if (input.target_temp_c !== undefined)
         patch.target_temp_c = input.target_temp_c;
       if (input.max_temp_c !== undefined) patch.max_temp_c = input.max_temp_c;
-      if (input.active !== undefined) patch.active = input.active;
 
       const { data, error } = await client
         .from("haccp_process_room_thresholds")

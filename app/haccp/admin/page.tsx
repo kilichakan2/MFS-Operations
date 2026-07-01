@@ -6,7 +6,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Banner, Button, TextField, Toggle } from '@/components/ui'
+import { Banner, Button, TextField } from '@/components/ui'
 import { isProcessRoomTempInRange } from '@/lib/domain'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -219,7 +219,6 @@ function ThresholdRow({ threshold, onSaved }: {
 }) {
   const [target, setTarget] = useState(String(threshold.target_temp_c))
   const [max,    setMax]    = useState(String(threshold.max_temp_c))
-  const [active, setActive] = useState(threshold.active)
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState('')
 
@@ -227,8 +226,7 @@ function ThresholdRow({ threshold, onSaved }: {
   const maxNum    = parseFloat(max)
   const dirty =
     target !== String(threshold.target_temp_c) ||
-    max !== String(threshold.max_temp_c) ||
-    active !== threshold.active
+    max !== String(threshold.max_temp_c)
   const valid =
     isProcessRoomTempInRange(targetNum) &&
     isProcessRoomTempInRange(maxNum) &&
@@ -241,7 +239,7 @@ function ThresholdRow({ threshold, onSaved }: {
       const res = await fetch('/api/haccp/admin/process-room-thresholds', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: threshold.id, target_temp_c: targetNum, max_temp_c: maxNum, active }),
+        body: JSON.stringify({ id: threshold.id, target_temp_c: targetNum, max_temp_c: maxNum }),
       })
       if (!res.ok) {
         const d = await res.json()
@@ -260,7 +258,6 @@ function ThresholdRow({ threshold, onSaved }: {
     <div className="bg-surface-raised border border-default rounded-2xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-body font-semibold text-sm">{threshold.name}</p>
-        <Toggle label="Active" checked={active} onCheckedChange={setActive} />
       </div>
       <div className="flex gap-3">
         <div className="flex-1">

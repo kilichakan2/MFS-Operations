@@ -349,12 +349,17 @@ export interface ProcessRoomListResult {
   readonly thresholds: readonly ProcessRoomThreshold[];
 }
 
-/** Admin PATCH body for a process-room threshold row. */
+/**
+ * Admin PATCH body for a process-room threshold row. Only the limit numbers are
+ * editable: "Product core" and "Room ambient" are mandatory CCP-3 measurement
+ * points that must always stay active, so there is no `active` field — a point
+ * cannot be deactivated via the app (that would let a submit grade against the
+ * wrong ruler).
+ */
 export interface UpdateProcessRoomThresholdInput {
   readonly id: string;
   readonly target_temp_c?: number;
   readonly max_temp_c?: number;
-  readonly active?: boolean;
 }
 
 /** POST process-room temps body (type='temps'). */

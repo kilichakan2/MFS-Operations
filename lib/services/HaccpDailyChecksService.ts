@@ -76,6 +76,7 @@ import type {
   UpdateProcessRoomThresholdInput,
 } from "@/lib/domain";
 import type { HaccpDailyChecksRepository } from "@/lib/ports";
+import { ServiceError } from "@/lib/errors";
 
 // ─── shared constants (verbatim from the routes) ─────────────────────────────
 
@@ -365,16 +366,28 @@ function deriveProcRoomAction(
 }
 
 /**
- * Resolve the Product core + Room ambient threshold rows from the active set
- * (by name, position as fallback). The seed guarantees both exist; the route
- * 500s if the set is empty (mirrors cold-storage units-empty).
+ * Resolve the Product core + Room ambient threshold rows from the active set,
+ * strictly BY NAME. Both are mandatory CCP-3 measurement points, so a missing
+ * one is a food-safety fault, not something to paper over: we FAIL CLOSED and
+ * throw (→ route 500) rather than substitute another row as the limits. A
+ * positional fallback here could grade a 10°C product against the Room ambient
+ * limits (12/15) — a false `pass` on a CCP. Mirrors the route's "empty set =
+ * 500, never a hardcoded fallback" stance.
  */
 function resolveProcRoomThresholds(
   thresholds: readonly ProcessRoomThreshold[],
 ): { product: ProcessRoomThreshold; room: ProcessRoomThreshold } {
   const byName = (n: string) => thresholds.find((t) => t.name === n);
-  const product = byName("Product core") ?? thresholds[0];
-  const room = byName("Room ambient") ?? thresholds[1] ?? thresholds[0];
+  const product = byName("Product core");
+  const room = byName("Room ambient");
+  if (!product || !room) {
+    const missing = [!product && "Product core", !room && "Room ambient"]
+      .filter(Boolean)
+      .join(", ");
+    throw new ServiceError(
+      `Required process-room threshold(s) missing from active set: ${missing}`,
+    );
+  }
   return { product, room };
 }
 
@@ -1503,8 +1516,7 @@ export function createHaccpDailyChecksService(
       if (!input.id) return reject(400, "Threshold id is required");
       const hasTarget = input.target_temp_c !== undefined;
       const hasMax = input.max_temp_c !== undefined;
-      const hasActive = input.active !== undefined;
-      if (!hasTarget && !hasMax && !hasActive) {
+      if (!hasTarget && !hasMax) {
         return reject(400, "No valid fields to update");
       }
       if (hasTarget && !isProcessRoomTempInRange(input.target_temp_c!)) {
