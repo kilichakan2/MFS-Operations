@@ -610,7 +610,14 @@ export function createSupabaseHaccpDailyChecksRepository(
       const after = data as unknown as ProcessRoomThreshold;
 
       // Immutable audit row (who / when / old→new). A separate statement — see
-      // plan R-3: acceptable at admin-edit frequency.
+      // plan R-3: acceptable at admin-edit frequency. The summary lists ONLY the
+      // fields that actually changed, so a partial PATCH can never record a
+      // misleading `X→X` no-op (only target/max are updatable — `active` is not).
+      const changes: string[] = [];
+      if (before.target_temp_c !== after.target_temp_c)
+        changes.push(`target ${before.target_temp_c}→${after.target_temp_c}`);
+      if (before.max_temp_c !== after.max_temp_c)
+        changes.push(`max ${before.max_temp_c}→${after.max_temp_c}`);
       const audit = await client.from("haccp_threshold_audit").insert({
         threshold_id: after.id,
         changed_by: changedBy,
@@ -618,7 +625,7 @@ export function createSupabaseHaccpDailyChecksRepository(
         new_target_temp_c: after.target_temp_c,
         old_max_temp_c: before.max_temp_c,
         new_max_temp_c: after.max_temp_c,
-        summary: `${after.name}: target ${before.target_temp_c}→${after.target_temp_c}, max ${before.max_temp_c}→${after.max_temp_c}`,
+        summary: `${after.name}: ${changes.length ? changes.join(", ") : "no changes"}`,
       });
       if (audit.error) {
         log.error(
