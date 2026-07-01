@@ -129,6 +129,63 @@ describe("contrast-pairings · layer 1 — token mapping (spec §6)", () => {
   });
 });
 
+// ── Layer 1.5 · the maths constants are PINNED to the live tokens.css ───────
+// Without this, the hex constants below are a COPY of tokens.css, not a
+// check: a future token nudge would keep both layers green while the real
+// rendered contrast silently diverges from the recomputed matrix. Each
+// constant must equal the literal hex its token declares in the light :root.
+/** Read the literal hex declared for `--name` in the light :root. */
+function rootHex(name: string): string {
+  const m = lightRoot.match(
+    new RegExp(`${name}\\s*:\\s*(#[0-9a-fA-F]{3,8})\\s*[;}]`),
+  );
+  expect(m, `expected a literal hex declaration for ${name} in the light :root of app/tokens.css`).not.toBeNull();
+  return (m as RegExpMatchArray)[1].toLowerCase();
+}
+
+const CONSTANT_SOURCES: Array<{ token: string; hex: string }> = [
+  // Tier-1 primitives
+  { token: "--mfs-soft-200", hex: CREAM },
+  { token: "--mfs-white", hex: WHITE },
+  { token: "--mfs-ink-900", hex: INK_900 },
+  { token: "--mfs-ink-600", hex: INK_600 },
+  { token: "--mfs-ink-400", hex: INK_400 },
+  { token: "--mfs-navy-700", hex: NAVY_700 },
+  { token: "--mfs-navy-300", hex: NAVY_300 },
+  { token: "--mfs-navy-50", hex: NAVY_50 },
+  { token: "--mfs-maroon-500", hex: MAROON_500 },
+  { token: "--mfs-orange-700", hex: ORANGE_700 },
+  { token: "--mfs-orange-600", hex: ORANGE_600 },
+  { token: "--mfs-orange-500", hex: ORANGE_500 },
+  { token: "--mfs-red-700", hex: RED_700 },
+  { token: "--mfs-red-600", hex: RED_600 },
+  { token: "--mfs-red-500", hex: RED_500 },
+  { token: "--mfs-red-100", hex: RED_100 },
+  { token: "--mfs-sand-600", hex: SAND_600 },
+  { token: "--mfs-sand-500", hex: SAND_500 },
+  { token: "--green-700", hex: GREEN_700 },
+  { token: "--green-100", hex: GREEN_100 },
+  { token: "--amber-700", hex: AMBER_700 },
+  { token: "--amber-100", hex: AMBER_100 },
+  // Tier-2 literals the matrix also leans on
+  { token: "--status-neutral-soft", hex: NEUTRAL_SOFT },
+  { token: "--border-strong", hex: BORDER_STRONG },
+];
+
+describe("contrast-pairings · layer 1.5 — constants pinned to live tokens", () => {
+  it.each(CONSTANT_SOURCES)(
+    "$token declares $hex in app/tokens.css",
+    ({ token, hex }) => {
+      expect(
+        rootHex(token),
+        `the ${token} constant in this file has diverged from the live ` +
+          `tokens.css declaration — update BOTH the constant and the ` +
+          `documented ratios, or revert the token nudge`,
+      ).toBe(hex.toLowerCase());
+    },
+  );
+});
+
 // ── Layer 2 · the pairing matrix as maths (spec §4) ─────────────────────────
 interface Pairing {
   bg: string;
