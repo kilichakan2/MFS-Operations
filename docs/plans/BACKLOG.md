@@ -643,8 +643,8 @@ the trail matters.
 ### F-INFRA-08 — Reset once-per-period HACCP data at smoke start so those E2E flows genuinely exercise (not degrade)
 
 - **Surfaced:** 2026-07-01 (PR #108 `/haccp/cold-storage` ship — the sibling of [[F-INFRA-07]])
-- **What:** The same never-reset shared preview DB (one branch per PR, only re-seeds on migration change) means once-per-session/day/week HACCP submit flows are already filled on any 2nd+ run. PR #108 **hardened the cold-storage @critical specs** to be deterministic against this — an `enterSession()` helper waits for the client `loadReadings` fetch to settle before checking, then gracefully early-returns on an already-submitted (read-only) session. That makes the smoke GREEN either way, BUT on a dirty DB those specs **degrade to a read-only-banner assertion** — the actual submit → "Session submitted" path is exercised only when a session is free (i.e. only on a freshly-reset DB). The authoritative save proof stays at the integration layer (+8 live tests). The other HACCP once-per-period specs (process-room, reviews, etc.) still hard-fail on a dirty DB per F-INFRA-07 until they get the same treatment or a reset.
-- **Fix shape:** Prefer [[F-INFRA-07]] option (a) — the smoke workflow resets/reseeds the PR's preview branch (or just the HACCP daily/weekly tables) BEFORE running Playwright — so EVERY run starts fresh and once-per-period flows always genuinely exercise instead of degrading. Failing that, roll the `enterSession()`-style wait-for-load + graceful-degrade pattern out to the remaining HACCP once-per-period specs as each screen is migrated.
+- **What:** The same never-reset shared preview DB (one branch per PR, only re-seeds on migration change) means once-per-session/day/week HACCP submit flows are already filled on any 2nd+ run. PR #108 **hardened the cold-storage @critical specs** to be deterministic against this — an `enterSession()` helper waits for the client `loadReadings` fetch to settle before checking, then gracefully early-returns on an already-submitted (read-only) session. That makes the smoke GREEN either way, BUT on a dirty DB those specs **degrade to a read-only-banner assertion** — the actual submit → "Session submitted" path is exercised only when a session is free (i.e. only on a freshly-reset DB). The authoritative save proof stays at the integration layer (+8 live tests). **PR #109 `/haccp/process-room` (2026-07-01) applied the same treatment** — `enterTempSession`/`enterDiaryPhase` helpers in `tests/e2e/16-haccp-process-room.spec.ts` wait for the client `loadData` (incl. thresholds) fetch to settle before selecting a session/phase, then gracefully early-return on already-submitted; ANVIL additionally **reset the preview branch** to genuinely exercise the submits. The remaining HACCP once-per-period specs (reviews/weekly — this is what turned the required CI `smoke` check RED on PR #109's HEAD, unrelated to process-room — cleaning, etc.) still hard-fail on a dirty DB per F-INFRA-07 until they get the same treatment or a reset.
+- **Fix shape:** Prefer [[F-INFRA-07]] option (a) — the smoke workflow resets/reseeds the PR's preview branch (or just the HACCP daily/weekly tables) BEFORE running Playwright — so EVERY run starts fresh and once-per-period flows always genuinely exercise instead of degrading. Failing that, roll the `enterSession()`-style wait-for-load + graceful-degrade pattern out to the remaining HACCP once-per-period specs as each screen is migrated (cold-storage ✅, process-room ✅; reviews/cleaning still open).
 - **Owner unit:** unscheduled (rolls up with F-INFRA-07; each HACCP Phase-1 screen re-hits it)
 - **Status:** open
 
@@ -940,4 +940,31 @@ probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to *
 - **Why NOT now:** the ~21 un-migrated HACCP screens still contain raw hex/palette — widening the guard to `app/haccp/**` today would turn it RED immediately. It can only widen once every HACCP screen is rebuilt onto the kit.
 - **Fix shape:** at the END of the HACCP section (all HACCP screens migrated), widen the guard glob to include `app/haccp/**` (or `app/**`). Pairs with the §8 finalisation token audit.
 - **Owner unit:** end of Phase-1 HACCP section.
+- **Status:** open
+
+### F-TD-37 — 🔵 Non-transactional process-room threshold update + audit-write window
+
+- **Raised:** 2026-07-01 (PR #109 `/haccp/process-room` Guard, code-critic 🔵#3).
+- **What:** `lib/adapters/supabase/HaccpDailyChecksRepository.ts` performs the threshold `UPDATE` and the `haccp_threshold_audit` `INSERT` as two separate statements. If the audit insert fails, the limit is already changed but the route returns 500 and no audit row exists — a limit change without a matching immutable-log line.
+- **Why it matters (low):** admin-edit frequency is very low and the plan (R-3) explicitly accepted this. But for a regulator-facing food-safety control the trail should be atomic.
+- **Fix shape:** wrap update+audit in a single Postgres RPC/transaction (or write audit-first, then update). Add a test that a failed audit insert rolls back the limit change.
+- **Owner unit:** unscheduled (fold into a HACCP hardening pass or the next admin-surface unit).
+- **Status:** open
+
+### F-TD-38 — 🔵 CCP-3 protocol guidance text duplicated screen↔server (already drifting)
+
+- **Raised:** 2026-07-01 (PR #109 Guard, code-critic 🔵#4).
+- **What:** the CCP-3 corrective-action protocol *step text* exists twice — `app/haccp/process-room/page.tsx` (`CCP3_PROTOCOL_STEPS`, on-screen) vs `lib/services/HaccpDailyChecksService.ts` (`PR_PROTOCOLS`, persisted into the CA record) — and the wording has already diverged ("below the target limit" vs "below 12°C"). NOTE: the band RULE (green/amber/critical) IS correctly single-sourced in `lib/domain/processRoom.ts` — this is only the free-text advice, and it mirrors the cold-storage precedent (not new debt).
+- **Why it matters (low):** the screen shows one wording, the saved audit record another. Cosmetic/consistency, not a correctness bug.
+- **Fix shape:** move the protocol step text into `lib/domain/processRoom.ts` and consume both sides, OR document the on-screen copy as indicative-only. Do the same for cold-storage's equivalent.
+- **Owner unit:** unscheduled.
+- **Status:** open
+
+### F-TD-39 — 🔵 Process-room seed band numbers reappear as view-layer fallbacks
+
+- **Raised:** 2026-07-01 (PR #109 Guard, code-critic 🔵#5).
+- **What:** `app/haccp/process-room/page.tsx` uses `?? 4 / ?? 7 / ?? 12 / ?? 15` as display fallbacks for threshold labels. Display-only (`bandFor` returns `null` without a real threshold → no mis-classification), but it re-hardcodes the seed numbers into the UI.
+- **Why it matters (cosmetic):** if the DB thresholds ever fail to load, the screen shows the old default numbers as placeholder labels — harmless, just untidy.
+- **Fix shape:** render `—` (em-dash) instead of the magic numbers when a threshold is missing, so there are zero hardcoded limits in the view.
+- **Owner unit:** unscheduled (tiny; fold into any process-room touch-up). Also: widen the spec-16 "temps happy" cold-start assertion timeout to de-flake the one preview retry.
 - **Status:** open
