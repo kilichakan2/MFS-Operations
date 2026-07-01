@@ -105,7 +105,11 @@ test.describe('@critical HACCP process room (UI Phase 1 rebuild)', () => {
 
     await page.getByRole('button', { name: /^Submit AM temperature check$/ }).click()
 
-    // After submit the page reloads and the session locks — the durable proof.
+    // After submit the page reloads and the smart-default (page.tsx:598-601 —
+    // "first unsubmitted") advances the selector to PM, so the AM lock isn't on
+    // screen yet. Re-select AM: it is now read-only and its "AM check submitted"
+    // banner is the durable proof the reading recorded.
+    expect(await enterTempSession(page, 'AM')).toBe('readonly')
     await expect(page.getByText(/AM check submitted/i)).toBeVisible({ timeout: 10_000 })
   })
 
