@@ -123,6 +123,9 @@ export type { DropdownMenuProps, DropdownMenuItem } from './DropdownMenu'
 export { AppHeader } from './AppHeader'
 export type { AppHeaderProps } from './AppHeader'
 
+export { ScreenHeader } from './ScreenHeader'
+export type { ScreenHeaderProps } from './ScreenHeader'
+
 export { BottomNav } from './BottomNav'
 export type { BottomNavProps } from './BottomNav'
 

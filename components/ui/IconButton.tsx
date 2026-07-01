@@ -2,7 +2,12 @@
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
-export type IconButtonVariant = 'ghost' | 'primary' | 'neutral' | 'danger'
+export type IconButtonVariant =
+  | 'ghost'
+  | 'ghost-inverse'
+  | 'primary'
+  | 'neutral'
+  | 'danger'
 export type IconButtonSize = 'sm' | 'md'
 
 export interface IconButtonProps
@@ -23,6 +28,13 @@ const VARIANT_CLASSES: Record<IconButtonVariant, string> = {
   ghost: cx(
     'bg-transparent border-action-ghost-border text-action-ghost-fg',
     'hover:bg-action-ghost-hover-bg disabled:opacity-50',
+  ),
+  // Inverse-safe ghost for actions sitting ON the navy ScreenHeader block:
+  // inverse (white) outline + inverse glyph, hover wash derived from
+  // --text-inverse (not stock white) to stay token-pure.
+  'ghost-inverse': cx(
+    'bg-transparent border-[color:var(--text-inverse)] text-inverse',
+    'hover:bg-[color-mix(in_srgb,var(--text-inverse)_12%,transparent)] disabled:opacity-50',
   ),
   primary: cx(
     'bg-action-primary text-on-action border-transparent',

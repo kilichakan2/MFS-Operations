@@ -7,8 +7,8 @@
  *
  * UI Phase 1 (Tier B): re-expressed onto components/ui/ + semantic tokens. The
  * inline number pad is now the reusable kit `NumberPad`; the number-pad,
- * corrective-action and quick-ref overlays use the kit `Modal`. Dark theme is
- * inherited from app/haccp/layout.tsx. The pass/amber/critical bands come from
+ * corrective-action and quick-ref overlays use the kit `Modal`. Inherits the
+ * light `:root` skin from app/haccp/layout.tsx. The pass/amber/critical bands come from
  * the DB thresholds (haccp_process_room_thresholds) via the SHARED domain
  * helper `processRoomBand`, so the screen and the server can never disagree.
  * Behaviour (AM/PM sessions, smart default, per-session lock, 3-phase diary,
@@ -23,7 +23,7 @@ import {
   Modal,
   NumberPad,
   Button,
-  IconButton,
+  ScreenHeader,
   SegmentedControl,
   Textarea,
   Banner,
@@ -169,14 +169,6 @@ function CrossGlyph({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
       <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  )
-}
-
-function BackGlyph() {
-  return (
-    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
     </svg>
   )
 }
@@ -709,19 +701,22 @@ export default function ProcessRoomPage() {
     <div className="min-h-screen bg-surface-base flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-default bg-surface-raised">
-        <IconButton aria-label="Back to HACCP" variant="ghost" icon={<BackGlyph />} onClick={() => { window.location.href = '/haccp' }} />
-        <div className="flex-1 min-w-0">
-          <p className="text-action-primary text-[10px] font-bold tracking-widest uppercase">CCP 3 + SOP 1 — Process Room</p>
-          <h1 className="text-body text-lg font-bold leading-tight">Process Room Check</h1>
-        </div>
-        <Button variant="ghost" size="sm" leadingIcon={<HelpGlyph />} onClick={() => setShowQuick(true)}>
-          Quick ref
-        </Button>
-        <Button variant="secondary" size="sm" leadingIcon={<HandbookGlyph />} onClick={() => { window.location.href = '/haccp/documents/hb-001?from=/haccp/process-room' }}>
-          Handbook
-        </Button>
-      </div>
+      <ScreenHeader
+        eyebrow="CCP 3 + SOP 1 — Process Room"
+        title="Process Room Check"
+        onBack={() => { window.location.href = '/haccp' }}
+        backLabel="Back to HACCP"
+        actions={
+          <>
+            <Button variant="ghost-inverse" size="sm" leadingIcon={<HelpGlyph />} onClick={() => setShowQuick(true)}>
+              Quick ref
+            </Button>
+            <Button variant="ghost-inverse" size="sm" leadingIcon={<HandbookGlyph />} onClick={() => { window.location.href = '/haccp/documents/hb-001?from=/haccp/process-room' }}>
+              Handbook
+            </Button>
+          </>
+        }
+      />
 
       {loading ? (
         <div className="flex items-center justify-center gap-3 text-muted text-sm mt-16">

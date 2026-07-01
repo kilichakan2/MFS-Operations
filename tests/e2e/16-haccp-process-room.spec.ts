@@ -29,6 +29,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { loginAs, loginAsAdmin, logout } from './_auth'
+import { resolveColor, avgChannel, contrastRatio, expectBrandRed } from './_theme'
 
 const PHASE_LABEL = {
   opening: 'Opening checks',
@@ -88,6 +89,45 @@ async function enterDiaryPhase(
 }
 
 test.describe('@critical HACCP process room (UI Phase 1 rebuild)', () => {
+  // ── LIGHT-THEME render (2026-07-01 refresh) ──────────────────────────────
+  // Navigate-only, no session entry → race-free on the shared preview DB.
+  // Proves the process-room screen flipped dark→light end-to-end: no dark opt-in,
+  // soft-neutral canvas, bold navy header, brand-red danger tokens + AA.
+  test('screen renders fully LIGHT — soft-neutral canvas, navy header, brand-red, AA', async ({
+    page,
+  }) => {
+    await loginAs(page, 'warehouse')
+    await page.goto('/haccp/process-room')
+    await expect(page).toHaveURL(/\/haccp\/process-room/)
+
+    // (a) No dark opt-in survives.
+    await expect(page.locator('[data-theme="dark"]')).toHaveCount(0)
+
+    // (b) Light soft-neutral canvas (whole body flipped, not just the header).
+    const rootRgb = await page
+      .locator('div.bg-surface-base')
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundColor)
+    const ch = (rootRgb.match(/\d+/g) ?? []).slice(0, 3).map(Number)
+    expect(ch.reduce((a, b) => a + b, 0) / 3).toBeGreaterThan(200)
+
+    // (c) Bold ScreenHeader stays navy + legible inverse "Quick ref" action.
+    const headerBg = await resolveColor(page, 'var(--surface-inverse)')
+    expect(avgChannel(headerBg)).toBeLessThan(90)
+    const qr = await page
+      .getByRole('button', { name: /quick ref/i })
+      .evaluate((el) => getComputedStyle(el).color)
+    const qrc = (qr.match(/\d+/g) ?? []).slice(0, 3).map(Number)
+    expect(qrc.reduce((a, b) => a + b, 0) / 3).toBeGreaterThan(180)
+
+    // (d) Brand-red danger/deviation tokens (no crimson, no pink) + AA.
+    expectBrandRed(await resolveColor(page, 'var(--status-error-fill)'), 'status-error-fill')
+    expectBrandRed(await resolveColor(page, 'var(--status-deviation-fill)'), 'status-deviation-fill')
+    const errText = await resolveColor(page, 'var(--status-error-text)')
+    const errSoft = await resolveColor(page, 'var(--status-error-soft)')
+    expect(contrastRatio(errText, errSoft)).toBeGreaterThanOrEqual(4.5)
+  })
+
   test('temps happy path — in-range product + room submit successfully', async ({ page }) => {
     await loginAs(page, 'warehouse')
     await page.goto('/haccp/process-room')

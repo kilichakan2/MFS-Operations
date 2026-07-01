@@ -47,6 +47,10 @@ Single-use vendor libraries (imported in exactly one file) must sit behind an ow
 
 Every shared visual primitive and brand asset (icons, logos, brand marks, shared UI primitives) is DEFINED in `components/ui/` and CONSUMED from its barrel (`components/ui/index.ts`). Screens (`app/**`) and feature components (`components/**` outside `components/ui/`) never define a reusable visual component inline, and never import one from outside `components/ui/`. A new shared visual pattern is added to `components/ui/` FIRST (ADR-0014 Rule 3), then used. Enforced by `tests/unit/lint/reusable-visual-in-kit.test.ts`.
 
+### Green and amber are caged (not brand colours)
+
+Green (`--status-success-*`) and amber (`--status-warning-*`) are an **app-invented functional extension**, NOT brand colours — the MFS brand has no green and no amber. They may appear **ONLY** on temperature-reading tiles and pass/warn/fail badges. They must **NEVER** appear on chrome — headers, buttons, nav, banners. Every "something is wrong" state (error, danger, deviation, overdue, stuck-sync, temperature-fail) uses the single brand **Mediterranean Red** family (`--mfs-red-*`); the invented scarlet crimson is retired from the light `:root` semantic mappings (retained only for the `[data-theme="dark"]` KDS kiosk). This caging is a written rule + ANVIL visual check (a reliable "badge vs chrome" static lint is too brittle — the difference is positional, not lexical).
+
 ### Blockers (code-critic will reject)
 
 - Anything in `lib/domain/**` or `lib/ports/**` importing from `lib/adapters/**` (the dependency rule points inward)

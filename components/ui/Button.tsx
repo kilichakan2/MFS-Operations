@@ -2,7 +2,12 @@
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'ghost'
+  | 'ghost-inverse'
+  | 'danger'
 export type ButtonSize = 'sm' | 'md' | 'lg'
 
 export interface ButtonProps
@@ -34,6 +39,15 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   ghost: cx(
     'bg-transparent border-action-ghost-border text-action-ghost-fg',
     'hover:bg-action-ghost-hover-bg',
+    'disabled:opacity-50',
+  ),
+  // Reads on the navy ScreenHeader block: transparent with an inverse (white)
+  // outline + inverse text. The hover wash is DERIVED from --text-inverse via
+  // color-mix (not stock white) so it stays token-pure. Never put a navy
+  // variant="secondary" button on the navy header — that is forbidden navy-on-navy.
+  'ghost-inverse': cx(
+    'bg-transparent border-[color:var(--text-inverse)] text-inverse',
+    'hover:bg-[color-mix(in_srgb,var(--text-inverse)_12%,transparent)]',
     'disabled:opacity-50',
   ),
   danger: cx(

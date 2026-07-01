@@ -78,6 +78,13 @@ const config: Config = {
           clear:   'var(--sync-clear)',
         },
         'focus-ring': 'var(--focus-ring)',
+        // Top-level alias so the literal `text-inverse` utility compiles.
+        // The semantic scale nests inverse under the `text` group, which only
+        // ever produces `text-text-inverse`; the components use the shorter
+        // `text-inverse` (+ harmless `bg-inverse`/`border-inverse`). Reads the
+        // same token, so it flips correctly per theme (white in light on navy /
+        // status-error; dark ink in [data-theme="dark"] on its light surface).
+        inverse: 'var(--text-inverse)',
 
         // ── Tier-1 LEGACY brand names (retained so existing screens stay
         //    painted; retired screen-by-screen in Phase 1). Values now read
