@@ -133,6 +133,13 @@ export type {
   AdminVisitFilter,
 } from "./Visit";
 export { VALID_PIPELINE_STATUSES } from "./Visit";
+export {
+  COLD_STORAGE_CAUSES,
+  COLD_STORAGE_MIN_TEMP_C,
+  COLD_STORAGE_MAX_TEMP_C,
+  isColdStorageTempInRange,
+} from "./coldStorage";
+export type { ColdStorageCause } from "./coldStorage";
 export type {
   // shared
   HaccpUserRef,

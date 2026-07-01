@@ -42,6 +42,18 @@ export type { PinKeypadProps, PinKeypadLabels } from './PinKeypad'
 export { Picker } from './Picker'
 export type { PickerProps, PickerItem, PickerLabels } from './Picker'
 
+export {
+  NumberPad,
+  pressNumberPadKey,
+  isNumberPadValueConfirmable,
+} from './NumberPad'
+export type {
+  NumberPadProps,
+  NumberPadTone,
+  NumberPadLabels,
+  NumberPadGating,
+} from './NumberPad'
+
 // ── Phase 0b Wave 2 (Display) ──────────────────────────────────────────────
 export type { Accent } from './accent'
 

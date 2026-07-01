@@ -70,6 +70,24 @@ async function readUnit(page: Page, unit: string, temp: string, negative = false
   await page.getByRole('button', { name: /^Confirm .+°C$/ }).click()
 }
 
+// Select a session AFTER the initial load has settled, and report whether it
+// is already submitted (read-only). The page's `loadReadings` fetch runs
+// client-side on mount, so a session click fired before it resolves races the
+// render: the "already submitted" banner isn't up yet, a naive isVisible guard
+// misses it, and the spec ploughs into a read-only page (no comments field / no
+// Submit) → 30s timeout. Cold storage is once-per-session-per-day and the
+// SHARED preview DB is never reset between runs, so a session stays read-only
+// after the first submit. Waiting for the units to render before choosing the
+// session removes the race and makes the outcome deterministic.
+async function enterSession(page: Page, session: 'AM' | 'PM'): Promise<'editable' | 'readonly'> {
+  await expect(page.getByText('Lamb Chiller', { exact: true })).toBeVisible({ timeout: 15_000 })
+  await page.getByRole('button', { name: session, exact: true }).click()
+  const banner = page.getByText(new RegExp(`${session} check already submitted`, 'i'))
+  const submit = page.getByRole('button', { name: new RegExp(`^Submit ${session} check$`) })
+  await expect(banner.or(submit)).toBeVisible({ timeout: 10_000 })
+  return (await banner.isVisible()) ? 'readonly' : 'editable'
+}
+
 test.describe('@critical HACCP cold storage (F-19 PR2 re-point)', () => {
   test('happy path — all 5 units in range submit successfully', async ({ page }) => {
     const MARKER = `E2E-CS-OK-${Date.now()}`
@@ -77,7 +95,14 @@ test.describe('@critical HACCP cold storage (F-19 PR2 re-point)', () => {
     await page.goto('/haccp/cold-storage')
     await expect(page).toHaveURL(/\/haccp\/cold-storage/)
 
-    await page.getByRole('button', { name: 'AM', exact: true }).click()
+    // If AM was already submitted on the shared preview DB, the read-only
+    // banner itself proves the session recorded — assert it and stop. Checked
+    // BEFORE driving the form (race-proof) so a read-only page can't strand the
+    // spec on a missing comments field / Submit button.
+    if ((await enterSession(page, 'AM')) === 'readonly') {
+      await expect(page.getByText(/AM check already submitted/i)).toBeVisible()
+      return
+    }
 
     // 4 chillers at 4°C (≤5 pass), freezer at -20°C (≤-18 pass).
     for (const c of CHILLERS) {
@@ -85,14 +110,6 @@ test.describe('@critical HACCP cold storage (F-19 PR2 re-point)', () => {
     }
     await readUnit(page, FREEZER, '20', /* negative */ true)
 
-    // If this AM session was already submitted on a prior run/retry, the form is
-    // read-only ("AM check already submitted") — which itself proves the session
-    // recorded. Otherwise, fill comments + submit and assert the success state.
-    const alreadyDone = page.getByText(/AM check already submitted/i)
-    if (await alreadyDone.isVisible().catch(() => false)) {
-      await expect(alreadyDone).toBeVisible()
-      return
-    }
     await page.getByPlaceholder(/comments \(optional\)/i).fill(`${MARKER} all good`)
     await page.getByRole('button', { name: /^Submit AM check$/ }).click()
 
@@ -109,14 +126,12 @@ test.describe('@critical HACCP cold storage (F-19 PR2 re-point)', () => {
     await page.goto('/haccp/cold-storage')
 
     // PM session — independent of the happy-path test's AM readings, so no
-    // pre-filled values collide on a same-DB re-run.
-    await page.getByRole('button', { name: 'PM', exact: true }).click()
-
-    // Only drive the form if PM hasn't already been submitted on a prior run/
-    // retry (in which case the critical CA already exists and the queue check
-    // below still proves the re-point).
-    const pmDone = page.getByText(/PM check already submitted/i)
-    if (!(await pmDone.isVisible().catch(() => false))) {
+    // pre-filled values collide on a same-DB re-run. Only drive the form if PM
+    // hasn't already been submitted on a prior run (in which case the critical
+    // CA already exists and the queue check below still proves the re-point).
+    // enterSession waits for load first, so this can't race into a read-only
+    // page and strand on a missing comments field / Submit button.
+    if ((await enterSession(page, 'PM')) === 'editable') {
       // Lamb Chiller CRITICAL at 12°C (>8 → critical → management queue). The
       // other 3 chillers + freezer stay in range so only one deviation is raised.
       await readUnit(page, 'Lamb Chiller', '12')

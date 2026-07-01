@@ -4,11 +4,35 @@
  * CCP 2 — Cold Storage Temperature Check
  * AM and PM readings for all 5 units.
  * Corrective Action popup fires if any reading is amber or critical.
+ *
+ * UI Phase 1 (Tier B): re-expressed onto components/ui/ + semantic tokens. The
+ * inline number pad is now the reusable kit `NumberPad`; the number-pad,
+ * corrective-action and quick-ref overlays use the kit `Modal`. Dark theme is
+ * inherited from app/haccp/layout.tsx (data-theme="dark" + ThemeLock) — no
+ * hardcoded colour survives. Behaviour (sessions, classification, CA flow,
+ * once-per-session guard, today-only, pre-fill, states) is preserved exactly.
  */
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import {
+  Modal,
+  NumberPad,
+  Button,
+  IconButton,
+  SegmentedControl,
+  Textarea,
+  Banner,
+  Spinner,
+  Badge,
+  type NumberPadTone,
+} from '@/components/ui'
+import {
+  COLD_STORAGE_CAUSES,
+  COLD_STORAGE_MIN_TEMP_C,
+  COLD_STORAGE_MAX_TEMP_C,
+} from '@/lib/domain'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,113 +80,66 @@ function todayISO(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
 }
 
-// ─── Status colours ───────────────────────────────────────────────────────────
-
-const STATUS_BG: Record<string, string> = {
-  pass:     'bg-green-50 border-green-300 text-green-600',
-  amber:    'bg-amber-50 border-amber-400 text-[#EB6619]',
-  critical: 'bg-red-50 border-red-400 text-red-600',
-}
+// ─── Status → semantic tokens ───────────────────────────────────────────────────
+// Literal class strings (not interpolated) so Tailwind's scanner keeps them.
 
 const STATUS_LABEL: Record<string, string> = {
   pass: 'Pass', amber: 'Amber', critical: 'Critical',
 }
 
-// ─── Numpad ───────────────────────────────────────────────────────────────────
+const STATUS_TONE: Record<'pass' | 'amber' | 'critical', NumberPadTone> = {
+  pass: 'success', amber: 'warning', critical: 'danger',
+}
 
-function Numpad({ value, onChange, onClose, unit }: {
-  value:    string
-  onChange: (v: string) => void
-  onClose:  () => void
-  unit:     StorageUnit
-}) {
-  const numericVal = parseFloat(value)
-  const status     = getTempStatus(numericVal, unit)
-  const isNeg      = unit.unit_type === 'freezer'
+const STATUS_BADGE_TONE: Record<'pass' | 'amber' | 'critical', 'success' | 'warning' | 'danger'> = {
+  pass: 'success', amber: 'warning', critical: 'danger',
+}
 
-  function press(key: string) {
-    if (key === 'back') { onChange(value.slice(0, -1)); return }
-    if (key === '.' && value.includes('.')) return
-    if (key === '-') { onChange(value.startsWith('-') ? value.slice(1) : '-' + value); return }
-    if (value === '0') { onChange(key); return }
-    onChange(value + key)
-  }
+const STATUS_CARD: Record<'pass' | 'amber' | 'critical', { shell: string; text: string }> = {
+  pass:     { shell: 'bg-status-success-soft border-status-success-border', text: 'text-status-success-text' },
+  amber:    { shell: 'bg-status-warning-soft border-status-warning-border', text: 'text-status-warning-text' },
+  critical: { shell: 'bg-status-error-soft border-status-error-border',     text: 'text-status-error-text' },
+}
 
-  const keys = ['1','2','3','4','5','6','7','8','9', isNeg ? '-' : '.', '0', 'back']
+// ─── Local icons (non-exported helpers — not kit assets) ────────────────────────
 
+function CheckGlyph({ className }: { className?: string }) {
   return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{ position: 'fixed' }}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
-        <div>
-          <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
-          <h2 className="text-slate-900 text-xl font-bold mt-0.5">{unit.name}</h2>
-        </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2">
-          <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
-        <div className="text-center">
-          <div className={`text-6xl font-bold tracking-tight transition-colors ${
-            status === 'pass' ? 'text-green-600' : status === 'amber' ? 'text-[#EB6619]' : status === 'critical' ? 'text-red-600' : 'text-white'
-          }`}>
-            {value || '—'}
-            <span className="text-2xl ml-2 opacity-60">°C</span>
-          </div>
-          {status && (
-            <div className={`mt-3 inline-block px-4 py-1.5 rounded-full text-sm font-bold border ${STATUS_BG[status]}`}>
-              {STATUS_LABEL[status]}
-              {status !== 'pass' && <span className="ml-2 opacity-80 text-xs">— action required</span>}
-            </div>
-          )}
-          {status && status !== 'pass' && (
-            <p className="text-slate-400 text-xs mt-3 max-w-xs mx-auto leading-relaxed">{getCorrectiveAction(status, unit.unit_type)}</p>
-          )}
-        </div>
-
-        <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
-          {keys.map((k) => (
-            <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
-              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${
-                k === 'back' ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-white active:bg-orange-500'
-              }`}>
-              {k === 'back' ? (
-                <svg className="w-6 h-6 mx-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
-              ) : k}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={onClose} disabled={!value || isNaN(parseFloat(value))}
-          className="w-full max-w-xs bg-[#EB6619] text-white font-bold py-4 rounded-2xl text-base disabled:opacity-40 transition-opacity">
-          Confirm {value ? `${value}°C` : ''}
-        </button>
-      </div>
-    </div>
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
   )
 }
 
-// ─── CCA Popup ────────────────────────────────────────────────────────────────
-
-type CAPayload = {
-  cause:       string
-  disposition: string
-  recurrence:  string
-  notes:       string
+function BackGlyph() {
+  return (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+    </svg>
+  )
 }
+
+function HelpGlyph() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  )
+}
+
+function HandbookGlyph() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  )
+}
+
 // ─── CA constants (Batch 4 — adaptive redesign) ──────────────────────────────
 
-const CAUSE_OPTIONS = [
-  'Door left open',
-  'Unit overloaded',
-  'Seal damaged',
-  'Equipment failure',
-  'Power interruption',
-  'Defrost cycle — scheduled temperature rise',
-  'High ambient room temperature',
-  'Other',
-]
+// Single source of truth — shared with the server's VALID_COLD_STORAGE_CAUSES
+// so the lists can never drift (the drift was the root cause of the 400 bug).
+const CAUSE_OPTIONS = COLD_STORAGE_CAUSES
 
 const RECURRENCE_BY_CAUSE: Record<string, string[]> = {
   'Door left open':                           ['Retrain staff on door discipline', 'Add door-close reminder signage', 'Other'],
@@ -231,7 +208,22 @@ function getDispositionOptions(cause: string, worstStatus: TempStatus): string[]
   return ['Conditional accept', 'Assess', 'Accept']
 }
 
-// ─── CCAPopup ─────────────────────────────────────────────────────────────────
+// ─── Section label ──────────────────────────────────────────────────────────────
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-2">{children}</p>
+  )
+}
+
+// ─── CCA Popup ────────────────────────────────────────────────────────────────
+
+type CAPayload = {
+  cause:       string
+  disposition: string
+  recurrence:  string
+  notes:       string
+}
 
 function CCAPopup({ deviations, onSubmit, onBack }: {
   deviations: { name: string; temp: number; status: TempStatus; unitType: string }[]
@@ -264,106 +256,93 @@ function CCAPopup({ deviations, onSubmit, onBack }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/75 z-50 flex items-end justify-center" style={{ position: 'fixed' }}>
-      <div className="bg-white rounded-t-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+    <Modal
+      variant="sheet"
+      open
+      onOpenChange={(o) => { if (!o) onBack() }}
+      title="Corrective Action Required"
+      description="CCP 2 deviation"
+    >
+      <div className="space-y-5 pt-1">
 
-        <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
-          <div>
-            <p className="text-red-600 text-xs font-bold tracking-widest uppercase">CCP 2 deviation</p>
-            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Corrective Action Required</h2>
-          </div>
-          <button onClick={onBack} className="text-slate-400 hover:text-slate-600">
-            <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+        {/* Deviation summary */}
+        <div className="space-y-2">
+          {deviations.map((d) => (
+            <div key={d.name} className={`rounded-xl p-3 border ${STATUS_CARD[d.status ?? 'amber'].shell}`}>
+              <span className={`font-semibold text-sm ${STATUS_CARD[d.status ?? 'amber'].text}`}>{d.name}: {d.temp}°C</span>
+              <span className={`ml-2 text-xs opacity-75 ${STATUS_CARD[d.status ?? 'amber'].text}`}>— {STATUS_LABEL[d.status ?? 'amber']}</span>
+              <p className="text-xs mt-1 text-muted">{getCorrectiveAction(d.status, d.unitType)}</p>
+            </div>
+          ))}
         </div>
 
-        <div className="px-6 pb-8 pt-4 space-y-5">
-
-          {/* Deviation summary */}
-          <div className="space-y-2">
-            {deviations.map((d) => (
-              <div key={d.name} className={`rounded-xl p-3 border ${STATUS_BG[d.status ?? 'amber']}`}>
-                <span className="font-semibold text-sm">{d.name}: {d.temp}°C</span>
-                <span className="ml-2 text-xs opacity-75">— {STATUS_LABEL[d.status ?? 'amber']}</span>
-                <p className="text-xs mt-1 opacity-70">{getCorrectiveAction(d.status, d.unitType)}</p>
+        {/* Required protocol — read only, updates if cause changes */}
+        <div>
+          <FieldLabel>
+            Required action (CA-001)
+            {cause === 'Equipment failure' && <span className="ml-1 text-status-warning-text normal-case font-normal">— equipment failure override</span>}
+          </FieldLabel>
+          <div className="bg-surface-sunken border border-default rounded-xl px-4 py-3 space-y-2">
+            {protocolSteps.map((step, i) => (
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-status-error-soft text-status-error-text">{i + 1}</div>
+                <p className="text-body text-xs leading-relaxed">{step}</p>
               </div>
             ))}
           </div>
-
-          {/* Required protocol — read only, updates if cause changes */}
-          <div>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-              Required action (CA-001)
-              {cause === 'Equipment failure' && <span className="ml-1 text-amber-600 normal-case font-normal">— equipment failure override</span>}
-            </p>
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
-              {protocolSteps.map((step, i) => (
-                <div key={i} className="flex items-start gap-2.5">
-                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-red-100 text-red-600">{i + 1}</div>
-                  <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Cause */}
-          <div>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
-            <div className="grid grid-cols-2 gap-2">
-              {CAUSE_OPTIONS.map((c) => (
-                <button key={c} onClick={() => setCause(c)}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all border ${
-                    cause === c ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
-                  }`}>{c}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Disposition — pre-filled, limited options */}
-          <div>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
-            <div className="flex flex-wrap gap-2">
-              {dispOptions.map((d) => (
-                <button key={d} onClick={() => setDisposition(d)}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
-                    disposition === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-400'
-                  }`}>{d}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Recurrence — cause-aware, appears after cause selected */}
-          {cause && (
-            <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
-              <div className="space-y-1.5">
-                {(RECURRENCE_BY_CAUSE[cause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
-                  <button key={r} onClick={() => setRecurrence(r)}
-                    className={`w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${
-                      recurrence === r ? 'bg-[#EB6619] border-[#EB6619] text-white' : 'bg-white border-slate-300 text-slate-600'
-                    }`}>{r}</button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Notes */}
-          <div>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes <span className="normal-case font-normal">(optional)</span></p>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              placeholder="Any additional details…"
-              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
-          </div>
-
-          <p className="text-slate-400 text-xs">This record is immutable once submitted. Protocol per CA-001.</p>
-
-          <button onClick={handleConfirm} disabled={!canSubmit}
-            className="w-full bg-red-600 text-white font-bold py-4 rounded-xl text-base disabled:opacity-40">
-            Confirm corrective action &amp; submit
-          </button>
         </div>
+
+        {/* Cause */}
+        <div>
+          <FieldLabel>What caused this?</FieldLabel>
+          <div className="grid grid-cols-2 gap-2">
+            {CAUSE_OPTIONS.map((c) => (
+              <Button key={c} variant={cause === c ? 'primary' : 'ghost'} size="sm" fullWidth onClick={() => setCause(c)}>
+                {c}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Disposition — pre-filled, limited options */}
+        <div>
+          <FieldLabel>Product disposition</FieldLabel>
+          <div className="flex flex-wrap gap-2">
+            {dispOptions.map((d) => (
+              <Button key={d} variant={disposition === d ? 'primary' : 'ghost'} size="sm" onClick={() => setDisposition(d)}>
+                {d}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Recurrence — cause-aware, appears after cause selected */}
+        {cause && (
+          <div>
+            <FieldLabel>Recurrence prevention</FieldLabel>
+            <div className="space-y-1.5">
+              {(RECURRENCE_BY_CAUSE[cause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                <Button key={r} variant={recurrence === r ? 'primary' : 'ghost'} size="sm" fullWidth className="justify-start" onClick={() => setRecurrence(r)}>
+                  {r}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        <div>
+          <FieldLabel>Notes <span className="normal-case font-normal">(optional)</span></FieldLabel>
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Any additional details…" />
+        </div>
+
+        <p className="text-muted text-xs">This record is immutable once submitted. Protocol per CA-001.</p>
+
+        <Button variant="danger" fullWidth disabled={!canSubmit} onClick={handleConfirm}>
+          Confirm corrective action & submit
+        </Button>
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -381,6 +360,10 @@ export default function ColdStoragePage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError,setSubmitError]= useState('')
   const [numpadUnit, setNumpadUnit] = useState<StorageUnit | null>(null)
+  // Draft buffer for the open pad — edits stay local until Confirm commits them,
+  // so an out-of-range / abandoned entry can never land in `temps` (and thus can
+  // never enable Submit). Dismissing the pad without Confirm discards the draft.
+  const [draft,      setDraft]      = useState('')
   const [showCCA,    setShowCCA]    = useState(false)
   const [submitted,  setSubmitted]  = useState(false)
   // Quick reference panel state
@@ -466,7 +449,6 @@ export default function ColdStoragePage() {
       const readings = units.map((u) => ({
         unit_id:       u.id,
         temperature_c: parseFloat(temps[u.id]),
-        unit_type:     u.unit_type,
       }))
       const res = await fetch('/api/haccp/cold-storage', {
         method:  'POST',
@@ -496,73 +478,89 @@ export default function ColdStoragePage() {
     doSubmit(null)
   }, [deviations, doSubmit])
 
+  // Open the pad for a unit, seeding the draft from its committed value (so
+  // pre-filled / already-recorded units show their existing reading).
+  const openNumpad = useCallback((unit: StorageUnit) => {
+    setDraft(temps[unit.id] ?? '')
+    setNumpadUnit(unit)
+  }, [temps])
+
+  // Confirm is the ONLY commit path — and it's range-gated by NumberPad, so an
+  // out-of-range value can never reach `temps`.
+  const commitNumpad = useCallback(() => {
+    setNumpadUnit((u) => {
+      if (u) setTemps((prev) => ({ ...prev, [u.id]: draft }))
+      return null
+    })
+  }, [draft])
+
   if (submitted) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
-        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-          <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      <div className="min-h-screen bg-surface-base flex flex-col items-center justify-center gap-4">
+        <div className="w-20 h-20 rounded-full bg-status-success-soft flex items-center justify-center text-status-success-text">
+          <CheckGlyph className="w-10 h-10" />
         </div>
-        <p className="text-slate-900 text-xl font-bold">Session submitted</p>
-        <p className="text-slate-400 text-sm">CCP 2 · {session} · {date}</p>
+        <p className="text-body text-xl font-bold">Session submitted</p>
+        <p className="text-muted text-sm">CCP 2 · {session} · {date}</p>
       </div>
     )
   }
 
+  // ── Numpad modal context ── (tone/hint reflect the live draft, not the
+  // committed value — so feedback updates as the user types.)
+  const numpadStatus = numpadUnit
+    ? getTempStatus(parseFloat(draft), numpadUnit)
+    : null
+
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
+    <div className="min-h-screen bg-surface-base flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B]">
-        <button onClick={() => { window.location.href = '/haccp' }} className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-        </button>
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-default bg-surface-raised">
+        <IconButton aria-label="Back to HACCP" variant="ghost" icon={<BackGlyph />} onClick={() => { window.location.href = '/haccp' }} />
         <div className="flex-1 min-w-0">
-          <p className="text-orange-400 text-[10px] font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
-          <h1 className="text-white text-lg font-bold leading-tight">Temperature Check</h1>
+          <p className="text-action-primary text-[10px] font-bold tracking-widest uppercase">CCP 2 — Cold Storage</p>
+          <h1 className="text-body text-lg font-bold leading-tight">Temperature Check</h1>
         </div>
-        {/* ? quick-tip button */}
-        <button onClick={() => setShowQuick(true)}
-          className="flex items-center gap-1.5 bg-white/10 hover:bg-white/18 border border-white/15 rounded-xl px-3 py-2 text-white/60 hover:text-white transition-all text-xs font-bold flex-shrink-0">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <Button variant="ghost" size="sm" leadingIcon={<HelpGlyph />} onClick={() => setShowQuick(true)}>
           Quick ref
-        </button>
-        {/* Handbook button — navigates to dedicated document page */}
-        <button onClick={openHandbook}
-          className="flex items-center gap-1.5 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-400/40 rounded-xl px-3 py-2 text-orange-300 transition-all text-xs font-bold flex-shrink-0">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </Button>
+        <Button variant="secondary" size="sm" leadingIcon={<HandbookGlyph />} onClick={openHandbook}>
           Handbook
-        </button>
+        </Button>
       </div>
 
       {/* Session + date selectors */}
-      <div className="px-5 py-4 flex items-center gap-4 border-b border-blue-100">
-        <div className="flex gap-2">
-          {(['AM', 'PM'] as const).map((s) => {
+      <div className="px-5 py-4 flex items-center gap-4 border-b border-default flex-wrap">
+        <SegmentedControl
+          aria-label="Session"
+          value={session}
+          onChange={(s) => setSession(s)}
+          options={(['AM', 'PM'] as const).map((s) => {
             const isDone = units.length > 0 &&
               units.every((u) => existing.some((r) => r.unit_id === u.id && r.session === s))
-            return (
-              <button key={s} onClick={() => setSession(s)}
-                className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-1.5 ${
-                  session === s ? 'bg-[#EB6619] text-white' : 'bg-slate-100 text-slate-400'
-                }`}>
-                {isDone && <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>}
-                {s}
-              </button>
-            )
+            return {
+              id: s,
+              label: (
+                <span className="inline-flex items-center gap-1.5">
+                  {isDone && <CheckGlyph className="w-3.5 h-3.5" />}
+                  {s}
+                </span>
+              ),
+            }
           })}
-        </div>
+        />
         <input type="date" value={date} onChange={(e) => handleDateChange(e.target.value)}
           max={todayISO()}
-          className="bg-slate-100 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]" />
-        <span className="text-slate-400 text-xs ml-auto">SOP 3 — check twice daily</span>
+          className="bg-surface-raised border border-default rounded-xl px-3 py-2 text-body text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring" />
+        <span className="text-subtle text-xs ml-auto">SOP 3 — check twice daily</span>
       </div>
 
       {/* Unit list */}
       <div className="flex-1 px-5 py-4 space-y-3">
         {loading ? (
-          <div className="flex items-center gap-3 text-slate-400 text-sm mt-8">
-            <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-            Loading units…
+          <div className="flex items-center gap-3 text-muted text-sm mt-8">
+            <Spinner /> Loading units…
           </div>
         ) : units.map((unit) => {
           const raw    = temps[unit.id] ?? ''
@@ -572,17 +570,14 @@ export default function ColdStoragePage() {
 
           return (
             <button key={unit.id}
-              onClick={() => setNumpadUnit(unit)}
-              className={`w-full text-left rounded-2xl p-4 border transition-all active:scale-[0.98] ${
-                status === 'critical' ? 'bg-red-50 border-red-400' :
-                status === 'amber'    ? 'bg-amber-50 border-amber-300' :
-                status === 'pass'     ? 'bg-green-50 border-green-200' :
-                'bg-white border-blue-100'
+              onClick={() => openNumpad(unit)}
+              className={`w-full text-left rounded-2xl p-4 border transition-transform active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
+                status ? STATUS_CARD[status].shell : 'bg-surface-raised border-default'
               }`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-slate-900 font-semibold text-base">{unit.name}</p>
-                  <p className="text-slate-400 text-xs mt-0.5">
+                  <p className="text-body font-semibold text-base">{unit.name}</p>
+                  <p className="text-muted text-xs mt-0.5">
                     {`Target ≤${unit.target_temp_c}°C · Max ${unit.max_temp_c}°C`}
                     {existing_session ? ' · Already recorded' : ''}
                   </p>
@@ -590,17 +585,15 @@ export default function ColdStoragePage() {
                 <div className="text-right">
                   {raw !== '' && !isNaN(numVal) ? (
                     <>
-                      <p className={`text-2xl font-bold ${status === 'pass' ? 'text-green-600' : status === 'amber' ? 'text-[#EB6619]' : 'text-red-600'}`}>
+                      <p className={`text-2xl font-bold ${status ? STATUS_CARD[status].text : 'text-body'}`}>
                         {numVal}°C
                       </p>
                       {status && (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_BG[status]}`}>
-                          {STATUS_LABEL[status]}
-                        </span>
+                        <Badge tone={STATUS_BADGE_TONE[status]}>{STATUS_LABEL[status]}</Badge>
                       )}
                     </>
                   ) : (
-                    <div className="w-20 h-12 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-400 text-sm">
+                    <div className="w-20 h-12 rounded-xl bg-surface-sunken border border-default flex items-center justify-center text-subtle text-sm">
                       Tap
                     </div>
                   )}
@@ -612,45 +605,52 @@ export default function ColdStoragePage() {
       </div>
 
       {/* Comments + submit — hidden when session already done */}
-      <div className="px-5 pb-6 border-t border-blue-100 pt-4">
+      <div className="px-5 pb-6 border-t border-default pt-4">
         {sessionAlreadyDone ? (
-          <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-5 py-4">
-            <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <div>
-              <p className="text-green-600 font-bold text-sm">{session} check already submitted</p>
-              <p className="text-slate-400 text-xs mt-0.5">Readings recorded above are read-only</p>
-            </div>
-          </div>
+          <Banner tone="success" icon={<CheckGlyph className="w-5 h-5" />} title={`${session} check already submitted`}>
+            Readings recorded above are read-only
+          </Banner>
         ) : (
           <div className="space-y-3">
-            <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2}
-              placeholder="Comments (optional)…"
-              className="w-full bg-slate-50 border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619] resize-none" />
-            {submitError && <p className="text-red-600 text-xs">{submitError}</p>}
-            <button onClick={handleSubmitAttempt}
-              disabled={!allFilled || submitting}
-              className="w-full bg-[#EB6619] text-white font-bold py-4 rounded-2xl text-base disabled:opacity-40 transition-opacity flex items-center justify-center gap-2">
-              {submitting ? (
-                <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-              ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-              )}
+            <Textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={2} placeholder="Comments (optional)…" />
+            {submitError && <Banner tone="danger">{submitError}</Banner>}
+            <Button fullWidth loading={submitting} disabled={!allFilled || submitting}
+              leadingIcon={!submitting ? <CheckGlyph className="w-5 h-5" /> : undefined}
+              onClick={handleSubmitAttempt}>
               {submitting ? 'Submitting…' : `Submit ${session} check`}
-            </button>
+            </Button>
           </div>
         )}
       </div>
 
       {/* Numpad overlay */}
       {numpadUnit && (
-        <Numpad
-          value={temps[numpadUnit.id] ?? ''}
-          onChange={(v) => setTemps((prev) => ({ ...prev, [numpadUnit.id]: v }))}
-          onClose={() => setNumpadUnit(null)}
-          unit={numpadUnit}
-        />
+        <Modal
+          variant="sheet"
+          open
+          onOpenChange={(o) => { if (!o) setNumpadUnit(null) }}
+          title={numpadUnit.name}
+          description="CCP 2 — Cold Storage"
+        >
+          <NumberPad
+            value={draft}
+            onChange={setDraft}
+            onConfirm={commitNumpad}
+            allowDecimal={numpadUnit.unit_type === 'chiller'}
+            allowNegative={numpadUnit.unit_type === 'freezer'}
+            min={COLD_STORAGE_MIN_TEMP_C}
+            max={COLD_STORAGE_MAX_TEMP_C}
+            suffix="°C"
+            tone={numpadStatus ? STATUS_TONE[numpadStatus] : 'neutral'}
+            hint={
+              numpadStatus && numpadStatus !== 'pass' ? (
+                <span className={STATUS_CARD[numpadStatus].text}>
+                  {STATUS_LABEL[numpadStatus]} — action required. {getCorrectiveAction(numpadStatus, numpadUnit.unit_type)}
+                </span>
+              ) : undefined
+            }
+          />
+        </Modal>
       )}
 
       {/* CCA popup */}
@@ -664,36 +664,27 @@ export default function ColdStoragePage() {
 
       {/* Quick reference panel */}
       {showQuick && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end" style={{position:'fixed'}}>
-          <div className="bg-white rounded-t-3xl w-full p-6 max-h-[70vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-slate-900 font-bold text-lg">CCP 2 — Quick Reference</h3>
-              <button onClick={() => setShowQuick(false)} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95 flex-shrink-0">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div className="space-y-3 text-sm">
-              <div className="bg-white rounded-xl p-4">
-                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Chillers (Lamb, Dispatch, Dairy)</p>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤5°C — Pass</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-slate-600">5–8°C — Amber: check seals, recheck in 30 min</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;8°C — Critical: transfer all product, call engineer</span></div>
-                </div>
+        <Modal variant="sheet" open onOpenChange={(o) => { if (!o) setShowQuick(false) }} title="CCP 2 — Quick Reference">
+          <div className="space-y-3 text-sm pt-1">
+            <div className="bg-surface-sunken border border-default rounded-xl p-4">
+              <p className="text-action-primary font-bold text-xs uppercase tracking-widest mb-2">Chillers (Lamb, Dispatch, Dairy)</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-status-success-fill flex-shrink-0" /><span className="text-muted">≤5°C — Pass</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-status-warning-fill flex-shrink-0" /><span className="text-muted">5–8°C — Amber: check seals, recheck in 30 min</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-status-error-fill flex-shrink-0" /><span className="text-muted">&gt;8°C — Critical: transfer all product, call engineer</span></div>
               </div>
-              <div className="bg-white rounded-xl p-4">
-                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Freezer</p>
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-600 flex-shrink-0"/><span className="text-slate-600">≤-18°C — Pass</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-[#EB6619] flex-shrink-0"/><span className="text-slate-600">-15 to -18°C — Amber: keep door closed, check coils</span></div>
-                  <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-600 flex-shrink-0"/><span className="text-slate-600">&gt;-15°C — Critical: assess for thawing, do NOT refreeze</span></div>
-                </div>
+            </div>
+            <div className="bg-surface-sunken border border-default rounded-xl p-4">
+              <p className="text-action-primary font-bold text-xs uppercase tracking-widest mb-2">Freezer</p>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-status-success-fill flex-shrink-0" /><span className="text-muted">≤-18°C — Pass</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-status-warning-fill flex-shrink-0" /><span className="text-muted">-15 to -18°C — Amber: keep door closed, check coils</span></div>
+                <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-status-error-fill flex-shrink-0" /><span className="text-muted">&gt;-15°C — Critical: assess for thawing, do NOT refreeze</span></div>
               </div>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
-
 
     </div>
   )

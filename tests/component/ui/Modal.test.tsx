@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import { Modal } from "@/components/ui/Modal";
@@ -103,5 +103,66 @@ describe("Modal", () => {
       </Modal>,
     );
     expect(await axe(document.body)).toHaveNoViolations();
+  });
+
+  // ── Radix body-pointer-events leak guard (the cold-storage prod-smoke fix) ──
+  describe("releases a stuck body { pointer-events: none } on close", () => {
+    afterEach(() => {
+      document.body.style.pointerEvents = "";
+    });
+
+    it("clears the lock on unmount when no modal dialog remains open", async () => {
+      const { unmount } = render(
+        <Modal open onOpenChange={() => {}} title="Pad">
+          <p>Body</p>
+        </Modal>,
+      );
+      // Simulate Radix's dismissable-layer leaving the page locked (the race
+      // that bites the production build under rapid open/close).
+      document.body.style.pointerEvents = "none";
+      unmount();
+      await waitFor(() =>
+        expect(document.body.style.pointerEvents).not.toBe("none"),
+      );
+    });
+
+    it("clears the lock when open flips to false", async () => {
+      const { rerender } = render(
+        <Modal open onOpenChange={() => {}} title="Pad">
+          <p>Body</p>
+        </Modal>,
+      );
+      document.body.style.pointerEvents = "none";
+      rerender(
+        <Modal open={false} onOpenChange={() => {}} title="Pad">
+          <p>Body</p>
+        </Modal>,
+      );
+      await waitFor(() =>
+        expect(document.body.style.pointerEvents).not.toBe("none"),
+      );
+    });
+
+    it("does NOT clear the lock while another modal dialog is still open", async () => {
+      // A second, still-open Modal must keep the page locked — closing one of a
+      // stack must not re-enable the page behind the survivor.
+      render(
+        <Modal open onOpenChange={() => {}} title="Survivor">
+          <p>Still open</p>
+        </Modal>,
+      );
+      const { unmount } = render(
+        <Modal open onOpenChange={() => {}} title="Closing">
+          <p>Closing</p>
+        </Modal>,
+      );
+      document.body.style.pointerEvents = "none";
+      unmount();
+      // Give the rAF a chance to run; the survivor dialog ([data-state=open])
+      // must prevent the guard from clearing the lock.
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      expect(document.body.style.pointerEvents).toBe("none");
+    });
   });
 });

@@ -28,6 +28,7 @@ import type {
   CreateTimeSeparationInput,
   CreateReturnInput,
 } from "@/lib/domain";
+import { COLD_STORAGE_CAUSES } from "@/lib/domain";
 
 function svc() {
   return createHaccpDailyChecksService({
@@ -303,7 +304,7 @@ describe("HaccpDailyChecksService — cold-storage", () => {
     const ok: CreateColdStorageReadingsInput = {
       session: "AM",
       date: TODAY,
-      readings: [{ unit_id: "u1", temperature_c: 3, unit_type: "chiller" }],
+      readings: [{ unit_id: "u1", temperature_c: 3 }],
       comments: "",
     };
     expect(
@@ -314,7 +315,7 @@ describe("HaccpDailyChecksService — cold-storage", () => {
     ).toMatchObject({ message: "Readings may only be submitted for today's date." });
     expect(
       s.validateColdStorage({
-        input: { ...ok, readings: [{ unit_id: "ghost", temperature_c: 3, unit_type: "chiller" }] },
+        input: { ...ok, readings: [{ unit_id: "ghost", temperature_c: 3 }] },
         today: TODAY,
         units,
         hasDeviation: false,
@@ -339,7 +340,7 @@ describe("HaccpDailyChecksService — cold-storage", () => {
       session: "AM",
       date: TODAY,
       readings: [
-        { unit_id: "u1", temperature_c: 9, unit_type: "chiller" }, // critical
+        { unit_id: "u1", temperature_c: 9 }, // critical
       ],
       comments: "warm",
       corrective_action: { cause: "Equipment failure", disposition: "Assess", recurrence: "fix" },
@@ -360,6 +361,138 @@ describe("HaccpDailyChecksService — cold-storage", () => {
     expect(cas[0].ccp_ref).toBe("CCP2");
     expect(cas[0].management_verification_required).toBe(true);
     expect(cas[0].product_disposition).toBe("assess");
+  });
+
+  // ── bug fix: the two legitimate causes the client offers now validate ──
+  it.each([
+    "Defrost cycle — scheduled temperature rise",
+    "High ambient room temperature",
+  ])("accepts the previously-rejected cause %s on a deviation", (cause) => {
+    const s = svc();
+    const input: CreateColdStorageReadingsInput = {
+      session: "AM",
+      date: TODAY,
+      readings: [{ unit_id: "u1", temperature_c: 7 }], // 5<7<=8 → amber deviation
+      comments: "",
+      corrective_action: {
+        cause,
+        disposition: "Conditional accept",
+        recurrence: "Review defrost cycle schedule",
+      },
+    };
+    expect(
+      s.validateColdStorage({ input, today: TODAY, units, hasDeviation: true }),
+    ).toEqual({ ok: true });
+  });
+
+  it("each new cause builds a CA row with non-empty action + mapped disposition", () => {
+    const s = svc();
+    for (const cause of [
+      "Defrost cycle — scheduled temperature rise",
+      "High ambient room temperature",
+    ]) {
+      const input: CreateColdStorageReadingsInput = {
+        session: "AM",
+        date: TODAY,
+        readings: [{ unit_id: "u1", temperature_c: 7 }],
+        comments: "",
+        corrective_action: {
+          cause,
+          disposition: "Conditional accept",
+          recurrence: "Improve room ventilation",
+        },
+      };
+      const cas = s.buildColdStorageCorrectiveActions({
+        input,
+        userId: "u1",
+        inserted: [
+          { id: "r1", unit_id: "u1", temperature_c: 7, temp_status: "amber" },
+        ],
+        units,
+      });
+      expect(cas).toHaveLength(1);
+      expect(cas[0].action_taken.length).toBeGreaterThan(0);
+      expect(cas[0].product_disposition).toBe("conditional_accept");
+      expect(cas[0].deviation_description).toContain(cause);
+    }
+  });
+
+  it("still rejects a junk cause (allow-list not loosened beyond the two strings)", () => {
+    const s = svc();
+    const input: CreateColdStorageReadingsInput = {
+      session: "AM",
+      date: TODAY,
+      readings: [{ unit_id: "u1", temperature_c: 7 }],
+      comments: "",
+      corrective_action: { cause: "banana", disposition: "Accept", recurrence: "x" },
+    };
+    expect(
+      s.validateColdStorage({ input, today: TODAY, units, hasDeviation: true }),
+    ).toMatchObject({ message: "Invalid cause: banana" });
+  });
+
+  it("rejects a physically-impossible reading via the shared entry bound", () => {
+    const s = svc();
+    const base: CreateColdStorageReadingsInput = {
+      session: "AM",
+      date: TODAY,
+      readings: [{ unit_id: "u1", temperature_c: 300 }],
+      comments: "",
+    };
+    expect(
+      s.validateColdStorage({ input: base, today: TODAY, units, hasDeviation: false }),
+    ).toMatchObject({ message: "Temperature out of range" });
+    expect(
+      s.validateColdStorage({
+        input: { ...base, readings: [{ unit_id: "u1", temperature_c: -99 }] },
+        today: TODAY,
+        units,
+        hasDeviation: false,
+      }),
+    ).toMatchObject({ message: "Temperature out of range" });
+    // an in-range deviation passes the bound (only impossible values blocked)
+    expect(
+      s.validateColdStorage({
+        input: {
+          ...base,
+          readings: [{ unit_id: "u1", temperature_c: 12 }],
+          corrective_action: {
+            cause: "Door left open",
+            disposition: "Assess",
+            recurrence: "Retrain staff on door discipline",
+          },
+        },
+        today: TODAY,
+        units,
+        hasDeviation: true,
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("server cause set is exactly the shared 8-cause domain constant (de-drift)", () => {
+    const s = svc();
+    // Every shared cause validates; nothing outside it does. Structural proof
+    // that VALID_COLD_STORAGE_CAUSES is derived from COLD_STORAGE_CAUSES.
+    expect(COLD_STORAGE_CAUSES).toHaveLength(8);
+    for (const cause of COLD_STORAGE_CAUSES) {
+      const r = s.validateColdStorage({
+        input: {
+          session: "AM",
+          date: TODAY,
+          readings: [{ unit_id: "u1", temperature_c: 7 }],
+          comments: "",
+          corrective_action: {
+            cause,
+            disposition: "Assess",
+            recurrence: "r",
+          },
+        },
+        today: TODAY,
+        units,
+        hasDeviation: true,
+      });
+      expect(r).toEqual({ ok: true });
+    }
   });
 });
 
