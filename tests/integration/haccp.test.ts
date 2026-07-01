@@ -661,6 +661,17 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
     expect(newRow).toBeDefined();
     expect(await caCountFor(newRow!.id)).toBe(2);
 
+    // Band-aware mgmt sign-off (DB-driven thresholds Product 4/7, Room 12/15):
+    // product 6 is AMBER → no mgmt sign-off; room 16 is CRITICAL → mgmt sign-off.
+    const { data: caRows } = await supa
+      .from("haccp_corrective_actions")
+      .select("deviation_description, management_verification_required")
+      .eq("source_id", newRow!.id);
+    const productCa = (caRows ?? []).find((c) => c.deviation_description.startsWith("Product"));
+    const roomCa = (caRows ?? []).find((c) => c.deviation_description.startsWith("Room"));
+    expect(productCa?.management_verification_required).toBe(false);
+    expect(roomCa?.management_verification_required).toBe(true);
+
     // resubmit same (date, session) → 409 with the session-interpolated string
     const dup = await api("/api/haccp/process-room", {
       method: "POST",
