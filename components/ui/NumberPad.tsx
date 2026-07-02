@@ -22,7 +22,8 @@ export interface NumberPadProps {
   onConfirm: () => void
   /** Allow a single decimal point (chillers). */
   allowDecimal?: boolean
-  /** Allow a leading minus sign (freezers). */
+  /** Allow a leading minus sign (freezers). With `allowDecimal` also set, the
+   *  '.' keeps the grid slot and the sign becomes a toggle row below it. */
   allowNegative?: boolean
   /** Inclusive sanity bound — gates Confirm. Numeric DATA, not style. */
   min?: number
@@ -124,7 +125,8 @@ function cx(...parts: Array<string | false | null | undefined>): string {
  * Reusable numeric entry pad (ADR-0014 Rule 3). The keypad BODY only — display
  * + grid + explicit Confirm — NOT an overlay; wrap it in a kit `Modal` to give
  * it a scrim/focus-trap. Unlike `PinKeypad` (masked, fixed length, auto-submit)
- * this shows a live value, optionally allows a decimal OR a sign, and waits for
+ * this shows a live value, optionally allows a decimal and/or a sign (both
+ * together add a full-width sign-toggle row below the grid), and waits for
  * a deliberate Confirm gated by an optional inclusive bound. Semantic tokens
  * only; render root is a `<div>`.
  */
@@ -153,6 +155,9 @@ export function NumberPad({
   const confirmable = isNumberPadValueConfirmable(value, min, max)
 
   // The slot between 9 and 0: a decimal point (chillers) OR a sign (freezers).
+  // When BOTH are allowed (frozen goods-in, process room) the decimal keeps the
+  // grid slot and the sign moves to a full-width toggle row below the grid.
+  const showSignToggleRow = allowDecimal && allowNegative
   const signOrDecimal = allowDecimal ? '.' : allowNegative ? '-' : ''
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', signOrDecimal, '0', 'back']
 
@@ -232,6 +237,24 @@ export function NumberPad({
             </button>
           )
         })}
+        {showSignToggleRow && (
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              e.preventDefault()
+              if ('vibrate' in navigator) navigator.vibrate(8)
+              handlePress('-')
+            }}
+            className={cx(
+              'col-span-3 flex items-center justify-center h-12 rounded-2xl text-sm font-bold',
+              'select-none transition-colors duration-[120ms]',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+              'bg-surface-sunken text-body active:bg-action-primary active:text-action-primary-fg',
+            )}
+          >
+            +/− Toggle negative
+          </button>
+        )}
       </div>
 
       <button

@@ -118,6 +118,13 @@ describe("goodsIn — goodsInStatus band boundaries (LOCKED values)", () => {
     },
   );
 
+  it("frozen_beef_lamb: a DECIMAL negative -17.5 grades urgent (QFF amber band) — pins the pad offering '.' AND '-' together", () => {
+    expect(status(-17.5, "frozen_beef_lamb")).toBe("urgent");
+    // Rounded to -18 the same reading would false-pass — the reason decimal
+    // entry must stay available on the frozen family (review 🟡1).
+    expect(status(-18, "frozen_beef_lamb")).toBe("pass");
+  });
+
   it("mince_prep: 4.0→pass, 4.1→fail (no amber band)", () => {
     expect(status(4.0, "mince_prep")).toBe("pass");
     expect(status(4.1, "mince_prep")).toBe("fail");

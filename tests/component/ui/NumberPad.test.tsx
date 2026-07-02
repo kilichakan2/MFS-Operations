@@ -31,6 +31,18 @@ describe("pressNumberPadKey — pure entry reducer", () => {
     expect(pressNumberPadKey("-20", "-", { allowNegative: true })).toBe("20");
     expect(pressNumberPadKey("20", "-")).toBe("20"); // sign not allowed → ignored
   });
+
+  it("both flags: sign toggle preserves digits INCLUDING the decimal", () => {
+    const both = { allowDecimal: true, allowNegative: true };
+    expect(pressNumberPadKey("17.5", "-", both)).toBe("-17.5");
+    expect(pressNumberPadKey("-17.5", "-", both)).toBe("17.5");
+  });
+
+  it("both flags: decimal entry works on a negative value, still single-dot", () => {
+    const both = { allowDecimal: true, allowNegative: true };
+    expect(pressNumberPadKey("-17", ".", both)).toBe("-17.");
+    expect(pressNumberPadKey("-17.5", ".", both)).toBe("-17.5"); // no second dot
+  });
 });
 
 describe("isNumberPadValueConfirmable — bound predicate", () => {
@@ -65,12 +77,63 @@ describe("NumberPad — component", () => {
     );
     expect(screen.getByRole("button", { name: "." })).toBeDefined();
     expect(screen.queryByRole("button", { name: "-" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /toggle negative/i })).toBeNull();
 
     rerender(
       <NumberPad value="" onChange={() => {}} onConfirm={() => {}} allowNegative />,
     );
     expect(screen.getByRole("button", { name: "-" })).toBeDefined();
     expect(screen.queryByRole("button", { name: "." })).toBeNull();
+    expect(screen.queryByRole("button", { name: /toggle negative/i })).toBeNull();
+  });
+
+  it("both flags: keeps the decimal grid key AND adds the sign-toggle row", () => {
+    render(
+      <NumberPad
+        value=""
+        onChange={() => {}}
+        onConfirm={() => {}}
+        allowDecimal
+        allowNegative
+      />,
+    );
+    expect(screen.getByRole("button", { name: "." })).toBeDefined();
+    // The sign moves to the full-width toggle row — no bare '-' grid key.
+    expect(screen.queryByRole("button", { name: "-" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /toggle negative/i }),
+    ).toBeDefined();
+  });
+
+  it("both flags: the sign-toggle row toggles the sign, preserving digits", () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <NumberPad
+        value="17.5"
+        onChange={onChange}
+        onConfirm={() => {}}
+        allowDecimal
+        allowNegative
+      />,
+    );
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: /toggle negative/i }),
+    );
+    expect(onChange).toHaveBeenCalledWith("-17.5");
+
+    rerender(
+      <NumberPad
+        value="-17.5"
+        onChange={onChange}
+        onConfirm={() => {}}
+        allowDecimal
+        allowNegative
+      />,
+    );
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: /toggle negative/i }),
+    );
+    expect(onChange).toHaveBeenLastCalledWith("17.5");
   });
 
   it("disables Confirm outside the bound and enables it in-range", () => {
@@ -129,6 +192,23 @@ describe("NumberPad — component", () => {
         onConfirm={() => {}}
         title="Lamb Chiller"
         suffix="°C"
+        min={-40}
+        max={30}
+      />,
+    );
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it("has no axe violations in both-flags mode (sign-toggle row)", async () => {
+    const { container } = render(
+      <NumberPad
+        value="-17.5"
+        onChange={() => {}}
+        onConfirm={() => {}}
+        title="Frozen Beef/Lamb"
+        suffix="°C"
+        allowDecimal
+        allowNegative
         min={-40}
         max={30}
       />,

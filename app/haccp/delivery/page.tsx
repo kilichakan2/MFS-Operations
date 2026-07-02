@@ -1620,7 +1620,7 @@ export default function DeliveryPage() {
             value={tempVal}
             onChange={setTempVal}
             onConfirm={() => setShowNumpad(false)}
-            allowDecimal={!FROZEN_CATEGORIES.has(category)}
+            allowDecimal
             allowNegative={FROZEN_CATEGORIES.has(category)}
             suffix="°C"
             tone={tempStat ? STATUS_TONE[tempStat] : 'neutral'}

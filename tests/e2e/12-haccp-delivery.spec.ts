@@ -15,8 +15,8 @@
  *   2. NEW poultry bands — numpad verdict tiles per band: poultry 4.0 → Pass,
  *                         4.5 → Conditional accept (THE FIX — used to pass
  *                         silently), 5.5 → Reject; lamb 6.0 → amber; frozen
- *                         -16 → amber; band copy under the chip is DERIVED
- *                         from the DB rows.
+ *                         -17.5 → amber (decimal + sign together); band copy
+ *                         under the chip is DERIVED from the DB rows.
  *   3. Reject track     — poultry 5.5 → CCA popup, disposition LOCKED to
  *                         Reject, cause+recurrence → submit → admin CA queue.
  *   4. Conditional track + BLS — lamb 6.0 (amber) full meat walk: curated GB
@@ -61,8 +61,9 @@ import { resolveColor, avgChannel, type RGB } from './_theme'
 // ── NumberPad helpers (kit pad inside a Modal sheet) ─────────────────────────
 
 /** Clear the pad via backspace (aria-label), then type `temp` (digits, '.'
- *  where the decimal key is offered, trailing '-' toggles the sign on frozen
- *  categories), WITHOUT confirming. */
+ *  via the grid decimal key, trailing '-' via the full-width sign-toggle row
+ *  the pad shows on frozen categories — where '.' AND '-' are offered
+ *  together), WITHOUT confirming. */
 async function typeTemp(page: Page, temp: string): Promise<void> {
   const dialog = page.getByRole('dialog')
   for (let i = 0; i < 8; i++) {
@@ -74,7 +75,7 @@ async function typeTemp(page: Page, temp: string): Promise<void> {
     await dialog.getByRole('button', { name: ch, exact: true }).click()
   }
   if (negative) {
-    await dialog.getByRole('button', { name: '-', exact: true }).click()
+    await dialog.getByRole('button', { name: /toggle negative/i }).click()
   }
 }
 
@@ -148,7 +149,7 @@ test.describe('@critical HACCP Goods In (CCP 1) — kit rebuild + DB-driven thre
   })
 
   // ── 2. NEW poultry bands — numpad verdict tiles per band (THE FIX) ─────────
-  test('numpad verdicts per band: poultry 4.0 pass / 4.5 amber / 5.5 reject; lamb 6.0 amber; frozen -16 amber', async ({
+  test('numpad verdicts per band: poultry 4.0 pass / 4.5 amber / 5.5 reject; lamb 6.0 amber; frozen -17.5 amber', async ({
     page,
   }) => {
     await loginAs(page, 'warehouse')
@@ -188,12 +189,14 @@ test.describe('@critical HACCP Goods In (CCP 1) — kit rebuild + DB-driven thre
     await enterTemp(page, '6')
     await expect(page.getByText('Conditional accept', { exact: true }).first()).toBeVisible()
 
-    // Frozen -16 → amber (sign key on the frozen family).
+    // Frozen -17.5 → amber. A DECIMAL negative: the frozen pad must offer the
+    // '.' grid key AND the sign-toggle row together (review 🟡1 fix) — flattened
+    // to -18 this reading would false-pass the 3°C-wide QFF amber band.
     await page.getByRole('button', { name: 'Frozen', exact: true }).click()
     await expect(
       page.getByText('≤-18°C pass · -18 to -15°C conditional accept · >-15°C reject'),
     ).toBeVisible()
-    await enterTemp(page, '-16')
+    await enterTemp(page, '-17.5')
     await expect(page.getByText('Conditional accept', { exact: true }).first()).toBeVisible()
   })
 
