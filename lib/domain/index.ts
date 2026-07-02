@@ -155,6 +155,18 @@ export {
   describeGoodsInBands,
 } from "./goodsIn";
 export type { GoodsInThreshold, UpdateGoodsInThresholdInput } from "./goodsIn";
+// Mince & Meat Prep (CCP-M) — the single-source grading rule (DB-driven
+// thresholds; amber is DISPLAY ONLY — minceTempPass is the paperwork rule).
+export {
+  minceTempKey,
+  resolveMinceThreshold,
+  minceTempStatus,
+  minceTempPass,
+  minceKillDaysPass,
+  minceKillDaysHardFail,
+  describeMinceBand,
+} from "./mincePrep";
+export type { MinceThreshold, UpdateMinceThresholdInput } from "./mincePrep";
 export type {
   // shared
   HaccpUserRef,

@@ -3,7 +3,7 @@
  *
  * Light Design-System Refresh (2026-07-01) — the machine guarantee behind the
  * spec's acceptance criterion #6 ("screens remain token-pure") and the
- * brand's dark-on-dark ban, for the 3 SHIPPED HACCP screens.
+ * brand's dark-on-dark ban, for the 5 SHIPPED HACCP screens.
  *
  * The existing `semantic-tokens-only` guard scopes `components/ui/**` ONLY and
  * does NOT cover app screens. This guard pins the three shipped HACCP screens so
@@ -36,6 +36,7 @@ const SCREENS = [
   "app/haccp/cold-storage/page.tsx",
   "app/haccp/process-room/page.tsx",
   "app/haccp/delivery/page.tsx",
+  "app/haccp/mince/page.tsx",
 ];
 
 // ── The three banned colour patterns (same as semantic-tokens-only) ──────────
@@ -85,7 +86,7 @@ function screenHeaderActions(src: string): string[] {
   return blocks;
 }
 
-describe("haccp-screens-token-pure — the 3 shipped HACCP screens stay brand-clean", () => {
+describe("haccp-screens-token-pure — the shipped HACCP screens stay brand-clean", () => {
   const sources = SCREENS.map((rel) => ({
     rel,
     src: readFileSync(join(ROOT, rel), "utf8"),

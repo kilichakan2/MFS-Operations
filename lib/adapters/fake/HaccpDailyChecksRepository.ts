@@ -44,6 +44,8 @@ import type {
   MincePersist,
   MeatPrepPersist,
   TimeSeparationPersist,
+  MinceThreshold,
+  UpdateMinceThresholdInput,
   ReturnRow,
   ReturnPersist,
 } from "@/lib/domain";
@@ -69,6 +71,8 @@ export interface FakeHaccpDailyChecksSeed {
   readonly processRoomThresholds?: readonly ProcessRoomThreshold[];
   /** seedable CCP-1 goods-in thresholds (all 11 categories). */
   readonly goodsInThresholds?: readonly GoodsInThreshold[];
+  /** seedable CCP-M mince/meat-prep thresholds (all 9 keys). */
+  readonly minceThresholds?: readonly MinceThreshold[];
   /** table+date → existing run count (delivery_number / batch sequencing). */
   readonly counts?: Readonly<Record<string, number>>;
   /** methods that should throw ConflictError (23505 simulation). */
@@ -103,6 +107,16 @@ export interface FakeGoodsInThresholdAudit {
   readonly new_amber_max_c: number | null;
 }
 
+/** A recorded mince threshold change (test-inspectable audit trail). */
+export interface FakeMinceThresholdAudit {
+  readonly threshold_id: string;
+  readonly changed_by: string;
+  readonly old_pass_max: number | null;
+  readonly new_pass_max: number | null;
+  readonly old_amber_max: number | null;
+  readonly new_amber_max: number | null;
+}
+
 /** A test-inspectable Fake daily-checks repository. */
 export interface FakeHaccpDailyChecksRepository
   extends HaccpDailyChecksRepository {
@@ -119,6 +133,7 @@ export interface FakeHaccpDailyChecksRepository
   readonly returnInserts: readonly ReturnPersist[];
   readonly thresholdAudits: readonly FakeThresholdAudit[];
   readonly goodsInThresholdAudits: readonly FakeGoodsInThresholdAudit[];
+  readonly minceThresholdAudits: readonly FakeMinceThresholdAudit[];
 }
 
 let fakeIdCounter = 0;
@@ -153,6 +168,7 @@ const EMPTY_MINCE_PREP_LIST: MincePrepListResult = {
   timesep: [],
   deliveries: [],
   mince_batches: [],
+  thresholds: [],
 };
 
 export function createFakeHaccpDailyChecksRepository(
@@ -177,6 +193,10 @@ export function createFakeHaccpDailyChecksRepository(
   const goodsInThresholds: GoodsInThreshold[] = (
     seed?.goodsInThresholds ?? []
   ).map((t) => ({ ...t }));
+  const minceThresholdAudits: FakeMinceThresholdAudit[] = [];
+  const minceThresholds: MinceThreshold[] = (seed?.minceThresholds ?? [])
+    .map((t) => ({ ...t }))
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
 
   const conflictOn = new Set(seed?.conflictOn ?? []);
   function guardConflict(method: HaccpConflictMethod): void {
@@ -224,6 +244,9 @@ export function createFakeHaccpDailyChecksRepository(
     },
     get goodsInThresholdAudits() {
       return goodsInThresholdAudits;
+    },
+    get minceThresholdAudits() {
+      return minceThresholdAudits;
     },
 
     // ── 1. delivery ──────────────────────────────────────────
@@ -386,7 +409,12 @@ export function createFakeHaccpDailyChecksRepository(
     // ── 6. mince-prep ────────────────────────────────────────
     async listMincePrep(_range: DeliveryRange): Promise<MincePrepListResult> {
       void _range;
-      return seed?.mincePrepList ?? EMPTY_MINCE_PREP_LIST;
+      return (
+        seed?.mincePrepList ?? {
+          ...EMPTY_MINCE_PREP_LIST,
+          thresholds: minceThresholds.map((t) => ({ ...t })),
+        }
+      );
     },
     async countMinceRuns(
       table: "haccp_mince_log" | "haccp_meatprep_log",
@@ -406,8 +434,38 @@ export function createFakeHaccpDailyChecksRepository(
     },
     async insertTimeSeparation(
       payload: TimeSeparationPersist,
-    ): Promise<void> {
+    ): Promise<{ id: string }> {
       timeSeparationInserts.push(payload);
+      return { id: nextId() };
+    },
+
+    async listMinceThresholds(): Promise<readonly MinceThreshold[]> {
+      return minceThresholds.map((t) => ({ ...t }));
+    },
+    async updateMinceThreshold(
+      input: UpdateMinceThresholdInput,
+      changedBy: string,
+    ): Promise<MinceThreshold> {
+      const idx = minceThresholds.findIndex((t) => t.id === input.id);
+      if (idx === -1) {
+        throw new Error(`threshold not found (${input.id})`);
+      }
+      const current = minceThresholds[idx];
+      const next: MinceThreshold = {
+        ...current,
+        pass_max: input.pass_max,
+        amber_max: input.amber_max,
+      };
+      minceThresholds[idx] = next;
+      minceThresholdAudits.push({
+        threshold_id: current.id,
+        changed_by: changedBy,
+        old_pass_max: current.pass_max,
+        new_pass_max: next.pass_max,
+        old_amber_max: current.amber_max,
+        new_amber_max: next.amber_max,
+      });
+      return { ...next };
     },
 
     // ── 7. product-return ────────────────────────────────────

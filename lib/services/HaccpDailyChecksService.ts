@@ -77,6 +77,14 @@ import type {
 } from "@/lib/domain";
 import { resolveGoodsInThreshold, goodsInStatus } from "@/lib/domain";
 import type { GoodsInThreshold, UpdateGoodsInThresholdInput } from "@/lib/domain";
+import {
+  minceTempKey,
+  resolveMinceThreshold,
+  minceTempPass,
+  minceKillDaysPass,
+  minceKillDaysHardFail,
+} from "@/lib/domain";
+import type { MinceThreshold, UpdateMinceThresholdInput } from "@/lib/domain";
 import type { HaccpDailyChecksRepository } from "@/lib/ports";
 import { ServiceError } from "@/lib/errors";
 
@@ -401,18 +409,69 @@ function resolveProcRoomThresholds(
   return { product, room };
 }
 
-// ─── mince-prep logic (verbatim) ─────────────────────────────────────────────
+// ─── mince-prep logic (DB-driven since the mince unit) ──────────────────────
+// The band VALUES live in `haccp_mince_thresholds`; the grading RULE lives in
+// `lib/domain/mincePrep.ts` (the SAME functions the screen's live tiles use).
+// No band/kill-day literal remains in this file — the CA texts interpolate the
+// resolved rows.
+//
+// ⚠️ AMBER IS DISPLAY ONLY (plan risk R1): the pass helpers below delegate to
+// `minceTempPass`, which is deliberately blind to the amber band — an amber
+// reading is pass:false ⇒ CA required + filed, exactly as before.
+
+/**
+ * Resolve a CCP-M threshold row strictly BY KEY from the FETCHED set — FAIL
+ * CLOSED. A missing row is a food-safety fault: we throw (→ route 500) rather
+ * than substitute another row or a hardcoded table as the limits (mirrors
+ * `resolveGoodsInRow` / `resolveProcRoomThresholds`).
+ */
+function resolveMinceRow(
+  thresholds: readonly MinceThreshold[],
+  key: string,
+): MinceThreshold {
+  try {
+    return resolveMinceThreshold(thresholds, key);
+  } catch (e) {
+    throw new ServiceError(e instanceof Error ? e.message : String(e), {
+      cause: e,
+    });
+  }
+}
+
+function minceInputRow(
+  form: "mince" | "meatprep",
+  thresholds: readonly MinceThreshold[],
+): MinceThreshold {
+  return resolveMinceRow(thresholds, minceTempKey(form, "input", "chilled"));
+}
+
+function minceOutputRow(
+  form: "mince" | "meatprep",
+  mode: string,
+  thresholds: readonly MinceThreshold[],
+): MinceThreshold {
+  return resolveMinceRow(thresholds, minceTempKey(form, "output", mode));
+}
+
+function minceKillRow(
+  species: string,
+  thresholds: readonly MinceThreshold[],
+): MinceThreshold {
+  return resolveMinceRow(thresholds, `kill_days_${species}`);
+}
 
 function deriveMinceTempAction(
   channel: "input" | "output",
   outputMode: string,
+  t: MinceThreshold,
 ): string {
+  const p = Number(t.pass_max);
   if (channel === "input") {
     return [
       "Quarantine batch immediately.",
       "Assess product condition and odour.",
-      "Attempt rapid chilling to ≤7°C within 2 hours.",
-      "If ≤7°C not achieved within 2 hours: reject product and return to supplier.",
+      `Attempt rapid chilling to ≤${p}°C within 2 hours.`,
+      `If ≤${p}°C not achieved within 2 hours: reject product and return to supplier.`,
       "Investigate supplier temperature control and delivery conditions.",
       "Record deviation on Mincing Production Log (MMP-MF-001 Form 1).",
     ].join(" ");
@@ -420,67 +479,46 @@ function deriveMinceTempAction(
   if (outputMode === "frozen") {
     return [
       "Extend freezing time and recheck temperature after 30 minutes.",
-      "If still above -18°C: assess product and review blast freezer capacity.",
+      `If still above ${p}°C: assess product and review blast freezer capacity.`,
       "Reduce batch sizes to ensure temperature compliance.",
-      "Do not dispatch until ≤-18°C is confirmed.",
+      `Do not dispatch until ≤${p}°C is confirmed.`,
     ].join(" ");
   }
   return [
     "Extend chilling period and recheck temperature after 30 minutes.",
-    "If still above 2°C: assess product safety.",
+    `If still above ${p}°C: assess product safety.`,
     "Reduce batch size — product may be too warm from mincing friction.",
-    "Do not dispatch until ≤2°C is confirmed.",
+    `Do not dispatch until ≤${p}°C is confirmed.`,
   ].join(" ");
 }
 
 function derivePrepTempAction(
   channel: "input" | "output",
   outputMode: string,
+  t: MinceThreshold,
 ): string {
+  const p = Number(t.pass_max);
   if (channel === "input") {
     return [
       "Quarantine batch immediately.",
       "Assess product condition.",
-      "Attempt rapid chilling to ≤7°C within 2 hours.",
-      "If ≤7°C not achieved: reject product.",
+      `Attempt rapid chilling to ≤${p}°C within 2 hours.`,
+      `If ≤${p}°C not achieved: reject product.`,
       "Record deviation on Meat Prep Production Log (MMP-MF-001 Form 2).",
     ].join(" ");
   }
   if (outputMode === "frozen") {
     return [
       "Extend freezing time and recheck after 30 minutes.",
-      "If still above -18°C: assess product and review freezer capacity.",
-      "Do not dispatch until ≤-18°C is confirmed.",
+      `If still above ${p}°C: assess product and review freezer capacity.`,
+      `Do not dispatch until ≤${p}°C is confirmed.`,
     ].join(" ");
   }
   return [
     "Extend chilling period and recheck after 30 minutes.",
-    "If still above 4°C: assess product safety before dispatch.",
+    `If still above ${p}°C: assess product safety before dispatch.`,
     "Consider reducing batch size.",
   ].join(" ");
-}
-
-function killDatePass(species: string, daysFromKill: number): boolean {
-  if (species === "imported_vac") return true;
-  return daysFromKill <= 6;
-}
-
-function killDateHardFail(species: string, daysFromKill: number): boolean {
-  if (species === "imported_vac") return false;
-  return daysFromKill > 6;
-}
-
-function inputTempPass(temp: number): boolean {
-  return temp <= 7;
-}
-
-function outputTempPass(
-  temp: number,
-  form: "mince" | "meatprep",
-  mode: string,
-): boolean {
-  if (mode === "frozen") return temp <= -18;
-  return form === "mince" ? temp <= 2 : temp <= 4;
 }
 
 function buildBatchCode(
@@ -564,13 +602,26 @@ export interface HaccpDailyChecksService {
     species: string,
     runNum: number,
   ): string;
-  killDatePass(species: string, daysFromKill: number): boolean;
-  killDateHardFail(species: string, daysFromKill: number): boolean;
-  inputTempPass(temp: number): boolean;
+  killDatePass(
+    species: string,
+    daysFromKill: number,
+    thresholds: readonly MinceThreshold[],
+  ): boolean;
+  killDateHardFail(
+    species: string,
+    daysFromKill: number,
+    thresholds: readonly MinceThreshold[],
+  ): boolean;
+  inputTempPass(
+    temp: number,
+    form: "mince" | "meatprep",
+    thresholds: readonly MinceThreshold[],
+  ): boolean;
   outputTempPass(
     temp: number,
     form: "mince" | "meatprep",
     mode: string,
+    thresholds: readonly MinceThreshold[],
   ): boolean;
 
   // ── reads (thin passthroughs) ──
@@ -729,6 +780,7 @@ export interface HaccpDailyChecksService {
   validateMince(args: {
     input: CreateMinceInput;
     daysFromKill: number;
+    thresholds: readonly MinceThreshold[];
   }): ValidationResult;
   buildMince(args: {
     input: CreateMinceInput;
@@ -737,15 +789,31 @@ export interface HaccpDailyChecksService {
     nowTime: string;
     daysFromKill: number;
     runNum: number;
+    thresholds: readonly MinceThreshold[];
   }): MincePersist;
   buildMinceCorrectiveActions(args: {
     input: CreateMinceInput;
     userId: string;
     sourceId: string;
+    thresholds: readonly MinceThreshold[];
   }): readonly CorrectiveActionInsert[];
 
+  // ── mince thresholds (admin + POST band derivation) ──
+  listMinceThresholds(): Promise<readonly MinceThreshold[]>;
+  validateMinceThreshold(
+    input: UpdateMinceThresholdInput,
+    current: MinceThreshold,
+  ): ValidationResult;
+  updateMinceThreshold(args: {
+    input: UpdateMinceThresholdInput;
+    changedBy: string;
+  }): Promise<MinceThreshold>;
+
   // ── meatprep ──
-  validateMeatPrep(input: CreateMeatPrepInput): ValidationResult;
+  validateMeatPrep(
+    input: CreateMeatPrepInput,
+    thresholds: readonly MinceThreshold[],
+  ): ValidationResult;
   buildMeatPrep(args: {
     input: CreateMeatPrepInput;
     userId: string;
@@ -753,11 +821,13 @@ export interface HaccpDailyChecksService {
     nowTime: string;
     daysFromKill: number | null;
     runNum: number;
+    thresholds: readonly MinceThreshold[];
   }): MeatPrepPersist;
   buildMeatPrepCorrectiveActions(args: {
     input: CreateMeatPrepInput;
     userId: string;
     sourceId: string;
+    thresholds: readonly MinceThreshold[];
   }): readonly CorrectiveActionInsert[];
 
   // ── timesep ──
@@ -768,6 +838,13 @@ export interface HaccpDailyChecksService {
     today: string;
     nowTime: string;
   }): TimeSeparationPersist;
+  /** Bug fix 1 (server half): a non-empty free-text corrective action files
+   *  exactly one MMP-TS row into the CA register; empty/whitespace → none. */
+  buildTimeSeparationCorrectiveActions(args: {
+    input: CreateTimeSeparationInput;
+    userId: string;
+    sourceId: string;
+  }): readonly CorrectiveActionInsert[];
 
   // ── product-return ──
   validateReturn(input: CreateReturnInput): ValidationResult;
@@ -799,7 +876,9 @@ export interface HaccpDailyChecksService {
   insertDailyDiary(payload: DailyDiaryPersist): Promise<{ id: string }>;
   insertMince(payload: MincePersist): Promise<{ id: string }>;
   insertMeatPrep(payload: MeatPrepPersist): Promise<{ id: string }>;
-  insertTimeSeparation(payload: TimeSeparationPersist): Promise<void>;
+  insertTimeSeparation(
+    payload: TimeSeparationPersist,
+  ): Promise<{ id: string }>;
   insertReturn(payload: ReturnPersist): Promise<{ id: string }>;
 }
 
@@ -824,10 +903,16 @@ export function createHaccpDailyChecksService(
     coldStorageTempStatus,
     buildBatchNumber,
     buildBatchCode,
-    killDatePass,
-    killDateHardFail,
-    inputTempPass,
-    outputTempPass,
+    // DB-driven CCP-M helpers — delegate to the shared domain rule against the
+    // FETCHED thresholds (fail-closed on a missing key).
+    killDatePass: (species, daysFromKill, thresholds) =>
+      minceKillDaysPass(daysFromKill, minceKillRow(species, thresholds)),
+    killDateHardFail: (species, daysFromKill, thresholds) =>
+      minceKillDaysHardFail(daysFromKill, minceKillRow(species, thresholds)),
+    inputTempPass: (temp, form, thresholds) =>
+      minceTempPass(temp, minceInputRow(form, thresholds)),
+    outputTempPass: (temp, form, mode, thresholds) =>
+      minceTempPass(temp, minceOutputRow(form, mode, thresholds)),
 
     // ── reads ──
     listDeliveries: (range) => dailyChecks.listDeliveries(range),
@@ -1649,7 +1734,7 @@ export function createHaccpDailyChecksService(
     },
 
     // ── mince ──
-    validateMince({ input, daysFromKill }): ValidationResult {
+    validateMince({ input, daysFromKill, thresholds }): ValidationResult {
       if (
         !input.product_species ||
         !MINCE_VALID_SPECIES.includes(input.product_species)
@@ -1661,18 +1746,27 @@ export function createHaccpDailyChecksService(
       if (input.output_temp_c == null)
         return reject(400, "Output temperature is required");
 
-      if (killDateHardFail(input.product_species, daysFromKill)) {
+      if (
+        minceKillDaysHardFail(
+          daysFromKill,
+          minceKillRow(input.product_species, thresholds),
+        )
+      ) {
         return reject(
           400,
           `Kill date exceeded (${daysFromKill} days) — DO NOT MINCE. Segregate and return to supplier or dispose as Category 3 ABP.`,
         );
       }
 
-      const inPass = inputTempPass(input.input_temp_c);
-      const outPass = outputTempPass(
+      // AMBER IS DISPLAY ONLY: minceTempPass is false for amber AND fail, so
+      // an amber reading still 400s without a corrective action.
+      const inPass = minceTempPass(
+        input.input_temp_c,
+        minceInputRow("mince", thresholds),
+      );
+      const outPass = minceTempPass(
         input.output_temp_c,
-        "mince",
-        input.output_mode ?? "chilled",
+        minceOutputRow("mince", input.output_mode ?? "chilled", thresholds),
       );
       const anyDeviation = !inPass || !outPass;
       if (anyDeviation && !input.corrective_action) {
@@ -1691,13 +1785,19 @@ export function createHaccpDailyChecksService(
       nowTime,
       daysFromKill,
       runNum,
+      thresholds,
     }): MincePersist {
-      const killPass = killDatePass(input.product_species, daysFromKill);
-      const inPass = inputTempPass(input.input_temp_c);
-      const outPass = outputTempPass(
+      const killPass = minceKillDaysPass(
+        daysFromKill,
+        minceKillRow(input.product_species, thresholds),
+      );
+      const inPass = minceTempPass(
+        input.input_temp_c,
+        minceInputRow("mince", thresholds),
+      );
+      const outPass = minceTempPass(
         input.output_temp_c,
-        "mince",
-        input.output_mode ?? "chilled",
+        minceOutputRow("mince", input.output_mode ?? "chilled", thresholds),
       );
       const batchCode = buildBatchCode(
         "mince",
@@ -1731,13 +1831,16 @@ export function createHaccpDailyChecksService(
       input,
       userId,
       sourceId,
+      thresholds,
     }): readonly CorrectiveActionInsert[] {
-      const inPass = inputTempPass(input.input_temp_c);
-      const outPass = outputTempPass(
-        input.output_temp_c,
+      const inputRow = minceInputRow("mince", thresholds);
+      const outputRow = minceOutputRow(
         "mince",
         input.output_mode ?? "chilled",
+        thresholds,
       );
+      const inPass = minceTempPass(input.input_temp_c, inputRow);
+      const outPass = minceTempPass(input.output_temp_c, outputRow);
       const anyDeviation = !inPass || !outPass;
       if (!anyDeviation || !input.corrective_action) return [];
 
@@ -1754,10 +1857,11 @@ export function createHaccpDailyChecksService(
           source_table: "haccp_mince_log",
           source_id: sourceId,
           ccp_ref: "CCP-M1",
-          deviation_description: `Mince input temp: ${input.input_temp_c}°C (limit ≤7°C, ${input.product_species}). Cause: ${ca.cause}`,
+          deviation_description: `Mince input temp: ${input.input_temp_c}°C (limit ≤${Number(inputRow.pass_max)}°C, ${input.product_species}). Cause: ${ca.cause}`,
           action_taken: deriveMinceTempAction(
             "input",
             input.output_mode ?? "chilled",
+            inputRow,
           ),
           product_disposition: disp,
           recurrence_prevention: recNotes,
@@ -1765,17 +1869,16 @@ export function createHaccpDailyChecksService(
         });
       }
       if (!outPass) {
-        const limit =
-          (input.output_mode ?? "chilled") === "frozen" ? "≤-18°C" : "≤2°C";
         caRows.push({
           actioned_by: userId,
           source_table: "haccp_mince_log",
           source_id: sourceId,
           ccp_ref: "CCP-M1",
-          deviation_description: `Mince output temp: ${input.output_temp_c}°C (limit ${limit}, ${input.output_mode ?? "chilled"}). Cause: ${ca.cause}`,
+          deviation_description: `Mince output temp: ${input.output_temp_c}°C (limit ≤${Number(outputRow.pass_max)}°C, ${input.output_mode ?? "chilled"}). Cause: ${ca.cause}`,
           action_taken: deriveMinceTempAction(
             "output",
             input.output_mode ?? "chilled",
+            outputRow,
           ),
           product_disposition: disp,
           recurrence_prevention: recNotes,
@@ -1785,8 +1888,65 @@ export function createHaccpDailyChecksService(
       return caRows;
     },
 
+    // ── mince thresholds (admin) ──
+    listMinceThresholds: () => dailyChecks.listMinceThresholds(),
+
+    validateMinceThreshold(input, current): ValidationResult {
+      if (!input.id) return reject(400, "Threshold id is required");
+      // Band STRUCTURE is code-locked: which rows have an amber band / a limit
+      // at all cannot change via the app — only the numbers move. (An admin
+      // giving `kill_days_imported_vac` a limit — or removing lamb's — would
+      // silently rewrite the documented CCP-M2 policy.)
+      if ((input.pass_max === null) !== (current.pass_max === null)) {
+        return reject(
+          400,
+          "Band structure is fixed — pass limit cannot be added or removed",
+        );
+      }
+      if ((input.amber_max === null) !== (current.amber_max === null)) {
+        return reject(
+          400,
+          "Band structure is fixed — amber band cannot be added or removed",
+        );
+      }
+      if (input.pass_max !== null && !Number.isFinite(input.pass_max)) {
+        return reject(400, "Pass limit must be a number");
+      }
+      if (input.amber_max !== null && !Number.isFinite(input.amber_max)) {
+        return reject(400, "Amber limit must be a number");
+      }
+      if (current.kind === "kill_days") {
+        // Kill-day grading is BINARY (DB CHECK) and in whole days.
+        if (input.amber_max !== null) {
+          return reject(400, "Kill-day rows are binary — no amber band");
+        }
+        if (
+          input.pass_max !== null &&
+          (!Number.isInteger(input.pass_max) || input.pass_max < 1)
+        ) {
+          return reject(
+            400,
+            "Kill-day limit must be a whole number of days (at least 1)",
+          );
+        }
+      }
+      // amber == pass is allowed and means "amber band empty".
+      if (
+        input.pass_max !== null &&
+        input.amber_max !== null &&
+        input.amber_max < input.pass_max
+      ) {
+        return reject(400, "Amber limit must be at or above the pass limit");
+      }
+      return { ok: true };
+    },
+
+    updateMinceThreshold({ input, changedBy }) {
+      return dailyChecks.updateMinceThreshold(input, changedBy);
+    },
+
     // ── meatprep ──
-    validateMeatPrep(input): ValidationResult {
+    validateMeatPrep(input, thresholds): ValidationResult {
       if (!input.product_name?.trim())
         return reject(400, "Product name is required");
       if (input.input_temp_c == null)
@@ -1799,11 +1959,14 @@ export function createHaccpDailyChecksService(
       )
         return reject(400, "Invalid species");
 
-      const inPass = inputTempPass(input.input_temp_c);
-      const outPass = outputTempPass(
+      // AMBER IS DISPLAY ONLY — see validateMince.
+      const inPass = minceTempPass(
+        input.input_temp_c,
+        minceInputRow("meatprep", thresholds),
+      );
+      const outPass = minceTempPass(
         input.output_temp_c,
-        "meatprep",
-        input.output_mode ?? "chilled",
+        minceOutputRow("meatprep", input.output_mode ?? "chilled", thresholds),
       );
       const allergenLabelIssue =
         (input.allergens_present?.length ?? 0) > 0 &&
@@ -1821,13 +1984,16 @@ export function createHaccpDailyChecksService(
       nowTime,
       daysFromKill,
       runNum,
+      thresholds,
     }): MeatPrepPersist {
       const speciesForTemp = input.product_species ?? "beef";
-      const inPass = inputTempPass(input.input_temp_c);
-      const outPass = outputTempPass(
+      const inPass = minceTempPass(
+        input.input_temp_c,
+        minceInputRow("meatprep", thresholds),
+      );
+      const outPass = minceTempPass(
         input.output_temp_c,
-        "meatprep",
-        input.output_mode ?? "chilled",
+        minceOutputRow("meatprep", input.output_mode ?? "chilled", thresholds),
       );
       const allSourceBatches = [
         ...(input.source_batch_numbers ?? []),
@@ -1867,13 +2033,16 @@ export function createHaccpDailyChecksService(
       input,
       userId,
       sourceId,
+      thresholds,
     }): readonly CorrectiveActionInsert[] {
-      const inPass = inputTempPass(input.input_temp_c);
-      const outPass = outputTempPass(
-        input.output_temp_c,
+      const inputRow = minceInputRow("meatprep", thresholds);
+      const outputRow = minceOutputRow(
         "meatprep",
         input.output_mode ?? "chilled",
+        thresholds,
       );
+      const inPass = minceTempPass(input.input_temp_c, inputRow);
+      const outPass = minceTempPass(input.output_temp_c, outputRow);
       // Route gates the CA write on temperature only (NOT allergenLabelIssue).
       if ((inPass && outPass) || !input.corrective_action) return [];
 
@@ -1890,10 +2059,11 @@ export function createHaccpDailyChecksService(
           source_table: "haccp_meatprep_log",
           source_id: sourceId,
           ccp_ref: "CCP-MP1",
-          deviation_description: `Prep input temp: ${input.input_temp_c}°C (limit ≤7°C, ${input.product_name.trim()}). Cause: ${ca.cause}`,
+          deviation_description: `Prep input temp: ${input.input_temp_c}°C (limit ≤${Number(inputRow.pass_max)}°C, ${input.product_name.trim()}). Cause: ${ca.cause}`,
           action_taken: derivePrepTempAction(
             "input",
             input.output_mode ?? "chilled",
+            inputRow,
           ),
           product_disposition: disp,
           recurrence_prevention: recNotes,
@@ -1901,17 +2071,16 @@ export function createHaccpDailyChecksService(
         });
       }
       if (!outPass) {
-        const limit =
-          (input.output_mode ?? "chilled") === "frozen" ? "≤-18°C" : "≤4°C";
         caRows.push({
           actioned_by: userId,
           source_table: "haccp_meatprep_log",
           source_id: sourceId,
           ccp_ref: "CCP-MP1",
-          deviation_description: `Prep output temp: ${input.output_temp_c}°C (limit ${limit}, ${input.product_name.trim()}). Cause: ${ca.cause}`,
+          deviation_description: `Prep output temp: ${input.output_temp_c}°C (limit ≤${Number(outputRow.pass_max)}°C, ${input.product_name.trim()}). Cause: ${ca.cause}`,
           action_taken: derivePrepTempAction(
             "output",
             input.output_mode ?? "chilled",
+            outputRow,
           ),
           product_disposition: disp,
           recurrence_prevention: recNotes,
@@ -1949,6 +2118,32 @@ export function createHaccpDailyChecksService(
         allergens_in_production: input.allergens_in_production.trim(),
         corrective_action: input.corrective_action?.trim() || null,
       };
+    },
+
+    buildTimeSeparationCorrectiveActions({
+      input,
+      userId,
+      sourceId,
+    }): readonly CorrectiveActionInsert[] {
+      // Bug fix 1 (server half): the free-text corrective action — previously
+      // dropped by the client and never registered — now files exactly one
+      // MMP-TS row when non-empty. Empty/whitespace → no CA row (a clean
+      // changeover writes nothing, as before).
+      const text = input.corrective_action?.trim();
+      if (!text) return [];
+      return [
+        {
+          actioned_by: userId,
+          source_table: "haccp_time_separation_log",
+          source_id: sourceId,
+          ccp_ref: "MMP-TS",
+          deviation_description: `Time separation (MMP-MF-001 Form 3) — issue recorded during allergen changeover. Allergens in production: ${input.allergens_in_production.trim()}`,
+          action_taken: text,
+          product_disposition: null,
+          recurrence_prevention: null,
+          management_verification_required: true,
+        },
+      ];
     },
 
     // ── product-return ──

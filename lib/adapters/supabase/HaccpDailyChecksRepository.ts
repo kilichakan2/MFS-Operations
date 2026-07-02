@@ -62,6 +62,8 @@ import type {
   MincePersist,
   MeatPrepPersist,
   TimeSeparationPersist,
+  MinceThreshold,
+  UpdateMinceThresholdInput,
   ReturnRow,
   ReturnPersist,
 } from "@/lib/domain";
@@ -750,7 +752,7 @@ export function createSupabaseHaccpDailyChecksRepository(
       const { weekStart } = weekRange(today);
       const { lastWeekStart, lastWeekEnd } = lastWeekRange(today);
 
-      const [mince, meatprep, timesep, deliveries] = await Promise.all([
+      const [mince, meatprep, timesep, deliveries, thresholds] = await Promise.all([
         (range === "week"
           ? client
               .from("haccp_mince_log")
@@ -815,6 +817,11 @@ export function createSupabaseHaccpDailyChecksRepository(
           .not("batch_number", "is", null)
           .order("date", { ascending: false })
           .order("delivery_number", { ascending: true }),
+
+        client
+          .from("haccp_mince_thresholds")
+          .select("id, key, label, kind, pass_max, amber_max, position")
+          .order("position"),
       ]);
 
       if (mince.error) {
@@ -850,6 +857,18 @@ export function createSupabaseHaccpDailyChecksRepository(
           cause: deliveries.error,
         });
       }
+      // Thresholds are required to render the CCP-M bands — fatal on error (do
+      // NOT fall back to hardcoded limits: a silent hardcoded ruler is exactly
+      // the drift this unit removes).
+      if (thresholds.error) {
+        log.error(
+          "HaccpDailyChecksRepository.listMincePrep thresholds DB error",
+          { error: thresholds.error.message },
+        );
+        throw new ServiceError("Failed to load thresholds", {
+          cause: thresholds.error,
+        });
+      }
 
       const minceRows = (mince.data ?? []) as unknown as MinceLogRow[];
       const minceBatches: MinceBatchSummary[] = minceRows.map((r) => ({
@@ -869,6 +888,7 @@ export function createSupabaseHaccpDailyChecksRepository(
         deliveries: (deliveries.data ??
           []) as unknown as MincePrepDeliveryRow[],
         mince_batches: minceBatches,
+        thresholds: (thresholds.data ?? []) as unknown as MinceThreshold[],
       };
     },
 
@@ -936,16 +956,106 @@ export function createSupabaseHaccpDailyChecksRepository(
 
     async insertTimeSeparation(
       payload: TimeSeparationPersist,
-    ): Promise<void> {
-      const { error } = await client
+    ): Promise<{ id: string }> {
+      // Selects the new id back — needed to link the timesep CA row (bug fix 1).
+      const { data, error } = await client
         .from("haccp_time_separation_log")
-        .insert(payload as unknown as Record<string, unknown>);
-      if (error) {
+        .insert(payload as unknown as Record<string, unknown>)
+        .select("id")
+        .single();
+      if (error || !data) {
         log.error("HaccpDailyChecksRepository.insertTimeSeparation DB error", {
-          error: error.message,
+          error: error?.message,
         });
-        throw new ServiceError("Insert failed", { cause: error });
+        throw new ServiceError("Insert failed", {
+          cause: error ?? new Error("no row returned"),
+        });
       }
+      return { id: (data as { id: string }).id };
+    },
+
+    async listMinceThresholds(): Promise<readonly MinceThreshold[]> {
+      const { data, error } = await client
+        .from("haccp_mince_thresholds")
+        .select("id, key, label, kind, pass_max, amber_max, position")
+        .order("position");
+      if (error) {
+        log.error(
+          "HaccpDailyChecksRepository.listMinceThresholds DB error",
+          { error: error.message },
+        );
+        throw new ServiceError("Could not load thresholds", { cause: error });
+      }
+      return (data ?? []) as unknown as MinceThreshold[];
+    },
+
+    async updateMinceThreshold(
+      input: UpdateMinceThresholdInput,
+      changedBy: string,
+    ): Promise<MinceThreshold> {
+      // Read the current row first so the audit log can record old→new.
+      const current = await client
+        .from("haccp_mince_thresholds")
+        .select("id, key, label, kind, pass_max, amber_max, position")
+        .eq("id", input.id)
+        .single();
+      if (current.error || !current.data) {
+        log.error(
+          "HaccpDailyChecksRepository.updateMinceThreshold read DB error",
+          { error: current.error?.message },
+        );
+        throw new ServiceError("Threshold not found", {
+          cause: current.error ?? new Error("no row returned"),
+        });
+      }
+      const before = current.data as unknown as MinceThreshold;
+
+      const { data, error } = await client
+        .from("haccp_mince_thresholds")
+        .update({ pass_max: input.pass_max, amber_max: input.amber_max })
+        .eq("id", input.id)
+        .select("id, key, label, kind, pass_max, amber_max, position")
+        .single();
+      if (error || !data) {
+        log.error(
+          "HaccpDailyChecksRepository.updateMinceThreshold update DB error",
+          { error: error?.message },
+        );
+        throw new ServiceError("Threshold update failed", {
+          cause: error ?? new Error("no row returned"),
+        });
+      }
+      const after = data as unknown as MinceThreshold;
+
+      // Immutable audit row (who / when / old→new). A separate statement —
+      // acceptable at admin-edit frequency (mirrors updateGoodsInThreshold).
+      // The summary lists ONLY the fields that actually changed, so a no-move
+      // PATCH can never record a misleading `X→X`.
+      const changes: string[] = [];
+      if (before.pass_max !== after.pass_max)
+        changes.push(`pass ${before.pass_max}→${after.pass_max}`);
+      if (before.amber_max !== after.amber_max)
+        changes.push(`amber ${before.amber_max}→${after.amber_max}`);
+      const audit = await client.from("haccp_mince_threshold_audit").insert({
+        threshold_id: after.id,
+        changed_by: changedBy,
+        old_pass_max: before.pass_max,
+        new_pass_max: after.pass_max,
+        old_amber_max: before.amber_max,
+        new_amber_max: after.amber_max,
+        summary: `${after.label}: ${changes.length ? changes.join(", ") : "no changes"}`,
+      });
+      if (audit.error) {
+        log.error(
+          "HaccpDailyChecksRepository.updateMinceThreshold audit DB error",
+          { error: audit.error.message },
+        );
+        throw new ServiceError("Threshold audit write failed", {
+          cause: audit.error,
+        });
+      }
+
+      return after;
     },
 
     // ── 7. product-return ────────────────────────────────────

@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Banner, Button, TextField } from '@/components/ui'
 import { isProcessRoomTempInRange } from '@/lib/domain'
-import type { GoodsInThreshold } from '@/lib/domain'
+import type { GoodsInThreshold, MinceThreshold } from '@/lib/domain'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,6 +65,7 @@ const CCP_LABELS: Record<string, string> = {
   'CCP3':           'CCP3 — Process Room',
   'CCP-M1':         'CCP-M — Mince Input',
   'CCP-MP1':        'CCP-M — Prep Input',
+  'MMP-TS':         'MMP — Time Separation',
   'SOP2':           'SOP2 — Cleaning',
   'SOP3':           'SOP3 — Calibration',
   'SOP12':          'SOP12 — Product Return',
@@ -78,6 +79,7 @@ const SOURCE_LABELS: Record<string, string> = {
   'haccp_processing_temps': 'Process Room',
   'haccp_mince_log':        'Mince',
   'haccp_meatprep_log':     'Meat Prep',
+  'haccp_time_separation_log': 'Time Separation',
   'haccp_cleaning_log':     'Cleaning',
   'haccp_calibration_log':  'Calibration',
   'haccp_returns':          'Product Return',
@@ -369,6 +371,116 @@ function GoodsInThresholdRow({ threshold, onSaved }: {
   )
 }
 
+// ─── Mince & Meat Prep (CCP-M) threshold editor row (kit — mirrors
+//     GoodsInThresholdRow; F-TD-42 admin-wide repaint stays out of scope) ─────
+
+function MinceThresholdRow({ threshold, onSaved }: {
+  threshold: MinceThreshold
+  onSaved:   () => void
+}) {
+  const isKillDays = threshold.kind === 'kill_days'
+  const hasLimit   = threshold.pass_max !== null
+  const hasAmber   = threshold.amber_max !== null
+  const [pass,  setPass]  = useState(threshold.pass_max === null ? '' : String(threshold.pass_max))
+  const [amber, setAmber] = useState(threshold.amber_max === null ? '' : String(threshold.amber_max))
+  const [saving, setSaving] = useState(false)
+  const [error,  setError]  = useState('')
+
+  const passNum  = parseFloat(pass)
+  const amberNum = parseFloat(amber)
+  const dirty =
+    pass !== (threshold.pass_max === null ? '' : String(threshold.pass_max)) ||
+    amber !== (threshold.amber_max === null ? '' : String(threshold.amber_max))
+  // Band STRUCTURE is code-locked (only the numbers move; amber == pass
+  // allowed; kill-day rows are binary + whole days).
+  const valid = isKillDays
+    ? Number.isInteger(passNum) && passNum >= 1
+    : Number.isFinite(passNum) &&
+      (!hasAmber || (Number.isFinite(amberNum) && amberNum >= passNum))
+
+  // No kill-day limit (imported / vac-packed) — the documented deviation,
+  // shown read-only so it can never silently grow a limit.
+  if (!hasLimit) {
+    return (
+      <div className="bg-surface-raised border border-default rounded-2xl p-4">
+        <p className="text-body font-semibold text-sm">{threshold.label}</p>
+        <p className="text-muted text-xs mt-1">No kill-day limit — documented deviation, recorded for traceability only.</p>
+      </div>
+    )
+  }
+
+  async function handleSave() {
+    if (!valid) {
+      setError(isKillDays
+        ? 'Kill-day limit must be a whole number of days (at least 1)'
+        : 'Pass limit must be a number; amber must be at or above pass')
+      return
+    }
+    setSaving(true); setError('')
+    try {
+      const res = await fetch('/api/haccp/admin/mince-thresholds', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: threshold.id,
+          pass_max: passNum,
+          amber_max: hasAmber ? amberNum : null,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        setError(d.error ?? 'Save failed')
+        return
+      }
+      onSaved()
+    } catch {
+      setError('Connection error — try again')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-surface-raised border border-default rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-body font-semibold text-sm">{threshold.label}</p>
+      </div>
+      {isKillDays ? (
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Max days from kill</p>
+            <TextField inputMode="numeric" value={pass} onChange={(e) => setPass(e.target.value)} suffix="days" error={!Number.isInteger(passNum) || passNum < 1} />
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Pass (≤)</p>
+            <TextField inputMode="decimal" value={pass} onChange={(e) => setPass(e.target.value)} suffix="°C" error={!Number.isFinite(passNum)} />
+          </div>
+          {hasAmber && (
+            <div className="flex-1">
+              <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Warning ceiling (≤)</p>
+              <TextField inputMode="decimal" value={amber} onChange={(e) => setAmber(e.target.value)} suffix="°C" error={!Number.isFinite(amberNum) || amberNum < passNum} />
+            </div>
+          )}
+        </div>
+      )}
+      <p className="text-subtle text-[10px]">
+        {isKillDays
+          ? <>Pass ≤ {isNaN(passNum) ? '—' : passNum} days · over = hard block (DO NOT MINCE)</>
+          : hasAmber
+            ? <>Pass ≤ {isNaN(passNum) ? '—' : passNum}°C · Warning {isNaN(passNum) ? '—' : passNum}–{isNaN(amberNum) ? '—' : amberNum}°C (display only — CA still required) · Deviation &gt; {isNaN(amberNum) ? '—' : amberNum}°C</>
+            : <>Pass ≤ {isNaN(passNum) ? '—' : passNum}°C · Deviation &gt; {isNaN(passNum) ? '—' : passNum}°C</>}
+      </p>
+      {error && <Banner tone="danger">{error}</Banner>}
+      <Button size="sm" loading={saving} disabled={!dirty || !valid || saving} onClick={handleSave}>
+        {saving ? 'Saving…' : 'Save limit'}
+      </Button>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminCCAPage() {
@@ -393,6 +505,11 @@ export default function AdminCCAPage() {
   const [giThresholds, setGiThresholds] = useState<GoodsInThreshold[]>([])
   const [giLoading,    setGiLoading]    = useState(false)
   const [giError,      setGiError]      = useState('')
+
+  // ── Mince & Meat Prep (CCP-M) threshold state ───────────────────────────────
+  const [mThresholds, setMThresholds] = useState<MinceThreshold[]>([])
+  const [mLoading,    setMLoading]    = useState(false)
+  const [mError,      setMError]      = useState('')
 
   // ── Supplier state ────────────────────────────────────────────────────────────
   const [suppliers,      setSuppliers]      = useState<Supplier[]>([])
@@ -452,11 +569,20 @@ export default function AdminCCAPage() {
       .finally(() => setGiLoading(false))
   }, [])
 
+  const loadMinceThresholds = useCallback(() => {
+    setMLoading(true)
+    fetch('/api/haccp/admin/mince-thresholds')
+      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
+      .then(d => setMThresholds(d.thresholds ?? []))
+      .catch(e => setMError(`Could not load — ${e.message}`))
+      .finally(() => setMLoading(false))
+  }, [])
+
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { if (tab === 'suppliers') loadSuppliers() }, [tab, loadSuppliers])
   useEffect(() => {
-    if (tab === 'thresholds') { loadThresholds(); loadGoodsInThresholds() }
-  }, [tab, loadThresholds, loadGoodsInThresholds])
+    if (tab === 'thresholds') { loadThresholds(); loadGoodsInThresholds(); loadMinceThresholds() }
+  }, [tab, loadThresholds, loadGoodsInThresholds, loadMinceThresholds])
 
   async function handleVerify(id: string) {
     setVerifying(id)
@@ -834,7 +960,7 @@ export default function AdminCCAPage() {
 
             {savedReminder && (
               <Banner tone="warning" title="Limit updated — paperwork required">
-                You MUST update docs/reference/haccp/DOCUMENT_CONTROL.md §4 (CCP 1 Goods In and CCP 3 process-room limits) and retrain staff on the new limit (SALSA/FSA control). Every change is recorded in the immutable threshold audit log.
+                You MUST update docs/reference/haccp/DOCUMENT_CONTROL.md §4 (CCP 1 Goods In, CCP 3 process-room and CCP-M mince/meat-prep limits) and retrain staff on the new limit (SALSA/FSA control). Every change is recorded in the immutable threshold audit log.
               </Banner>
             )}
 
@@ -872,6 +998,28 @@ export default function AdminCCAPage() {
                   key={t.id}
                   threshold={t}
                   onSaved={() => { setSavedReminder(true); loadGoodsInThresholds() }}
+                />
+              ))
+            )}
+
+            {/* ── Mince & Meat Prep (CCP-M) thresholds ────────────────────── */}
+            <div className="pt-4">
+              <p className="text-body font-semibold text-sm">Mince &amp; Meat Prep (CCP-M1 / M2 / MP1 / MP2) — production limits</p>
+              <p className="text-muted text-xs mt-0.5">Temperature warning bands are DISPLAY ONLY — a corrective action is still required and filed for anything above the pass limit. Kill-day limits are binary hard blocks. Band structure is fixed — only the numbers move. Editing a limit is a food-safety control.</p>
+            </div>
+
+            {mError && <Banner tone="danger">{mError}</Banner>}
+
+            {mLoading ? (
+              <p className="text-muted text-sm">Loading limits…</p>
+            ) : mThresholds.length === 0 ? (
+              <p className="text-muted text-sm">No thresholds configured.</p>
+            ) : (
+              mThresholds.map((t) => (
+                <MinceThresholdRow
+                  key={t.id}
+                  threshold={t}
+                  onSaved={() => { setSavedReminder(true); loadMinceThresholds() }}
                 />
               ))
             )}
