@@ -317,15 +317,18 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
     );
   });
 
-  it("delivery GET (today) → 200 with deliveries + suppliers + next_number", async () => {
+  it("delivery GET (today) → 200 with deliveries + suppliers + next_number + thresholds", async () => {
     const res = await api("/api/haccp/delivery", { ...actor });
     expect(res.status).toBe(200);
     const body = res.body as Record<string, unknown>;
+    // `thresholds` appended by the Goods In unit (DB-driven CCP-1 bands);
+    // pre-existing keys unchanged.
     expect(Object.keys(body).sort()).toEqual(
-      ["date", "deliveries", "next_number", "suppliers"].sort(),
+      ["date", "deliveries", "next_number", "suppliers", "thresholds"].sort(),
     );
     expect(Array.isArray(body.deliveries)).toBe(true);
     expect(typeof body.next_number).toBe("number");
+    expect(Array.isArray(body.thresholds)).toBe(true);
   });
 
   // ── 2. cold-storage — STATUS-CODE PRECEDENCE CHAIN ─────────────────────────
