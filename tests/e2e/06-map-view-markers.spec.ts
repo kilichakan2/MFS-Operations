@@ -51,6 +51,23 @@ import { loginAsAdmin }            from './_auth'
 const ADMIN_USER     = process.env.E2E_USER_ADMIN     ?? ''
 const ADMIN_PASSWORD = process.env.E2E_PASSWORD_ADMIN ?? ''
 
+// F-TD-41 — this spec is gated to PROD-BUILD targets. The local harness
+// (BASE_URL unset → auto-booted `npm run dev`) fails it identically on
+// `main` and on feature branches: Leaflet's data-gated mount never
+// completes under the dev build (control-proven pre-existing; dev-server
+// StrictMode double-mount is the historical suspect — the 0a cert already
+// required a prod build for map specs). It passes on every Vercel preview
+// run. Skipping locally keeps local E2E red meaning "real regression".
+// Force it on against a locally-served prod build with E2E_RUN_MAP_SPECS=1.
+// LOCAL detection mirrors playwright.config.ts's REMOTE check exactly —
+// .env.e2e.local pins BASE_URL=http://localhost:3000, so "unset" alone
+// is never a sufficient test; the hostname is the real signal.
+const RAW_BASE     = process.env.BASE_URL
+const LOCAL_TARGET =
+  !RAW_BASE || ['localhost', '127.0.0.1'].includes(new URL(RAW_BASE).hostname)
+const SKIP_ON_DEV_HARNESS =
+  LOCAL_TARGET && process.env.E2E_RUN_MAP_SPECS !== '1'
+
 /** Click a layer-toggle button by its label and let the map settle. */
 async function clickLayer(page: Page, label: 'All' | 'Customers' | 'Visits'): Promise<void> {
   await page.getByRole('button', { name: label, exact: true }).click()
@@ -72,6 +89,10 @@ async function readCount(page: Page, re: RegExp): Promise<number> {
 
 test.describe('@critical Map View renders clustered marker layers through the MapProvider port (F-24 PR2)', () => {
   test('the Leaflet marker map mounts, draws customer + visit layers, and a visit pin opens the modal', async ({ page }) => {
+    test.skip(
+      SKIP_ON_DEV_HARNESS,
+      'gated to prod-build targets (preview runs / E2E_RUN_MAP_SPECS=1) — BACKLOG F-TD-41',
+    )
     test.skip(
       !ADMIN_USER || !ADMIN_PASSWORD,
       'E2E_USER_ADMIN / E2E_PASSWORD_ADMIN not set in .env.e2e.local',

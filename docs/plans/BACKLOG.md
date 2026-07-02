@@ -979,13 +979,14 @@ probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to *
   - **Guards:** `tests/unit/lint/tailwind-namespace-collision.test.ts` (bans any fontSize↔textColor shared key forever, pins both contracts, and greps `text-on-action` out of the tree) + `tests/unit/design/contrast-pairings.test.ts` (the §4 pairing matrix recomputed on every CI run, incl. negative fixtures).
 - **Status:** closed (2026-07-01)
 
-### F-TD-41 — 🔵 Local E2E map specs 05/06 are red on `main` (harness/main-drift, NOT a diff bug)
+### F-TD-41 — ✅ CLOSED 2026-07-02 — map specs 05/06 gated to prod-build targets (local dev-harness skip)
 
 - **Raised:** 2026-07-02 (colour-pairing Unit 2 ANVIL, control experiment).
 - **What:** `05-routes-planner-map.spec.ts` + `06-map-view-markers.spec.ts` fail identically on `main` and on the Unit-2 branch in the LOCAL E2E harness (same machine, isolated run) — a Leaflet data-gated-mount/harness issue, control-proven pre-existing. Both passed on the Vercel preview run.
 - **Why it matters:** two permanently-red local specs train everyone to ignore local E2E failures.
 - **Fix shape:** trace the local-only mount failure on `main` (dev-server StrictMode double-mount is the historical suspect for Leaflet — 0a cert notes say prod build was required for map specs) and either fix the harness or gate those 2 specs to prod-build runs.
-- **Status:** open
+- **Resolution (2026-07-02, capped-fix option chosen by Hakan):** both specs now `test.skip` when the target is local (`BASE_URL` unset or localhost — mirrors playwright.config.ts REMOTE detection; NB `.env.e2e.local` pins `BASE_URL=http://localhost:3000`, so hostname is the signal, not unset-ness). They still run on every Vercel preview smoke, where they pass. Override to run locally against a prod build: `E2E_RUN_MAP_SPECS=1`. The underlying dev-harness Leaflet quirk remains untraced by choice (rabbit-hole cap) — but local E2E red now always means "real regression", which was the actual risk.
+- **Status:** closed (gated; deep harness trace deliberately not pursued)
 
 ### F-TD-42 — 🔵 Pre-existing green sign-off buttons on `/haccp/admin` violate green-caging
 
@@ -995,7 +996,7 @@ probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to *
 - **Owner unit:** the `/haccp/admin` Phase-1 migration.
 - **Status:** open
 
-### F-TD-43 — 🔵 Hub headers lost the MFS brand mark (kit ScreenHeader has no logo slot) — Hakan decision pending
+### F-TD-43 — ✅ CLOSED 2026-07-02 — Hub headers logo-less ACCEPTED by Hakan (no logo slot needed)
 
 - **Raised:** 2026-07-02 (colour-pairing Unit 2 Guard 🟡#3; logo question asked, not yet answered).
 - **What:** adopting kit `ScreenHeader` on the hub removed `MfsIcon` from both hub headers (door + home) — consistent with cold-storage/process-room, but the kiosk LANDING screen carrying no brand mark was never an explicit decision.
