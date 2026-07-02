@@ -48,6 +48,8 @@ import type {
   MincePersist,
   MeatPrepPersist,
   TimeSeparationPersist,
+  MinceThreshold,
+  UpdateMinceThresholdInput,
   // product-return
   ReturnRow,
   ReturnPersist,
@@ -156,9 +158,23 @@ export interface HaccpDailyChecksRepository {
   /** Insert a meatprep row; returns the new id (for CA linking). 23505 →
    *  ConflictError. → POST /api/haccp/mince-prep form=meatprep. */
   insertMeatPrep(payload: MeatPrepPersist): Promise<{ id: string }>;
-  /** Insert a time-separation row (no id selected back — no CA path).
-   *  → POST /api/haccp/mince-prep form=timesep. */
-  insertTimeSeparation(payload: TimeSeparationPersist): Promise<void>;
+  /** Insert a time-separation row; returns the new id — needed to link the
+   *  timesep CA row (bug fix 1: a non-empty free-text corrective action now
+   *  files into the CA register). → POST /api/haccp/mince-prep form=timesep. */
+  insertTimeSeparation(payload: TimeSeparationPersist): Promise<{ id: string }>;
+  /** The CCP-M band rows (9 keys: 6 temp channels + 3 per-species kill-day
+   *  limits, ordered by position) — for the admin editor AND the POST band
+   *  derivation. FAIL-CLOSED consumers: an empty/errored read must stop
+   *  grading, never fall back to hardcoded bands.
+   *  → GET/PATCH /api/haccp/admin/mince-thresholds + POST /api/haccp/mince-prep. */
+  listMinceThresholds(): Promise<readonly MinceThreshold[]>;
+  /** Update a CCP-M band row AND append an immutable audit row (who/when/
+   *  old→new). Admin-only (route gate + DB RLS). Returns the updated domain row.
+   *  → PATCH /api/haccp/admin/mince-thresholds. */
+  updateMinceThreshold(
+    input: UpdateMinceThresholdInput,
+    changedBy: string,
+  ): Promise<MinceThreshold>;
 
   // ── 7. product-return ────────────────────────────────────────
   /** Today's returns, newest first. → GET /api/haccp/product-return. */

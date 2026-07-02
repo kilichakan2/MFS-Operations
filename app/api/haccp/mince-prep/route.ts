@@ -14,7 +14,14 @@
  *   - the mince kill-date hard-fail 400 carries two extra response keys;
  *   - the meatprep response `has_deviation` flag INCLUDES the allergen-label
  *     issue, while its CA write gates on temperature only;
- *   - timesep writes NO CA row (no builder exists).
+ *   - timesep files an MMP-TS CA row when its free-text corrective action is
+ *     non-empty (mince-unit bug fix 1; previously it never wrote one).
+ *
+ * Mince unit: the CCP-M bands are DB-driven (`haccp_mince_thresholds`) — the
+ * POST loads them fresh and REFUSES to grade without them (empty set → 500,
+ * never a hardcoded fallback). Amber is DISPLAY ONLY: the service's pass
+ * booleans are blind to it, so an amber reading still 400s without a CA and
+ * still files the register row.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -91,14 +98,29 @@ export async function POST(req: NextRequest) {
     if (form === 'mince') {
       const input = body as CreateMinceInput
 
+      // FAIL-CLOSED: never grade a CCP against a missing rulebook (mirror the
+      // delivery route's stance — no hardcoded fallback exists any more).
+      const thresholds = await dc.listMinceThresholds()
+      if (thresholds.length === 0) {
+        return NextResponse.json({ error: 'Could not load mince/prep thresholds' }, { status: 500 })
+      }
+
       const killDateObj  = new Date(input.kill_date + 'T00:00:00')
       const todayObj     = new Date(today + 'T00:00:00')
       const daysFromKill = Math.floor((todayObj.getTime() - killDateObj.getTime()) / 86400000)
 
-      const v = dc.validateMince({ input, daysFromKill })
+      const v = dc.validateMince({ input, daysFromKill, thresholds })
       if (!v.ok) {
         // The kill-date hard-fail 400 carries two extra keys (route-edge detail).
-        if (dc.killDateHardFail(input.product_species, daysFromKill)) {
+        let hardFail = false
+        try {
+          hardFail = dc.killDateHardFail(input.product_species, daysFromKill, thresholds)
+        } catch {
+          // An invalid species has no kill-day row (fail-closed resolver) —
+          // the 400 below already carries the validation message; the
+          // hard-fail extras simply don't apply.
+        }
+        if (hardFail) {
           return NextResponse.json({
             error:               v.message,
             kill_date_hard_fail: true,
@@ -109,7 +131,7 @@ export async function POST(req: NextRequest) {
       }
 
       const runNum = (await dc.countMinceRuns('haccp_mince_log', today)) + 1
-      const built  = dc.buildMince({ input, userId, today, nowTime, daysFromKill, runNum })
+      const built  = dc.buildMince({ input, userId, today, nowTime, daysFromKill, runNum, thresholds })
 
       let id: string
       try {
@@ -121,7 +143,7 @@ export async function POST(req: NextRequest) {
         throw e
       }
 
-      const caRows = dc.buildMinceCorrectiveActions({ input, userId, sourceId: id })
+      const caRows = dc.buildMinceCorrectiveActions({ input, userId, sourceId: id, thresholds })
       const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'mince')
 
       return NextResponse.json({
@@ -138,7 +160,13 @@ export async function POST(req: NextRequest) {
     if (form === 'meatprep') {
       const input = body as CreateMeatPrepInput
 
-      const v = dc.validateMeatPrep(input)
+      // FAIL-CLOSED: never grade a CCP against a missing rulebook.
+      const thresholds = await dc.listMinceThresholds()
+      if (thresholds.length === 0) {
+        return NextResponse.json({ error: 'Could not load mince/prep thresholds' }, { status: 500 })
+      }
+
+      const v = dc.validateMeatPrep(input, thresholds)
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
       let daysFromKill: number | null = null
@@ -149,7 +177,7 @@ export async function POST(req: NextRequest) {
       }
 
       const runNum = (await dc.countMinceRuns('haccp_meatprep_log', today)) + 1
-      const built  = dc.buildMeatPrep({ input, userId, today, nowTime, daysFromKill, runNum })
+      const built  = dc.buildMeatPrep({ input, userId, today, nowTime, daysFromKill, runNum, thresholds })
 
       let id: string
       try {
@@ -162,7 +190,7 @@ export async function POST(req: NextRequest) {
       }
 
       // CA write gates on temperature only (NOT the allergen-label issue).
-      const caRows = dc.buildMeatPrepCorrectiveActions({ input, userId, sourceId: id })
+      const caRows = dc.buildMeatPrepCorrectiveActions({ input, userId, sourceId: id, thresholds })
       const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'meatprep')
 
       // The response flag INCLUDES the allergen-label issue (broader than the CA gate).
@@ -185,12 +213,16 @@ export async function POST(req: NextRequest) {
       const v = dc.validateTimeSeparation(input)
       if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
 
-      // timesep writes NO CA row — there is no time-separation CA builder.
-      await dc.insertTimeSeparation(
+      // Bug fix 1 (server half): a non-empty free-text corrective action now
+      // files an MMP-TS row into the CA register, linked to the new timesep id.
+      const { id } = await dc.insertTimeSeparation(
         dc.buildTimeSeparation({ input, userId, today, nowTime }),
       )
 
-      return NextResponse.json({ ok: true })
+      const caRows = dc.buildTimeSeparationCorrectiveActions({ input, userId, sourceId: id })
+      const { ca_write_failed } = await submit.fileCorrectiveActions(caRows, 'timesep')
+
+      return NextResponse.json({ ok: true, ca_write_failed })
     }
 
     return NextResponse.json({ error: 'Invalid form type' }, { status: 400 })

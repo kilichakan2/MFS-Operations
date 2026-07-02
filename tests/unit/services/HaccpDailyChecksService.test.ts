@@ -10,7 +10,8 @@
  *     `resolved:false`;
  *   - the diary CA rows carry `null` disposition/recurrence;
  *   - product-return writes a CA row on EVERY post (SOP-12);
- *   - timesep writes NO CA row (no builder exists for it).
+ *   - timesep files a CA row only when its free-text corrective action is
+ *     non-empty (bug fix 1 — contract pinned in the .mincePrep twin).
  */
 import { describe, it, expect } from "vitest";
 import { createHaccpDailyChecksService } from "@/lib/services";
@@ -28,6 +29,7 @@ import type {
   CreateTimeSeparationInput,
   CreateReturnInput,
   GoodsInThreshold,
+  MinceThreshold,
 } from "@/lib/domain";
 import { COLD_STORAGE_CAUSES } from "@/lib/domain";
 
@@ -65,6 +67,38 @@ const GI_THRESHOLDS: readonly GoodsInThreshold[] = [
   giRow("dry_goods", null, null, 9),
 ];
 
+// CCP-M bands are DB-driven since the mince unit — the fixture mirrors the
+// migration seed (values unchanged, so every verdict below is byte-identical
+// to the old hardcoded cascades).
+function mRow(
+  key: string,
+  kind: "temp" | "kill_days",
+  pass_max: number | null,
+  amber_max: number | null,
+  position: number,
+): MinceThreshold {
+  return {
+    id: `00000000-0000-0000-0000-${String(position + 20).padStart(12, "0")}`,
+    key,
+    label: key,
+    kind,
+    pass_max,
+    amber_max,
+    position,
+  };
+}
+const M_THRESHOLDS: readonly MinceThreshold[] = [
+  mRow("mince_input", "temp", 7.0, 8.0, 1),
+  mRow("mince_output_chilled", "temp", 2.0, 3.0, 2),
+  mRow("mince_output_frozen", "temp", -18.0, -17.0, 3),
+  mRow("prep_input", "temp", 7.0, 8.0, 4),
+  mRow("prep_output_chilled", "temp", 4.0, 5.0, 5),
+  mRow("prep_output_frozen", "temp", -18.0, -17.0, 6),
+  mRow("kill_days_lamb", "kill_days", 6, null, 7),
+  mRow("kill_days_beef", "kill_days", 6, null, 8),
+  mRow("kill_days_imported_vac", "kill_days", null, null, 9),
+];
+
 describe("HaccpDailyChecksService — lifted pure helpers", () => {
   it("deliveryTempStatus matches the route cascades", () => {
     const s = svc();
@@ -91,15 +125,15 @@ describe("HaccpDailyChecksService — lifted pure helpers", () => {
     expect(s.buildBatchCode("mince", "2026-06-22", "imported_vac", 2)).toBe(
       "MINCE-2206-IMPVAC-2",
     );
-    expect(s.killDatePass("beef", 6)).toBe(true);
-    expect(s.killDatePass("beef", 7)).toBe(false);
-    expect(s.killDatePass("imported_vac", 99)).toBe(true);
-    expect(s.killDateHardFail("beef", 7)).toBe(true);
-    expect(s.inputTempPass(7)).toBe(true);
-    expect(s.inputTempPass(8)).toBe(false);
-    expect(s.outputTempPass(2, "mince", "chilled")).toBe(true);
-    expect(s.outputTempPass(4, "meatprep", "chilled")).toBe(true);
-    expect(s.outputTempPass(-18, "mince", "frozen")).toBe(true);
+    expect(s.killDatePass("beef", 6, M_THRESHOLDS)).toBe(true);
+    expect(s.killDatePass("beef", 7, M_THRESHOLDS)).toBe(false);
+    expect(s.killDatePass("imported_vac", 99, M_THRESHOLDS)).toBe(true);
+    expect(s.killDateHardFail("beef", 7, M_THRESHOLDS)).toBe(true);
+    expect(s.inputTempPass(7, "mince", M_THRESHOLDS)).toBe(true);
+    expect(s.inputTempPass(8, "mince", M_THRESHOLDS)).toBe(false);
+    expect(s.outputTempPass(2, "mince", "chilled", M_THRESHOLDS)).toBe(true);
+    expect(s.outputTempPass(4, "meatprep", "chilled", M_THRESHOLDS)).toBe(true);
+    expect(s.outputTempPass(-18, "mince", "frozen", M_THRESHOLDS)).toBe(true);
   });
 });
 
@@ -663,14 +697,24 @@ describe("HaccpDailyChecksService — mince-prep", () => {
       output_temp_c: 1,
     };
     expect(
-      s.validateMince({ input: { ...base, product_species: "pork" }, daysFromKill: 2 }),
+      s.validateMince({
+        input: { ...base, product_species: "pork" },
+        daysFromKill: 2,
+        thresholds: M_THRESHOLDS,
+      }),
     ).toMatchObject({ message: "Species must be lamb, beef, or imported_vac" });
-    expect(s.validateMince({ input: base, daysFromKill: 7 })).toMatchObject({
+    expect(
+      s.validateMince({ input: base, daysFromKill: 7, thresholds: M_THRESHOLDS }),
+    ).toMatchObject({
       message:
         "Kill date exceeded (7 days) — DO NOT MINCE. Segregate and return to supplier or dispose as Category 3 ABP.",
     });
     expect(
-      s.validateMince({ input: { ...base, input_temp_c: 8 }, daysFromKill: 2 }),
+      s.validateMince({
+        input: { ...base, input_temp_c: 8 },
+        daysFromKill: 2,
+        thresholds: M_THRESHOLDS,
+      }),
     ).toMatchObject({ message: "Corrective action is required for temperature deviation" });
 
     const cas = s.buildMinceCorrectiveActions({
@@ -681,6 +725,7 @@ describe("HaccpDailyChecksService — mince-prep", () => {
       },
       userId: "u1",
       sourceId: "m1",
+      thresholds: M_THRESHOLDS,
     });
     expect(cas).toHaveLength(1);
     expect(cas[0].ccp_ref).toBe("CCP-M1");
@@ -693,13 +738,15 @@ describe("HaccpDailyChecksService — mince-prep", () => {
       input_temp_c: 4,
       output_temp_c: 3,
     };
-    expect(s.validateMeatPrep({ ...mp, product_name: "" })).toMatchObject({
+    expect(
+      s.validateMeatPrep({ ...mp, product_name: "" }, M_THRESHOLDS),
+    ).toMatchObject({
       message: "Product name is required",
     });
-    expect(s.validateMeatPrep(mp)).toEqual({ ok: true });
+    expect(s.validateMeatPrep(mp, M_THRESHOLDS)).toEqual({ ok: true });
   });
 
-  it("timesep validation + persist has NO CA builder (timesep never files a CA row)", () => {
+  it("timesep validation + persist (CA rows are covered in the .mincePrep twin)", () => {
     const s = svc();
     const ts: CreateTimeSeparationInput = {
       form: "timesep",
@@ -718,12 +765,10 @@ describe("HaccpDailyChecksService — mince-prep", () => {
       nowTime: "12:00:00",
     });
     expect(persist.corrective_action).toBe("note");
-    // There is deliberately no buildTimeSeparationCorrectiveActions on the
-    // service — timesep never writes to haccp_corrective_actions.
-    expect(
-      (s as unknown as Record<string, unknown>)
-        .buildTimeSeparationCorrectiveActions,
-    ).toBeUndefined();
+    // Since the mince unit (bug fix 1), timesep DOES file a CA row when the
+    // free-text corrective action is non-empty — the builder contract is
+    // pinned in HaccpDailyChecksService.mincePrep.test.ts.
+    expect(typeof s.buildTimeSeparationCorrectiveActions).toBe("function");
   });
 });
 

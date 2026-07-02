@@ -26,6 +26,7 @@
 
 import type { ProcessRoomThreshold } from "./processRoom";
 import type { GoodsInThreshold } from "./goodsIn";
+import type { MinceThreshold } from "./mincePrep";
 
 // ─── shared ──────────────────────────────────────────────────────────────────
 
@@ -501,6 +502,9 @@ export interface MincePrepListResult {
   readonly timesep: readonly TimeSeparationRow[];
   readonly deliveries: readonly MincePrepDeliveryRow[];
   readonly mince_batches: readonly MinceBatchSummary[];
+  /** CCP-M band rows (9 keys, ordered by position) — APPENDED LAST so the
+   *  existing response key order stays byte-identical (F-19 discipline). */
+  readonly thresholds: readonly MinceThreshold[];
 }
 
 /** POST mince-prep body — mince form. */

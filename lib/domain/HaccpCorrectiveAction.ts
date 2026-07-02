@@ -17,7 +17,9 @@
  */
 
 // The (source_table, source_id) hub pattern — a CA row links back to the
-// daily-check row. The nine source tables verified against the 7 route files.
+// daily-check row. The ten source tables verified against the 7 route files
+// (haccp_time_separation_log added by the mince unit — bug fix 1: a timesep
+// entry with a non-empty free-text corrective action now files a CA row).
 export type HaccpCASourceTable =
   | "haccp_deliveries"
   | "haccp_cold_storage_temps"
@@ -27,6 +29,7 @@ export type HaccpCASourceTable =
   | "haccp_daily_diary"
   | "haccp_mince_log"
   | "haccp_meatprep_log"
+  | "haccp_time_separation_log"
   | "haccp_returns";
 
 /**
