@@ -51,6 +51,8 @@ import type {
   DailyDiaryPersist,
   ProcessRoomThreshold,
   UpdateProcessRoomThresholdInput,
+  GoodsInThreshold,
+  UpdateGoodsInThresholdInput,
   MincePrepListResult,
   MinceLogRow,
   MeatPrepLogRow,
@@ -175,7 +177,7 @@ export function createSupabaseHaccpDailyChecksRepository(
       const { lastWeekStart, lastWeekEnd } = lastWeekRange(today);
 
       const baseQuery = client.from("haccp_deliveries").select(DELIVERY_COLS);
-      const [deliveries, suppliers] = await Promise.all([
+      const [deliveries, suppliers, thresholds] = await Promise.all([
         (range === "week"
           ? baseQuery.gte("date", weekStart).lte("date", today)
           : range === "last_week"
@@ -189,6 +191,10 @@ export function createSupabaseHaccpDailyChecksRepository(
           .select("id, name, categories")
           .eq("active", true)
           .order("name"),
+        client
+          .from("haccp_goods_in_thresholds")
+          .select("id, category, label, pass_max_c, amber_max_c")
+          .order("position"),
       ]);
 
       if (deliveries.error) {
@@ -207,6 +213,18 @@ export function createSupabaseHaccpDailyChecksRepository(
           cause: suppliers.error,
         });
       }
+      // Thresholds are required to render the CCP-1 bands — fatal on error (do
+      // NOT fall back to hardcoded limits, which would resurrect the drift that
+      // let poultry pass at ≤8°C).
+      if (thresholds.error) {
+        log.error(
+          "HaccpDailyChecksRepository.listDeliveries thresholds DB error",
+          { error: thresholds.error.message },
+        );
+        throw new ServiceError("Failed to load thresholds", {
+          cause: thresholds.error,
+        });
+      }
 
       const allDeliveries = (deliveries.data ??
         []) as unknown as DeliveryRow[];
@@ -218,6 +236,7 @@ export function createSupabaseHaccpDailyChecksRepository(
         deliveries: allDeliveries,
         suppliers: (suppliers.data ?? []) as unknown as DeliverySupplierRow[],
         next_number: nextNumber,
+        thresholds: (thresholds.data ?? []) as unknown as GoodsInThreshold[],
       };
     },
 
@@ -268,6 +287,90 @@ export function createSupabaseHaccpDailyChecksRepository(
         });
       }
       return { id: (data as { id: string }).id };
+    },
+
+    async listGoodsInThresholds(): Promise<readonly GoodsInThreshold[]> {
+      const { data, error } = await client
+        .from("haccp_goods_in_thresholds")
+        .select("id, category, label, pass_max_c, amber_max_c, position")
+        .order("position");
+      if (error) {
+        log.error(
+          "HaccpDailyChecksRepository.listGoodsInThresholds DB error",
+          { error: error.message },
+        );
+        throw new ServiceError("Could not load thresholds", { cause: error });
+      }
+      return (data ?? []) as unknown as GoodsInThreshold[];
+    },
+
+    async updateGoodsInThreshold(
+      input: UpdateGoodsInThresholdInput,
+      changedBy: string,
+    ): Promise<GoodsInThreshold> {
+      // Read the current row first so the audit log can record old→new.
+      const current = await client
+        .from("haccp_goods_in_thresholds")
+        .select("id, category, label, pass_max_c, amber_max_c, position")
+        .eq("id", input.id)
+        .single();
+      if (current.error || !current.data) {
+        log.error(
+          "HaccpDailyChecksRepository.updateGoodsInThreshold read DB error",
+          { error: current.error?.message },
+        );
+        throw new ServiceError("Threshold not found", {
+          cause: current.error ?? new Error("no row returned"),
+        });
+      }
+      const before = current.data as unknown as GoodsInThreshold;
+
+      const { data, error } = await client
+        .from("haccp_goods_in_thresholds")
+        .update({ pass_max_c: input.pass_max_c, amber_max_c: input.amber_max_c })
+        .eq("id", input.id)
+        .select("id, category, label, pass_max_c, amber_max_c, position")
+        .single();
+      if (error || !data) {
+        log.error(
+          "HaccpDailyChecksRepository.updateGoodsInThreshold update DB error",
+          { error: error?.message },
+        );
+        throw new ServiceError("Threshold update failed", {
+          cause: error ?? new Error("no row returned"),
+        });
+      }
+      const after = data as unknown as GoodsInThreshold;
+
+      // Immutable audit row (who / when / old→new). A separate statement —
+      // acceptable at admin-edit frequency (mirrors updateProcessRoomThreshold).
+      // The summary lists ONLY the fields that actually changed, so a no-move
+      // PATCH can never record a misleading `X→X`.
+      const changes: string[] = [];
+      if (before.pass_max_c !== after.pass_max_c)
+        changes.push(`pass ${before.pass_max_c}→${after.pass_max_c}`);
+      if (before.amber_max_c !== after.amber_max_c)
+        changes.push(`amber ${before.amber_max_c}→${after.amber_max_c}`);
+      const audit = await client.from("haccp_goods_in_threshold_audit").insert({
+        threshold_id: after.id,
+        changed_by: changedBy,
+        old_pass_max_c: before.pass_max_c,
+        new_pass_max_c: after.pass_max_c,
+        old_amber_max_c: before.amber_max_c,
+        new_amber_max_c: after.amber_max_c,
+        summary: `${after.label}: ${changes.length ? changes.join(", ") : "no changes"}`,
+      });
+      if (audit.error) {
+        log.error(
+          "HaccpDailyChecksRepository.updateGoodsInThreshold audit DB error",
+          { error: audit.error.message },
+        );
+        throw new ServiceError("Threshold audit write failed", {
+          cause: audit.error,
+        });
+      }
+
+      return after;
     },
 
     // ── 2. cold-storage ──────────────────────────────────────

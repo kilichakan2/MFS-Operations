@@ -25,6 +25,7 @@
  */
 
 import type { ProcessRoomThreshold } from "./processRoom";
+import type { GoodsInThreshold } from "./goodsIn";
 
 // ─── shared ──────────────────────────────────────────────────────────────────
 
@@ -83,12 +84,15 @@ export interface DeliverySupplierRow {
   readonly categories: unknown;
 }
 
-/** Everything the GET /api/haccp/delivery screen needs. */
+/** Everything the GET /api/haccp/delivery screen needs. `thresholds` is the
+ *  DB-driven CCP-1 band set (appended LAST — existing response key order is
+ *  preserved per the F-19 byte-identity discipline). */
 export interface DeliveryListResult {
   readonly date: string;
   readonly deliveries: readonly DeliveryRow[];
   readonly suppliers: readonly DeliverySupplierRow[];
   readonly next_number: number;
+  readonly thresholds: readonly GoodsInThreshold[];
 }
 
 /** The delivery date range selector. */

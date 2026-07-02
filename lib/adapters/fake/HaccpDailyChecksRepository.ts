@@ -38,6 +38,8 @@ import type {
   DailyDiaryPersist,
   ProcessRoomThreshold,
   UpdateProcessRoomThresholdInput,
+  GoodsInThreshold,
+  UpdateGoodsInThresholdInput,
   MincePrepListResult,
   MincePersist,
   MeatPrepPersist,
@@ -65,6 +67,8 @@ export interface FakeHaccpDailyChecksSeed {
   readonly coldStorageUnits?: readonly ColdStorageUnit[];
   /** seedable CCP-3 process-room thresholds (active + inactive). */
   readonly processRoomThresholds?: readonly ProcessRoomThreshold[];
+  /** seedable CCP-1 goods-in thresholds (all 11 categories). */
+  readonly goodsInThresholds?: readonly GoodsInThreshold[];
   /** table+date → existing run count (delivery_number / batch sequencing). */
   readonly counts?: Readonly<Record<string, number>>;
   /** methods that should throw ConflictError (23505 simulation). */
@@ -89,6 +93,16 @@ export interface FakeThresholdAudit {
   readonly new_max_temp_c: number | null;
 }
 
+/** A recorded goods-in threshold change (test-inspectable audit trail). */
+export interface FakeGoodsInThresholdAudit {
+  readonly threshold_id: string;
+  readonly changed_by: string;
+  readonly old_pass_max_c: number | null;
+  readonly new_pass_max_c: number | null;
+  readonly old_amber_max_c: number | null;
+  readonly new_amber_max_c: number | null;
+}
+
 /** A test-inspectable Fake daily-checks repository. */
 export interface FakeHaccpDailyChecksRepository
   extends HaccpDailyChecksRepository {
@@ -104,6 +118,7 @@ export interface FakeHaccpDailyChecksRepository
   readonly timeSeparationInserts: readonly TimeSeparationPersist[];
   readonly returnInserts: readonly ReturnPersist[];
   readonly thresholdAudits: readonly FakeThresholdAudit[];
+  readonly goodsInThresholdAudits: readonly FakeGoodsInThresholdAudit[];
 }
 
 let fakeIdCounter = 0;
@@ -118,6 +133,7 @@ const EMPTY_DELIVERY_LIST: DeliveryListResult = {
   deliveries: [],
   suppliers: [],
   next_number: 1,
+  thresholds: [],
 };
 const EMPTY_COLD_STORAGE_LIST: ColdStorageListResult = {
   units: [],
@@ -156,6 +172,10 @@ export function createFakeHaccpDailyChecksRepository(
   const thresholdAudits: FakeThresholdAudit[] = [];
   const processRoomThresholds: ProcessRoomThreshold[] = (
     seed?.processRoomThresholds ?? []
+  ).map((t) => ({ ...t }));
+  const goodsInThresholdAudits: FakeGoodsInThresholdAudit[] = [];
+  const goodsInThresholds: GoodsInThreshold[] = (
+    seed?.goodsInThresholds ?? []
   ).map((t) => ({ ...t }));
 
   const conflictOn = new Set(seed?.conflictOn ?? []);
@@ -202,11 +222,19 @@ export function createFakeHaccpDailyChecksRepository(
     get thresholdAudits() {
       return thresholdAudits;
     },
+    get goodsInThresholdAudits() {
+      return goodsInThresholdAudits;
+    },
 
     // ── 1. delivery ──────────────────────────────────────────
     async listDeliveries(_range: DeliveryRange): Promise<DeliveryListResult> {
       void _range;
-      return seed?.deliveryList ?? EMPTY_DELIVERY_LIST;
+      return (
+        seed?.deliveryList ?? {
+          ...EMPTY_DELIVERY_LIST,
+          thresholds: goodsInThresholds.map((t) => ({ ...t })),
+        }
+      );
     },
     async findSupplierForDelivery(
       supplierId: string,
@@ -220,6 +248,34 @@ export function createFakeHaccpDailyChecksRepository(
       guardConflict("insertDelivery");
       deliveryInserts.push(payload);
       return { id: nextId() };
+    },
+    async listGoodsInThresholds(): Promise<readonly GoodsInThreshold[]> {
+      return goodsInThresholds.map((t) => ({ ...t }));
+    },
+    async updateGoodsInThreshold(
+      input: UpdateGoodsInThresholdInput,
+      changedBy: string,
+    ): Promise<GoodsInThreshold> {
+      const idx = goodsInThresholds.findIndex((t) => t.id === input.id);
+      if (idx === -1) {
+        throw new Error(`threshold not found (${input.id})`);
+      }
+      const current = goodsInThresholds[idx];
+      const next: GoodsInThreshold = {
+        ...current,
+        pass_max_c: input.pass_max_c,
+        amber_max_c: input.amber_max_c,
+      };
+      goodsInThresholds[idx] = next;
+      goodsInThresholdAudits.push({
+        threshold_id: current.id,
+        changed_by: changedBy,
+        old_pass_max_c: current.pass_max_c,
+        new_pass_max_c: next.pass_max_c,
+        old_amber_max_c: current.amber_max_c,
+        new_amber_max_c: next.amber_max_c,
+      });
+      return { ...next };
     },
 
     // ── 2. cold-storage ──────────────────────────────────────
