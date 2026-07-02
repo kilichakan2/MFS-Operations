@@ -120,6 +120,22 @@ describe("contrast-pairings · layer 1 — token mapping (spec §6)", () => {
     expectRootDeclaration("--icon-default", "var(--mfs-navy-700)");
   });
 
+  it("category-chip tokens (Goods In §5.11): brand fills with legal labels", () => {
+    // Meat family = maroon; frozen = navy; chilled = sand (ink label — the ONLY
+    // sand text pairing); poultry = orange (ink label, LOCKED b); ambient =
+    // red-600 (600 not 500 — red-500 fails white small-text contrast).
+    expectRootDeclaration("--category-meat-fill", "var(--mfs-maroon-500)");
+    expectRootDeclaration("--category-meat-fg", "#ffffff");
+    expectRootDeclaration("--category-frozen-fill", "var(--mfs-navy-700)");
+    expectRootDeclaration("--category-frozen-fg", "#ffffff");
+    expectRootDeclaration("--category-chilled-fill", "var(--mfs-sand-500)");
+    expectRootDeclaration("--category-chilled-fg", "var(--mfs-ink-900)");
+    expectRootDeclaration("--category-poultry-fill", "var(--mfs-orange-500)");
+    expectRootDeclaration("--category-poultry-fg", "var(--mfs-ink-900)");
+    expectRootDeclaration("--category-ambient-fill", "var(--mfs-red-600)");
+    expectRootDeclaration("--category-ambient-fg", "#ffffff");
+  });
+
   it("the blanket --text-on-action is RETIRED from the light :root", () => {
     expect(
       /--text-on-action\s*:/.test(lightRoot),
@@ -232,6 +248,12 @@ const APPROVED: Pairing[] = [
   { bg: RED_500, fg: CREAM, role: "cream on brand red shape", min: 3.0, documented: 3.0 },
   // Sand
   { bg: SAND_500, fg: INK_900, role: "ink on sand chip (the ONLY sand text)", min: 4.5, documented: 6.1 },
+  // Goods In category chips (§5.11) — small bold labels, body-text bar (≥4.5)
+  { bg: MAROON_500, fg: WHITE, role: "category chip: meat (white on maroon)", min: 4.5, documented: 14.4 },
+  { bg: NAVY_700, fg: WHITE, role: "category chip: frozen (white on navy)", min: 4.5, documented: 15.1 },
+  { bg: SAND_500, fg: INK_900, role: "category chip: chilled (ink on sand)", min: 4.5, documented: 6.1 },
+  { bg: ORANGE_500, fg: INK_900, role: "category chip: poultry (ink on orange)", min: 4.5, documented: 5.1 },
+  { bg: RED_600, fg: WHITE, role: "category chip: ambient (white on red-600)", min: 4.5, documented: 5.0 },
   // Status badges (soft fill + -700 text) — verified-safe set
   { bg: RED_100, fg: RED_700, role: "error badge", min: 4.5, documented: 5.8 },
   { bg: GREEN_100, fg: GREEN_700, role: "success badge (caged)", min: 4.5, documented: 6.6 },

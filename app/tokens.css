@@ -66,6 +66,21 @@
 
   --sync-syncing:var(--amber-600); --sync-stuck:var(--mfs-red-600); --sync-clear:var(--green-600);
 
+  /* ===== CATEGORY CHIPS (Goods In unit, pairing-law §5.11 / brand p14) =====
+     Product-category chip colours — brand category families with their LEGAL
+     label colour baked in as a pair (fill+fg travel together, spec §4 matrix):
+       meat (lamb/beef/red_meat/offal/mince_prep) = maroon-500 + white  (14.4)
+       frozen (frozen/frozen_beef_lamb)           = navy-700  + white   (15.1)
+       chilled (dairy/chilled_other)              = sand-500  + ink-900 (6.1 — the ONLY sand text pairing)
+       poultry                                    = orange-500 + ink-900 (5.1, LOCKED b)
+       ambient (dry_goods)                        = red-600   + white   (5.0 — 600 not 500: red-500 fails white small text; bold weight per §5.11)
+     Pinned by tests/unit/design/contrast-pairings.test.ts (both layers). */
+  --category-meat-fill:var(--mfs-maroon-500); --category-meat-fg:#ffffff;
+  --category-frozen-fill:var(--mfs-navy-700); --category-frozen-fg:#ffffff;
+  --category-chilled-fill:var(--mfs-sand-500); --category-chilled-fg:var(--mfs-ink-900);
+  --category-poultry-fill:var(--mfs-orange-500); --category-poultry-fg:var(--mfs-ink-900);
+  --category-ambient-fill:var(--mfs-red-600); --category-ambient-fg:#ffffff;
+
   --shadow-sm:0 1px 2px rgba(22,32,91,.08); --shadow-md:0 4px 14px rgba(22,32,91,.10),0 2px 4px rgba(22,32,91,.06); --shadow-lg:0 18px 48px rgba(22,32,91,.16); --shadow-accent:0 8px 24px rgba(235,102,25,.30);
 
   --radius-sm:4px; --radius-md:8px; --radius-lg:14px; --radius-xl:22px; --radius-pill:999px;

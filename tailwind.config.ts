@@ -74,6 +74,19 @@ const config: Config = {
           stuck:   'var(--sync-stuck)',
           clear:   'var(--sync-clear)',
         },
+        // Goods In category chips (pairing-law §5.11) — fill+label pairs.
+        category: {
+          'meat-fill':    'var(--category-meat-fill)',
+          'meat-fg':      'var(--category-meat-fg)',
+          'frozen-fill':  'var(--category-frozen-fill)',
+          'frozen-fg':    'var(--category-frozen-fg)',
+          'chilled-fill': 'var(--category-chilled-fill)',
+          'chilled-fg':   'var(--category-chilled-fg)',
+          'poultry-fill': 'var(--category-poultry-fill)',
+          'poultry-fg':   'var(--category-poultry-fg)',
+          'ambient-fill': 'var(--category-ambient-fill)',
+          'ambient-fg':   'var(--category-ambient-fg)',
+        },
         'focus-ring': 'var(--focus-ring)',
 
         // ── Tier-1 LEGACY brand names (retained so existing screens stay
