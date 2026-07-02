@@ -552,6 +552,18 @@ test.describe('@critical HACCP Goods In (CCP 1) — kit rebuild + DB-driven thre
       .filter({ hasText: 'Amber ceiling' })
       .first()
     const amberInput = poultryCard.getByRole('textbox').nth(1)
+    // Self-heal a dirty start (ANVIL 2026-07-02): a crashed prior attempt or
+    // an unreset shared DB can leave 5.5 behind — restore the locked seed
+    // value via the same save path FIRST, so retries recover instead of
+    // failing at the door. Legal values here are only 5 (seed) or 5.5 (ours).
+    await expect(amberInput).toHaveValue(/^5(\.5)?$/)
+    if ((await amberInput.inputValue()) !== '5') {
+      await amberInput.fill('5')
+      await poultryCard.getByRole('button', { name: /save limit/i }).click()
+      await expect(page.getByText(/limit updated — paperwork required/i)).toBeVisible({
+        timeout: 10_000,
+      })
+    }
     await expect(amberInput).toHaveValue('5')
     await amberInput.fill('5.5')
     await poultryCard.getByRole('button', { name: /save limit/i }).click()
@@ -562,12 +574,15 @@ test.describe('@critical HACCP Goods In (CCP 1) — kit rebuild + DB-driven thre
     })
     await expect(page.getByText(/CCP 1 Goods In/i)).toBeVisible()
 
-    // The delivery screen's band copy SELF-UPDATES from the DB row.
-    await page.goto('/haccp/delivery')
+    // The delivery screen's band copy SELF-UPDATES from the DB row. Use the
+    // openGoodsIn readiness gate + a 20s window: the copy is DERIVED from the
+    // thresholds fetch, which can sit at "Loading…" well past 10s on a busy
+    // dev server (ANVIL 2026-07-02 caught exactly that snapshot).
+    await openGoodsIn(page)
     await page.getByRole('button', { name: 'Poultry', exact: true }).click()
     await expect(
       page.getByText('≤4°C pass · 4–5.5°C conditional accept · >5.5°C reject'),
-    ).toBeVisible({ timeout: 10_000 })
+    ).toBeVisible({ timeout: 20_000 })
 
     // RESTORE the locked seed value (5.0).
     await page.goto('/haccp/admin')
@@ -583,11 +598,11 @@ test.describe('@critical HACCP Goods In (CCP 1) — kit rebuild + DB-driven thre
     await poultryCard2.getByRole('button', { name: /save limit/i }).click()
     await expect(page.getByText(/limit updated — paperwork required/i)).toBeVisible()
 
-    await page.goto('/haccp/delivery')
+    await openGoodsIn(page)
     await page.getByRole('button', { name: 'Poultry', exact: true }).click()
     await expect(
       page.getByText('≤4°C pass · 4–5°C conditional accept · >5°C reject'),
-    ).toBeVisible({ timeout: 10_000 })
+    ).toBeVisible({ timeout: 20_000 })
 
     // Non-admin: the thresholds API is denied outright (route gate + DB RLS
     // behind it; the DB-level denial is pinned in pgTAP 019).

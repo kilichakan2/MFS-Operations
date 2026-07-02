@@ -112,15 +112,22 @@ SELECT isnt_empty($$SELECT * FROM haccp_goods_in_threshold_audit$$,
   'admin CAN SELECT the audit log');
 
 -- ── 4) Audit immutability: even an admin cannot UPDATE/DELETE it (2 assertions)
+-- Assertions key on THIS test's own row (changed_by = the fixture admin created
+-- in this transaction) — never LIMIT 1 over the whole threshold_id, which is
+-- order-dependent on a dirty DB (the integration suite commits real poultry
+-- audit rows; ANVIL 2026-07-02 caught the LIMIT 1 read picking one of those).
 UPDATE haccp_goods_in_threshold_audit SET new_pass_max_c = 99
   WHERE threshold_id = current_setting('test.poultry')::uuid;
 SELECT is(
   (SELECT new_pass_max_c::text FROM haccp_goods_in_threshold_audit
-     WHERE threshold_id = current_setting('test.poultry')::uuid LIMIT 1),
+     WHERE threshold_id = current_setting('test.poultry')::uuid
+       AND changed_by = current_setting('test.admin')::uuid),
   '3.0',
   'audit log is immutable — admin UPDATE is a no-op (no UPDATE policy)');
 DELETE FROM haccp_goods_in_threshold_audit WHERE threshold_id = current_setting('test.poultry')::uuid;
-SELECT isnt_empty($$SELECT * FROM haccp_goods_in_threshold_audit$$,
+SELECT isnt_empty(
+  format($$SELECT * FROM haccp_goods_in_threshold_audit WHERE changed_by = %L$$,
+    current_setting('test.admin')),
   'audit log is immutable — admin DELETE is a no-op (no DELETE policy)');
 
 RESET ROLE;
