@@ -115,13 +115,6 @@ CCP 1 and CCP 3 use a three-band model: **pass** (≤ target), **amber / conditi
 | CCP 1 — Goods In | Frozen — conditional accept (CA logged, re-freeze immediately) | -18 to -15°C | QFF Regs 2007 tolerance |
 | CCP 1 — Goods In | Frozen — reject | >-15°C | QFF Regs 2007 |
 | CCP 1 — Goods In | Dry goods | No temperature CCP — visual / condition check only | — |
-
-**Written justifications for the two CCP-1 bands that deviate from the strictest legal reading:**
-
-1. **Red meat reject line at >8°C** — Regulation 853/2004's specific red-meat transport limit is 7°C core; this register's reject line sits 1°C above it. Retained per the general UK chill-holding requirement of 8°C, with the 5–8°C band treated as a conditional accept with mandatory corrective action (place into coldest chiller, halve remaining shelf life, document, review supplier). Decision: Hakan, 2026-07-02.
-2. **Poultry 4–5°C grace band** — the legal limit is ≤4°C (Reg 853/2004 Annex III Sec II) with no legal headroom. The 4–5°C band is a documented 1°C grace band for probe/unloading measurement fluctuation, treated as amber with mandatory corrective action; >5°C is a hard reject. Decision: Hakan, 2026-07-02.
-
-*(Historical note: earlier revisions of this table listed "fresh meat receipt ≤4°C" and "frozen meat receipt ≤-12°C". Both were wrong: 4°C is poultry's limit, not red meat's, and -12°C is the QFF retail-cabinet exception, not a receipt limit. Corrected Jul 2026 to the bands the app actually enforces.)*
 | CCP 2 — Cold Storage | Fresh product storage | 0–4°C | Reg 853/2004 |
 | CCP 2 — Cold Storage | Frozen product storage | ≤-18°C | Reg 853/2004 |
 | CCP 3 — Process Room | Product core — pass | ≤4°C | Reg 853/2004 |
@@ -134,6 +127,13 @@ CCP 1 and CCP 3 use a three-band model: **pass** (≤ target), **amber / conditi
 | SOP 3 — Calibration | Steriliser (knife/tools) | ≥82°C | Industry standard |
 | SOP 3 — Calibration | Ice water probe test | 0°C ±1°C | Industry standard |
 | SOP 3 — Calibration | Boiling water probe test | 100°C ±1°C | Industry standard |
+
+**Written justifications for the two CCP-1 bands that deviate from the strictest legal reading:**
+
+1. **Red meat reject line at >8°C** — Regulation 853/2004's specific red-meat transport limit is 7°C core; this register's reject line sits 1°C above it. Retained per the general UK chill-holding requirement of 8°C, with the 5–8°C band treated as a conditional accept with mandatory corrective action (place into coldest chiller, halve remaining shelf life, document, review supplier). Decision: Hakan, 2026-07-02.
+2. **Poultry 4–5°C grace band** — the legal limit is ≤4°C (Reg 853/2004 Annex III Sec II) with no legal headroom. The 4–5°C band is a documented 1°C grace band for probe/unloading measurement fluctuation, treated as amber with mandatory corrective action; >5°C is a hard reject. Decision: Hakan, 2026-07-02.
+
+*(Historical note: earlier revisions of this table listed "fresh meat receipt ≤4°C" and "frozen meat receipt ≤-12°C". Both were wrong: 4°C is poultry's limit, not red meat's, and -12°C is the QFF retail-cabinet exception, not a receipt limit. Corrected Jul 2026 to the bands the app actually enforces.)*
 
 ---
 
