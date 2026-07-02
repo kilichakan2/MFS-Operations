@@ -1003,16 +1003,23 @@ probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to *
 - **Fix shape (if "restore"):** add an optional logo `ReactNode` slot to `ScreenHeader` (kit-first, ADR-0014 Rule 3), pass `MfsIcon` on the hub; legal pairing = white mark on bold-navy / alarm-red.
 - **Status:** open (awaiting Hakan: accept vs restore)
 
-### F-TD-44 — 🔵 Threshold update→audit is non-transactional (goods-in AND process-room)
+### F-TD-44 — 🔵 Threshold update→audit is non-transactional (goods-in AND process-room AND mince)
 
-- **Raised:** 2026-07-02 (Goods In unit Guard review 🔵3, PR #112).
+- **Raised:** 2026-07-02 (Goods In unit Guard review 🔵3, PR #112). **Extended 2026-07-02:** `updateMinceThreshold` (PR #113, `haccp_mince_thresholds`) shares the same two-write posture — close all THREE tables in the one follow-up.
 - **What:** `updateGoodsInThreshold` (and the shipped `updateProcessRoomThreshold` it mirrors) performs the threshold UPDATE and the audit INSERT as two separate writes. If the audit insert fails after the update commits, the limit has moved with no audit row (the admin sees a 500, but the change persists).
 - **Fix shape:** one DB trigger or RPC that writes both atomically — close it for BOTH threshold tables in one follow-up.
 - **Status:** open
 
-### F-TD-45 — 🔵 No magnitude bound on threshold edits (goods-in + process-room posture)
+### F-TD-45 — 🔵 No magnitude bound on threshold edits (goods-in + process-room + mince posture)
 
-- **Raised:** 2026-07-02 (Goods In unit Guard review 🔵4, PR #112).
+- **Raised:** 2026-07-02 (Goods In unit Guard review 🔵4, PR #112). **Extended 2026-07-02:** the mince validator (PR #113) shares the posture (structure/ordering checked, magnitude unbounded → numeric(4,1) overflow = 500 not 400).
 - **What:** `validateGoodsInThreshold` checks finiteness/ordering/structure but not magnitude — `pass_max_c: 1000` overflows `numeric(4,1)` → DB error → ugly 500 instead of a friendly 400; nothing bounds how far an admin can loosen a band (the immutable audit log is the only control). Same posture as the process-room trio.
 - **Fix shape:** sanity range per category (e.g. ±50°C) in the shared validator, 400 on breach; consider a "loosening beyond X requires a second admin" rule if Hakan ever wants it.
+- **Status:** open
+
+### F-TD-46 — 🔵 pgTAP runner globs `_helpers.sql` → cosmetic FAIL summary line
+
+- **Raised:** 2026-07-02 (/haccp/mince unit ANVIL run, PR #113; pre-existing on main).
+- **What:** `supabase test db` picks up `supabase/tests/_helpers.sql` as a test file; it has no TAP plan so the runner prints "No plan found" and the final summary line says `Result: FAIL` even when every real assertion passes (293/293 as of #113). Every ANVIL run must carry a "count assertions, ignore the summary line" caveat — a standing misread risk for future sessions/agents.
+- **Fix shape:** rename/move the helper out of the glob (e.g. `supabase/tests/helpers/` or a non-`.sql`-test naming pattern the runner skips) or give it a trivial plan; one-file change + re-run to confirm the summary goes green.
 - **Status:** open
