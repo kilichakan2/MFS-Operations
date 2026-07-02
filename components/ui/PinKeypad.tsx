@@ -120,7 +120,7 @@ function PinDots({
         <span
           key={i}
           className={[
-            'w-4 h-4 rounded-full border-2 border-strong transition-all duration-150',
+            'w-4 h-4 rounded-full border-2 border-input transition-all duration-150',
             i < filled ? 'bg-action-primary border-action-primary scale-110' : 'bg-transparent',
           ].join(' ')}
         />

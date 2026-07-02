@@ -23,8 +23,9 @@ const BASE =
   'disabled:bg-surface-sunken disabled:text-subtle disabled:cursor-not-allowed ' +
   'placeholder:text-subtle'
 
+// Load-bearing boundary (§5.4) — border-input, not the decorative default.
 const BORDER_DEFAULT =
-  'border-[1.5px] border-default ' +
+  'border-[1.5px] border-input ' +
   'focus-visible:border-focus-ring focus-visible:shadow-[0_0_0_3px_var(--focus-ring-shadow)]'
 
 const BORDER_ERROR =

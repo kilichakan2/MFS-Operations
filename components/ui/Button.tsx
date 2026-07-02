@@ -26,13 +26,16 @@ function cx(...parts: Array<string | false | null | undefined>): string {
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
+  // Per-variant label colours (spec §5.3): the orange fill carries an INK
+  // label (LOCKED (b) — white on orange is 3.3, body-illegal); navy and red
+  // fills carry white labels via their own -fg tokens.
   primary: cx(
-    'bg-action-primary text-on-action border-transparent',
+    'bg-action-primary text-action-primary-fg border-transparent',
     'hover:bg-action-primary-hover active:bg-action-primary-active',
     'disabled:bg-action-primary-disabled',
   ),
   secondary: cx(
-    'bg-action-secondary text-on-action border-transparent',
+    'bg-action-secondary text-action-secondary-fg border-transparent',
     'hover:bg-action-secondary-hover active:bg-action-secondary-active',
     'disabled:bg-action-secondary-disabled',
   ),
@@ -51,7 +54,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
     'disabled:opacity-50',
   ),
   danger: cx(
-    'bg-action-danger text-on-action border-transparent',
+    'bg-action-danger text-action-danger-fg border-transparent',
     'hover:bg-action-danger-hover active:bg-action-danger-active',
     'disabled:bg-action-danger-disabled',
   ),

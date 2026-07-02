@@ -14,7 +14,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { MfsIcon, MfsLogo } from '@/components/ui'
+import { MfsLogo } from '@/components/ui'
 import { useHACCPAlarm } from '@/hooks/useHACCPAlarm'
 import { usePushNotifications } from '@/hooks/usePushNotifications'
 import {
@@ -23,6 +23,9 @@ import {
   Banner,
   Modal,
   PinKeypad,
+  ScreenHeader,
+  Button,
+  IconButton,
   type TileState,
 } from '@/components/ui'
 import {
@@ -375,68 +378,62 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
   return (
     <div className="min-h-screen bg-surface-base flex flex-col select-none">
 
-      {/* Header — turns red while alarming (preserved behaviour) */}
-      <header
-        className={cx(
-          'flex items-center justify-between gap-3 px-4 md:px-6 h-16 border-b flex-shrink-0 transition-colors duration-500',
-          alarm.isAlarming ? 'bg-status-error-fill border-status-error-border' : 'bg-surface-raised border-default',
-        )}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <MfsIcon className={cx('h-7 w-7', alarm.isAlarming ? 'text-inverse' : 'text-body')} />
-          <div className="w-px h-6 bg-border" />
-          <div className="min-w-0 leading-tight">
-            <div className={cx('font-display text-h3', alarm.isAlarming ? 'text-inverse' : 'text-body')}>
-              Food Safety
-            </div>
-            <div className={cx('text-caption font-semibold', alarm.isAlarming ? 'text-inverse' : 'text-subtle')}>
-              <span className="hidden md:inline">MFS Sheffield · S3 8DG · </span>HACCP
-            </div>
-          </div>
-          {alarm.isAlarming && (
-            <span className="ml-1 animate-pulse rounded-pill border border-current px-2 py-0.5 text-caption font-bold text-inverse">
-              {alarm.overdueCount} OVERDUE
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => { window.location.href = '/haccp/admin' }}
-              className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-action-primary bg-surface-raised text-action-primary font-semibold text-body-sm"
+      {/* Header — the bold navy anchor that flips to the ALARM surface while
+          alarming. Same boolean, same source (alarm.isAlarming); only the
+          surface context it toggles changed (spec §5.10). */}
+      <ScreenHeader
+        surface={alarm.isAlarming ? 'alarm' : 'bold-navy'}
+        title="Food Safety"
+        eyebrow={
+          <>
+            <span className="hidden md:inline">MFS Sheffield · S3 8DG · </span>HACCP
+          </>
+        }
+        actions={
+          <>
+            {alarm.isAlarming && (
+              <span className="animate-pulse rounded-pill border border-current px-2 py-0.5 text-caption font-bold text-body whitespace-nowrap">
+                {alarm.overdueCount} OVERDUE
+              </span>
+            )}
+            {isAdmin && (
+              <Button
+                // Orange-500 fill is spec-banned on the red alarm surface
+                // (1.54:1, §4 red-600 row) — drop to ghost-inverse while alarming.
+                variant={alarm.isAlarming ? 'ghost-inverse' : 'primary'}
+                size="sm"
+                leadingIcon={<Ic name="settings" size={17} />}
+                onClick={() => { window.location.href = '/haccp/admin' }}
+              >
+                <span className="hidden md:inline">Admin panel</span>
+              </Button>
+            )}
+            <Button
+              variant="ghost-inverse"
+              size="sm"
+              leadingIcon={<Ic name="documents" size={18} />}
+              onClick={() => { window.location.href = '/haccp/documents' }}
             >
-              <Ic name="settings" size={17} />
-              <span className="hidden md:inline">Admin panel</span>
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => { window.location.href = '/haccp/documents' }}
-            className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-default bg-surface-raised text-muted font-semibold text-body-sm"
-          >
-            <Ic name="documents" size={18} />
-            <span className="hidden md:inline">Documents</span>
-          </button>
-          <div className="flex items-center gap-2 rounded-xl bg-surface-base border border-default px-2 py-1">
-            <span className="w-8 h-8 rounded-full bg-action-primary text-on-action flex items-center justify-center text-caption font-bold">
-              {initials(userName)}
-            </span>
-            <div className="hidden md:block min-w-0">
-              <div className="text-body-sm font-semibold text-body truncate">{userName}</div>
+              <span className="hidden md:inline">Documents</span>
+            </Button>
+            <div className="flex items-center gap-2 rounded-xl border border-default px-2 py-1">
+              <span className="w-8 h-8 rounded-full bg-action-primary text-action-primary-fg flex items-center justify-center text-caption font-bold">
+                {initials(userName)}
+              </span>
+              <div className="hidden md:block min-w-0">
+                <div className="text-body-sm font-semibold text-body truncate">{userName}</div>
+              </div>
+              <IconButton
+                variant="ghost-inverse"
+                size="sm"
+                aria-label="Sign out"
+                icon={<Ic name="logout" size={17} />}
+                onClick={signOut}
+              />
             </div>
-            <button
-              type="button"
-              onClick={signOut}
-              aria-label="Sign out"
-              className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-default bg-surface-raised text-muted"
-            >
-              <Ic name="logout" size={17} />
-            </button>
-          </div>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {/* Safety banners */}
       <div className="flex flex-col gap-2 px-4 pt-3 md:px-6 flex-shrink-0 empty:hidden">
@@ -460,7 +457,7 @@ function HomeScreen({ userName, userRole }: { userName: string; userRole: string
               <button
                 type="button"
                 onClick={async () => { await push.subscribe() }}
-                className="flex-shrink-0 h-9 px-4 rounded-md bg-action-primary text-on-action font-semibold text-body-sm"
+                className="flex-shrink-0 h-9 px-4 rounded-md bg-action-primary text-action-primary-fg font-semibold text-body-sm"
               >
                 Enable
               </button>
@@ -639,14 +636,16 @@ function StaffCard({ member, onSelect }: { member: StaffMember; onSelect: (m: St
     >
       <span
         className={cx(
-          'w-12 h-12 rounded-full flex items-center justify-center text-on-action text-body-lg font-bold',
-          isWh ? 'bg-action-primary' : 'bg-action-secondary',
+          'w-12 h-12 rounded-full flex items-center justify-center text-body-lg font-bold',
+          isWh
+            ? 'bg-action-primary text-action-primary-fg'
+            : 'bg-action-secondary text-action-secondary-fg',
         )}
       >
         {initials(member.name)}
       </span>
       <div className="min-w-0">
-        <div className="text-body font-semibold text-body">{member.name}</div>
+        <div className="text-body-md font-semibold text-body">{member.name}</div>
         <div className="text-body-sm text-subtle mt-0.5">{isWh ? 'Warehouse' : 'Butcher'}</div>
       </div>
       {(member.secondary_roles ?? []).length > 0 && (
@@ -713,23 +712,22 @@ function LoginDoor() {
 
   return (
     <div className="min-h-screen bg-surface-base flex flex-col select-none">
-      <header className="flex items-center justify-between gap-3 px-4 md:px-6 h-16 border-b border-default flex-shrink-0">
-        <div className="flex items-center gap-3 min-w-0">
-          <MfsIcon className="h-7 w-7 text-body" />
-          <div className="w-px h-6 bg-border" />
-          <div className="leading-tight">
-            <div className="font-display text-h3 text-body">Food Safety</div>
-            <div className="text-caption font-semibold text-subtle">MFS Sheffield · HACCP kiosk</div>
+      {/* Bold navy anchor (spec §5.12 — one bold anchor per screen); the
+          clock resolves white/cream through the surface context. */}
+      <ScreenHeader
+        surface="bold-navy"
+        title="Food Safety"
+        eyebrow="MFS Sheffield · HACCP kiosk"
+        actions={
+          <div className="text-right">
+            <div className="font-text text-h2 font-bold text-body tabular-nums leading-none">{timeStr}</div>
+            <div className="text-caption font-semibold text-subtle mt-1">{dateStr}</div>
           </div>
-        </div>
-        <div className="text-right">
-          <div className="font-text text-h2 font-bold text-body tabular-nums leading-none">{timeStr}</div>
-          <div className="text-caption font-semibold text-subtle mt-1">{dateStr}</div>
-        </div>
-      </header>
+        }
+      />
 
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="font-display text-h2 text-body">Tap your name to sign in</div>
+        <div className="font-display text-h2 text-heading">Tap your name to sign in</div>
         <div className="text-body-sm text-subtle mt-1 mb-6">
           A 4-digit PIN keeps every record signed to you.
         </div>
@@ -744,7 +742,7 @@ function LoginDoor() {
             <span className="w-14 h-14 rounded-lg bg-surface-sunken flex items-center justify-center text-subtle">
               <Ic name="people" size={26} />
             </span>
-            <div className="text-body font-semibold text-body">No staff found</div>
+            <div className="text-body-md font-semibold text-body">No staff found</div>
             <div className="text-body-sm text-subtle max-w-[34ch]">
               No team members are set up for this site. An admin can add staff from the main app.
             </div>
@@ -760,7 +758,7 @@ function LoginDoor() {
         <button
           type="button"
           onPointerDown={() => { window.location.href = '/haccp/visitor' }}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-action-primary text-on-action font-semibold text-body py-3"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-action-primary text-action-primary-fg font-semibold text-body-md py-3"
         >
           <Ic name="people" size={19} />
           Visitor sign-in
@@ -768,7 +766,7 @@ function LoginDoor() {
         <button
           type="button"
           onPointerDown={(e) => { e.preventDefault(); window.location.href = '/' }}
-          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-action-ghost-border bg-transparent text-action-ghost-fg font-semibold text-body py-3"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-md border border-action-ghost-border bg-transparent text-action-ghost-fg font-semibold text-body-md py-3"
         >
           Back to main app
         </button>

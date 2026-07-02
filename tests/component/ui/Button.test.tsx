@@ -63,23 +63,28 @@ describe("Button", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
-  it("renders the expected semantic class per variant", () => {
+  it("renders the expected semantic fill + per-variant label class (spec §5.3)", () => {
+    // Per-action -fg labels (2026-07-01 Unit 2): orange fill carries an INK
+    // label (LOCKED b — white on orange is 3.3, body-illegal); navy and red
+    // fills carry white labels via their own -fg tokens.
     const { rerender } = render(<Button variant="primary">x</Button>);
-    expect(
-      screen.getByRole("button", { name: "x" }).className,
-    ).toContain("bg-action-primary");
+    let cls = screen.getByRole("button", { name: "x" }).className;
+    expect(cls).toContain("bg-action-primary");
+    expect(cls).toContain("text-action-primary-fg");
     rerender(<Button variant="secondary">x</Button>);
-    expect(
-      screen.getByRole("button", { name: "x" }).className,
-    ).toContain("bg-action-secondary");
+    cls = screen.getByRole("button", { name: "x" }).className;
+    expect(cls).toContain("bg-action-secondary");
+    expect(cls).toContain("text-action-secondary-fg");
     rerender(<Button variant="ghost">x</Button>);
     expect(
       screen.getByRole("button", { name: "x" }).className,
     ).toContain("text-action-ghost-fg");
     rerender(<Button variant="danger">x</Button>);
-    expect(
-      screen.getByRole("button", { name: "x" }).className,
-    ).toContain("bg-action-danger");
+    cls = screen.getByRole("button", { name: "x" }).className;
+    expect(cls).toContain("bg-action-danger");
+    expect(cls).toContain("text-action-danger-fg");
+    // The blanket on-action class is retired from every variant.
+    expect(cls).not.toContain("text-on-action");
   });
 
   it("forwards a ref to the underlying button", () => {

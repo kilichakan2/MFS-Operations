@@ -103,6 +103,9 @@ export function Banner({
     </>
   )
 
+  // Soft fills are LIGHT surfaces: declare the canvas context so nested
+  // semantic text resolves light even when a Banner sits inside a bold
+  // surface (spec §5.9).
   const shell = cx(
     'flex items-start gap-3 rounded-xl border px-4 py-3',
     TONE_CLASSES[tone],
@@ -121,6 +124,7 @@ export function Banner({
       <button
         type="button"
         onClick={onClick}
+        data-surface="canvas"
         {...announce}
         className={cx(
           shell,
@@ -134,7 +138,7 @@ export function Banner({
   }
 
   return (
-    <div role={role} className={shell}>
+    <div role={role} data-surface="canvas" className={shell}>
       {body}
     </div>
   )

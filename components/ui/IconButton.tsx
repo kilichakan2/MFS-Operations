@@ -37,7 +37,7 @@ const VARIANT_CLASSES: Record<IconButtonVariant, string> = {
     'hover:bg-[color-mix(in_srgb,var(--text-inverse)_12%,transparent)] disabled:opacity-50',
   ),
   primary: cx(
-    'bg-action-primary text-on-action border-transparent',
+    'bg-action-primary text-action-primary-fg border-transparent',
     'hover:bg-action-primary-hover active:bg-action-primary-active',
     'disabled:bg-action-primary-disabled',
   ),

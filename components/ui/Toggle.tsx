@@ -40,7 +40,10 @@ export function Toggle({
       >
         <RadixSwitch.Thumb
           className={[
-            'block w-[21px] h-[21px] rounded-full bg-[var(--text-on-action)]',
+            // Intentional borrow: --action-secondary-fg IS the shared white
+            // foreground — legal as the knob on the orange fill at the ≥3:1
+            // icon bar (measured 3.3, spec §4).
+            'block w-[21px] h-[21px] rounded-full bg-[var(--action-secondary-fg)]',
             'translate-x-[3px] data-[state=checked]:translate-x-[22px]',
             'transition-transform',
           ].join(' ')}

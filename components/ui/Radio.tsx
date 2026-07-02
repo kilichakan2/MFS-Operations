@@ -50,7 +50,7 @@ export function Radio({
               className={[
                 'flex shrink-0 items-center justify-center',
                 'w-[22px] h-[22px] rounded-full border-2',
-                'border-strong bg-transparent',
+                'border-input bg-transparent',
                 'data-[state=checked]:border-action-primary',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
                 'disabled:cursor-not-allowed',

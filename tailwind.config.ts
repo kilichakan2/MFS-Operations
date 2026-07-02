@@ -17,14 +17,6 @@ const config: Config = {
           overlay: 'var(--surface-overlay)',
           inverse: 'var(--surface-inverse)',
         },
-        text: {
-          body:        'var(--text-body)',
-          muted:       'var(--text-muted)',
-          subtle:      'var(--text-subtle)',
-          inverse:     'var(--text-inverse)',
-          'on-action': 'var(--text-on-action)',
-          link:        'var(--text-link)',
-        },
         border: {
           DEFAULT: 'var(--border-default)',
           strong:  'var(--border-strong)',
@@ -45,6 +37,11 @@ const config: Config = {
           'danger-hover':    'var(--action-danger-hover)',
           'danger-active':   'var(--action-danger-active)',
           'danger-disabled': 'var(--action-danger-disabled)',
+          // Per-action-fill label colours (spec §6 — one blanket "on action"
+          // colour can't serve an ink-label fill AND white-label fills).
+          'primary-fg':   'var(--action-primary-fg)',
+          'secondary-fg': 'var(--action-secondary-fg)',
+          'danger-fg':    'var(--action-danger-fg)',
         },
         status: {
           'success-fill':   'var(--status-success-fill)',
@@ -78,13 +75,6 @@ const config: Config = {
           clear:   'var(--sync-clear)',
         },
         'focus-ring': 'var(--focus-ring)',
-        // Top-level alias so the literal `text-inverse` utility compiles.
-        // The semantic scale nests inverse under the `text` group, which only
-        // ever produces `text-text-inverse`; the components use the shorter
-        // `text-inverse` (+ harmless `bg-inverse`/`border-inverse`). Reads the
-        // same token, so it flips correctly per theme (white in light on navy /
-        // status-error; dark ink in [data-theme="dark"] on its light surface).
-        inverse: 'var(--text-inverse)',
 
         // ── Tier-1 LEGACY brand names (retained so existing screens stay
         //    painted; retired screen-by-screen in Phase 1). Values now read
@@ -120,6 +110,31 @@ const config: Config = {
         'mfs-kds-line-done':      '#16A34A',
         'mfs-kds-accent':         '#EB6619',
       },
+      // ── Semantic TEXT colours (F-TD-40 fix) ─────────────────────────────
+      // Dedicated theme key: entries here generate ONLY `text-*` utilities,
+      // so they can never leak `bg-*`/`border-*` variants and never collide
+      // with the fontSize namespace (guarded by
+      // tests/unit/lint/tailwind-namespace-collision.test.ts).
+      textColor: {
+        heading: 'var(--text-heading)',
+        body:    'var(--text-body)',
+        muted:   'var(--text-muted)',
+        subtle:  'var(--text-subtle)',
+        inverse: 'var(--text-inverse)',
+        link:    'var(--text-link)',
+        icon:    'var(--icon-default)',
+      },
+      // ── Semantic BORDER colours (F-TD-40 border-namespace fix) ──────────
+      // Lower-case `default` is a legal key (only upper-case DEFAULT is
+      // special), so `border-default` compiles exactly as call sites spell it.
+      borderColor: {
+        default: 'var(--border-default)',
+        // NO `strong` here: --border-strong is decorative-only at 1.8:1 (fails
+        // the 3:1 outline bar, spec §5.4) — it keeps its token + bg-border-strong
+        // (colors namespace) but gets no border-* outline utility.
+        subtle:  'var(--border-subtle)',
+        input:   'var(--border-input)',
+      },
       fontFamily: {
         // Semantic aliases for 0b
         display: ['var(--font-display)'],
@@ -135,7 +150,9 @@ const config: Config = {
         'h2':       ['var(--text-h2-size)',       { lineHeight: '1.25', letterSpacing: '-0.005em' }],
         'h3':       ['var(--text-h3-size)',       { lineHeight: '1.3',  letterSpacing: '0' }],
         'body-lg':  ['var(--text-body-lg-size)',  { lineHeight: '1.5',  letterSpacing: '0' }],
-        'body':     ['var(--text-body-size)',     { lineHeight: '1.5',  letterSpacing: '0' }],
+        // `body-md` (was `body`): the bare name is reserved for the COLOUR
+        // utility `text-body` — a shared key would re-open F-TD-40.
+        'body-md':  ['var(--text-body-size)',     { lineHeight: '1.5',  letterSpacing: '0' }],
         'body-sm':  ['var(--text-body-sm-size)',  { lineHeight: '1.4',  letterSpacing: '0' }],
         'caption':  ['var(--text-caption-size)',  { lineHeight: '1.3',  letterSpacing: '0.05em' }],
         'mono':     ['var(--text-mono-size)',     { lineHeight: '1.4',  letterSpacing: '0' }],
