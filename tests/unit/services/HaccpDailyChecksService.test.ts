@@ -27,6 +27,7 @@ import type {
   CreateMeatPrepInput,
   CreateTimeSeparationInput,
   CreateReturnInput,
+  GoodsInThreshold,
 } from "@/lib/domain";
 import { COLD_STORAGE_CAUSES } from "@/lib/domain";
 
@@ -38,18 +39,44 @@ function svc() {
 
 const TODAY = "2026-06-22";
 
+// CCP-1 bands are DB-driven since the Goods In unit — the fixture mirrors the
+// migration seed for the categories exercised here (values unchanged for these
+// categories, so every verdict below is byte-identical to the old cascades).
+function giRow(
+  category: string,
+  pass_max_c: number | null,
+  amber_max_c: number | null,
+  position: number,
+): GoodsInThreshold {
+  return {
+    id: `00000000-0000-0000-0000-${String(position).padStart(12, "0")}`,
+    category,
+    label: category,
+    pass_max_c,
+    amber_max_c,
+    position,
+  };
+}
+const GI_THRESHOLDS: readonly GoodsInThreshold[] = [
+  giRow("lamb", 5.0, 8.0, 1),
+  giRow("beef", 5.0, 8.0, 2),
+  giRow("offal", 3.0, null, 3),
+  giRow("frozen", -18.0, -15.0, 4),
+  giRow("dry_goods", null, null, 9),
+];
+
 describe("HaccpDailyChecksService — lifted pure helpers", () => {
   it("deliveryTempStatus matches the route cascades", () => {
     const s = svc();
-    expect(s.deliveryTempStatus(null, "dry_goods")).toBe("pass");
-    expect(s.deliveryTempStatus(4, "beef")).toBe("pass");
-    expect(s.deliveryTempStatus(7, "beef")).toBe("urgent");
-    expect(s.deliveryTempStatus(9, "beef")).toBe("fail");
-    expect(s.deliveryTempStatus(2, "offal")).toBe("pass");
-    expect(s.deliveryTempStatus(4, "offal")).toBe("fail");
-    expect(s.deliveryTempStatus(-19, "frozen")).toBe("pass");
-    expect(s.deliveryTempStatus(-16, "frozen")).toBe("urgent");
-    expect(s.deliveryTempStatus(null, "beef")).toBe("fail");
+    expect(s.deliveryTempStatus(null, "dry_goods", GI_THRESHOLDS)).toBe("pass");
+    expect(s.deliveryTempStatus(4, "beef", GI_THRESHOLDS)).toBe("pass");
+    expect(s.deliveryTempStatus(7, "beef", GI_THRESHOLDS)).toBe("urgent");
+    expect(s.deliveryTempStatus(9, "beef", GI_THRESHOLDS)).toBe("fail");
+    expect(s.deliveryTempStatus(2, "offal", GI_THRESHOLDS)).toBe("pass");
+    expect(s.deliveryTempStatus(4, "offal", GI_THRESHOLDS)).toBe("fail");
+    expect(s.deliveryTempStatus(-19, "frozen", GI_THRESHOLDS)).toBe("pass");
+    expect(s.deliveryTempStatus(-16, "frozen", GI_THRESHOLDS)).toBe("urgent");
+    expect(s.deliveryTempStatus(null, "beef", GI_THRESHOLDS)).toBe("fail");
   });
 
   it("coldStorageTempStatus, batch-code, kill-date and temp-pass helpers", () => {
@@ -211,6 +238,7 @@ describe("HaccpDailyChecksService — delivery", () => {
       resolvedSupplierId: null,
       resolvedSupplierName: "Acme",
       deliveryNumber: 1,
+      thresholds: GI_THRESHOLDS,
     });
     expect(built.tempStatus).toBe("fail");
     expect(built.persist.batch_number).toBe("2206-GB-1");

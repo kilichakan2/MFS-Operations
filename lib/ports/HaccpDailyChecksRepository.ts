@@ -40,6 +40,9 @@ import type {
   DailyDiaryPersist,
   ProcessRoomThreshold,
   UpdateProcessRoomThresholdInput,
+  // goods-in thresholds
+  GoodsInThreshold,
+  UpdateGoodsInThresholdInput,
   // mince-prep
   MincePrepListResult,
   MincePersist,
@@ -64,6 +67,18 @@ export interface HaccpDailyChecksRepository {
   /** Insert a delivery; returns the new id (for CA linking). 23505 →
    *  ConflictError. → POST /api/haccp/delivery. */
   insertDelivery(payload: DeliveryPersist): Promise<{ id: string }>;
+  /** The CCP-1 band rows (all 11 categories, ordered by position) — for the
+   *  admin editor AND the POST band derivation. FAIL-CLOSED consumers: an
+   *  empty/errored read must stop grading, never fall back to hardcoded bands.
+   *  → GET/PATCH /api/haccp/admin/goods-in-thresholds + POST /api/haccp/delivery. */
+  listGoodsInThresholds(): Promise<readonly GoodsInThreshold[]>;
+  /** Update a CCP-1 band row AND append an immutable audit row (who/when/
+   *  old→new). Admin-only (route gate + DB RLS). Returns the updated domain row.
+   *  → PATCH /api/haccp/admin/goods-in-thresholds. */
+  updateGoodsInThreshold(
+    input: UpdateGoodsInThresholdInput,
+    changedBy: string,
+  ): Promise<GoodsInThreshold>;
 
   // ── 2. cold-storage ──────────────────────────────────────────
   /** Active units + the date's readings. → GET /api/haccp/cold-storage. */

@@ -75,6 +75,8 @@ import type {
   ProcessRoomThreshold,
   UpdateProcessRoomThresholdInput,
 } from "@/lib/domain";
+import { resolveGoodsInThreshold, goodsInStatus } from "@/lib/domain";
+import type { GoodsInThreshold, UpdateGoodsInThresholdInput } from "@/lib/domain";
 import type { HaccpDailyChecksRepository } from "@/lib/ports";
 import { ServiceError } from "@/lib/errors";
 
@@ -220,32 +222,40 @@ function buildBatchNumber(
   return `${dd}${mm}-${prefix}-${deliveryNumber}`;
 }
 
+/**
+ * Resolve the CCP-1 band row for a category from the FETCHED threshold set,
+ * strictly BY KEY. A missing row is a food-safety fault, not something to paper
+ * over: we FAIL CLOSED and throw (→ route 500) rather than substitute another
+ * row or a hardcoded table as the limits. A positional/hardcoded fallback here
+ * could grade a 6°C poultry delivery against the old ≤8°C ruler — a false
+ * `pass` on a CCP. Mirrors `resolveProcRoomThresholds` below and the route's
+ * "empty set = 500, never a hardcoded fallback" stance.
+ */
+function resolveGoodsInRow(
+  thresholds: readonly GoodsInThreshold[],
+  category: string,
+): GoodsInThreshold {
+  try {
+    return resolveGoodsInThreshold(thresholds, category);
+  } catch (e) {
+    throw new ServiceError(e instanceof Error ? e.message : String(e), {
+      cause: e,
+    });
+  }
+}
+
+/**
+ * DB-driven CCP-1 grading — delegates to the shared domain rule
+ * (`lib/domain/goodsIn.ts`), the SAME function the screen's live verdict tile
+ * uses, so client and server can never drift apart again. No band literals
+ * remain here: the values live in `haccp_goods_in_thresholds`.
+ */
 function deliveryTempStatus(
   temp: number | null,
   category: string,
+  thresholds: readonly GoodsInThreshold[],
 ): "pass" | "urgent" | "fail" {
-  if (category === "dry_goods") return "pass";
-  if (temp === null || isNaN(temp as number)) return "fail";
-  const t = temp as number;
-  switch (category) {
-    case "lamb":
-    case "beef":
-    case "red_meat":
-      return t <= 5.0 ? "pass" : t <= 8.0 ? "urgent" : "fail";
-    case "offal":
-      return t <= 3.0 ? "pass" : "fail";
-    case "mince_prep":
-      return t <= 4.0 ? "pass" : "fail";
-    case "frozen":
-    case "frozen_beef_lamb":
-      return t <= -18.0 ? "pass" : t <= -15.0 ? "urgent" : "fail";
-    case "poultry":
-    case "dairy":
-    case "chilled_other":
-      return t <= 8.0 ? "pass" : "fail";
-    default:
-      return "fail";
-  }
+  return goodsInStatus(temp, resolveGoodsInRow(thresholds, category));
 }
 
 // ─── cold-storage protocol lookups (CA-001 verbatim) ─────────────────────────
@@ -535,6 +545,7 @@ export interface HaccpDailyChecksService {
   deliveryTempStatus(
     temp: number | null,
     category: string,
+    thresholds: readonly GoodsInThreshold[],
   ): "pass" | "urgent" | "fail";
   coldStorageTempStatus(
     temp: number,
@@ -592,6 +603,7 @@ export interface HaccpDailyChecksService {
     resolvedSupplierId: string | null;
     resolvedSupplierName: string;
     deliveryNumber: number;
+    thresholds: readonly GoodsInThreshold[];
   }): DeliveryBuildResult;
   buildDeliveryCorrectiveActions(args: {
     input: CreateDeliveryInput;
@@ -599,6 +611,17 @@ export interface HaccpDailyChecksService {
     sourceId: string;
     tempStatus: "pass" | "urgent" | "fail";
   }): readonly CorrectiveActionInsert[];
+
+  // ── goods-in thresholds (admin + POST band derivation) ──
+  listGoodsInThresholds(): Promise<readonly GoodsInThreshold[]>;
+  validateGoodsInThreshold(
+    input: UpdateGoodsInThresholdInput,
+    current: GoodsInThreshold,
+  ): ValidationResult;
+  updateGoodsInThreshold(args: {
+    input: UpdateGoodsInThresholdInput;
+    changedBy: string;
+  }): Promise<GoodsInThreshold>;
 
   // ── cold-storage ──
   validateColdStorage(args: {
@@ -927,11 +950,13 @@ export function createHaccpDailyChecksService(
       resolvedSupplierId,
       resolvedSupplierName,
       deliveryNumber,
+      thresholds,
     }): DeliveryBuildResult {
       const isMeat = isMeatCategory(input.product_category);
       const status = deliveryTempStatus(
         input.temperature_c,
         input.product_category,
+        thresholds,
       );
       const hasDeviationAllergen =
         input.allergens_identified === true &&
@@ -1073,6 +1098,43 @@ export function createHaccpDailyChecksService(
       }
 
       return caRows;
+    },
+
+    // ── goods-in thresholds (admin + POST band derivation) ──
+    listGoodsInThresholds: () => dailyChecks.listGoodsInThresholds(),
+
+    validateGoodsInThreshold(input, current): ValidationResult {
+      if (!input.id) return reject(400, "Threshold id is required");
+      // Band STRUCTURE is code-locked: which categories have an amber band /
+      // a temperature CCP at all cannot change via the app — only the numbers
+      // move. (An admin nulling poultry's amber band would silently turn the
+      // documented grace band into a hard reject line — or worse, nulling
+      // pass_max would remove the CCP entirely.)
+      if ((input.pass_max_c === null) !== (current.pass_max_c === null)) {
+        return reject(400, "Band structure is fixed — pass limit cannot be added or removed");
+      }
+      if ((input.amber_max_c === null) !== (current.amber_max_c === null)) {
+        return reject(400, "Band structure is fixed — amber band cannot be added or removed");
+      }
+      if (input.pass_max_c !== null && !Number.isFinite(input.pass_max_c)) {
+        return reject(400, "Pass limit must be a number");
+      }
+      if (input.amber_max_c !== null && !Number.isFinite(input.amber_max_c)) {
+        return reject(400, "Amber limit must be a number");
+      }
+      // amber == pass is allowed and means "amber band empty".
+      if (
+        input.pass_max_c !== null &&
+        input.amber_max_c !== null &&
+        input.amber_max_c < input.pass_max_c
+      ) {
+        return reject(400, "Amber limit must be at or above the pass limit");
+      }
+      return { ok: true };
+    },
+
+    updateGoodsInThreshold({ input, changedBy }) {
+      return dailyChecks.updateGoodsInThreshold(input, changedBy);
     },
 
     // ── cold-storage ──

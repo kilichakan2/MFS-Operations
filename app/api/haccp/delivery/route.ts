@@ -81,7 +81,15 @@ export async function POST(req: NextRequest) {
       ? await dc.findSupplierForDelivery(input.supplier_id)
       : null
 
-    const tempStatus = dc.deliveryTempStatus(input.temperature_c, input.product_category)
+    // Bands are DB-driven — load the CCP-1 thresholds fresh and thread them
+    // through grade/build (mirrors the process-room flow). Empty = 500, never a
+    // hardcoded fallback (that would resurrect the poultry ≤8°C drift).
+    const thresholds = await dc.listGoodsInThresholds()
+    if (thresholds.length === 0) {
+      return NextResponse.json({ error: 'Could not load thresholds' }, { status: 500 })
+    }
+
+    const tempStatus = dc.deliveryTempStatus(input.temperature_c, input.product_category, thresholds)
 
     const v = dc.validateDelivery({ input, supplier, tempStatus })
     if (!v.ok) return NextResponse.json({ error: v.message }, { status: v.status })
@@ -99,6 +107,7 @@ export async function POST(req: NextRequest) {
       resolvedSupplierId,
       resolvedSupplierName,
       deliveryNumber,
+      thresholds,
     })
 
     let id: string

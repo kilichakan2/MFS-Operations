@@ -148,6 +148,13 @@ export {
   processRoomBand,
 } from "./processRoom";
 export type { ProcessRoomCause, ProcessRoomThreshold } from "./processRoom";
+// Goods In (CCP 1) — the single-source band rule (DB-driven thresholds).
+export {
+  resolveGoodsInThreshold,
+  goodsInStatus,
+  describeGoodsInBands,
+} from "./goodsIn";
+export type { GoodsInThreshold, UpdateGoodsInThresholdInput } from "./goodsIn";
 export type {
   // shared
   HaccpUserRef,

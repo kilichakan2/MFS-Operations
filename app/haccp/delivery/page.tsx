@@ -1,18 +1,28 @@
 /**
  * app/haccp/delivery/page.tsx
  *
- * CCP 1 — Delivery Intake (Goods In Temperature Check)
+ * CCP 1 — Goods In (Delivery Intake Temperature Check)
  * Event-driven: one record per delivery. Form resets after submit.
- * Supplier: dropdown from DB + "Other" free text fallback.
+ * Supplier: chips from DB + "Other" free text fallback.
  *
- * Batch 2:
- *   C1  — CCAPopup rewritten: structured 2-track (temp + contam) with
- *          cause / action / disposition / recurrence / notes. One CAPayload
- *          per active track sent to server.
- *   C8  — born_in / reared_in / slaughter_site / cut_site required on every
- *          submission (all categories). isValid gated + required indicators.
- *   fmt — batch code DDMM-CC-N. COUNTRIES expanded to 14 ISO alpha-2 +
- *          full search over extended ISO list.
+ * Goods In unit (Tier B): re-expressed onto components/ui/ + semantic tokens.
+ * The hand-rolled number pad is now the reusable kit `NumberPad`; the CCA,
+ * delivery-detail and quick-ref overlays use the kit `Modal`. The
+ * pass/urgent/fail bands come from the DB thresholds
+ * (haccp_goods_in_thresholds) via the SHARED domain rule `goodsInStatus`, so
+ * the screen and the server can never disagree — and the chip copy is DERIVED
+ * from the fetched rows (`describeGoodsInBands`), so an admin threshold edit
+ * self-updates the wording. FAIL-CLOSED: if the thresholds cannot be loaded,
+ * temperature entry is disabled — there is no baked-in band table left.
+ *
+ * Behaviour preserved exactly (spec §1 inventory): category-first form,
+ * category-filtered supplier chips + Other, meat-only BLS block (curated
+ * country chips + ISO search, same-as shortcuts, live DDMM-CC-N batch
+ * preview), contamination 3-way + 4 types + notes, SALSA 1.4.2 allergen check
+ * (auto-CA on meat/poultry categories only), two-track CCA popup,
+ * Today/This-week/Last-week log + detail sheet, SOP 5B banner, quick ref,
+ * handbook link, Europe/London stamping, ca_write_failed path. Printer-port
+ * label flow byte-preserved (ADR-0010).
  */
 
 'use client'
@@ -21,6 +31,21 @@ import { useState, useEffect, useCallback } from 'react'
 import { getPrinter } from '@/lib/wiring/printer'
 import type { DeliveryLabelInput } from '@/lib/ports'
 import PrintLabelStrip from '@/components/PrintLabelStrip'
+import {
+  Modal,
+  NumberPad,
+  Button,
+  ScreenHeader,
+  SegmentedControl,
+  TextField,
+  Textarea,
+  Banner,
+  Spinner,
+  Badge,
+  type NumberPadTone,
+} from '@/components/ui'
+import { goodsInStatus, describeGoodsInBands } from '@/lib/domain'
+import type { GoodsInThreshold } from '@/lib/domain'
 
 // Maps a label-print failure to a user-facing message, surfaced via each
 // screen's existing `submitErr` red-inline `<p>` (no new UI component).
@@ -83,6 +108,8 @@ interface Supplier  { id: string; name: string; categories: string[] }
 const MEAT_CATEGORIES = new Set(['lamb', 'beef', 'red_meat', 'offal', 'frozen_beef_lamb'])
 // Categories that have a temperature CCP (all except dry_goods)
 const NO_TEMP_CATEGORIES = new Set(['dry_goods'])
+// Frozen family — number pad offers the sign key (cold-storage precedent)
+const FROZEN_CATEGORIES = new Set(['frozen', 'frozen_beef_lamb'])
 
 function isMeatCategory(cat: string) { return MEAT_CATEGORIES.has(cat) }
 function noTempCategory(cat: string)  { return NO_TEMP_CATEGORIES.has(cat) }
@@ -127,18 +154,18 @@ const ALLERGENS = [
   'Molluscs', 'Fish', 'Lupin', 'Sesame',
 ]
 
-
-
-const CATEGORIES: { key: string; label: string; limit: string; detail: string }[] = [
-  { key: 'lamb',            label: 'Lamb',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
-  { key: 'beef',            label: 'Beef',              limit: '≤8°C (target ≤5°C)', detail: '≤5°C pass · 5–8°C conditional accept · >8°C reject' },
-  { key: 'offal',           label: 'Offal',             limit: '≤3°C',               detail: '≤3°C pass · >3°C reject' },
-  { key: 'frozen',          label: 'Frozen',            limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional · >-15°C reject' },
-  { key: 'frozen_beef_lamb',label: 'Frozen Beef/Lamb',  limit: '≤-18°C',             detail: '≤-18°C pass · -15 to -18°C conditional · >-15°C reject · BLS traceability required' },
-  { key: 'poultry',         label: 'Poultry',           limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
-  { key: 'dairy',           label: 'Dairy / Chilled',   limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
-  { key: 'chilled_other',   label: 'Chilled Other',     limit: '≤8°C',               detail: '≤8°C pass · >8°C reject' },
-  { key: 'dry_goods',       label: 'Dry Goods',         limit: 'Ambient',            detail: 'No temperature CCP — visual / condition check only' },
+// The 9 selectable categories. Band copy (limit/detail) is NOT hardcoded any
+// more — it is derived from the fetched thresholds via `describeGoodsInBands`.
+const CATEGORIES: { key: string; label: string }[] = [
+  { key: 'lamb',             label: 'Lamb' },
+  { key: 'beef',             label: 'Beef' },
+  { key: 'offal',            label: 'Offal' },
+  { key: 'frozen',           label: 'Frozen' },
+  { key: 'frozen_beef_lamb', label: 'Frozen Beef/Lamb' },
+  { key: 'poultry',          label: 'Poultry' },
+  { key: 'dairy',            label: 'Dairy / Chilled' },
+  { key: 'chilled_other',    label: 'Chilled Other' },
+  { key: 'dry_goods',        label: 'Dry Goods' },
 ]
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -149,18 +176,29 @@ const CATEGORY_LABELS: Record<string, string> = {
   chilled_other: 'Chilled Other', dry_goods: 'Dry Goods',
 }
 
-const CATEGORY_COLOUR: Record<string, string> = {
-  lamb:             'bg-red-100 text-red-700',
-  beef:             'bg-red-100 text-red-700',
-  red_meat:         'bg-red-100 text-red-700',
-  offal:            'bg-rose-100 text-rose-700',
-  mince_prep:       'bg-pink-100 text-pink-700',
-  frozen:           'bg-cyan-100 text-cyan-700',
-  frozen_beef_lamb: 'bg-cyan-100 text-cyan-700',
-  poultry:          'bg-amber-100 text-amber-700',
-  dairy:            'bg-blue-100 text-blue-700',
-  chilled_other:    'bg-teal-100 text-teal-700',
-  dry_goods:        'bg-stone-100 text-stone-600',
+// ── Category chips — brand family tokens (pairing-law §5.11, Step-10 tokens) ──
+// Visual concern only: which brand chip family each category key belongs to.
+type CategoryFamily = 'meat' | 'frozen' | 'chilled' | 'poultry' | 'ambient'
+
+const CATEGORY_FAMILY: Record<string, CategoryFamily> = {
+  lamb: 'meat', beef: 'meat', red_meat: 'meat', offal: 'meat', mince_prep: 'meat',
+  frozen: 'frozen', frozen_beef_lamb: 'frozen',
+  dairy: 'chilled', chilled_other: 'chilled',
+  poultry: 'poultry',
+  dry_goods: 'ambient',
+}
+
+// Literal class strings (not interpolated) so Tailwind's scanner keeps them.
+const FAMILY_CHIP: Record<CategoryFamily, string> = {
+  meat:    'bg-category-meat-fill text-category-meat-fg',
+  frozen:  'bg-category-frozen-fill text-category-frozen-fg',
+  chilled: 'bg-category-chilled-fill text-category-chilled-fg',
+  poultry: 'bg-category-poultry-fill text-category-poultry-fg',
+  ambient: 'bg-category-ambient-fill text-category-ambient-fg',
+}
+
+function categoryChipClass(cat: string): string {
+  return FAMILY_CHIP[CATEGORY_FAMILY[cat] ?? 'ambient']
 }
 
 // ─── Countries ────────────────────────────────────────────────────────────────
@@ -232,23 +270,23 @@ function buildBatchPrefix(date: string, countryCode: string): string {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function calcStatus(temp: number | null, category: string): TempStatus {
-  if (category === 'dry_goods') return 'pass'
-  if (temp === null || isNaN(temp as number)) return null
-  const t = temp as number
-  switch (category) {
-    case 'lamb':
-    case 'beef':
-    case 'red_meat':      return t <= 5.0   ? 'pass' : t <= 8.0   ? 'urgent' : 'fail'
-    case 'offal':         return t <= 3.0   ? 'pass' : 'fail'
-    case 'mince_prep':    return t <= 4.0   ? 'pass' : 'fail'
-    case 'frozen':
-    case 'frozen_beef_lamb': return t <= -18.0 ? 'pass' : t <= -15.0 ? 'urgent' : 'fail'
-    case 'poultry':
-    case 'dairy':
-    case 'chilled_other': return t <= 8.0   ? 'pass' : 'fail'
-    default:              return null
+/**
+ * Client-side verdict via the SHARED domain rule against the FETCHED
+ * thresholds (client and server can never disagree). The client keeps its own
+ * "no temp typed yet → null (no verdict)" pre-check; a missing threshold row →
+ * null too (fail-closed — never grade against a baked-in table; none exists).
+ */
+function calcStatus(
+  temp: number | null,
+  category: string,
+  thresholds: readonly GoodsInThreshold[],
+): TempStatus {
+  const row = thresholds.find((t) => t.category === category)
+  if (!row) return null
+  if (temp === null || isNaN(temp as number)) {
+    return row.pass_max_c === null ? 'pass' : null
   }
+  return goodsInStatus(temp, row)
 }
 
 function nowDisplay() {
@@ -257,110 +295,30 @@ function nowDisplay() {
 
 function deliveryTime(t: string) { return t?.slice(0, 5) ?? '—' }
 
-const STATUS_COLOUR: Record<string, string> = {
-  pass:   'text-green-600', urgent: 'text-[#EB6619]', fail: 'text-red-600',
-}
-const STATUS_BADGE: Record<string, string> = {
-  pass:   'bg-green-100 text-green-600',
-  urgent: 'bg-amber-100 text-[#EB6619]',
-  fail:   'bg-red-100 text-red-600',
-}
-const STATUS_BORDER: Record<string, string> = {
-  pass:   'border-green-300 bg-green-50',
-  urgent: 'border-amber-400 bg-amber-50',
-  fail:   'border-red-400 bg-red-50',
-  empty:  'border-blue-200 bg-white',
-}
+// ─── Status → semantic tokens (green/amber CAGED: verdict tiles + badges only) ─
+
 const STATUS_LABEL: Record<string, string> = {
   pass: 'Pass', urgent: 'Conditional accept', fail: 'Reject',
 }
-
-// ─── Numpad ───────────────────────────────────────────────────────────────────
-
-function Numpad({ value, onChange, onClose, category }: {
-  value:    string
-  onChange: (v: string) => void
-  onClose:  () => void
-  category: string
-}) {
-  const num  = parseFloat(value)
-  const stat = category ? calcStatus(num, category) : null
-  const cat  = CATEGORIES.find((c) => c.key === category)
-
-  function press(key: string) {
-    if (key === 'back') { onChange(value.slice(0, -1)); return }
-    if (key === '.' && value.includes('.')) return
-    if (key === '-') { onChange(value.startsWith('-') ? value.slice(1) : '-' + value); return }
-    if (value === '0') { onChange(key); return }
-    onChange(value + key)
-  }
-
-  const keys = ['1','2','3','4','5','6','7','8','9','.','0','back']
-
-  return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{position:'fixed'}}>
-      <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-blue-100">
-        <div>
-          <p className="text-[#EB6619] text-xs font-bold tracking-widest uppercase">CCP 1 — Delivery Intake</p>
-          <h2 className="text-slate-900 text-xl font-bold mt-0.5">Probe temperature</h2>
-          {cat && <p className="text-slate-400 text-sm mt-0.5">{cat.label} · limit {cat.limit}</p>}
-        </div>
-        <button onClick={onClose} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6">
-        <div className="text-center">
-          <div className={`text-6xl font-bold tracking-tight ${stat ? STATUS_COLOUR[stat] : 'text-slate-300'}`}>
-            {value || '—'}<span className="text-2xl ml-2 opacity-60">°C</span>
-          </div>
-          {stat && (
-            <div className={`mt-3 inline-block px-5 py-1.5 rounded-full text-sm font-bold ${STATUS_BADGE[stat]}`}>
-              {STATUS_LABEL[stat]}
-            </div>
-          )}
-          {stat === 'urgent' && (
-            <div className="mt-4 mx-2 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-left">
-              <p className="text-amber-700 text-xs font-bold uppercase tracking-widest mb-1.5">Conditional accept — do NOT reject (CA-001)</p>
-              {category === 'frozen'
-                ? <p className="text-slate-600 text-xs leading-relaxed">Acceptable short-term if product is re-frozen immediately. Document decision.</p>
-                : <p className="text-slate-600 text-xs leading-relaxed">Place immediately into coldest chiller area. Halve remaining shelf life. Document assessment. Review supplier performance.</p>
-              }
-            </div>
-          )}
-          {stat === 'fail' && (
-            <div className="mt-4 mx-2 bg-red-50 border border-red-300 rounded-xl px-4 py-3 text-left">
-              <p className="text-red-600 text-xs font-bold uppercase tracking-widest mb-1.5">Reject delivery</p>
-              <p className="text-slate-600 text-xs leading-relaxed">Do NOT accept. Photograph product and temp reading. Complete non-conformance report. Notify supplier within 24 hours.</p>
-            </div>
-          )}
-        </div>
-        <div className="grid grid-cols-3 gap-4 w-full max-w-xs">
-          {keys.map((k) => (
-            <button key={k} onPointerDown={(e) => { e.preventDefault(); press(k) }}
-              className={`h-16 rounded-2xl text-xl font-semibold select-none transition-all active:scale-95 ${k === 'back' ? 'bg-slate-200 text-slate-700' : 'bg-slate-800 text-white active:bg-orange-500'}`}>
-              {k === 'back' ? (
-                <svg className="w-6 h-6 mx-auto" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="13" y2="14"/><line x1="13" y1="9" x2="18" y2="14"/></svg>
-              ) : k}
-            </button>
-          ))}
-          {category === 'frozen' && (
-            <button onPointerDown={(e) => { e.preventDefault(); press('-') }}
-              className="col-span-3 h-12 rounded-2xl bg-slate-50 text-slate-500 text-sm font-bold active:scale-95">
-              +/− Toggle negative
-            </button>
-          )}
-        </div>
-        <button onClick={onClose} disabled={!value || isNaN(parseFloat(value))}
-          className="w-full max-w-xs bg-[#EB6619] text-white font-bold py-4 rounded-2xl text-base disabled:opacity-40">
-          Confirm {value ? `${value}°C` : ''}
-        </button>
-      </div>
-    </div>
-  )
+const STATUS_TEXT: Record<string, string> = {
+  pass:   'text-status-success-text',
+  urgent: 'text-status-warning-text',
+  fail:   'text-status-error-text',
+}
+const STATUS_BADGE_TONE: Record<string, 'success' | 'warning' | 'danger'> = {
+  pass: 'success', urgent: 'warning', fail: 'danger',
+}
+const STATUS_TILE: Record<string, string> = {
+  pass:   'bg-status-success-soft border-status-success-border',
+  urgent: 'bg-status-warning-soft border-status-warning-border',
+  fail:   'bg-status-error-soft border-status-error-border',
+  empty:  'bg-surface-raised border-default',
+}
+const STATUS_TONE: Record<'pass' | 'urgent' | 'fail', NumberPadTone> = {
+  pass: 'success', urgent: 'warning', fail: 'danger',
 }
 
-// ─── CA constants (Batch 3 — adaptive/smart redesign) ─────────────────────────
+// ─── CA constants (adaptive/smart redesign — unchanged) ───────────────────────
 
 // Track-specific cause lists
 const TEMP_CAUSES = [
@@ -426,7 +384,7 @@ const PROTOCOL_STEPS: Record<string, string[]> = {
   contam_contaminated_faecal: [
     'Trim contaminated area using clean knife',
     'Dispose of trimmings as Category 2/3 ABP',
-    'Sterilise knife immediately after trimming (\u226582\u00b0C)',
+    'Sterilise knife immediately after trimming (≥82°C)',
     'Document trimming action and disposal',
     'If contamination excessive: REJECT entire carcase',
   ],
@@ -465,12 +423,61 @@ const CONTAM_TYPE_LABELS: Record<string, string> = {
   missing_docs:        'Missing documentation',
 }
 
+// ─── Local glyphs (non-exported helpers — not kit assets) ─────────────────────
+
+function CheckGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
+function HelpGlyph() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  )
+}
+
+function HandbookGlyph() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+    </svg>
+  )
+}
+
+function WarnGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+    </svg>
+  )
+}
+
+function ChevronRightGlyph() {
+  return (
+    <svg className="w-3.5 h-3.5 text-subtle mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
+  )
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-2">{children}</p>
+  )
+}
+
 // ─── CCAPopup ─────────────────────────────────────────────────────────────────
 
-function CCAPopup({ tempStatus, contaminated, contamType, onSubmit, onBack }: {
+function CCAPopup({ tempStatus, contaminated, contamType, catRow, onSubmit, onBack }: {
   tempStatus:   TempStatus
   contaminated: string
   contamType:   string
+  catRow:       GoodsInThreshold | undefined
   onSubmit:     (caTemp: CAPayload | null, caContam: CAPayload | null) => void
   onBack:       () => void
 }) {
@@ -514,197 +521,188 @@ function CCAPopup({ tempStatus, contaminated, contamType, onSubmit, onBack }: {
     onSubmit(caTemp, caContam)
   }
 
-  const headerColour = tempStatus === 'fail' ? 'text-red-600' : 'text-[#EB6619]'
-  const submitBg     = tempStatus === 'fail' ? 'bg-red-600'   : 'bg-[#EB6619]'
+  // Band copy DERIVED from the fetched row (admin edits self-update this line).
+  const rejectLine = catRow?.amber_max_c ?? catRow?.pass_max_c ?? null
+  const tempTrackSub = tempStatus === 'fail'
+    ? `Reject required${rejectLine !== null ? ` (>${Number(rejectLine)}°C)` : ''}`
+    : `Conditional accept${catRow && catRow.pass_max_c !== null && catRow.amber_max_c !== null
+        ? ` (${Number(catRow.pass_max_c)}–${Number(catRow.amber_max_c)}°C)` : ''}`
+
+  const tempTrackShell = tempStatus === 'fail'
+    ? { head: 'bg-status-error-soft', headText: 'text-status-error-text', border: 'border-status-error-border', num: 'bg-status-error-soft text-status-error-text' }
+    : { head: 'bg-status-warning-soft', headText: 'text-status-warning-text', border: 'border-status-warning-border', num: 'bg-status-warning-soft text-status-warning-text' }
 
   return (
-    <div className="fixed inset-0 bg-black/75 z-50 flex items-end" style={{position:'fixed'}}>
-      <div className="bg-white rounded-t-3xl w-full max-h-[90vh] overflow-y-auto">
+    <Modal
+      variant="sheet"
+      open
+      onOpenChange={(o) => { if (!o) onBack() }}
+      title="Record what happened"
+      description={
+        activeTempTrack && activeContamTrack
+          ? 'CCP 1 — Corrective Action · two deviations — complete both sections below'
+          : 'CCP 1 — Corrective Action · complete all fields to submit'
+      }
+    >
+      <div className="space-y-5 pt-1">
 
-        <div className="flex items-start justify-between p-6 pb-4 sticky top-0 bg-white border-b border-slate-100 z-10">
-          <div>
-            <p className={`text-xs font-bold tracking-widest uppercase ${headerColour}`}>CCP 1 — Corrective Action</p>
-            <h2 className="text-slate-900 text-xl font-bold mt-0.5">Record what happened</h2>
-            <p className="text-slate-400 text-xs mt-0.5">
-              {activeTempTrack && activeContamTrack
-                ? 'Two deviations — complete both sections below'
-                : 'Complete all fields to submit'}
-            </p>
-          </div>
-          <button onClick={onBack} className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 transition-all active:scale-95 mt-1">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-
-        <div className="px-6 pb-8 pt-5 space-y-5">
-
-          {activeTempTrack && (
-            <div className={`border rounded-2xl overflow-hidden ${tempStatus === 'fail' ? 'border-red-200' : 'border-amber-200'}`}>
-              <div className={`px-4 py-3 ${tempStatus === 'fail' ? 'bg-red-50' : 'bg-amber-50'}`}>
-                <p className={`text-xs font-bold uppercase tracking-widest ${tempStatus === 'fail' ? 'text-red-600' : 'text-amber-700'}`}>
-                  Temperature deviation
-                </p>
-                <p className="text-slate-600 text-xs mt-0.5">
-                  {tempStatus === 'fail' ? 'Reject required (>8\u00b0C)' : 'Conditional accept (5\u20138\u00b0C)'}
-                  {tempCause === 'Vehicle refrigeration failure' && ' \u2014 equipment failure override'}
-                </p>
+        {activeTempTrack && (
+          <div className={`border rounded-2xl overflow-hidden ${tempTrackShell.border}`}>
+            <div className={`px-4 py-3 ${tempTrackShell.head}`}>
+              <p className={`text-xs font-bold uppercase tracking-widest ${tempTrackShell.headText}`}>
+                Temperature deviation
+              </p>
+              <p className="text-muted text-xs mt-0.5">
+                {tempTrackSub}
+                {tempCause === 'Vehicle refrigeration failure' && ' — equipment failure override'}
+              </p>
+            </div>
+            <div className="px-4 py-4 space-y-5 bg-surface-raised">
+              <div>
+                <FieldLabel>Required action (CA-001)</FieldLabel>
+                <div className="bg-surface-sunken border border-default rounded-xl px-4 py-3 space-y-2">
+                  {tempProtocolSteps.map((step, i) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 ${tempTrackShell.num}`}>{i + 1}</div>
+                      <p className="text-body text-xs leading-relaxed">{step}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="px-4 py-4 space-y-5 bg-white">
+              <div>
+                <FieldLabel>What caused this?</FieldLabel>
+                <div className="space-y-1.5">
+                  {TEMP_CAUSES.map((c) => (
+                    <Button key={c} variant={tempCause === c ? 'primary' : 'ghost'} size="sm" fullWidth className="justify-start"
+                      onClick={() => { setTempCause(c); setTempRecurrence('') }}>
+                      {c}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <FieldLabel>
+                  Product disposition{tempStatus === 'fail' && <span className="ml-1 text-status-error-text normal-case font-normal">— locked</span>}
+                </FieldLabel>
+                <div className="flex gap-2 flex-wrap">
+                  {tempDispOptions.map((d) => (
+                    <Button key={d}
+                      variant={tempDisp === d ? (tempStatus === 'fail' ? 'danger' : 'primary') : 'ghost'}
+                      size="sm"
+                      disabled={tempStatus === 'fail'}
+                      onClick={() => { if (tempStatus !== 'fail') setTempDisp(d) }}>
+                      {d}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              {tempCause && (
                 <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Required action (CA-001)</p>
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
-                    {tempProtocolSteps.map((step, i) => (
+                  <FieldLabel>Recurrence prevention</FieldLabel>
+                  <div className="space-y-1.5">
+                    {(RECURRENCE_BY_CAUSE[tempCause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                      <Button key={r} variant={tempRecurrence === r ? 'primary' : 'ghost'} size="sm" fullWidth className="justify-start"
+                        onClick={() => setTempRecurrence(r)}>
+                        {r}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeContamTrack && (
+          <div className="border border-status-deviation-border rounded-2xl overflow-hidden">
+            <div className="bg-status-deviation-soft px-4 py-3">
+              <p className="text-status-deviation-text text-xs font-bold uppercase tracking-widest">Contamination deviation</p>
+              <p className="text-muted text-xs mt-0.5">
+                {CONTAM_TYPE_LABELS[contamType] ?? contamType}
+                {' · '}
+                {contaminated === 'yes_actioned' ? 'Actioned at intake' : 'Not yet actioned'}
+              </p>
+            </div>
+            <div className="px-4 py-4 space-y-5 bg-surface-raised">
+              {contamProtocolSteps.length > 0 && (
+                <div>
+                  <FieldLabel>Required action (CA-001)</FieldLabel>
+                  <div className="bg-surface-sunken border border-default rounded-xl px-4 py-3 space-y-2">
+                    {contamProtocolSteps.map((step, i) => (
                       <div key={i} className="flex items-start gap-2.5">
-                        <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 ${tempStatus === 'fail' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>{i + 1}</div>
-                        <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
+                        <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-status-deviation-soft text-status-deviation-text">{i + 1}</div>
+                        <p className="text-body text-xs leading-relaxed">{step}</p>
                       </div>
                     ))}
                   </div>
                 </div>
+              )}
+              <div>
+                <FieldLabel>What caused this?</FieldLabel>
+                <div className="space-y-1.5">
+                  {CONTAM_CAUSES.map((c) => (
+                    <Button key={c} variant={contamCause === c ? 'primary' : 'ghost'} size="sm" fullWidth className="justify-start"
+                      onClick={() => { setContamCause(c); setContamRecurrence('') }}>
+                      {c}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <FieldLabel>Product disposition</FieldLabel>
+                <div className="flex flex-wrap gap-2">
+                  {contamDispOptions.map((d) => (
+                    <Button key={d} variant={contamDisp === d ? 'primary' : 'ghost'} size="sm" onClick={() => setContamDisp(d)}>
+                      {d}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              {contamCause && (
                 <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
+                  <FieldLabel>Recurrence prevention</FieldLabel>
                   <div className="space-y-1.5">
-                    {TEMP_CAUSES.map((c) => (
-                      <button key={c} onClick={() => { setTempCause(c); setTempRecurrence('') }}
-                        className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                          tempCause === c ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
-                        }`}>
-                        {c}
-                      </button>
+                    {(RECURRENCE_BY_CAUSE[contamCause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
+                      <Button key={r} variant={contamRecurrence === r ? 'primary' : 'ghost'} size="sm" fullWidth className="justify-start"
+                        onClick={() => setContamRecurrence(r)}>
+                        {r}
+                      </Button>
                     ))}
                   </div>
                 </div>
-                <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-                    Product disposition{tempStatus === 'fail' && <span className="ml-1 text-red-500 normal-case font-normal">\u2014 locked</span>}
-                  </p>
-                  <div className="flex gap-2 flex-wrap">
-                    {tempDispOptions.map((d) => (
-                      <button key={d} onClick={() => { if (tempStatus !== 'fail') setTempDisp(d) }}
-                        disabled={tempStatus === 'fail'}
-                        className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
-                          tempDisp === d
-                            ? tempStatus === 'fail' ? 'border-red-400 bg-red-50 text-red-600' : 'border-[#EB6619] bg-amber-50 text-[#EB6619]'
-                            : 'border-slate-200 bg-white text-slate-400'
-                        }`}>
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {tempCause && (
-                  <div>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
-                    <div className="space-y-1.5">
-                      {(RECURRENCE_BY_CAUSE[tempCause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
-                        <button key={r} onClick={() => setTempRecurrence(r)}
-                          className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                            tempRecurrence === r ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
-                          }`}>
-                          {r}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
-          )}
-
-          {activeContamTrack && (
-            <div className="border border-amber-200 rounded-2xl overflow-hidden">
-              <div className="bg-amber-50 px-4 py-3">
-                <p className="text-amber-700 text-xs font-bold uppercase tracking-widest">Contamination deviation</p>
-                <p className="text-slate-600 text-xs mt-0.5">
-                  {CONTAM_TYPE_LABELS[contamType] ?? contamType}
-                  {' \u00b7 '}
-                  {contaminated === 'yes_actioned' ? 'Actioned at intake' : 'Not yet actioned'}
-                </p>
-              </div>
-              <div className="px-4 py-4 space-y-5 bg-white">
-                {contamProtocolSteps.length > 0 && (
-                  <div>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Required action (CA-001)</p>
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-2">
-                      {contamProtocolSteps.map((step, i) => (
-                        <div key={i} className="flex items-start gap-2.5">
-                          <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold mt-0.5 bg-amber-100 text-amber-700">{i + 1}</div>
-                          <p className="text-slate-700 text-xs leading-relaxed">{step}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">What caused this?</p>
-                  <div className="space-y-1.5">
-                    {CONTAM_CAUSES.map((c) => (
-                      <button key={c} onClick={() => { setContamCause(c); setContamRecurrence('') }}
-                        className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                          contamCause === c ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
-                        }`}>
-                        {c}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product disposition</p>
-                  <div className="flex flex-wrap gap-2">
-                    {contamDispOptions.map((d) => (
-                      <button key={d} onClick={() => setContamDisp(d)}
-                        className={`px-4 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
-                          contamDisp === d ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-200 bg-white text-slate-400'
-                        }`}>
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {contamCause && (
-                  <div>
-                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Recurrence prevention</p>
-                    <div className="space-y-1.5">
-                      {(RECURRENCE_BY_CAUSE[contamCause] ?? RECURRENCE_BY_CAUSE['Other']).map((r) => (
-                        <button key={r} onClick={() => setContamRecurrence(r)}
-                          className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                            contamRecurrence === r ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-200 bg-white text-slate-600'
-                          }`}>
-                          {r}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Additional notes <span className="normal-case font-normal">(optional)</span></p>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              placeholder="Any additional context\u2026"
-              className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
           </div>
+        )}
 
-          <p className="text-slate-400 text-xs">This record is immutable once submitted. Protocol per CA-001.</p>
-
-          <button onClick={handleSubmit} disabled={!isSubmittable}
-            className={`w-full text-white font-bold py-4 rounded-xl text-base disabled:opacity-40 transition-all ${submitBg}`}>
-            Confirm &amp; submit delivery
-          </button>
+        <div>
+          <FieldLabel>Additional notes <span className="normal-case font-normal">(optional)</span></FieldLabel>
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+            placeholder="Any additional context…" />
         </div>
+
+        <p className="text-muted text-xs">This record is immutable once submitted. Protocol per CA-001.</p>
+
+        <Button variant={tempStatus === 'fail' ? 'danger' : 'primary'} fullWidth disabled={!isSubmittable} onClick={handleSubmit}>
+          Confirm &amp; submit delivery
+        </Button>
       </div>
-    </div>
+    </Modal>
   )
 }
 
 // ─── Delivery Detail Sheet ────────────────────────────────────────────────────
 
-function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
+function DeliveryDetail({ d, thresholds, onClose }: {
+  d: Delivery
+  thresholds: readonly GoodsInThreshold[]
+  onClose: () => void
+}) {
   const bornLabel   = countryLabel(d.born_in)
   const rearedLabel = countryLabel(d.reared_in)
-  const catLabel    = CATEGORIES.find((c) => c.key === d.product_category)
+  const catRow      = thresholds.find((t) => t.category === d.product_category)
+  const catLabel    = CATEGORY_LABELS[d.product_category]
+  const bands       = catRow ? describeGoodsInBands(catRow) : null
   // Print errors surface here (inside the modal, where the print buttons live)
   // using the same submitErr styling as the rest of the app — the page-level
   // submitErr line is occluded by this overlay.
@@ -712,170 +710,160 @@ function DeliveryDetail({ d, onClose }: { d: Delivery; onClose: () => void }) {
   const onPrintError: PrintErrorHandler = (kind) => setSubmitErr(printErrorMessage(kind))
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end" style={{ position: 'fixed' }}>
-      <div className="bg-white rounded-t-3xl w-full max-h-[85vh] overflow-y-auto">
+    <Modal
+      variant="sheet"
+      open
+      onOpenChange={(o) => { if (!o) onClose() }}
+      title={
+        <span className="inline-flex items-center gap-2">
+          {d.delivery_number && (
+            <span data-surface="bold-navy" className="text-xs font-bold bg-surface-inverse text-body px-2 py-0.5 rounded font-mono flex-shrink-0">#{d.delivery_number}</span>
+          )}
+          {d.supplier}
+        </span>
+      }
+    >
+      <div className="space-y-4 pb-4 pt-1">
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-100 sticky top-0 bg-white">
-          <div className="flex items-center gap-2">
-            {d.delivery_number && (
-              <span className="text-xs font-bold bg-slate-900 text-white px-2 py-0.5 rounded font-mono flex-shrink-0">#{d.delivery_number}</span>
-            )}
-            <h2 className="text-slate-900 font-bold text-lg">{d.supplier}</h2>
+        {/* Batch number + Print label */}
+        {d.batch_number && (
+          <div data-surface="bold-navy" className="bg-surface-inverse rounded-xl px-4 py-3">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
+            <p className="text-body text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
+            <PrintLabelStrip
+              on100mm={() => getPrinter().printDeliveryLabel(buildDeliveryInput(d, '100mm'), onPrintError)}
+              on58mm={() => handlePrint58(d, onPrintError)}
+            />
+            {submitErr && <p className="text-status-error-text text-xs mt-2">{submitErr}</p>}
           </div>
-          <button onClick={onClose}
-            className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-all">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
+        )}
 
-        <div className="px-5 py-4 space-y-4 pb-8">
-
-          {/* Batch number + Print label */}
-          {d.batch_number && (
-            <div className="bg-slate-900 rounded-xl px-4 py-3">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Batch reference</p>
-              <p className="text-white text-xl font-bold font-mono tracking-widest">{d.batch_number}</p>
-              <PrintLabelStrip
-                on100mm={() => getPrinter().printDeliveryLabel(buildDeliveryInput(d, '100mm'), onPrintError)}
-                on58mm={() => handlePrint58(d, onPrintError)}
-              />
-              {submitErr && <p className="text-red-600 text-xs mt-2">{submitErr}</p>}
+        {/* Temperature — verdict tile (caged green/amber legal here) */}
+        <div className={`rounded-xl px-4 py-3 border ${STATUS_TILE[d.temp_status] ?? STATUS_TILE.empty}`}>
+          <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Temperature — CCP 1</p>
+          <div className="flex items-center justify-between">
+            <p className={`text-2xl font-bold font-mono ${STATUS_TEXT[d.temp_status] ?? 'text-body'}`}>
+              {d.temperature_c != null ? `${d.temperature_c}°C` : 'Ambient'}
+            </p>
+            <Badge tone={STATUS_BADGE_TONE[d.temp_status] ?? 'neutral'}>
+              {STATUS_LABEL[d.temp_status] ?? d.temp_status}
+            </Badge>
+          </div>
+          {catLabel && (
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${categoryChipClass(d.product_category)}`}>
+                {catLabel}
+              </span>
+              {bands && <p className="text-subtle text-[10px]">Temp limit: {bands.limit}</p>}
             </div>
           )}
+        </div>
 
-          {/* Temperature */}
-          <div className={`rounded-xl px-4 py-3 border ${
-            d.temp_status === 'pass'   ? 'bg-green-50 border-green-200' :
-            d.temp_status === 'urgent' ? 'bg-amber-50 border-amber-200' :
-                                          'bg-red-50 border-red-200'
-          }`}>
-            <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature — CCP 1</p>
-            <div className="flex items-center justify-between">
-              <p className={`text-2xl font-bold font-mono ${
-                d.temp_status === 'pass'   ? 'text-green-700' :
-                d.temp_status === 'urgent' ? 'text-amber-700' : 'text-red-700'
-              }`}>{d.temperature_c != null ? `${d.temperature_c}°C` : 'Ambient'}</p>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${STATUS_BADGE[d.temp_status]}`}>
-                {STATUS_LABEL[d.temp_status]}
-              </span>
-            </div>
-            {catLabel && (
-              <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${CATEGORY_COLOUR[d.product_category] ?? 'bg-slate-100 text-slate-500'}`}>
-                  {catLabel.label}
-                </span>
-                <p className="text-slate-400 text-[10px]">Temp limit: {catLabel.limit}</p>
-              </div>
+        {/* Two-column grid */}
+        <div className="grid grid-cols-2 gap-3">
+
+          <div className="bg-surface-sunken border border-subtle rounded-xl px-3 py-2.5">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Slaughter site</p>
+            <p className="text-body font-mono font-bold text-sm">{d.slaughter_site ?? '—'}</p>
+          </div>
+
+          <div className="bg-surface-sunken border border-subtle rounded-xl px-3 py-2.5">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Cut site</p>
+            <p className="text-body font-mono font-bold text-sm">
+              {d.cut_site
+                ? d.cut_site === d.slaughter_site ? <span className="font-sans font-normal text-muted text-xs">Same</span> : d.cut_site
+                : '—'}
+            </p>
+          </div>
+
+          <div className="bg-surface-sunken border border-subtle rounded-xl px-3 py-2.5">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Born in</p>
+            <p className="text-body font-semibold text-sm">{bornLabel}</p>
+          </div>
+
+          <div className="bg-surface-sunken border border-subtle rounded-xl px-3 py-2.5">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Reared in</p>
+            <p className="text-body font-semibold text-sm">
+              {d.reared_in
+                ? d.reared_in === d.born_in
+                  ? <span className="text-muted font-normal text-xs">Same</span>
+                  : rearedLabel
+                : '—'}
+            </p>
+          </div>
+
+          <div className="bg-surface-sunken border border-subtle rounded-xl px-3 py-2.5">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Time</p>
+            <p className="text-body font-semibold text-sm">{deliveryTime(d.time_of_delivery)}</p>
+          </div>
+
+          <div className="bg-surface-sunken border border-subtle rounded-xl px-3 py-2.5">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Logged by</p>
+            <p className="text-body font-semibold text-sm truncate">{d.users?.name ?? '—'}</p>
+          </div>
+
+        </div>
+
+        {/* Product */}
+        <div className="bg-surface-sunken border border-subtle rounded-xl px-4 py-3">
+          <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Product</p>
+          <p className="text-body text-sm font-medium">{d.product}</p>
+          <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded mt-1 ${categoryChipClass(d.product_category)}`}>
+            {catLabel ?? d.product_category}
+          </span>
+        </div>
+
+        {/* Contamination — "something is wrong" = red family */}
+        {d.covered_contaminated !== 'no' && (
+          <div className="bg-status-deviation-soft border border-status-deviation-border rounded-xl px-4 py-3">
+            <p className="text-status-deviation-text text-[10px] font-bold uppercase tracking-widest mb-1">
+              Contamination — {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}
+            </p>
+            {d.contamination_notes && (
+              <p className="text-body text-xs leading-relaxed">{d.contamination_notes}</p>
             )}
           </div>
+        )}
 
-          {/* Two-column grid */}
-          <div className="grid grid-cols-2 gap-3">
-
-            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Slaughter site</p>
-              <p className="text-slate-900 font-mono font-bold text-sm">{d.slaughter_site ?? '—'}</p>
-            </div>
-
-            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Cut site</p>
-              <p className="text-slate-900 font-mono font-bold text-sm">
-                {d.cut_site
-                  ? d.cut_site === d.slaughter_site ? <span className="font-sans font-normal text-slate-500 text-xs">Same</span> : d.cut_site
-                  : '—'}
-              </p>
-            </div>
-
-            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Born in</p>
-              <p className="text-slate-900 font-semibold text-sm">{bornLabel}</p>
-            </div>
-
-            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Reared in</p>
-              <p className="text-slate-900 font-semibold text-sm">
-                {d.reared_in
-                  ? d.reared_in === d.born_in
-                    ? <span className="text-slate-500 font-normal text-xs">Same</span>
-                    : rearedLabel
-                  : '—'}
-              </p>
-            </div>
-
-            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Time</p>
-              <p className="text-slate-900 font-semibold text-sm">{deliveryTime(d.time_of_delivery)}</p>
-            </div>
-
-            <div className="bg-slate-50 border border-blue-100 rounded-xl px-3 py-2.5">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Logged by</p>
-              <p className="text-slate-900 font-semibold text-sm truncate">{d.users?.name ?? '—'}</p>
-            </div>
-
-          </div>
-
-          {/* Product */}
-          <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-3">
-            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Product</p>
-            <p className="text-slate-900 text-sm font-medium">{d.product}</p>
-            <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded mt-1 ${CATEGORY_COLOUR[d.product_category] ?? 'bg-slate-100 text-slate-500'}`}>
-              {catLabel?.label ?? d.product_category}
+        {/* Allergen check result — pass/fail badge (caged green legal) */}
+        <div className={`rounded-xl px-4 py-2.5 flex items-start gap-2 border ${
+          d.allergens_identified
+            ? 'bg-status-error-soft border-status-error-border'
+            : 'bg-status-success-soft border-status-success-border'
+        }`}>
+          <div>
+            <span className={`text-[10px] font-bold block ${d.allergens_identified ? 'text-status-error-text' : 'text-status-success-text'}`}>
+              {d.allergens_identified ? '⚠️ ALLERGENS IDENTIFIED — SALSA 1.4.2' : '✓ No allergens — SALSA 1.4.2'}
             </span>
+            {d.allergens_identified && d.allergen_notes && (
+              <span className="text-status-error-text text-xs font-bold block mt-0.5">{d.allergen_notes}</span>
+            )}
           </div>
-
-          {/* Contamination */}
-          {d.covered_contaminated !== 'no' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">
-                Contamination — {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}
-              </p>
-              {d.contamination_notes && (
-                <p className="text-slate-700 text-xs leading-relaxed">{d.contamination_notes}</p>
-              )}
-            </div>
-          )}
-
-          {/* Allergen check result */}
-          <div className={`rounded-xl px-4 py-2.5 flex items-start gap-2 border ${
-            d.allergens_identified
-              ? 'bg-red-50 border-red-200'
-              : 'bg-green-50 border-green-200'
-          }`}>
-            <div>
-              <span className={`text-[10px] font-bold block ${d.allergens_identified ? 'text-red-600' : 'text-green-700'}`}>
-                {d.allergens_identified ? '⚠️ ALLERGENS IDENTIFIED — SALSA 1.4.2' : '✓ No allergens — SALSA 1.4.2'}
-              </span>
-              {d.allergens_identified && d.allergen_notes && (
-                <span className="text-red-700 text-xs font-bold block mt-0.5">{d.allergen_notes}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Corrective action required */}
-          {d.corrective_action_required && (
-            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <p className="text-red-700 text-[10px] font-bold uppercase tracking-widest mb-1">Corrective action required</p>
-              <p className="text-slate-600 text-xs leading-relaxed">
-                {d.allergens_identified
-                  ? `Allergen non-conformance: ${d.allergen_notes || 'See corrective action log'}. Do not process until resolved.`
-                  : 'A temperature deviation or contamination issue was recorded. Corrective action was documented at time of logging.'
-                }
-              </p>
-            </div>
-          )}
-
-          {/* Notes */}
-          {d.notes && (
-            <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-3">
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Notes</p>
-              <p className="text-slate-700 text-xs leading-relaxed">{d.notes}</p>
-            </div>
-          )}
-
         </div>
+
+        {/* Corrective action required */}
+        {d.corrective_action_required && (
+          <div className="bg-status-error-soft border border-status-error-border rounded-xl px-4 py-3">
+            <p className="text-status-error-text text-[10px] font-bold uppercase tracking-widest mb-1">Corrective action required</p>
+            <p className="text-muted text-xs leading-relaxed">
+              {d.allergens_identified
+                ? `Allergen non-conformance: ${d.allergen_notes || 'See corrective action log'}. Do not process until resolved.`
+                : 'A temperature deviation or contamination issue was recorded. Corrective action was documented at time of logging.'
+              }
+            </p>
+          </div>
+        )}
+
+        {/* Notes */}
+        {d.notes && (
+          <div className="bg-surface-sunken border border-subtle rounded-xl px-4 py-3">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Notes</p>
+            <p className="text-body text-xs leading-relaxed">{d.notes}</p>
+          </div>
+        )}
+
       </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -899,54 +887,43 @@ function CountryPicker({ value, onChange, label, required }: {
 
   return (
     <div>
-      <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </p>
+      <FieldLabel>
+        {label}{required && <span className="text-status-error-text ml-0.5">*</span>}
+      </FieldLabel>
       {/* Curated chips */}
       <div className="flex flex-wrap gap-2 mb-2">
         {CURATED_COUNTRIES.map((c) => (
-          <button key={c.code}
-            onPointerDown={(e) => { e.preventDefault(); onChange(c.code); setSearch('') }}
-            className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-              value === c.code
-                ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
-                : 'border-slate-300 bg-white text-slate-600'
-            }`}>
+          <Button key={c.code} variant={value === c.code ? 'primary' : 'ghost'} size="sm"
+            onPointerDown={(e) => { e.preventDefault(); onChange(c.code); setSearch('') }}>
             {c.code}
-            <span className="ml-1 font-normal text-slate-400 text-[10px]">{c.label.split(' ')[0]}</span>
-          </button>
+            <span className="ml-1 font-normal text-[10px] opacity-70">{c.label.split(' ')[0]}</span>
+          </Button>
         ))}
       </div>
       {/* Search for others */}
-      <input
+      <TextField
         type="text"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search other countries…"
-        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-700 text-sm focus:outline-none focus:border-orange-400"
       />
       {searchResults.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-2">
           {searchResults.map((c) => (
-            <button key={c.code}
-              onPointerDown={(e) => { e.preventDefault(); onChange(c.code); setSearch('') }}
-              className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                value === c.code
-                  ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
-                  : 'border-slate-300 bg-white text-slate-600'
-              }`}>
+            <Button key={c.code} variant={value === c.code ? 'primary' : 'ghost'} size="sm"
+              onPointerDown={(e) => { e.preventDefault(); onChange(c.code); setSearch('') }}>
               {c.code}
-              <span className="ml-1 font-normal text-slate-400 text-[10px]">{c.label}</span>
-            </button>
+              <span className="ml-1 font-normal text-[10px] opacity-70">{c.label}</span>
+            </Button>
           ))}
         </div>
       )}
       {q.length >= 1 && searchResults.length === 0 && (
-        <p className="text-slate-400 text-xs mt-2">No results for &quot;{search}&quot;</p>
+        <p className="text-muted text-xs mt-2">No results for &quot;{search}&quot;</p>
       )}
       {/* Show selected value if it came from search (not in curated chips) */}
       {value && !CURATED_CODES.includes(value) && (
-        <p className="text-[#EB6619] text-xs mt-1.5 font-medium">Selected: {value} — {countryLabel(value)}</p>
+        <p className="text-link text-xs mt-1.5 font-medium">Selected: {value} — {countryLabel(value)}</p>
       )}
     </div>
   )
@@ -957,6 +934,7 @@ function CountryPicker({ value, onChange, label, required }: {
 export default function DeliveryPage() {
   const [suppliers,  setSuppliers]  = useState<Supplier[]>([])
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [thresholds, setThresholds] = useState<GoodsInThreshold[]>([])
   const [loading,    setLoading]    = useState(true)
   const [nextNumber, setNextNumber] = useState(1)
   const [dateFilter, setDateFilter] = useState<'today' | 'week' | 'last_week'>('today')
@@ -1006,6 +984,7 @@ export default function DeliveryPage() {
         setSuppliers(d.suppliers ?? [])
         setDeliveries(d.deliveries ?? [])
         setNextNumber(d.next_number ?? 1)
+        setThresholds(d.thresholds ?? [])
       })
       .catch((e) => setSubmitErr(`Could not load data — ${e.message}`))
       .finally(() => setLoading(false))
@@ -1013,8 +992,11 @@ export default function DeliveryPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // FAIL-CLOSED: no threshold rows = no ruler — refuse temperature grading.
+  const thresholdsMissing = !loading && thresholds.length === 0
+
   const tempNum  = parseFloat(tempVal)
-  const tempStat = category ? calcStatus(noTempCategory(category) ? null : tempNum, category) : null
+  const tempStat = category ? calcStatus(noTempCategory(category) ? null : tempNum, category, thresholds) : null
 
   const supplierIdSel     = supplierSel && supplierSel !== 'other' ? supplierSel : ''
   const supplierOtherTrim = supplierOther.trim()
@@ -1101,113 +1083,133 @@ export default function DeliveryPage() {
     doSubmit()
   }
 
-  const catDef = CATEGORIES.find((c) => c.key === category)
+  const catDef  = CATEGORIES.find((c) => c.key === category)
+  const catRow  = category ? thresholds.find((t) => t.category === category) : undefined
+  const catBands = catRow ? describeGoodsInBands(catRow) : null
 
   // Batch number preview (shown once bornIn is set)
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })
   const batchPreview = bornIn ? `${buildBatchPrefix(todayStr, bornIn)}-${nextNumber}` : ''
 
+  // Quick-ref key-rule copy — derived from the live rows (no baked-in bands).
+  const lambRow   = thresholds.find((t) => t.category === 'lamb')
+  const frozenRow = thresholds.find((t) => t.category === 'frozen')
+
+  // Numpad verdict hint (live pass/amber/reject verdict + CA-001 guidance).
+  const numpadHint = tempStat ? (
+    <span className="block space-y-2">
+      <span className="block">
+        <Badge tone={STATUS_BADGE_TONE[tempStat]}>{STATUS_LABEL[tempStat]}</Badge>
+      </span>
+      {tempStat === 'urgent' && (
+        <span className="block text-status-warning-text text-left">
+          Conditional accept — do NOT reject (CA-001).{' '}
+          {FROZEN_CATEGORIES.has(category)
+            ? 'Acceptable short-term if product is re-frozen immediately. Document decision.'
+            : 'Place immediately into coldest chiller area. Halve remaining shelf life. Document assessment. Review supplier performance.'}
+        </span>
+      )}
+      {tempStat === 'fail' && (
+        <span className="block text-status-error-text text-left">
+          Reject delivery. Do NOT accept. Photograph product and temp reading. Complete non-conformance report. Notify supplier within 24 hours.
+        </span>
+      )}
+    </span>
+  ) : undefined
+
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col select-none">
+    <div className="min-h-screen bg-surface-base flex flex-col select-none">
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-700 bg-[#1E293B]">
-        <button onClick={() => { window.location.href = '/haccp' }}
-          className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/18 flex items-center justify-center text-white/60 hover:text-white transition-all flex-shrink-0">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-        </button>
-        <div className="flex-1 min-w-0">
-          <p className="text-orange-400 text-[10px] font-bold tracking-widest uppercase">CCP 1 — Delivery Intake</p>
-          <h1 className="text-white text-lg font-bold leading-tight">Goods In Check</h1>
-        </div>
-        <button onClick={() => setShowQuick(true)}
-          className="flex items-center gap-1.5 bg-white/10 hover:bg-white/18 border border-white/15 rounded-xl px-3 py-2 text-white/60 hover:text-white transition-all text-xs font-bold flex-shrink-0">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          Quick ref
-        </button>
-        <button onClick={() => { window.location.href = '/haccp/documents/hb-001?from=/haccp/delivery' }}
-          className="flex items-center gap-1.5 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-400/40 rounded-xl px-3 py-2 text-orange-300 transition-all text-xs font-bold flex-shrink-0">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          Handbook
-        </button>
-      </div>
+      <ScreenHeader
+        eyebrow="CCP 1 — Delivery Intake"
+        title="Goods In"
+        onBack={() => { window.location.href = '/haccp' }}
+        backLabel="Back to HACCP"
+        actions={
+          <>
+            <Button variant="ghost-inverse" size="sm" leadingIcon={<HelpGlyph />} onClick={() => setShowQuick(true)}>
+              Quick ref
+            </Button>
+            <Button variant="ghost-inverse" size="sm" leadingIcon={<HandbookGlyph />} onClick={() => { window.location.href = '/haccp/documents/hb-001?from=/haccp/delivery' }}>
+              Handbook
+            </Button>
+          </>
+        }
+      />
 
       <div className="flex-1 px-5 py-4 space-y-4 overflow-y-auto">
 
         {/* SOP 5B banner */}
-        <div className="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 flex items-start gap-3">
-          <svg className="w-4 h-4 text-[#EB6619] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-          <div>
-            <p className="text-amber-700 text-[10px] font-bold uppercase tracking-widest mb-1">SOP 5B — Receiving rule</p>
-            <p className="text-slate-500 text-xs leading-relaxed">Boxed / packaged meat only — NO exposed meat. Driver stays in receiving area and does NOT enter production.</p>
-          </div>
-        </div>
+        <Banner tone="info" icon={<WarnGlyph className="w-4 h-4" />} title="SOP 5B — Receiving rule">
+          Boxed / packaged meat only — NO exposed meat. Driver stays in receiving area and does NOT enter production.
+        </Banner>
+
+        {/* FAIL-CLOSED: thresholds unavailable */}
+        {thresholdsMissing && (
+          <Banner tone="danger" title="Temperature limits unavailable">
+            The CCP 1 temperature thresholds could not be loaded — temperature entry is
+            disabled. Do not grade deliveries by memory; retry or contact the admin.
+          </Banner>
+        )}
 
         {/* Flash */}
         {flash && (
-          <div className="bg-green-50 border border-green-300 rounded-xl px-4 py-3 flex items-center gap-3">
-            <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <p className="text-green-600 font-bold text-sm">Delivery logged — ready for next entry</p>
-          </div>
+          <Banner tone="info" icon={<CheckGlyph className="w-5 h-5" />}>
+            <span className="font-bold">Delivery logged — ready for next entry</span>
+          </Banner>
         )}
 
         {/* Form */}
-        <div className="bg-white border border-blue-100 rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-blue-100">
-            <p className="text-slate-900 font-semibold text-sm">Log a delivery</p>
-            <p className="text-slate-400 text-xs mt-0.5">CCP 1 · one record per delivery</p>
+        <div className="bg-surface-raised border border-default rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-default">
+            <p className="text-body font-semibold text-sm">Log a delivery</p>
+            <p className="text-muted text-xs mt-0.5">CCP 1 · one record per delivery</p>
           </div>
 
           <div className="px-4 py-3 space-y-4">
 
             {/* Product category — FIRST: drives supplier list, BLS fields, temp limits */}
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product category</p>
+              <FieldLabel>Product category</FieldLabel>
               <div className="flex flex-wrap gap-2">
                 {CATEGORIES.map((c) => (
-                  <button key={c.key}
+                  <button key={c.key} type="button"
                     onPointerDown={(e) => { e.preventDefault(); setCategory(c.key); setTempVal(''); setSupplierSel(''); setSupplierOther(''); setBornIn(''); setRearedIn(''); setRearedSame(false); setSlaughter(''); setCutSite(''); setCutSameAs(false) }}
-                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      category === c.key ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
+                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
+                      category === c.key
+                        ? `${categoryChipClass(c.key)} border-transparent`
+                        : 'border-input bg-surface-raised text-muted'
                     }`}>
                     {c.label}
                   </button>
                 ))}
               </div>
-              {catDef && <p className="text-slate-300 text-[10px] mt-1.5 ml-1">{catDef.detail}</p>}
+              {catDef && catBands && <p className="text-subtle text-[10px] mt-1.5 ml-1">{catBands.detail}</p>}
             </div>
 
             {/* Supplier */}
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Supplier</p>
+              <FieldLabel>Supplier</FieldLabel>
               {!category ? (
-                <p className="text-slate-400 text-xs italic">Select a product category first</p>
+                <p className="text-muted text-xs italic">Select a product category first</p>
               ) : (
                 <>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {filterSuppliers(suppliers, category).map((s) => (
-                      <button key={s.id}
-                        onPointerDown={(e) => { e.preventDefault(); setSupplierSel(s.id); setSupplierOther('') }}
-                        className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                          supplierSel === s.id ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
-                        }`}>
+                      <Button key={s.id} variant={supplierSel === s.id ? 'primary' : 'ghost'} size="sm"
+                        onPointerDown={(e) => { e.preventDefault(); setSupplierSel(s.id); setSupplierOther('') }}>
                         {s.name}
-                      </button>
+                      </Button>
                     ))}
-                    <button
-                      onPointerDown={(e) => { e.preventDefault(); setSupplierSel('other') }}
-                      className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                        supplierSel === 'other' ? 'border-[#EB6619] bg-amber-50 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-400'
-                      }`}>
+                    <Button variant={supplierSel === 'other' ? 'primary' : 'ghost'} size="sm"
+                      onPointerDown={(e) => { e.preventDefault(); setSupplierSel('other') }}>
                       Other
-                    </button>
+                    </Button>
                   </div>
                   {supplierSel === 'other' && (
-                    <input type="text" value={supplierOther} onChange={(e) => setSupplierOther(e.target.value)}
-                      placeholder="Enter supplier name…"
-                      className="w-full bg-slate-100 border border-amber-400 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-[#EB6619]" />
+                    <TextField type="text" value={supplierOther} onChange={(e) => setSupplierOther(e.target.value)}
+                      placeholder="Enter supplier name…" />
                   )}
                 </>
               )}
@@ -1229,26 +1231,18 @@ export default function DeliveryPage() {
             {/* Reared in (C8: required) */}
             {bornIn && (
               <div>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-                  Reared in<span className="text-red-500 ml-0.5">*</span>
-                </p>
+                <FieldLabel>
+                  Reared in<span className="text-status-error-text ml-0.5">*</span>
+                </FieldLabel>
                 <div className="flex flex-wrap gap-2 mb-2">
-                  <button
-                    onPointerDown={(e) => { e.preventDefault(); setRearedSame(true); setRearedIn(bornIn) }}
-                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      rearedSame ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-300 bg-white text-slate-600'
-                    }`}>
+                  <Button variant={rearedSame ? 'primary' : 'ghost'} size="sm"
+                    onPointerDown={(e) => { e.preventDefault(); setRearedSame(true); setRearedIn(bornIn) }}>
                     ✓ Same as born in ({countryLabel(bornIn)})
-                  </button>
-                  <button
-                    onPointerDown={(e) => { e.preventDefault(); setRearedSame(false); setRearedIn('') }}
-                    className={`px-3 py-2 rounded-2xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      !rearedSame && rearedIn !== ''
-                        ? 'border-[#EB6619] bg-[#EB6619]/15 text-[#EB6619]'
-                        : 'border-slate-300 bg-white text-slate-600'
-                    }`}>
+                  </Button>
+                  <Button variant={!rearedSame && rearedIn !== '' ? 'primary' : 'ghost'} size="sm"
+                    onPointerDown={(e) => { e.preventDefault(); setRearedSame(false); setRearedIn('') }}>
                     Different country
-                  </button>
+                  </Button>
                 </div>
                 {!rearedSame && (
                   <CountryPicker
@@ -1263,10 +1257,10 @@ export default function DeliveryPage() {
 
             {/* Slaughter site (C8: required) */}
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-                Slaughter site code<span className="text-red-500 ml-0.5">*</span>
-              </p>
-              <input
+              <FieldLabel>
+                Slaughter site code<span className="text-status-error-text ml-0.5">*</span>
+              </FieldLabel>
+              <TextField
                 type="text"
                 inputMode="text"
                 autoCapitalize="characters"
@@ -1278,34 +1272,29 @@ export default function DeliveryPage() {
                 }}
                 placeholder="e.g. GB1234"
                 maxLength={10}
-                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
-              <p className="text-slate-400 text-[10px] mt-1 ml-1">Format: GB XXXX (UK approval number) or local code</p>
+                className="tracking-widest font-mono"
+              />
+              <p className="text-subtle text-[10px] mt-1 ml-1">Format: GB XXXX (UK approval number) or local code</p>
             </div>
 
             {/* Cut site (C8: required) */}
             {slaughter.length > 0 && (
               <div>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-                  Cut site code<span className="text-red-500 ml-0.5">*</span>
-                </p>
-                <div className="flex gap-2 mb-2">
-                  <button
-                    onPointerDown={(e) => { e.preventDefault(); setCutSameAs(true); setCutSite(slaughter) }}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      cutSameAs ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-300 bg-white text-slate-600'
-                    }`}>
+                <FieldLabel>
+                  Cut site code<span className="text-status-error-text ml-0.5">*</span>
+                </FieldLabel>
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  <Button variant={cutSameAs ? 'primary' : 'ghost'} size="sm"
+                    onPointerDown={(e) => { e.preventDefault(); setCutSameAs(true); setCutSite(slaughter) }}>
                     ✓ Same as slaughter ({slaughter})
-                  </button>
-                  <button
-                    onPointerDown={(e) => { e.preventDefault(); setCutSameAs(false); setCutSite('') }}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold border-2 transition-all active:scale-95 ${
-                      !cutSameAs && cutSite !== '' ? 'border-[#EB6619] bg-[#EB6619]/10 text-[#EB6619]' : 'border-slate-300 bg-white text-slate-600'
-                    }`}>
+                  </Button>
+                  <Button variant={!cutSameAs && cutSite !== '' ? 'primary' : 'ghost'} size="sm"
+                    onPointerDown={(e) => { e.preventDefault(); setCutSameAs(false); setCutSite('') }}>
                     Different site
-                  </button>
+                  </Button>
                 </div>
                 {!cutSameAs && (
-                  <input
+                  <TextField
                     type="text"
                     inputMode="text"
                     autoCapitalize="characters"
@@ -1313,19 +1302,20 @@ export default function DeliveryPage() {
                     onChange={(e) => setCutSite(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
                     placeholder="e.g. AU1234"
                     maxLength={10}
-                    className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500 tracking-widest font-mono" />
+                    className="tracking-widest font-mono"
+                  />
                 )}
               </div>
             )}
 
             {/* Batch number preview */}
             {batchPreview && (
-              <div className="bg-slate-900 border border-slate-700 rounded-xl px-4 py-3">
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1.5">Batch reference (auto-generated)</p>
-                <p className="text-white text-lg font-bold font-mono tracking-widest">{batchPreview}</p>
-                <p className="text-slate-500 text-[10px] mt-1">DDMM · country code (ISO) · delivery #{nextNumber}</p>
+              <div data-surface="bold-navy" className="bg-surface-inverse rounded-xl px-4 py-3">
+                <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1.5">Batch reference (auto-generated)</p>
+                <p className="text-body text-lg font-bold font-mono tracking-widest">{batchPreview}</p>
+                <p className="text-subtle text-[10px] mt-1">DDMM · country code (ISO) · delivery #{nextNumber}</p>
                 {bornIn && rearedIn && rearedIn !== bornIn && (
-                  <p className="text-amber-400 text-[10px] mt-1">
+                  <p className="text-[color:var(--surface-accent-fg)] text-[10px] mt-1">
                     Born: {countryLabel(bornIn)} · Reared: {countryLabel(rearedIn)}
                   </p>
                 )}
@@ -1336,57 +1326,55 @@ export default function DeliveryPage() {
 
             {/* Product description */}
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Product description</p>
-              <input type="text" value={product} onChange={(e) => setProduct(e.target.value)}
-                placeholder="e.g. Whole lamb carcasses — 24 units"
-                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-2.5 text-slate-900 text-sm focus:outline-none focus:border-orange-500" />
+              <FieldLabel>Product description</FieldLabel>
+              <TextField type="text" value={product} onChange={(e) => setProduct(e.target.value)}
+                placeholder="e.g. Whole lamb carcasses — 24 units" />
             </div>
 
             {/* Temperature */}
             {isAmbient ? (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Temperature — Not applicable</p>
-                <p className="text-slate-500 text-xs">Dry goods are ambient — no temperature CCP. Condition and packaging check only.</p>
+              <div className="bg-surface-sunken border border-default rounded-xl px-4 py-3">
+                <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Temperature — Not applicable</p>
+                <p className="text-muted text-xs">Dry goods are ambient — no temperature CCP. Condition and packaging check only.</p>
               </div>
             ) : (
               <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Temperature — tap to enter</p>
-              <button
-                onClick={() => category && setShowNumpad(true)}
-                disabled={!category}
-                className={`w-full rounded-2xl p-4 border-2 flex items-center justify-between transition-all disabled:opacity-40 ${
-                  !tempVal        ? STATUS_BORDER.empty  :
-                  tempStat === 'pass'   ? STATUS_BORDER.pass  :
-                  tempStat === 'urgent' ? STATUS_BORDER.urgent :
-                                          STATUS_BORDER.fail
+              <FieldLabel>Temperature — tap to enter</FieldLabel>
+              <button type="button"
+                onClick={() => category && !thresholdsMissing && setShowNumpad(true)}
+                disabled={!category || thresholdsMissing}
+                className={`w-full rounded-2xl p-4 border-2 flex items-center justify-between transition-all disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring ${
+                  !tempVal ? STATUS_TILE.empty : STATUS_TILE[tempStat ?? 'empty'] ?? STATUS_TILE.empty
                 }`}>
                 <div>
-                  <p className="text-slate-400 text-xs mb-1">{category ? `Probe reading · limit ${catDef?.limit}` : 'Select a category first'}</p>
-                  <p className={`text-2xl font-bold ${!tempVal ? 'text-slate-300' : tempStat ? STATUS_COLOUR[tempStat] : 'text-slate-300'}`}>
+                  <p className="text-muted text-xs mb-1">
+                    {thresholdsMissing
+                      ? 'Temperature limits unavailable — entry disabled'
+                      : category ? `Probe reading · limit ${catBands?.limit ?? '—'}` : 'Select a category first'}
+                  </p>
+                  <p className={`text-2xl font-bold ${!tempVal ? 'text-subtle' : tempStat ? STATUS_TEXT[tempStat] : 'text-subtle'}`}>
                     {tempVal && !isNaN(tempNum) ? `${tempNum}°C` : 'Tap to enter'}
                   </p>
                 </div>
                 {tempStat && tempVal && (
-                  <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${STATUS_BADGE[tempStat]}`}>
-                    {STATUS_LABEL[tempStat]}
-                  </span>
+                  <Badge tone={STATUS_BADGE_TONE[tempStat]}>{STATUS_LABEL[tempStat]}</Badge>
                 )}
               </button>
 
               {tempStat === 'urgent' && (
-                <div className="mt-2 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3">
-                  <p className="text-amber-700 text-xs font-bold uppercase tracking-widest mb-1.5">Conditional accept — do NOT reject (CA-001)</p>
-                  {category === 'frozen' ? (
-                    <p className="text-slate-500 text-xs leading-relaxed">Acceptable short-term only if product is re-frozen immediately. Document decision. Monitor closely.</p>
+                <div className="mt-2 bg-status-warning-soft border border-status-warning-border rounded-xl px-4 py-3">
+                  <p className="text-status-warning-text text-xs font-bold uppercase tracking-widest mb-1.5">Conditional accept — do NOT reject (CA-001)</p>
+                  {FROZEN_CATEGORIES.has(category) ? (
+                    <p className="text-muted text-xs leading-relaxed">Acceptable short-term only if product is re-frozen immediately. Document decision. Monitor closely.</p>
                   ) : (
-                    <p className="text-slate-500 text-xs leading-relaxed">Place into coldest chiller area immediately. Use within reduced shelf life — halve remaining use-by. Document assessment. Review supplier performance.</p>
+                    <p className="text-muted text-xs leading-relaxed">Place into coldest chiller area immediately. Use within reduced shelf life — halve remaining use-by. Document assessment. Review supplier performance.</p>
                   )}
                 </div>
               )}
               {tempStat === 'fail' && (
-                <div className="mt-2 bg-red-50 border border-red-300 rounded-xl px-4 py-3">
-                  <p className="text-red-600 text-xs font-bold uppercase tracking-widest mb-1">Reject delivery</p>
-                  <p className="text-slate-500 text-xs leading-relaxed">Do NOT accept. Photograph and complete non-conformance report. Notify supplier within 24 hours.</p>
+                <div className="mt-2 bg-status-error-soft border border-status-error-border rounded-xl px-4 py-3">
+                  <p className="text-status-error-text text-xs font-bold uppercase tracking-widest mb-1">Reject delivery</p>
+                  <p className="text-muted text-xs leading-relaxed">Do NOT accept. Photograph and complete non-conformance report. Notify supplier within 24 hours.</p>
                 </div>
               )}
               </div>
@@ -1395,30 +1383,24 @@ export default function DeliveryPage() {
 
             {/* Covered / contaminated */}
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Covered / contaminated?</p>
+              <FieldLabel>Covered / contaminated?</FieldLabel>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { val: 'no',           label: 'No — all clear' },
                   { val: 'yes',          label: 'Yes — rejected' },
                   { val: 'yes_actioned', label: 'Yes — actioned' },
                 ].map((o) => (
-                  <button key={o.val} onClick={() => { setContam(o.val); setContamType(''); setContamNote('') }}
-                    className={`py-3 rounded-xl text-xs font-bold border-2 transition-all ${
-                      contam === o.val
-                        ? o.val === 'no'
-                          ? 'border-green-300 bg-green-50 text-green-600'
-                          : 'border-[#EB6619] bg-amber-50 text-[#EB6619]'
-                        : 'border-slate-300 bg-white text-slate-400'
-                    }`}>
+                  <Button key={o.val} variant={contam === o.val ? 'primary' : 'ghost'} size="sm" fullWidth
+                    onClick={() => { setContam(o.val); setContamType(''); setContamNote('') }}>
                     {o.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
               {(contam === 'yes' || contam === 'yes_actioned') && (
                 <div className="mt-3 space-y-3">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
-                    Type of contamination <span className="text-red-400">*</span>
-                  </p>
+                  <FieldLabel>
+                    Type of contamination <span className="text-status-error-text">*</span>
+                  </FieldLabel>
                   <div className="space-y-2">
                     {[
                       { key: 'uncovered',           label: 'Product uncovered / exposed' },
@@ -1426,18 +1408,15 @@ export default function DeliveryPage() {
                       { key: 'packaging_damaged',   label: 'Packaging damaged' },
                       { key: 'missing_docs',        label: 'Missing documentation' },
                     ].map((t) => (
-                      <button key={t.key} onClick={() => setContamType(t.key)}
-                        className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                          contamType === t.key ? 'border-[#EB6619] bg-amber-50 text-slate-900' : 'border-slate-300 bg-white text-slate-600'
-                        }`}>
+                      <Button key={t.key} variant={contamType === t.key ? 'primary' : 'ghost'} size="sm" fullWidth className="justify-start"
+                        onClick={() => setContamType(t.key)}>
                         {t.label}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                   {contamType && (
-                    <textarea value={contamNote} onChange={(e) => setContamNote(e.target.value)} rows={2}
-                      placeholder="Additional details (optional)…"
-                      className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+                    <Textarea value={contamNote} onChange={(e) => setContamNote(e.target.value)} rows={2}
+                      placeholder="Additional details (optional)…" />
                   )}
                 </div>
               )}
@@ -1445,73 +1424,53 @@ export default function DeliveryPage() {
 
             {/* Optional notes */}
             <div>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Notes (optional)</p>
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-                placeholder="Any additional notes…"
-                className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-slate-900 text-sm focus:outline-none focus:border-orange-500 resize-none" />
+              <FieldLabel>Notes (optional)</FieldLabel>
+              <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+                placeholder="Any additional notes…" />
             </div>
 
             {/* SALSA 1.4.2 — Allergen check (required) */}
-            <div className={`rounded-xl border px-4 py-3 ${allergensIdentified ? 'border-red-300 bg-red-50' : 'border-blue-100 bg-white'}`}>
-              <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">
-                Allergen check — SALSA 1.4.2
-              </p>
-              <p className="text-slate-600 text-xs mb-3">Did this delivery contain any allergen-containing products?</p>
+            <div className={`rounded-xl border px-4 py-3 ${allergensIdentified ? 'border-status-error-border bg-status-error-soft' : 'border-default bg-surface-raised'}`}>
+              <FieldLabel>Allergen check — SALSA 1.4.2</FieldLabel>
+              <p className="text-muted text-xs mb-3">Did this delivery contain any allergen-containing products?</p>
               <div className="flex gap-2">
-                <button
-                  onClick={() => { setAllergensIdentified(false); setAllergenTypes([]); setAllergenNotes('') }}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
-                    !allergensIdentified
-                      ? 'bg-green-600 text-white border-green-600'
-                      : 'bg-white text-slate-500 border-slate-200'
-                  }`}>
+                <Button variant={!allergensIdentified ? 'primary' : 'ghost'} fullWidth size="sm"
+                  onClick={() => { setAllergensIdentified(false); setAllergenTypes([]); setAllergenNotes('') }}>
                   ✓ No allergens
-                </button>
-                <button
-                  onClick={() => setAllergensIdentified(true)}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
-                    allergensIdentified
-                      ? 'bg-red-600 text-white border-red-600'
-                      : 'bg-white text-slate-500 border-slate-200'
-                  }`}>
+                </Button>
+                <Button variant={allergensIdentified ? 'danger' : 'ghost'} fullWidth size="sm"
+                  onClick={() => setAllergensIdentified(true)}>
                   ⚠️ Allergens found
-                </button>
+                </Button>
               </div>
               {allergensIdentified && (
                 <div className="mt-3 space-y-3">
                   <div>
-                    <p className="text-red-700 text-xs font-bold mb-2">Select allergens identified (select all that apply):</p>
+                    <p className="text-status-error-text text-xs font-bold mb-2">Select allergens identified (select all that apply):</p>
                     <div className="flex flex-wrap gap-1.5">
                       {ALLERGENS.map(a => (
-                        <button
-                          key={a}
+                        <Button key={a} variant={allergenTypes.includes(a) ? 'danger' : 'ghost'} size="sm"
                           onClick={() => setAllergenTypes(prev =>
                             prev.includes(a) ? prev.filter(x => x !== a) : [...prev, a]
-                          )}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
-                            allergenTypes.includes(a)
-                              ? 'bg-red-600 text-white border-red-600'
-                              : 'bg-white text-red-600 border-red-200'
-                          }`}>
+                          )}>
                           {a}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                     {allergenTypes.length === 0 && (
-                      <p className="text-red-500 text-[10px] mt-1.5">Select at least one allergen to continue</p>
+                      <p className="text-status-error-text text-[10px] mt-1.5">Select at least one allergen to continue</p>
                     )}
                   </div>
                   <div>
-                    <p className="text-red-700 text-xs font-bold mb-1">Additional notes (optional):</p>
-                    <textarea
+                    <p className="text-status-error-text text-xs font-bold mb-1">Additional notes (optional):</p>
+                    <Textarea
                       value={allergenNotes}
                       onChange={(e) => setAllergenNotes(e.target.value)}
                       rows={2}
                       placeholder="e.g. Product code, box count, supplier confirmation…"
-                      className="w-full border border-red-300 rounded-xl px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-red-500 resize-none"
                     />
                   </div>
-                  <p className="text-red-600 text-[10px] font-bold">
+                  <p className="text-status-error-text text-[10px] font-bold">
                     ⚠️ A corrective action will be raised automatically. Do not process this delivery until resolved.
                   </p>
                 </div>
@@ -1520,123 +1479,115 @@ export default function DeliveryPage() {
 
             {/* Meta */}
             <div className="flex items-center justify-between">
-              <p className="text-slate-300 text-xs">{new Date().toLocaleDateString('en-GB', { weekday:'short', day:'2-digit', month:'short', year:'numeric', timeZone:'Europe/London' })}</p>
-              <p className="text-slate-300 text-xs">Auto-time: {timeNow}</p>
+              <p className="text-subtle text-xs">{new Date().toLocaleDateString('en-GB', { weekday:'short', day:'2-digit', month:'short', year:'numeric', timeZone:'Europe/London' })}</p>
+              <p className="text-subtle text-xs">Auto-time: {timeNow}</p>
             </div>
 
           </div>
 
-          {submitErr && <p className="px-4 pb-2 text-red-600 text-xs">{submitErr}</p>}
+          {submitErr && <p className="px-4 pb-2 text-status-error-text text-xs">{submitErr}</p>}
 
-          <button onClick={handleSubmit} disabled={!isValid || submitting}
-            className={`w-full text-white font-bold py-4 text-sm disabled:opacity-40 flex items-center justify-center gap-2 transition-all ${
-              needsCCA && isValid ? 'bg-red-600' : 'bg-[#EB6619]'
-            }`}>
-            {submitting
-              ? <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>Submitting…</>
-              : <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                {needsCCA && isValid ? 'Submit — corrective action required' : 'Submit delivery'}</>
-            }
-          </button>
+          <div className="px-4 pb-4">
+            <Button
+              variant={needsCCA && isValid ? 'danger' : 'primary'}
+              fullWidth
+              loading={submitting}
+              disabled={!isValid || submitting}
+              leadingIcon={!submitting ? <CheckGlyph className="w-4 h-4" /> : undefined}
+              onClick={handleSubmit}>
+              {submitting
+                ? 'Submitting…'
+                : needsCCA && isValid ? 'Submit — corrective action required' : 'Submit delivery'}
+            </Button>
+          </div>
         </div>
 
         {/* Today's log */}
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">
+          <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <p className="text-muted text-xs font-bold uppercase tracking-widest">
               {dateFilter === 'today' ? "Today's deliveries" : dateFilter === 'week' ? "This week's deliveries" : "Last week's deliveries"}
             </p>
             <div className="flex items-center gap-2">
               {deliveries.length > 0 && (
-                <span className="bg-green-50 border border-green-200 rounded-full px-3 py-1 text-xs font-bold text-green-600">
-                  {deliveries.length} logged
-                </span>
+                <Badge tone="neutral">{deliveries.length} logged</Badge>
               )}
-              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-                <button
-                  onClick={() => setDateFilter('today')}
-                  className={`px-3 py-1 text-xs font-bold transition-colors ${dateFilter === 'today' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
-                  Today
-                </button>
-                <button
-                  onClick={() => setDateFilter('week')}
-                  className={`px-3 py-1 text-xs font-bold transition-colors border-l border-slate-200 ${dateFilter === 'week' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
-                  This week
-                </button>
-                <button
-                  onClick={() => setDateFilter('last_week')}
-                  className={`px-3 py-1 text-xs font-bold transition-colors border-l border-slate-200 ${dateFilter === 'last_week' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500'}`}>
-                  Last week
-                </button>
-              </div>
+              <SegmentedControl
+                aria-label="Date range"
+                value={dateFilter}
+                onChange={(v) => setDateFilter(v as 'today' | 'week' | 'last_week')}
+                options={[
+                  { id: 'today',     label: 'Today' },
+                  { id: 'week',      label: 'This week' },
+                  { id: 'last_week', label: 'Last week' },
+                ]}
+              />
             </div>
           </div>
           {loading ? (
-            <div className="flex items-center gap-3 text-slate-400 text-sm py-4">
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
-              Loading…
+            <div className="flex items-center gap-3 text-muted text-sm py-4">
+              <Spinner /> Loading…
             </div>
           ) : deliveries.length === 0 ? (
-            <div className="bg-slate-50 border border-blue-100 rounded-xl px-4 py-5 text-center">
-              <p className="text-slate-400 text-sm">No deliveries logged {dateFilter === 'today' ? 'today' : dateFilter === 'week' ? 'this week' : 'last week'}</p>
+            <div className="bg-surface-sunken border border-subtle rounded-xl px-4 py-5 text-center">
+              <p className="text-muted text-sm">No deliveries logged {dateFilter === 'today' ? 'today' : dateFilter === 'week' ? 'this week' : 'last week'}</p>
             </div>
           ) : (
             <div className="space-y-2">
               {deliveries.map((d) => (
-                <button key={d.id}
+                <button key={d.id} type="button"
                   onClick={() => setSelectedDelivery(d)}
-                  className="w-full bg-white border border-blue-100 rounded-xl px-4 py-3 text-left transition-all hover:border-slate-300 hover:shadow-sm active:scale-[0.99]">
+                  className="w-full bg-surface-raised border border-default rounded-xl px-4 py-3 text-left transition-all hover:border-input hover:shadow-sm active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${CATEGORY_COLOUR[d.product_category] ?? 'bg-slate-100 text-slate-500'}`}>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${categoryChipClass(d.product_category)}`}>
                           {CATEGORY_LABELS[d.product_category] ?? d.product_category}
                         </span>
                         {dateFilter !== 'today' && (
-                          <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                          <span className="text-[10px] font-bold bg-status-info-soft text-status-info-text px-1.5 py-0.5 rounded flex-shrink-0">
                             {new Date(d.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}
                           </span>
                         )}
                         {d.delivery_number && (
-                          <span className="text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded font-mono flex-shrink-0">#{d.delivery_number}</span>
+                          <span data-surface="bold-navy" className="text-[10px] font-bold bg-surface-inverse text-body px-1.5 py-0.5 rounded font-mono flex-shrink-0">#{d.delivery_number}</span>
                         )}
-                        <p className="text-slate-900 font-semibold text-sm truncate">{d.supplier}</p>
+                        <p className="text-body font-semibold text-sm truncate">{d.supplier}</p>
                       </div>
-                      <p className="text-slate-500 text-xs mt-0.5 truncate">
+                      <p className="text-muted text-xs mt-0.5 truncate">
                         {d.product}
                       </p>
                       {d.batch_number && (
-                        <p className="text-slate-800 text-xs mt-0.5 font-mono font-bold tracking-wider">{d.batch_number}</p>
+                        <p className="text-body text-xs mt-0.5 font-mono font-bold tracking-wider">{d.batch_number}</p>
                       )}
                       <div className="flex flex-wrap gap-x-3 mt-0.5">
                         {d.slaughter_site && (
-                          <p className="text-slate-400 text-[10px]">Slaughter: <span className="font-mono font-bold text-slate-600">{d.slaughter_site}</span></p>
+                          <p className="text-subtle text-[10px]">Slaughter: <span className="font-mono font-bold text-muted">{d.slaughter_site}</span></p>
                         )}
                         {d.born_in && (
-                          <p className="text-slate-400 text-[10px]">
+                          <p className="text-subtle text-[10px]">
                             Born: {countryLabel(d.born_in)}
                             {d.reared_in && d.reared_in !== d.born_in && <> · Reared: {countryLabel(d.reared_in)}</>}
                           </p>
                         )}
                       </div>
                       {d.covered_contaminated !== 'no' && (
-                        <p className="text-amber-600 text-xs mt-1">⚠ Contamination {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}</p>
+                        <p className="text-status-deviation-text text-xs mt-1">⚠ Contamination {d.covered_contaminated === 'yes_actioned' ? 'actioned' : 'rejected'}</p>
                       )}
                       {d.allergens_identified && (
-                        <p className="text-red-600 text-[10px] font-bold mt-0.5">
+                        <p className="text-status-error-text text-[10px] font-bold mt-0.5">
                           ⚠️ Allergens: {d.allergen_notes?.split(' — ')[0] ?? 'identified'}
                         </p>
                       )}
                     </div>
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                      <p className="text-slate-400 text-xs">{deliveryTime(d.time_of_delivery)}</p>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_BADGE[d.temp_status] ?? 'bg-slate-100 text-slate-400'}`}>
+                      <p className="text-muted text-xs">{deliveryTime(d.time_of_delivery)}</p>
+                      <Badge tone={STATUS_BADGE_TONE[d.temp_status] ?? 'neutral'}>
                         {d.temperature_c != null
                           ? `${STATUS_LABEL[d.temp_status] ?? d.temp_status} · ${d.temperature_c}°C`
-                          : 'Ambient'
-                        }
-                      </span>
-                      <svg className="w-3.5 h-3.5 text-slate-300 mt-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                          : 'Ambient'}
+                      </Badge>
+                      <ChevronRightGlyph />
                     </div>
                   </div>
                   {d.batch_number && (
@@ -1655,16 +1606,34 @@ export default function DeliveryPage() {
 
       {/* Overlays */}
       {selectedDelivery && (
-        <DeliveryDetail d={selectedDelivery} onClose={() => setSelectedDelivery(null)} />
+        <DeliveryDetail d={selectedDelivery} thresholds={thresholds} onClose={() => setSelectedDelivery(null)} />
       )}
       {showNumpad && (
-        <Numpad value={tempVal} onChange={setTempVal} onClose={() => setShowNumpad(false)} category={category} />
+        <Modal
+          variant="sheet"
+          open
+          onOpenChange={(o) => { if (!o) setShowNumpad(false) }}
+          title="Probe temperature"
+          description={`CCP 1 — Goods In${catDef ? ` · ${catDef.label}` : ''}${catBands ? ` · limit ${catBands.limit}` : ''}`}
+        >
+          <NumberPad
+            value={tempVal}
+            onChange={setTempVal}
+            onConfirm={() => setShowNumpad(false)}
+            allowDecimal
+            allowNegative={FROZEN_CATEGORIES.has(category)}
+            suffix="°C"
+            tone={tempStat ? STATUS_TONE[tempStat] : 'neutral'}
+            hint={numpadHint}
+          />
+        </Modal>
       )}
       {showCCA && (
         <CCAPopup
           tempStatus={tempStat}
           contaminated={contam}
           contamType={contamType}
+          catRow={catRow}
           onSubmit={(caTemp, caContam) => doSubmit(caTemp, caContam)}
           onBack={() => setShowCCA(false)}
         />
@@ -1672,41 +1641,54 @@ export default function DeliveryPage() {
 
       {/* Quick reference */}
       {showQuick && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end" style={{position:'fixed'}}>
-          <div className="bg-white rounded-t-3xl w-full p-6 max-h-[75vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-slate-900 font-bold text-lg">CCP 1 — Quick Reference</h3>
-              <button onClick={() => setShowQuick(false)} className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-white transition-all active:scale-95">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div className="bg-white rounded-xl p-4">
-                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-3">Temperature limits (CA-001)</p>
-                <div className="space-y-2">
-                  {CATEGORIES.map((c) => (
+        <Modal variant="sheet" open onOpenChange={(o) => { if (!o) setShowQuick(false) }} title="CCP 1 — Quick Reference">
+          <div className="space-y-3 pt-1">
+            <div className="bg-surface-raised rounded-xl p-4">
+              <p className="text-[color:var(--surface-accent-fg)] font-bold text-xs uppercase tracking-widest mb-3">Temperature limits (CA-001)</p>
+              <div className="space-y-2">
+                {CATEGORIES.map((c) => {
+                  const row = thresholds.find((t) => t.category === c.key)
+                  return (
                     <div key={c.key} className="flex gap-3 items-start">
-                      <span className="text-slate-500 text-xs w-32 flex-shrink-0 pt-0.5">{c.label}</span>
-                      <span className="text-slate-400 text-xs leading-relaxed">{c.detail}</span>
+                      <span className="text-muted text-xs w-32 flex-shrink-0 pt-0.5">{c.label}</span>
+                      <span className="text-subtle text-xs leading-relaxed">
+                        {row ? describeGoodsInBands(row).detail : 'Limits unavailable'}
+                      </span>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <p className="text-amber-700 font-bold text-xs uppercase tracking-widest mb-2">Key rule — do NOT auto-reject (CA-001)</p>
-                <p className="text-slate-600 text-xs leading-relaxed">5–8°C for chilled meat is <span className="text-slate-900 font-semibold">NOT a reject</span> — it is a conditional accept. Place into coldest chiller immediately, halve shelf life, document, review supplier. Only {">"}8°C is a hard reject.</p>
-              </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                <p className="text-amber-700 font-bold text-xs uppercase tracking-widest mb-2">Frozen special rule</p>
-                <p className="text-slate-600 text-xs leading-relaxed">-15 to -18°C is acceptable short-term <span className="text-slate-900 font-semibold">only if product is re-frozen immediately</span>. Do NOT refreeze if product has thawed. {">-15°C"} = reject.</p>
-              </div>
-              <div className="bg-white rounded-xl p-4">
-                <p className="text-[#EB6619] font-bold text-xs uppercase tracking-widest mb-2">Contamination (CA-001)</p>
-                <p className="text-slate-500 text-xs leading-relaxed">Trim contaminated area with clean knife. Sterilise knife ≥82°C immediately. Dispose trimmings as Category 3 ABP. Document everything.</p>
-              </div>
+            </div>
+            <div className="bg-status-warning-soft border border-status-warning-border rounded-xl p-4">
+              <p className="text-status-warning-text font-bold text-xs uppercase tracking-widest mb-2">Key rule — do NOT auto-reject (CA-001)</p>
+              <p className="text-muted text-xs leading-relaxed">
+                {lambRow && lambRow.pass_max_c !== null && lambRow.amber_max_c !== null
+                  ? `${Number(lambRow.pass_max_c)}–${Number(lambRow.amber_max_c)}°C for chilled meat is `
+                  : 'The conditional band for chilled meat is '}
+                <span className="text-body font-semibold">NOT a reject</span> — it is a conditional accept. Place into coldest chiller immediately, halve shelf life, document, review supplier.
+                {lambRow && lambRow.amber_max_c !== null && (
+                  <> Only {'>'}{Number(lambRow.amber_max_c)}°C is a hard reject.</>
+                )}
+              </p>
+            </div>
+            <div className="bg-status-warning-soft border border-status-warning-border rounded-xl p-4">
+              <p className="text-status-warning-text font-bold text-xs uppercase tracking-widest mb-2">Frozen special rule</p>
+              <p className="text-muted text-xs leading-relaxed">
+                {frozenRow && frozenRow.pass_max_c !== null && frozenRow.amber_max_c !== null
+                  ? `${Number(frozenRow.amber_max_c)} to ${Number(frozenRow.pass_max_c)}°C is acceptable short-term `
+                  : 'The frozen conditional band is acceptable short-term '}
+                <span className="text-body font-semibold">only if product is re-frozen immediately</span>. Do NOT refreeze if product has thawed.
+                {frozenRow && frozenRow.amber_max_c !== null && (
+                  <> {'>'}{Number(frozenRow.amber_max_c)}°C = reject.</>
+                )}
+              </p>
+            </div>
+            <div className="bg-surface-raised rounded-xl p-4">
+              <p className="text-[color:var(--surface-accent-fg)] font-bold text-xs uppercase tracking-widest mb-2">Contamination (CA-001)</p>
+              <p className="text-muted text-xs leading-relaxed">Trim contaminated area with clean knife. Sterilise knife ≥82°C immediately. Dispose trimmings as Category 3 ABP. Document everything.</p>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
     </div>
