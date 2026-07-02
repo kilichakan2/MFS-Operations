@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Banner, Button, TextField } from '@/components/ui'
 import { isProcessRoomTempInRange } from '@/lib/domain'
+import type { GoodsInThreshold } from '@/lib/domain'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -278,6 +279,96 @@ function ThresholdRow({ threshold, onSaved }: {
   )
 }
 
+// ─── Goods In (CCP 1) threshold editor row (kit — new code meets the standard;
+//     mirrors ThresholdRow above; F-TD-42 admin-wide repaint stays out of scope) ─
+
+function GoodsInThresholdRow({ threshold, onSaved }: {
+  threshold: GoodsInThreshold
+  onSaved:   () => void
+}) {
+  const hasTempCcp  = threshold.pass_max_c !== null
+  const hasAmber    = threshold.amber_max_c !== null
+  const [pass,  setPass]  = useState(threshold.pass_max_c === null ? '' : String(threshold.pass_max_c))
+  const [amber, setAmber] = useState(threshold.amber_max_c === null ? '' : String(threshold.amber_max_c))
+  const [saving, setSaving] = useState(false)
+  const [error,  setError]  = useState('')
+
+  const passNum  = parseFloat(pass)
+  const amberNum = parseFloat(amber)
+  const dirty =
+    pass !== (threshold.pass_max_c === null ? '' : String(threshold.pass_max_c)) ||
+    amber !== (threshold.amber_max_c === null ? '' : String(threshold.amber_max_c))
+  // Band STRUCTURE is code-locked (only the numbers move; amber == pass allowed).
+  const valid =
+    Number.isFinite(passNum) &&
+    (!hasAmber || (Number.isFinite(amberNum) && amberNum >= passNum))
+
+  // No temperature CCP (dry goods) — nothing to edit, shown read-only.
+  if (!hasTempCcp) {
+    return (
+      <div className="bg-surface-raised border border-default rounded-2xl p-4">
+        <p className="text-body font-semibold text-sm">{threshold.label}</p>
+        <p className="text-muted text-xs mt-1">No temperature CCP — visual / condition check only.</p>
+      </div>
+    )
+  }
+
+  async function handleSave() {
+    if (!valid) { setError('Pass limit must be a number; amber must be at or above pass'); return }
+    setSaving(true); setError('')
+    try {
+      const res = await fetch('/api/haccp/admin/goods-in-thresholds', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: threshold.id,
+          pass_max_c: passNum,
+          amber_max_c: hasAmber ? amberNum : null,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        setError(d.error ?? 'Save failed')
+        return
+      }
+      onSaved()
+    } catch {
+      setError('Connection error — try again')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-surface-raised border border-default rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-body font-semibold text-sm">{threshold.label}</p>
+      </div>
+      <div className="flex gap-3">
+        <div className="flex-1">
+          <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Pass (≤)</p>
+          <TextField inputMode="decimal" value={pass} onChange={(e) => setPass(e.target.value)} suffix="°C" error={!Number.isFinite(passNum)} />
+        </div>
+        {hasAmber && (
+          <div className="flex-1">
+            <p className="text-muted text-[10px] font-bold uppercase tracking-widest mb-1">Amber ceiling (≤)</p>
+            <TextField inputMode="decimal" value={amber} onChange={(e) => setAmber(e.target.value)} suffix="°C" error={!Number.isFinite(amberNum) || amberNum < passNum} />
+          </div>
+        )}
+      </div>
+      <p className="text-subtle text-[10px]">
+        {hasAmber
+          ? <>Pass ≤ {isNaN(passNum) ? '—' : passNum}°C · Conditional accept {isNaN(passNum) ? '—' : passNum}–{isNaN(amberNum) ? '—' : amberNum}°C · Reject &gt; {isNaN(amberNum) ? '—' : amberNum}°C</>
+          : <>Pass ≤ {isNaN(passNum) ? '—' : passNum}°C · Reject &gt; {isNaN(passNum) ? '—' : passNum}°C</>}
+      </p>
+      {error && <Banner tone="danger">{error}</Banner>}
+      <Button size="sm" loading={saving} disabled={!dirty || !valid || saving} onClick={handleSave}>
+        {saving ? 'Saving…' : 'Save limit'}
+      </Button>
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminCCAPage() {
@@ -297,6 +388,11 @@ export default function AdminCCAPage() {
   const [thrLoading,   setThrLoading]   = useState(false)
   const [thrError,     setThrError]     = useState('')
   const [savedReminder,setSavedReminder]= useState(false)
+
+  // ── Goods In (CCP 1) threshold state ────────────────────────────────────────
+  const [giThresholds, setGiThresholds] = useState<GoodsInThreshold[]>([])
+  const [giLoading,    setGiLoading]    = useState(false)
+  const [giError,      setGiError]      = useState('')
 
   // ── Supplier state ────────────────────────────────────────────────────────────
   const [suppliers,      setSuppliers]      = useState<Supplier[]>([])
@@ -347,9 +443,20 @@ export default function AdminCCAPage() {
       .finally(() => setThrLoading(false))
   }, [])
 
+  const loadGoodsInThresholds = useCallback(() => {
+    setGiLoading(true)
+    fetch('/api/haccp/admin/goods-in-thresholds')
+      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json() })
+      .then(d => setGiThresholds(d.thresholds ?? []))
+      .catch(e => setGiError(`Could not load — ${e.message}`))
+      .finally(() => setGiLoading(false))
+  }, [])
+
   useEffect(() => { loadData() }, [loadData])
   useEffect(() => { if (tab === 'suppliers') loadSuppliers() }, [tab, loadSuppliers])
-  useEffect(() => { if (tab === 'thresholds') loadThresholds() }, [tab, loadThresholds])
+  useEffect(() => {
+    if (tab === 'thresholds') { loadThresholds(); loadGoodsInThresholds() }
+  }, [tab, loadThresholds, loadGoodsInThresholds])
 
   async function handleVerify(id: string) {
     setVerifying(id)
@@ -727,7 +834,7 @@ export default function AdminCCAPage() {
 
             {savedReminder && (
               <Banner tone="warning" title="Limit updated — paperwork required">
-                You MUST update docs/reference/haccp/DOCUMENT_CONTROL.md §4 and retrain staff on the new limit (SALSA/FSA control). Every change is recorded in the immutable threshold audit log.
+                You MUST update docs/reference/haccp/DOCUMENT_CONTROL.md §4 (CCP 1 Goods In and CCP 3 process-room limits) and retrain staff on the new limit (SALSA/FSA control). Every change is recorded in the immutable threshold audit log.
               </Banner>
             )}
 
@@ -743,6 +850,28 @@ export default function AdminCCAPage() {
                   key={t.id}
                   threshold={t}
                   onSaved={() => { setSavedReminder(true); loadThresholds() }}
+                />
+              ))
+            )}
+
+            {/* ── Goods In (CCP 1) thresholds ─────────────────────────────── */}
+            <div className="pt-4">
+              <p className="text-body font-semibold text-sm">Goods In (CCP 1) — delivery temperature limits</p>
+              <p className="text-muted text-xs mt-0.5">Pass ≤ pass limit · conditional accept up to the amber ceiling · reject above. Band structure is fixed — only the numbers move. Editing a limit is a food-safety control.</p>
+            </div>
+
+            {giError && <Banner tone="danger">{giError}</Banner>}
+
+            {giLoading ? (
+              <p className="text-muted text-sm">Loading limits…</p>
+            ) : giThresholds.length === 0 ? (
+              <p className="text-muted text-sm">No thresholds configured.</p>
+            ) : (
+              giThresholds.map((t) => (
+                <GoodsInThresholdRow
+                  key={t.id}
+                  threshold={t}
+                  onSaved={() => { setSavedReminder(true); loadGoodsInThresholds() }}
                 />
               ))
             )}
