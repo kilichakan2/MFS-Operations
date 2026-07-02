@@ -871,7 +871,7 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
     expect(await caCountFor(newRow!.id)).toBe(0);
   });
 
-  it("timesep → {ok:true} and ZERO CA rows written", async () => {
+  it("timesep without free text → ok + ZERO CA rows written", async () => {
     const supa = getServiceClient();
     const before = await supa
       .from("haccp_time_separation_log")
@@ -890,7 +890,9 @@ describe("/api/haccp/* integration — F-19 PR2 byte-identical route re-point", 
       },
     });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
+    // Mince unit (bug fix 1): timesep now reports ca_write_failed like the
+    // other forms; with no free text there is nothing to file → false.
+    expect(res.body).toEqual({ ok: true, ca_write_failed: false });
 
     const after = await supa
       .from("haccp_time_separation_log")
