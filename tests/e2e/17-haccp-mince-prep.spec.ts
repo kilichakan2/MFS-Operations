@@ -148,6 +148,19 @@ test.describe('@critical HACCP mince / prep / time-sep — kit rebuild + DB-driv
     await expect(page.getByText('CCP-M1 · CCP-M2 · CCP-MP1 · CCP-MP2')).toBeVisible()
 
     await fillHappyMince(page)
+
+    // Minus is available on the NON-frozen input tile too (Hakan 2026-07-02:
+    // enable the sign toggle everywhere — a −1°C partially frozen intake is a
+    // genuine reading): re-enter the input as −1 via the toggle, it grades
+    // Pass (≤7) live in the pad, and persists exactly through submit.
+    await page.getByRole('button', { name: /limit ≤7°C/i }).click()
+    await typeTemp(page, '-1')
+    const pad = page.getByRole('dialog')
+    await expect(pad.getByText('Pass', { exact: true })).toBeVisible()
+    await confirmPad(page)
+    await page.mouse.move(0, 0)
+    await expect(page.getByRole('button', { name: /limit ≤7°C/i })).toContainText('-1°C')
+
     await page.getByRole('button', { name: /^Submit mince log$/ }).click()
 
     // Batch-code format unchanged: MINCE-DDMM-LAMB-N.

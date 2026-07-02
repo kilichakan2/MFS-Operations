@@ -707,12 +707,15 @@ export default function MincePage() {
     }
   }
 
-  // Numpad target state: [value, setter, title, channel row, allowNegative]
-  const numpadState: Record<string, [string, (v: string) => void, string, MinceThreshold | undefined, boolean]> = {
-    m_input:  [mInputVal,  setMInputVal,  'Input temperature (CCP-M1)',  mInputRow,  false],
-    m_output: [mOutputVal, setMOutputVal, 'Output temperature (CCP-M1)', mOutputRow, mOutputMode === 'frozen'],
-    p_input:  [pInputVal,  setPInputVal,  'Input temperature (CCP-MP1)', pInputRow,  false],
-    p_output: [pOutputVal, setPOutputVal, 'Output temperature (CCP-MP1)', pOutputRow, pOutputMode === 'frozen'],
+  // Numpad target state: [value, setter, title, channel row]. The sign toggle
+  // is available on EVERY channel (Hakan 2026-07-02): genuinely sub-zero
+  // readings — e.g. a −1°C partially frozen intake — are recordable on input
+  // and chilled-output tiles too, matching the old pad's permanent +/− toggle.
+  const numpadState: Record<string, [string, (v: string) => void, string, MinceThreshold | undefined]> = {
+    m_input:  [mInputVal,  setMInputVal,  'Input temperature (CCP-M1)',  mInputRow],
+    m_output: [mOutputVal, setMOutputVal, 'Output temperature (CCP-M1)', mOutputRow],
+    p_input:  [pInputVal,  setPInputVal,  'Input temperature (CCP-MP1)', pInputRow],
+    p_output: [pOutputVal, setPOutputVal, 'Output temperature (CCP-MP1)', pOutputRow],
   }
 
   // Pre-compute filtered delivery lists in component body — avoids stale closure in DeliveryPicker
@@ -1485,7 +1488,7 @@ export default function MincePage() {
 
       {/* Numpad — kit NumberPad in a kit Modal (sheet) */}
       {numpad && numpadState[numpad] && (() => {
-        const [val, setVal, label, row, allowNeg] = numpadState[numpad]
+        const [val, setVal, label, row] = numpadState[numpad]
         const band = row ? describeMinceBand(row) : null
         const status = tempStatusFor(val, row)
         return (
@@ -1501,7 +1504,7 @@ export default function MincePage() {
               onChange={setVal}
               onConfirm={() => setNumpad(null)}
               allowDecimal
-              allowNegative={allowNeg}
+              allowNegative
               suffix="°C"
               tone={status ? TEMP_PAD_TONE[status] : 'neutral'}
               hint={status ? (
