@@ -30,11 +30,12 @@ import { describe, it, expect } from "vitest";
 
 const ROOT = process.cwd();
 
-/** The 3 shipped, token-pure HACCP screens this guard pins. */
+/** The shipped, token-pure HACCP screens this guard pins. */
 const SCREENS = [
   "app/haccp/page.tsx",
   "app/haccp/cold-storage/page.tsx",
   "app/haccp/process-room/page.tsx",
+  "app/haccp/delivery/page.tsx",
 ];
 
 // ── The three banned colour patterns (same as semantic-tokens-only) ──────────
