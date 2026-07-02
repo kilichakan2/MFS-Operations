@@ -978,3 +978,26 @@ probe 4/4 · prod smoke 0×5xx. Guard CLEAN (2 🟡 accepted). RLS deferred to *
   - **Proper fix:** semantic text colours moved to Tailwind's dedicated `theme.extend.textColor` key and border colours to `theme.extend.borderColor` (each emits ONLY its own utility namespace); the one colliding `fontSize` key renamed `body` → `body-md`; the dead `colors.text` group and `colors.inverse` alias deleted (killing the `bg-inverse`/`border-inverse` foot-guns, 0 call sites).
   - **Guards:** `tests/unit/lint/tailwind-namespace-collision.test.ts` (bans any fontSize↔textColor shared key forever, pins both contracts, and greps `text-on-action` out of the tree) + `tests/unit/design/contrast-pairings.test.ts` (the §4 pairing matrix recomputed on every CI run, incl. negative fixtures).
 - **Status:** closed (2026-07-01)
+
+### F-TD-41 — 🔵 Local E2E map specs 05/06 are red on `main` (harness/main-drift, NOT a diff bug)
+
+- **Raised:** 2026-07-02 (colour-pairing Unit 2 ANVIL, control experiment).
+- **What:** `05-routes-planner-map.spec.ts` + `06-map-view-markers.spec.ts` fail identically on `main` and on the Unit-2 branch in the LOCAL E2E harness (same machine, isolated run) — a Leaflet data-gated-mount/harness issue, control-proven pre-existing. Both passed on the Vercel preview run.
+- **Why it matters:** two permanently-red local specs train everyone to ignore local E2E failures.
+- **Fix shape:** trace the local-only mount failure on `main` (dev-server StrictMode double-mount is the historical suspect for Leaflet — 0a cert notes say prod build was required for map specs) and either fix the harness or gate those 2 specs to prod-build runs.
+- **Status:** open
+
+### F-TD-42 — 🔵 Pre-existing green sign-off buttons on `/haccp/admin` violate green-caging
+
+- **Raised:** 2026-07-02 (colour-pairing Unit 2 ANVIL browser-tap, shot 06).
+- **What:** the untouched `/haccp/admin` screen has green action buttons on chrome. The green/amber caging rule (CLAUDE.md; spec §5.7) allows green ONLY on temperature pass/warn/fail tiles + badges — never chrome. Pre-dates Unit 2 (screen not yet migrated).
+- **Fix shape:** repaint on `/haccp/admin`'s own overhaul turn using the pairing system (primary = orange-500 + ink-900; success stays badge-only).
+- **Owner unit:** the `/haccp/admin` Phase-1 migration.
+- **Status:** open
+
+### F-TD-43 — 🔵 Hub headers lost the MFS brand mark (kit ScreenHeader has no logo slot) — Hakan decision pending
+
+- **Raised:** 2026-07-02 (colour-pairing Unit 2 Guard 🟡#3; logo question asked, not yet answered).
+- **What:** adopting kit `ScreenHeader` on the hub removed `MfsIcon` from both hub headers (door + home) — consistent with cold-storage/process-room, but the kiosk LANDING screen carrying no brand mark was never an explicit decision.
+- **Fix shape (if "restore"):** add an optional logo `ReactNode` slot to `ScreenHeader` (kit-first, ADR-0014 Rule 3), pass `MfsIcon` on the hub; legal pairing = white mark on bold-navy / alarm-red.
+- **Status:** open (awaiting Hakan: accept vs restore)
