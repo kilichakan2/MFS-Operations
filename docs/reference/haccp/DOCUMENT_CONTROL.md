@@ -95,13 +95,33 @@ Most limits are hardcoded in the app; any change requires a code update AND a tr
 
 **Exception — CCP 3 Process Room limits are configurable in the app.** Since Apr 2026 the process-room product-core and room-ambient limits are stored in the database (`haccp_process_room_thresholds`) and editable by an **admin** at `/haccp/admin` → Thresholds. Every change is recorded in an immutable audit log (`haccp_threshold_audit`: who / when / old→new) and the admin is reminded on save to update THIS register (section 4) and retrain staff. The values below are the current approved bands and must be kept in step with the app.
 
-CCP 3 uses a three-band model: **pass** (≤ target), **amber** (above target, up to the legal max — corrective action logged, no management sign-off), **critical** (above the max — corrective action logged AND management sign-off required).
+**Exception — CCP 1 Goods In limits are also configurable in the app.** Since Jul 2026 the per-category delivery-intake bands are stored in the database (`haccp_goods_in_thresholds`) and editable by an **admin** at `/haccp/admin` → Thresholds. Every change is recorded in an immutable audit log (`haccp_goods_in_threshold_audit`: who / when / old→new) and the admin is reminded on save to update THIS register (section 4) and retrain staff. The band STRUCTURE (which categories carry an amber band or a temperature CCP at all) is fixed in code — only the numeric limits can be edited.
+
+CCP 1 and CCP 3 use a three-band model: **pass** (≤ target), **amber / conditional accept** (above target, up to the ceiling — corrective action logged), **reject / critical** (above the ceiling — corrective action logged AND management sign-off required).
 
 | CCP | Parameter | Limit | Source |
 |---|---|---|---|
-| CCP 1 — Goods In | Fresh meat receipt | ≤4°C | Reg 853/2004 |
-| CCP 1 — Goods In | Frozen meat receipt | ≤-12°C | Reg 853/2004 |
-| CCP 1 — Goods In | Offal receipt | ≤3°C | Reg 853/2004 |
+| CCP 1 — Goods In | Lamb / beef (fresh red meat) — pass | ≤5°C | See justification (1) below |
+| CCP 1 — Goods In | Lamb / beef (fresh red meat) — conditional accept (CA logged) | 5–8°C | See justification (1) below |
+| CCP 1 — Goods In | Lamb / beef (fresh red meat) — reject | >8°C | See justification (1) below |
+| CCP 1 — Goods In | Offal — pass | ≤3°C | Reg 853/2004 (3°C offal limit) |
+| CCP 1 — Goods In | Offal — reject (no amber band) | >3°C | Reg 853/2004 |
+| CCP 1 — Goods In | Poultry — pass | ≤4°C | Reg 853/2004 Annex III Sec II (≤4°C) |
+| CCP 1 — Goods In | Poultry — conditional accept (CA logged) | 4–5°C | See justification (2) below |
+| CCP 1 — Goods In | Poultry — reject | >5°C | See justification (2) below |
+| CCP 1 — Goods In | Dairy / chilled other — pass | ≤8°C | UK chill-holding (8°C) |
+| CCP 1 — Goods In | Dairy / chilled other — reject (no amber band) | >8°C | UK chill-holding |
+| CCP 1 — Goods In | Frozen (incl. frozen beef/lamb) — pass | ≤-18°C | Quick-frozen Foodstuffs Regs 2007 |
+| CCP 1 — Goods In | Frozen — conditional accept (CA logged, re-freeze immediately) | -18 to -15°C | QFF Regs 2007 tolerance |
+| CCP 1 — Goods In | Frozen — reject | >-15°C | QFF Regs 2007 |
+| CCP 1 — Goods In | Dry goods | No temperature CCP — visual / condition check only | — |
+
+**Written justifications for the two CCP-1 bands that deviate from the strictest legal reading:**
+
+1. **Red meat reject line at >8°C** — Regulation 853/2004's specific red-meat transport limit is 7°C core; this register's reject line sits 1°C above it. Retained per the general UK chill-holding requirement of 8°C, with the 5–8°C band treated as a conditional accept with mandatory corrective action (place into coldest chiller, halve remaining shelf life, document, review supplier). Decision: Hakan, 2026-07-02.
+2. **Poultry 4–5°C grace band** — the legal limit is ≤4°C (Reg 853/2004 Annex III Sec II) with no legal headroom. The 4–5°C band is a documented 1°C grace band for probe/unloading measurement fluctuation, treated as amber with mandatory corrective action; >5°C is a hard reject. Decision: Hakan, 2026-07-02.
+
+*(Historical note: earlier revisions of this table listed "fresh meat receipt ≤4°C" and "frozen meat receipt ≤-12°C". Both were wrong: 4°C is poultry's limit, not red meat's, and -12°C is the QFF retail-cabinet exception, not a receipt limit. Corrected Jul 2026 to the bands the app actually enforces.)*
 | CCP 2 — Cold Storage | Fresh product storage | 0–4°C | Reg 853/2004 |
 | CCP 2 — Cold Storage | Frozen product storage | ≤-18°C | Reg 853/2004 |
 | CCP 3 — Process Room | Product core — pass | ≤4°C | Reg 853/2004 |
@@ -159,6 +179,7 @@ Any new product line must be assessed against these. Allergen training must cove
 | Nov 2025 | HACCP Policy Handbook | Initial issue | V2.0 | Hakan Kilic |
 | Apr 2026 | MFS Operations App | All HACCP digital forms built and deployed | — | Hakan Kilic |
 | Jul 2026 | Critical Temperature Limits (section 4) | CCP 3 Process Room moved to a three-band model (pass / amber / critical): Product core pass ≤4°C, amber 4–7°C, critical >7°C; Ambient room pass ≤12°C, amber 12–15°C, critical >15°C. Limits now admin-configurable in the app (audit-logged) — this register remains the approved source of truth. | — | Hakan Kilic |
+| Jul 2026 | Critical Temperature Limits (section 4) | CCP 1 Goods In corrected and moved to per-category three-band model. KEY FIX: poultry pass ≤4°C / conditional 4–5°C / reject >5°C (previously the app passed poultry up to 8°C — illegal vs Reg 853/2004 Annex III Sec II). Old rows "fresh ≤4°C" and "frozen ≤-12°C" removed as wrong (4°C is poultry's limit; -12°C is the QFF retail-cabinet exception). Two written deviations recorded (red-meat >8°C reject line; poultry 1°C grace band). Limits now admin-configurable in the app (immutable audit log) — this register remains the approved source of truth. Staff to be retrained on the new poultry bands. | — | Hakan Kilic |
 
 ---
 
